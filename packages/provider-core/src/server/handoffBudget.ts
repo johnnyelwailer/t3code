@@ -311,11 +311,10 @@ function handoffRecallCoverage(threadId: string): string {
 }
 
 /**
- * Fallback used only when selectHistory cannot fit the computed budget (the path that
- * previously threw ContextHandoffBudgetError). Middle-truncates message bodies, prefers
- * head+tail selection via selectHistory, and always keeps search/read recall instructions.
- * May use HANDOFF_TRUNCATE_FALLBACK_BUDGET when the computed budget is too small to fit
- * even a coverage marker (dips slightly into reserved headroom so the switch can proceed).
+ * Fallback used only when selectHistory cannot fit the computed budget. Middle-truncates message
+ * bodies, prefers head+tail selection, and always keeps search/read recall instructions. May use
+ * HANDOFF_TRUNCATE_FALLBACK_BUDGET when the computed budget cannot fit even a coverage marker
+ * (dips slightly into reserved headroom so the switch can proceed).
  */
 export function fitHistoryWithMiddleTruncate(input: {
   readonly messages: ReadonlyArray<OrchestrationV2HistoricalMessage>;

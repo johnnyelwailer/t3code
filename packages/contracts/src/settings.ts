@@ -1142,15 +1142,10 @@ export type AgentInstructions = typeof AgentInstructions.Type;
 
 export const ServerSettings = Schema.Struct({
   /**
-   * Global "Personality / Instructions" override for agent sessions.
-   * Empty (default) = the provider driver's built-in default; a non-empty
-   * value replaces that default for every new agent session on this server
-   * without touching the driver's fixed operational rules (drivers own
-   * whether any of those can be overridden at all).
-   *
-   * Server-authoritative rather than client-local: prompt construction
-   * happens on the server, and the answer must not differ between a desktop
-   * window and a phone attached to the same server.
+   * Global "Personality / Instructions" override for agent sessions. Empty (default) = the driver's
+   * built-in default; non-empty replaces it for every new session without touching the driver's fixed
+   * operational rules. Server-authoritative: prompts are built on the server and must not differ
+   * between clients attached to the same server.
    */
   agentInstructions: AgentInstructions.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
@@ -1178,16 +1173,10 @@ export const ServerSettings = Schema.Struct({
 
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   /**
-   * Whether active threads get a short LLM-generated "working on" label (GHE #40)
-   * instead of the static "Working" pill. Server-authoritative like
-   * `enableAgentBrowserAccess`: the activity-label summarizer (inference side)
-   * and the sidebar pills (display side) must agree, and the answer must not
-   * differ between clients attached to the same server.
-   *
-   * ON by default for this distribution: generation is light by construction
-   * (tiny hard-capped payload, non-thinking model selection, ~20s debounce,
-   * skip-when-unchanged) and fail-open — when off or on any error the thread
-   * simply shows the static "Working" exactly as before.
+   * Whether active threads get a short LLM-generated "working on" label instead of the static
+   * "Working" pill. Server-authoritative: the summarizer and the sidebar pills must agree. ON by
+   * default and fail-open (off or on any error the static pill shows); generation is light by
+   * construction (tiny capped payload, non-thinking model, ~20s debounce, skip-when-unchanged).
    */
   t3teamActivityLabelsEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
@@ -1202,16 +1191,10 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
   /**
-   * Whether the server ingests a bound work source's project avatar (Jira)
-   * as the project's `faviconPath` at bind/creation time — see
-   * `apps/server/src/t3team-projectSourceIconIngest.ts`. Server-authoritative
-   * like `t3teamActivityLabelsEnabled`: the ingest happens at command
-   * dispatch time, so every client attached to the server sees the same
-   * result.
-   *
-   * ON by default for this distribution: it is fail-open — when off, or on
-   * any fetch/store failure, the command passes through untouched and the
-   * project simply keeps the auto-selected fallback icon, exactly as before.
+   * Whether the server ingests a bound work source's project avatar (Jira) as the project's
+   * `faviconPath` at bind/creation time (apps/server/src/t3team-projectSourceIconIngest.ts).
+   * Server-authoritative: ingest happens at command dispatch. ON by default and fail-open: when off
+   * or on any failure the command passes through and the project keeps its fallback icon.
    */
   t3teamProjectSourceIconIngestEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),

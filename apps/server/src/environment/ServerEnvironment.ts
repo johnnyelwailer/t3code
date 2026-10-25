@@ -196,12 +196,9 @@ export const make = Effect.gen(function* () {
   const label = yield* resolveServerEnvironmentLabel({ cwdBaseName });
   const machine = yield* detectServerEnvironmentMachineKind();
   const launcher = yield* resolveServiceLauncherMode();
-  // Captured at layer construction (= process boot). The descriptor is
-  // rebuilt live on read, but the boot instant is not — it identifies THIS
-  // server process, and clients use it to settle in-memory state (bash
-  // background jobs) that died with the previous one. nowUnsafe reads the same
-  // wall clock the previous Date.now() did (fake-timer test seams included)
-  // without the global Date the Effect linter rejects.
+  // Captured at layer construction (process boot): identifies THIS server process, so clients can
+  // settle in-memory state (bash background jobs) that died with the previous one. nowUnsafe reads
+  // the same wall clock as Date.now() (fake-timer seams included) without the linted global Date.
   const serverStartedAtMs = DateTime.toEpochMillis(DateTime.nowUnsafe());
   const serverSelfUpdate = resolveServerSelfUpdateCapability({
     desktopManaged: serverConfig.mode === "desktop",

@@ -174,8 +174,8 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
     "gpt-5.3-spark": "gpt-5.3-codex-spark",
   },
   [CLAUDE_DRIVER_KIND]: {
-    // Fable aliases are fork-specific (usage pricing + fork tests). Upstream #9084
-    // moved the other Claude aliases to remote-manifest discovery.
+    // Fable aliases are fork-specific (usage pricing + fork tests); upstream moved the other Claude
+    // aliases to remote-manifest discovery.
     fable: "claude-fable-5-1",
     "fable-5.1": "claude-fable-5-1",
     "claude-fable-5.1": "claude-fable-5-1",

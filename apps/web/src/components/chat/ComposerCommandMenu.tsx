@@ -66,11 +66,10 @@ export type ComposerCommandItem =
       description: string;
     }
   /**
-   * t3team-owned kind. Unlike the kinds above it selects host state (stages the
-   * recipe as the composer's pre-submit chip) instead of mutating editor text —
-   * see docs/t3team-mvp/16-action-recipes.md#composer-slash-command-launchers.
-   * It lives in this union so every `/` menu renders through one component
-   * instead of a parallel panel duplicating the row chrome.
+   * t3team-owned kind. Unlike the kinds above it selects host state (stages the recipe as the
+   * composer's pre-submit chip) instead of mutating editor text; see
+   * docs/t3team-mvp/16-action-recipes.md#composer-slash-command-launchers. It lives in this union so
+   * every `/` menu renders through one component.
    */
   | {
       id: string;

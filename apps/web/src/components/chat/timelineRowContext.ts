@@ -120,7 +120,9 @@ export interface TimelineRowActivityState {
   liveReasoningTrace?: boolean;
   /** Current plan step label for the working row, when the run has a plan. */
   workingStepLabel: string | null;
-  /** GHE #201: active agents (running child threads + live subagents). */
+  /**
+   * Active agents (running child threads + live subagents).
+   */
   activeAgents: readonly ActiveAgentEntry[];
   /**
    * Background bash jobs folded from this thread's transcript. The working row
@@ -128,11 +130,17 @@ export interface TimelineRowActivityState {
    * live line instead of reading as idle.
    */
   backgroundJobs: readonly BackgroundJobState[];
-  /** GHE #201: opens the agents surface from the working-row indicator. */
+  /**
+   * Opens the agents surface from the working-row indicator.
+   */
   onOpenAgents: () => void;
-  /** GHE #201 follow-up: opens ONE agent (per-dot click). */
+  /**
+   * Opens ONE agent (per-dot click).
+   */
   onOpenAgent?: ((entry: ActiveAgentEntry) => void) | undefined;
-  /** GHE #236/#208: the thread's deterministic activity state; null falls back to the base word. */
+  /**
+   * The thread's deterministic activity state; null falls back to the base word.
+   */
   threadActivityState?: ActivityState | null;
   /** GHE #40: the thread's live LLM activity label (flag-gated by the caller). */
   threadActivityLabel?: string | null;

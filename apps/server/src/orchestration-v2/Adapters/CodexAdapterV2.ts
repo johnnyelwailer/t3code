@@ -1408,7 +1408,7 @@ export const makeCodexAppServerSpawnCommand = Effect.fn(
     ...(input.env === undefined ? {} : { env: input.env }),
     ...(input.extendEnv === undefined ? {} : { extendEnv: input.extendEnv }),
     shell: spawnCommand.shell,
-    // t3team: escalate to SIGKILL when the app-server ignores SIGTERM (GHE #326).
+    // t3team: escalate to SIGKILL when the app-server ignores SIGTERM.
     forceKillAfter: CODEX_APP_SERVER_FORCE_KILL_AFTER,
   });
 });

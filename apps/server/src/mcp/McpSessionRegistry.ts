@@ -118,14 +118,10 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
         const next = new Map(records);
-        // Re-issuing for a thread that already holds credentials is a provider
-        // session RESTART (model tier / cwd / access change), not a stop. The
-        // agent process that received the earlier token may well survive that
-        // restart — a pack driver may reuse its live session and never see
-        // the new bearer — so killing the old token here stranded a running
-        // thread on 401s until the whole app was restarted. Instead every live
-        // token of the thread adopts the new scope; they all die together on
-        // `revokeThread` or stop authenticating once the thread goes idle.
+        // Re-issuing for a thread that already holds credentials is a provider session RESTART (model tier /
+        // cwd / access change), not a stop: the agent that got the earlier token may survive it, and killing
+        // the old token stranded a running thread on 401s. Every live token of the thread adopts the new
+        // scope instead; they die together on `revokeThread` or stop authenticating once the thread idles.
         for (const [existingHash, record] of next) {
           // A token already past the liveness window stays dead: a restart must not revive it.
           if (

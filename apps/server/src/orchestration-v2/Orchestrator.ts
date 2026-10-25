@@ -4408,7 +4408,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         commandType: input.command.type,
         cause:
           `Provider session ${providerThread.providerSessionId} is not active ` +
-          `(idle-released or crashed). The stuck turn was cleared — send again to start a fresh session.`,
+          `(idle-released or crashed). The stuck turn was cleared. Send again to start a fresh session.`,
       });
     }
 

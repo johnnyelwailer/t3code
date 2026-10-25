@@ -596,16 +596,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   const isLocked = lockedProvider !== null;
   const isSearching = searchQuery.trim().length > 0;
   /**
-   * When the selected tab is installed-but-unauthenticated or not installed
-   * at all, the model list area renders a connect/install panel instead —
-   * this is the actual moment the user hits the problem, not a settings page
-   * they may never visit. Only for tools with a sign-in flow at all
-   * (`toolAuthToolForDriverKind` returns `undefined` for cursor/grok/
-   * opencode/...), and only while `INTEGRATIONS_TOOL_AUTH` is on; the rest fall back to
-   * today's behaviour (an empty list).
-   * Suppressed while searching: search already flattens matches across every
-   * *ready* instance regardless of which tab is selected, so the connect
-   * panel would be showing the wrong instance's state.
+   * When the selected tab is installed-but-unauthenticated or not installed, the list area renders a
+   * connect/install panel instead: the moment the user hits the problem. Only for tools with a sign-in
+   * flow (`toolAuthToolForDriverKind` is undefined otherwise) and while `INTEGRATIONS_TOOL_AUTH` is on.
+   * Suppressed while searching: search spans every ready instance, so the panel would show the wrong one.
    */
   const toolAuthEnabled = useFeatureFlag("INTEGRATIONS_TOOL_AUTH");
   const connectPanelCandidate = useMemo(() => {

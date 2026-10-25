@@ -266,14 +266,10 @@ export function sanitizeNewRefName(rawName: string): string {
 }
 
 /**
- * Replace command argument VALUES in process output so retained stderr
- * cannot echo secrets. Git echoes unknown `--opt=value` arguments verbatim
- * but STRIPS the leading dashes, so attached values are redacted in the
- * dash form, the dash-less form, and as the bare value (any process may
- * echo just the value). Flags with separate secret values (`-pass hunter2`)
- * redact that following argument instead. Plain arguments — subcommand
- * verbs, remote names, branch names, paths — are left intact: they are the
- * diagnostics these errors exist to carry.
+ * Replace command argument VALUES in process output so retained stderr cannot echo secrets. Git
+ * echoes unknown `--opt=value` arguments verbatim but STRIPS the leading dashes, so attached values are
+ * redacted in dash, dash-less and bare-value form; separate secret values (`-pass hunter2`) redact the
+ * next argument. Plain arguments (verbs, remotes, branches, paths) stay: they are the diagnostics.
  */
 const REDACTED_ARG = "[redacted]";
 

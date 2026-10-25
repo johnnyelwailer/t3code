@@ -621,11 +621,9 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   providers: Schema.Array(OrchestratorMcpProviderCapability),
   /**
-   * Compact per-instance usage view: one short line per instance built from
-   * the published `usageLimits` snapshots, e.g.
-   * `claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 71% · severity: warning`,
-   * or an explicit `no usage data` marker. Omitted when the host has no
-   * provider registry snapshot.
+   * Compact per-instance usage view, one short line per instance built from the published
+   * `usageLimits` snapshots (e.g. `claudeAgent: Session 42% (resets ...) · severity: warning`),
+   * or an explicit `no usage data` marker. Omitted when the host has no provider registry snapshot.
    */
   providerUsage: Schema.optional(
     Schema.Array(Schema.String).annotate({

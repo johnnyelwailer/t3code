@@ -7488,8 +7488,8 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               updatedAt,
             }),
           });
-          // Upstream #16897 retired the attempt-derived prompt uuid: Claude acks a uuid its
-          // transcript already holds without running a turn, so every offer needs a fresh one.
+          // Claude acks a uuid its transcript already holds without running a turn, so every offer needs a
+          // fresh prompt uuid (not attempt-derived).
           const promptUuid = yield* crypto
             .randomUUIDv4()
             .pipe(Effect.filterOrFail(isClaudePromptUuid), Effect.orDie);

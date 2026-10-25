@@ -68,12 +68,10 @@ export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
 );
 
 /**
- * The distribution's desktop icon (GHE #29). When `T3CODE_DISTRIBUTION` names a
- * distribution whose `distribution.json` declares `branding.iconPng`, the dev
- * desktop flow exports it as `T3CODE_DESKTOP_ICON_PNG` — the source icon the
- * macOS launcher (bundle .icns) and the main process (Dock icon) use in
- * unpackaged builds. An explicitly set `T3CODE_DESKTOP_ICON_PNG` always wins.
- * Returns `undefined` (no override) whenever nothing usable is configured.
+ * The distribution's desktop icon. When `T3CODE_DISTRIBUTION` names a distribution whose
+ * `distribution.json` declares `branding.iconPng`, exports it as `T3CODE_DESKTOP_ICON_PNG` (used by
+ * the macOS launcher and the Dock icon in unpackaged builds). An explicit value always wins.
+ * Returns `undefined` when nothing usable is configured.
  */
 export function resolveDistributionDesktopIconPng(
   env: Readonly<Record<string, string | undefined>>,

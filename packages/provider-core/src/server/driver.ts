@@ -42,10 +42,9 @@ export interface ProviderInstance {
   readonly configurationSource?: "pack" | undefined;
   readonly enabled: boolean;
   /**
-   * Host-owned turn inactivity watchdog budget in seconds (GHE #113),
-   * populated by the registry from the `ProviderInstanceConfig` envelope.
-   * `undefined` means "use the host default". Drivers never read this —
-   * it is consumed by the host-level watchdog in `ProviderService`.
+   * Host-owned turn inactivity watchdog budget in seconds, populated by the registry from the
+   * `ProviderInstanceConfig` envelope. `undefined` means "use the host default". Drivers never read
+   * this; the host-level watchdog in `ProviderService` consumes it.
    */
   readonly turnInactivityTimeoutSeconds?: number | undefined;
   readonly snapshot: ManagedServerProvider;

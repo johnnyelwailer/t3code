@@ -269,14 +269,10 @@ const make = Effect.gen(function* () {
         : Effect.fail(new Failure({ cause }));
 
   /**
-   * One bounded read for a new link whose host was inferred (no url, no host). An agent that
-   * names only repository and number lands on the project's host, which is wrong whenever the
-   * pull request lives elsewhere, and such a link can never be read. A url or an explicit host
-   * is the agent's override and is trusted. Only a not-found answer rejects: a missing
-   * credential grant or an unroutable host says nothing about the pull request, and a rate
-   * limit, a signed-out CLI, a network failure or a timeout must not block linking. The read
-   * goes through the service's persistent read cache under the key the sync reactor uses, so
-   * the first sweep after the link reuses it.
+   * One bounded read for a new link whose host was inferred (no url, no host): naming only repository
+   * and number lands on the project's host, wrong whenever the PR lives elsewhere. A url or explicit
+   * host is trusted. Only not-found rejects; grants, routing, rate limits, CLI or network failures
+   * must not block linking. Reads via the persistent cache under the sync reactor's key.
    */
   const verifyInferredHost = Effect.fn("PullRequestsToolkit.verifyInferredHost")(function* (
     thread: OrchestrationV2ThreadShell,

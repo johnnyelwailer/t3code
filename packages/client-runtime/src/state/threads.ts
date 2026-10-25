@@ -269,11 +269,10 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   };
   if (resumeCache?.owner === owner) resumeCache.snapshot = committed;
   const awaitingCompletion = yield* Ref.make(false);
-  // Whether the connected server advertises staggered thread resubscribes
-  // (runtime feature flag, GHE #382 storm): when true, this stream's
-  // (re)subscribes take a slot in the shared resubscribe gate so a session
-  // change cannot reopen hundreds of thread streams in one tick. Older servers
-  // never advertise it and keep the legacy all-at-once behavior.
+  // Whether the connected server advertises staggered thread resubscribes (runtime feature flag): when
+  // true, this stream's (re)subscribes take a slot in the shared resubscribe gate so a session change
+  // cannot reopen hundreds of streams in one tick. Older servers never advertise it and keep the
+  // legacy all-at-once behavior.
   const resubscribeStaggerEnabled = yield* Ref.make(false);
   const applyLock = yield* Semaphore.make(1);
   // Save only completed data/cursor updates. A canceled scope must not cache
@@ -996,13 +995,10 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
 
         const sequence = yield* SubscriptionRef.get(lastSequence);
         const eventId = yield* Ref.get(lastEventId);
-        // A cursor the server cannot verify is not a resume cursor: without an
-        // event id (cache written before ids existed, or an older server that
-        // sends none) a restored or overlapping server could be replaying
-        // different events after that sequence. Subscribe without one so the
-        // server sends a snapshot; the cached projection still paints meanwhile.
-        // Cost: one snapshot per such cached thread, and every reconnect to an
-        // older server (which never sends ids) is a snapshot.
+        // A cursor the server cannot verify is not a resume cursor: without an event id (old cache or older
+        // server) a restored or overlapping server could replay different events after that sequence. Subscribe
+        // without one so the server sends a snapshot while the cached projection still paints; the cost is a
+        // snapshot per such thread, and on every reconnect to an older server.
         const canResume = Option.isSome(current.data) && eventId !== undefined;
         const acceptBoundedSnapshot = yield* Ref.get(acceptsBoundedSocketSnapshots);
         if (!supportsCompletionMarker && canResume) {
@@ -1032,11 +1028,9 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         onExpectedFailure: (cause) => setStreamError(formatThreadError(cause)),
         retryExpectedFailureAfter: "250 millis",
         resubscribe: foregroundResubscriptions,
-        // GHE #382 storm: when the server advertises the stagger, each
-        // (re)subscribe takes a slot in the shared gate — the first few in a
-        // burst open immediately, the rest drip in — so a session change
-        // cannot issue hundreds of snapshot loads in one tick. Unflagged
-        // sessions keep the legacy immediate behavior.
+        // When the server advertises the stagger, each (re)subscribe takes a slot in the shared gate (the
+        // first few in a burst open immediately, the rest drip in), so a session change cannot issue hundreds
+        // of snapshot loads in one tick. Unflagged sessions keep the legacy immediate behavior.
         beforeSubscribe: Effect.fn("EnvironmentThreadState.beforeSubscribe")(function* (session) {
           if (!(yield* Ref.get(resubscribeStaggerEnabled))) return;
           const delayMs = yield* defaultThreadResubscribeGate.allocateDelayMsEffect(session);
@@ -1072,14 +1066,10 @@ export function createEnvironmentThreadStateAtoms<R, E>(
   >,
   options?: {
     /**
-     * How long the live-state node survives with no consumers before its
-     * `subscribeThread` stream is torn down. Defaults to
-     * {@link THREAD_STATE_IDLE_TTL_MS}.
-     *
-     * Only tests pass this. Cases that exercise what survives *across* a
-     * teardown (warm resume, cursors, paging, retries) use `0` so the close is
-     * a synchronous handle rather than a timer they have to drive; the tests
-     * that pin *when* teardown happens use the shipped default.
+     * How long the live-state node survives with no consumers before its `subscribeThread` stream is
+     * torn down. Defaults to {@link THREAD_STATE_IDLE_TTL_MS}. Only tests pass this: cases about what
+     * survives a teardown use `0` so the close is a synchronous handle; tests pinning WHEN teardown
+     * happens use the shipped default.
      */
     readonly idleTtlMs?: number;
   },

@@ -1304,12 +1304,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerSuggestionListVisible = composerSuggestionsVisible && composerMenuItems.length > 0;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
-  // The prompt editor's value while a pending question is docked: it stays on
-  // the user's in-progress draft until they actually start answering (see
-  // composerDraftAnswerState), so docking the question never rewrites the editor
-  // out from under the caret.
-  // Upstream #21503 keeps the composer usable during approvals, so an approval no
-  // longer blanks the editor: only the pending-question draft rule applies here.
+  // The prompt editor's value while a pending question is docked: it stays on the user's in-progress
+  // draft until they start answering (see composerDraftAnswerState), so docking the question never
+  // rewrites the editor from under the caret. Approvals no longer blank the editor, so only the
+  // pending-question draft rule applies.
   const composerDraftAnswerState = {
     isComposerApprovalState: false,
     activePendingCustomAnswer: activePendingProgress ? activePendingProgress.customAnswer : null,

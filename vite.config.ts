@@ -22,6 +22,14 @@ const T3TEAM_LINT_PENDING_FILES = NodeFS.readFileSync(
   .split("\n")
   .filter((line) => line.length > 0 && !line.startsWith("#"));
 
+// t3team: TEMPORARY exemption pending owner decision; see t3team-comment-lint-pending.txt.
+const T3TEAM_COMMENT_LINT_PENDING_FILES = NodeFS.readFileSync(
+  NodeURL.fileURLToPath(new URL("./t3team-comment-lint-pending.txt", import.meta.url)),
+  "utf8",
+)
+  .split("\n")
+  .filter((line) => line.length > 0 && !line.startsWith("#"));
+
 const DOM_TEST_ENVIRONMENT_ALLOWLIST: Array<string> = [];
 
 const TEST_EXCLUDE = [
@@ -659,6 +667,15 @@ export default defineConfig({
           "react/unsupported-syntax": "warn",
           "t3code/no-manual-memo": "warn",
           "t3code/no-hookless-use-function": "warn",
+        },
+      },
+      {
+        // t3team: TEMPORARY exemption pending owner decision (see t3team-comment-lint-pending.txt).
+        files: [...T3TEAM_COMMENT_LINT_PENDING_FILES],
+        rules: {
+          "t3code/no-em-dash-copy": "warn",
+          "t3code/no-low-value-comments": "warn",
+          "t3code/no-polling-loop-in-tests": "warn",
         },
       },
       {

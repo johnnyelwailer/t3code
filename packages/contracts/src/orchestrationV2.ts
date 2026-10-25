@@ -3428,12 +3428,10 @@ export const OrchestrationV2SubscribeThreadInput = Schema.Struct({
   threadId: ThreadId,
   afterSequence: Schema.optionalKey(NonNegativeInt),
   /**
-   * Event id of the thread event at `afterSequence`. Sequences restart their
-   * meaning when a state restore or an overlapping server reissues them for
-   * different events, so a bare cursor cannot prove it belongs to this
-   * timeline. When present and the stored event at that sequence has another
-   * id (or none), the server sends a snapshot instead of replaying. Optional:
-   * older clients send none, older servers ignore it.
+   * Event id of the thread event at `afterSequence`. Sequences can be reissued for different events
+   * after a state restore or overlapping server, so a bare cursor cannot prove it belongs to this
+   * timeline. If the stored event at that sequence has another id, the server sends a snapshot
+   * instead of replaying. Optional: older clients send none, older servers ignore it.
    */
   afterEventId: Schema.optionalKey(EventId),
   requestCompletionMarker: Schema.optionalKey(Schema.Boolean),

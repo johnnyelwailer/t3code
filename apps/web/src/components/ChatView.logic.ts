@@ -928,13 +928,9 @@ export interface ComposerTasksProgressView {
 }
 
 /**
- * Decides how the composer task badge renders the thread's active plan.
- *
- * The plan itself is resolved by `deriveActivePlanState` (session-logic): a
- * plan owned by the latest run wins, otherwise the most recent plan from any
- * run — and that resolution persists after the run settles. This function
- * must therefore NOT re-gate on run ownership or run settledness: the badge is
- * a task list, not only a live-progress indicator.
+ * Decides how the composer task badge renders the thread's active plan. The plan is resolved by
+ * `deriveActivePlanState` and persists after the run settles, so this must NOT re-gate on run
+ * ownership or settledness: the badge is a task list, not only a live-progress indicator.
  */
 export function deriveComposerTasksProgress(input: {
   readonly activeLatestRunId: RunId | null;
@@ -1311,30 +1307,18 @@ export function hasServerAcknowledgedLocalDispatch(input: {
 }
 
 /**
- * Stuck-busy backstop window (GHE #301). A local dispatch the server never
- * acknowledged (no run change, no runtime status/updatedAt edge, no pending
- * approval or input, no thread error) is stuck until a thread re-mount
- * re-derives it — the send button spins and Enter stays blocked until then.
- * This happens when a run dies on the provider side and no terminal event
- * ever lands: the acknowledgement above is a pure state comparison with no
- * time-based release, so dead ends stay dead forever. If NONE of the
- * server-visible fields this dispatch watches has changed for this long,
- * treat the dispatch as dead and clear the busy state. The window is
- * deliberately longer than every legitimate "no server activity" stretch
- * before a run starts. A genuinely running run is unaffected: once the
- * provider is alive, the composer stays blocked by the running phase (and the
- * stop button), not by this flag.
+ * Stuck-busy backstop window. A local dispatch the server never acknowledged stays stuck (send
+ * button spinning, Enter blocked) when a run dies provider-side with no terminal event, since the
+ * acknowledgement is a pure state comparison. If NONE of the watched server-visible fields changed
+ * for this long, treat the dispatch as dead. Deliberately longer than any legitimate quiet stretch.
  */
 export const LOCAL_DISPATCH_STUCK_BACKSTOP_MS = 5 * 60 * 1_000;
 
 /**
- * True when a still-unacknowledged local dispatch should be abandoned:
- * the dispatch is not in local worktree preparation, no approval/input
- * request or thread error is pending (those clear the busy state on their
- * own), and no server-visible activity the dispatch watches has been seen
- * for LOCAL_DISPATCH_STUCK_BACKSTOP_MS. The send itself floors the window:
- * even a server that emits no timestamps at all cannot hold the busy state
- * past the backstop.
+ * True when a still-unacknowledged local dispatch should be abandoned: not in worktree preparation,
+ * no approval/input request or thread error pending (those clear busy on their own), and no watched
+ * server-visible activity for LOCAL_DISPATCH_STUCK_BACKSTOP_MS. The send itself floors the window,
+ * so even a server emitting no timestamps cannot hold the busy state past the backstop.
  */
 export function hasLocalDispatchGoneStuck(input: {
   localDispatch: LocalDispatchSnapshot | null;

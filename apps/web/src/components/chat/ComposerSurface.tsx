@@ -12,12 +12,10 @@ function Shell({
     <div
       data-slot="composer-shell"
       data-with-context={contextStrip || undefined}
-      // Drives the in-progress glow, which index.css gates on the active nexplore pack theme
-      // (`html[data-theme-id="t3team-pack-nexplore"]`) — this attribute alone paints nothing on
-      // any other theme, so it is safe to set unconditionally here. The Shell is
-      // the glow host because it is the outermost `relative isolate` box and — unlike `Host` and
-      // `Main` — its `::after` is still free, so the bloom can bleed past the composer's rounded
-      // edge without a new DOM node.
+      // Drives the in-progress glow, which index.css gates on the nexplore pack theme, so this attribute
+      // paints nothing on other themes and is safe to set unconditionally. The Shell hosts the glow: it is
+      // the outermost `relative isolate` box and its `::after` is still free, so the bloom can bleed past
+      // the composer's rounded edge without a new DOM node.
       data-composer-working={working || undefined}
       className={cn(
         "@container/composer-surface group/composer-surface relative isolate mx-auto w-full max-w-(--chat-content-max-width)",

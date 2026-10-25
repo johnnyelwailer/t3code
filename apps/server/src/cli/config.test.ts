@@ -690,15 +690,9 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
       }),
   );
 
-  // Regression test: `serve` (and any other headless startup) resolves
-  // `startupPresentation: "headless"` here, and its handler used to pass a
-  // `forceAutoBootstrapProjectFromCwd: false` override that always won,
-  // regardless of what the CLI flag or env var said. That made
-  // `serve --auto-bootstrap-project-from-cwd` (and the env-var form) a
-  // silent no-op: no project or thread was ever created for the cwd, and
-  // nothing was logged about it. The two tests below pin the fix: an
-  // explicit request — flag or env var — must still win over the headless
-  // default.
+  // Regression: headless `serve` used to pass a `forceAutoBootstrapProjectFromCwd: false` override
+  // that always won, making `serve --auto-bootstrap-project-from-cwd` (and the env-var form) a
+  // silent no-op. An explicit flag or env var must still win over the headless default.
   it.effect(
     "honors an explicit --auto-bootstrap-project-from-cwd flag for headless startup presentation",
     () =>

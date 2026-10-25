@@ -59,11 +59,9 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsMutate]: AuthOrchestrationOperateScope,
   // t3team: per-thread composing heartbeat (wire name "orchestration.noteComposing"; V2 removed
-  // ORCHESTRATION_WS_METHODS, so the fork RPC is registered under WS_METHODS). It mutates the
-  // server's engagement state (the inter-agent drain back-off), so it operates rather than reads.
-  // Every standard client session already carries orchestration:operate, the same scope every
-  // thread command flows through. The signal is per-thread and self-clearing (typing-lapse
-  // window), so the scope is the full authorization: it is strictly weaker than starting a turn.
+  // ORCHESTRATION_WS_METHODS, so it is registered under WS_METHODS). It mutates engagement state, so it
+  // operates rather than reads. The signal is per-thread and self-clearing, so the standard
+  // orchestration:operate scope suffices: it is strictly weaker than starting a turn.
   [WS_METHODS.orchestrationNoteComposing]: AuthOrchestrationOperateScope,
   // t3team: fork thread facts/artifacts side streams are thread reads like subscribeThread.
   [WS_METHODS.t3teamSubscribeThreadFacts]: AuthOrchestrationReadScope,

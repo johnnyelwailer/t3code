@@ -193,18 +193,10 @@ export const Route = createFileRoute("/_chat")({
       throw redirect({ to: "/pair", replace: true });
     }
 
-    // T3 Team is the permanent shell: upstream's sidebar navigates with
-    // upstream's own route shapes (`/`, `/$environmentId/$threadId`,
-    // `/draft/$draftId`), all of which live under this layout route. Resolving
-    // the equivalent Team route here — synchronously, before this route ever
-    // commits — means a thread row click never renders this tree at all.
-    // Doing the same translation reactively (the __root.tsx bridge effect,
-    // which still covers deep links this beforeLoad can't reach, e.g. history
-    // navigation that bypasses the router) requires this route to mount
-    // first and then bounce away, which unmounts the whole Team shell
-    // (including the sidebar) for a frame and remounts it fresh — silently
-    // resetting any component-local sidebar state, such as the project scope
-    // selector, back to its default.
+    // T3 Team is the permanent shell: upstream's sidebar navigates with upstream's route shapes, all of
+    // which live under this layout route. Resolving the Team route here, synchronously before this route
+    // commits, avoids the reactive bridge (__root.tsx), which mounts this route then bounces away,
+    // unmounting the Team shell for a frame and resetting component-local sidebar state.
     const translation = translateUpstreamPath(location.pathname, {
       resolveProjectIdForThread: ({ environmentId, threadId }) =>
         readThreadShells().find(
@@ -223,20 +215,10 @@ export const Route = createFileRoute("/_chat")({
       throw redirect(translation.target);
     }
     if (translation.kind === "unhandled") {
-      // t3team: the concrete unhandled path is a race, not a bad link. Both
-      // segments of `/$environmentId/$threadId` are already known here, but
-      // resolveProjectIdForThread still misses when this environment's
-      // thread shells haven't finished syncing into the entities store yet
-      // (readThreadShells() above is a synchronous snapshot of an
-      // asynchronously-populated atom) — e.g. a thread click landing right
-      // after a cold load, or for an environment whose shells are still
-      // in flight. That drops projectId to null and lands here.
-      // This redirect to /t3team used to also reset the sidebar's
-      // component-local project scope back to "All projects" on remount.
-      // Now that projectScopeKey is persisted in sessionStorage (see
-      // Sidebar.tsx), the remount restores the scope, so this fallback is
-      // safe to keep as a plain redirect rather than adding wait/passthrough
-      // logic here.
+      // t3team: the unhandled path is a race, not a bad link: both segments are known, but
+      // resolveProjectIdForThread misses while this environment's thread shells are still syncing into
+      // the entities store (readThreadShells() is a synchronous snapshot), so projectId is null. A plain
+      // redirect is safe because projectScopeKey is persisted in sessionStorage (see Sidebar.tsx).
       throw redirect({ to: "/t3team" });
     }
   },

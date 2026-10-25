@@ -193,15 +193,23 @@ const TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH = {
  * single line of `MessagesTimelineProps`.
  */
 export interface MessagesTimelineT3TeamProps extends T3TeamTimelineRowProps {
-  /** GHE #201: active agents for the working row (running child threads + live subagents). */
+  /**
+   * Active agents for the working row (running child threads + live subagents).
+   */
   readonly activeAgents?: readonly ActiveAgentEntry[];
-  /** GHE #201: opens the agents surface from the working-row indicator. */
+  /**
+   * Opens the agents surface from the working-row indicator.
+   */
   readonly onOpenAgents?: () => void;
-  /** GHE #201 follow-up: per-dot open; defaults to `onOpenThread` for child dots. */
+  /**
+   * Per-dot open; defaults to `onOpenThread` for child dots.
+   */
   readonly onOpenAgent?: (entry: ActiveAgentEntry) => void;
   /** Label for the working row's current step (plan step / active-agents focus). */
   readonly workingStepLabel?: string | null;
-  /** GHE #236/#208: thread activity state — bases the working row's status word. */
+  /**
+   * Thread activity state; bases the working row's status word.
+   */
   readonly threadActivityState?: ActivityState | null;
   /** GHE #40: thread LLM activity label — replaces the state word (flag-gated by the caller). */
   readonly threadActivityLabel?: string | null;
@@ -651,14 +659,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
     });
   }, [latestRun, listIdentityKey]);
 
-  // t3team: background bash jobs. No provider event marks job start/settle, so the
-  // fold is transcript-driven — the "background job: job_xxx" marker in a tool
-  // result opens the job, later process-tool results settle it, and the marker's
-  // hard deadline keeps stale threads quiet (client-runtime work-log/background-jobs).
-  // It runs before the row derivation: a running job keeps the working-row slot
-  // alive after the run settles, and a collapsed tool group needs to know one of
-  // its hidden rows started a job. An unchanged fold keeps its identity so text
-  // streaming does not invalidate the rows projection or the shared row context.
+  // t3team: background bash jobs. No provider event marks job start/settle, so the fold is
+  // transcript-driven (the "background job: job_xxx" marker opens it, process-tool results settle it,
+  // the marker's hard deadline keeps stale threads quiet). Runs before row derivation; an unchanged
+  // fold keeps its identity so text streaming does not invalidate the rows projection or row context.
   const backgroundJobFoldRef = useRef<T3TeamBackgroundJobFold | null>(null);
   const backgroundJobFold = useMemo<T3TeamBackgroundJobFold>(() => {
     const foldEntries = timelineEntries
@@ -1097,8 +1101,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     threadJobsController,
     backgroundJobStarters: backgroundJobFold.starters,
   };
-  // t3team (GHE #201 follow-up): per-dot open default — a child dot opens its own
-  // thread; a subagent dot (or anything unresolvable) opens the agents surface.
+  // t3team: per-dot open default. A child dot opens its own thread; a subagent dot (or anything
+  // unresolvable) opens the agents surface.
   const onOpenAgentDefault = (entry: ActiveAgentEntry) => {
     const childPrefix = "child:";
     if (entry.source === "child" && entry.id.startsWith(childPrefix)) {

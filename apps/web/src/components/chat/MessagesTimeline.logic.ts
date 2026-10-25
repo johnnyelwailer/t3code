@@ -1457,9 +1457,8 @@ export function deriveMessagesTimelineRows(input: {
   liveAgentTaskIds?: ReadonlySet<string> | undefined;
   worktreeSetup?: WorktreeSetupSnapshot | null;
   /**
-   * t3team (GHE #201): the main run is idle but active agents (running child
-   * threads / live subagents) exist — render the working-row surface for the
-   * active-agents indicator even without a "Working..." prefix.
+   * t3team: the main run is idle but active agents (running child threads / live subagents) exist;
+   * render the working-row surface for the active-agents indicator even without a "Working..." prefix.
    */
   idleActiveAgentsPresent?: boolean;
   /**
@@ -1483,8 +1482,8 @@ export function deriveMessagesTimelineRows(input: {
    */
   backgroundJobStartEntryIds?: ReadonlySet<string>;
   /**
-   * t3team (GHE #236): the working row renders the live state word itself, so
-   * the separate live "Thinking" row is not emitted while a working row exists.
+   * t3team: the working row renders the live state word itself, so the separate live "Thinking" row
+   * is not emitted while a working row exists.
    */
   workingRowOwnsLiveStatus?: boolean;
 }): MessagesTimelineRow[] {
@@ -1857,8 +1856,8 @@ export function deriveMessagesTimelineRows(input: {
         timelineEntry.entry.itemType === "system_notice" ||
         timelineEntry.entry.itemType === "notification" ||
         timelineEntry.entry.questionAnswer !== undefined ||
-        // t3team (GHE #209): an outbound inter-agent send is a communication event,
-        // not tool usage — it renders standalone and never folds into a tool group.
+        // t3team: an outbound inter-agent send is a communication event, not tool usage; it renders
+        // standalone and never folds into a tool group.
         isActorOutboundSendMessageEntry(timelineEntry.entry)
       ) {
         nextRows.push({
@@ -1890,7 +1889,7 @@ export function deriveMessagesTimelineRows(input: {
           supersededFoldsByAnchorEntryId.has(nextEntry.id) ||
           (nextEntry.entry.runId ?? null) !== (timelineEntry.entry.runId ?? null) ||
           nextEntry.attempt?.id !== timelineEntry.attempt?.id ||
-          // t3team (GHE #209): a send ends the tool run so it renders on its own row.
+          // t3team: a send ends the tool run so it renders on its own row.
           isActorOutboundSendMessageEntry(nextEntry.entry)
         ) {
           break;
@@ -2173,11 +2172,9 @@ export function deriveMessagesTimelineRows(input: {
   if (input.isWorking && !hasWorkingRow && activeTurnHeaderIndex === timelineEntries.length) {
     appendWorkingRow();
   }
-  // t3team (GHE #201): main run idle but agents are active — the active-agents
-  // indicator still renders, in the working-row slot, without a timer. Same for
-  // a still-running background bash job: the run settles the moment the command
-  // is handed to the job registry, and the working-row slot is the one place a
-  // reader looks for "is anything happening".
+  // t3team: main run idle but agents are active; the active-agents indicator still renders in the
+  // working-row slot, without a timer. Same for a still-running background bash job: the run settles
+  // as soon as the command is handed to the job registry, and this slot is where readers look.
   if (
     !input.isWorking &&
     !hasWorkingRow &&

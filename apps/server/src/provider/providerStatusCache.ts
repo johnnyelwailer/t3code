@@ -16,13 +16,10 @@ const decodeProviderStatusCache = Schema.decodeUnknownEffect(
 );
 
 /**
- * Union the live list with cached extras, so a provider whose model list comes from
- * probing an external CLI keeps its last-known models when the probe has not run yet
- * (or came back empty) instead of showing an empty picker.
- *
- * Pack-declared providers are the exception: their `describe()` list IS the complete,
- * authoritative set. Resurrecting cached extras there makes a model removed from a pack
- * linger in the picker forever on any install that had already cached it.
+ * Union the live list with cached extras, so a provider whose models come from probing an external
+ * CLI keeps its last-known models when the probe has not run (or came back empty). Pack-declared
+ * providers are the exception: their `describe()` list IS authoritative, and resurrecting cached
+ * extras would leave removed models in the picker forever.
  */
 const mergeProviderModels = (
   fallbackModels: ReadonlyArray<ServerProvider["models"][number]>,

@@ -57,12 +57,10 @@ const configuredAtlassianOAuthRedirectUri =
   process.env.VITE_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   process.env.T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   "";
-// Build guard: a pinned desktop release listens on the default backend port
-// (3773, see DEFAULT_DESKTOP_BACKEND_PORT in apps/desktop/src/app/DesktopBackendPort.ts).
-// A baked redirect URI pointing at a different origin would desync the Atlassian
-// OAuth callback from the live listener — the resolver prefers the live desktop
-// base URL, but the baked value is still the fallback while the bridge has no
-// live URL, so a stale one must never ship. Refuse the build instead.
+// Build guard: a pinned desktop release listens on the default backend port (3773, see
+// DEFAULT_DESKTOP_BACKEND_PORT). A baked redirect URI on another origin would desync the Atlassian
+// OAuth callback from the live listener; the baked value is still the fallback while the bridge has
+// no live URL, so a stale one must never ship. Refuse the build instead.
 const pinnedDesktopBackendPort = process.env.VITE_DESKTOP_PIN_BACKEND_PORT?.trim() === "1";
 if (pinnedDesktopBackendPort && configuredAtlassianOAuthRedirectUri) {
   let redirectOrigin = "";

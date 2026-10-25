@@ -147,23 +147,9 @@ const stateBytes = (userdataDir: string, join: (first: string, ...segments: stri
 
 /**
  * Move a pre-branding home (`~/.t3`) into the branded one, once.
- *
- * A build with bundled packs stores state under
- * `<appData>/<userDataDirName>`, while an unbundled build uses `~/.t3`. Before
- * this migration existed, installing a branded build over an existing install
- * silently started with a BLANK workspace: the old database was never opened,
- * never migrated, and never surfaced — the app simply looked wiped.
- *
- * The move is a rename, so on the normal same-volume case it is instant even
- * with large `worktrees/` trees. Anything that already exists in the branded
- * home is left untouched, so a real branded workspace can never be clobbered.
- * A blank state DB left behind by such a first launch does not block adoption
- * — it is moved aside rather than deleted, because discarding user-adjacent
- * data on startup is never the right default.
- *
- * Returns the directory the backend should actually use. On any failure
- * (cross-device rename, permissions) it returns the legacy directory so the
- * user keeps a working app instead of an empty one.
+ * Without it a branded build installed over an existing install started with a blank workspace.
+ * Existing branded content is never clobbered; a blank state DB is moved aside, not deleted.
+ * On any failure (cross-device rename, permissions) returns the legacy directory.
  */
 export const migrateLegacyHomeIfNeeded = (input: {
   readonly legacyDir: string;

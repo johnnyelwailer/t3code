@@ -34,12 +34,9 @@ export function shouldUseRestingComposerLayout(input: {
   collapseOnBlur: boolean;
   timelineOverflows: boolean;
 }): boolean {
-  // Focus is authoritative over both collapse paths: a focused composer is one
-  // the user is actively composing in, and resting it would pull the text and
-  // caret from under them. "Lifts on the next composer interaction" is exactly
-  // "lifts while focused", so a focused composer never rests no matter what a
-  // scroll gesture requested; an unfocused composer still collapses on scroll,
-  // keeping the feature intact.
+  // Focus is authoritative over both collapse paths: resting a focused composer would pull the text
+  // and caret from under the user. A focused composer never rests whatever a scroll gesture
+  // requested; an unfocused one still collapses on scroll.
   const collapsed = !input.isFocused && (input.isScrollCollapsed || input.collapseOnBlur);
   return (
     input.isExistingThread &&

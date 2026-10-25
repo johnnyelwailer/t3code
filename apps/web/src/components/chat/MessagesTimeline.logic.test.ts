@@ -3915,11 +3915,9 @@ describe("failed turn transcript", () => {
 });
 
 describe("deriveMessagesTimelineRows: t3team hooks", () => {
-  // Regression, thread fbdb583b: a bash call that yields a job handle settles
-  // its run immediately, so `isWorking` goes false while the job runs on for
-  // minutes. Without the working-row slot the thread rendered no live row at
-  // all, and the only trace of the job was a hidden row inside a collapsed
-  // tool group.
+  // Regression: a bash call that yields a job handle settles its run immediately, so `isWorking` goes
+  // false while the job runs on. Without the working-row slot the thread rendered no live row and the
+  // job was only a hidden row inside a collapsed tool group.
   describe("a running background job", () => {
     const toolEntry = (id: string, label: string, at: string) => ({
       id: `${id}-entry`,

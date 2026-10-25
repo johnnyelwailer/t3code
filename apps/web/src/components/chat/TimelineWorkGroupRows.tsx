@@ -317,12 +317,10 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   }
   const hasActiveAgents = activeAgents.length > 0;
   const waitingForAgents = !isWorking && hasActiveAgents;
-  // A backgrounded bash job outlives its turn, so the row can be here for
-  // the job alone. Then the status line has nothing true to say — there is
-  // no active turn and no agent — and the job line IS the row. Rendering it
-  // alone (not as a second line under a stale "Working") also means the row
-  // disappears cleanly: the indicator returns null once the last job settles
-  // or passes its hard deadline, and it takes the whole row with it.
+  // A backgrounded bash job outlives its turn, so the row can exist for the job alone. Then the
+  // status line has nothing true to say and the job line IS the row; rendering it alone (not under a
+  // stale "Working") lets the row disappear cleanly when the indicator returns null once the last
+  // job settles or passes its hard deadline.
   if (!isWorking && !hasActiveAgents) {
     return (
       <div data-t3team-working-row>
@@ -335,12 +333,10 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
       </div>
     );
   }
-  // GHE #236/#208/#40: the shared resolver (same seam as the sidebar) picks
-  // the lead word: the LLM activity label REPLACES the deterministic state
-  // word, which replaces the base word. The base word: a turn STARTS
-  // thinking (the server persists `thinking` on turn-started), so an
-  // ACTIVE turn with no live state yet reads "Thinking" — "Working"
-  // remains only when no active-turn info exists at all (old servers).
+  // The shared resolver (same seam as the sidebar) picks the lead word: the LLM activity label
+  // REPLACES the deterministic state word, which replaces the base word. A turn STARTS thinking (the
+  // server persists `thinking` on turn-started), so an ACTIVE turn with no live state reads
+  // "Thinking"; "Working" remains only when no active-turn info exists (old servers).
   const liveState = threadActivityState !== null && threadActivityState !== undefined;
   const baseWord = liveState
     ? ACTIVITY_STATE_WORDS[threadActivityState]
@@ -359,43 +355,21 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   return (
     <div data-t3team-working-row>
       <div className="border-b border-border/60 pb-2 pt-1">
-        {/* GHE #238: single-line, no wrap. The row is a flex line; the step
-            label is the primary shrink/truncate point (it clips internally
-            via .t3team-aci-step). The dots never shrink; the lead span is
-            the last-resort shrink point (narrow panels — see below).
-            GHE #236 follow-up: items-CENTER, not baseline — the lead's
-            clamp span is overflow-hidden, which by spec has NO text
-            baseline, so baseline alignment pinned the lead's line-box
-            BOTTOM to the row baseline and left the status text riding ~3px
-            above the agent dots (with dead space below it). Centering puts
-            the glyph centers and the dot centers on the same line.
-            The clamp itself must be a flex row (below): as a block it lays
-            out the inline-block slot in a LINE BOX whose strut overhangs
-            the slot's baseline by ~6px, inflating the row to 29px and
-            pinning the status text ~3px above the centered dots. As a
-            flex row the slot is a flex item (no line box), the row stays
-            22.75px tall, and everything centers on one line. */}
+        {/* Single-line, no wrap: the step label is the primary shrink/truncate point, the dots never shrink,
+            the lead span is the last resort. items-CENTER, not baseline: the lead's clamp span is
+            overflow-hidden and has no text baseline. The clamp must be a flex row, else its inline-block slot
+            sits in a line box whose strut inflates the row to 29px and pins the text ~3px above the dots. */}
         <div className="flex items-center px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-          {/* GHE #208 follow-up: the step label stays the PRIMARY shrink
-              point; the lead span is the LAST-RESORT one — only when the
-              panel is narrower than the lead itself does the timer text
-              ellipsize (the .t3team-aci-lead clamp) instead of hard-clipping
-              at the row wrapper's overflow-x-clip. The row stays one line,
-              no wrap, no second line. */}
+          {/* The step label stays the PRIMARY shrink point; the lead span is the last resort, so only a panel
+              narrower than the lead ellipsizes the timer text (the .t3team-aci-lead clamp) instead of
+              hard-clipping at the row wrapper's overflow-x-clip. */}
           {waitingForAgents ? null : (
             <span className="flex min-w-0 items-center">
-              {/* GHE #236 follow-up: no leading dot pulses — the status
-                  text alone leads the row; child chips on the right carry
-                  each agent's driver and status word. */}
-              {/* The shimmer paint lives on the LEAF text spans inside
-                  WorkingLeadText (background-clip: text cannot reach text
-                  in nested animated spans through this wrapper — P0).
-                  This span is pure layout: the last-resort clamp. FLEX, not
-                  block — a block here lays the inline-block slot out in a
-                  line box whose strut overhangs the slot baseline, and the
-                  inflated 29px box makes the status text ride ~3px above
-                  the chips (measured on the GHE #201 alignment story).
-                  text-overflow is dead CSS on a flex container; the SLOT
+              {/* No leading dot pulses: the status text alone leads the row; child chips on the right carry each
+                  agent's driver and status word. */}
+              {/* The shimmer paint lives on the LEAF text spans inside WorkingLeadText (background-clip: text cannot
+                  reach nested animated spans through this wrapper). This span is pure layout: the last-resort clamp,
+                  FLEX not block (see above); text-overflow is dead CSS on a flex container, so the SLOT
                   (.t3team-aci-lead) owns overflow + ellipsis. */}
               <span className="flex min-w-0 items-center overflow-hidden">
                 {row.createdAt ? (
@@ -424,10 +398,8 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
           {hasActiveAgents && isWorking ? (
             <T3TeamActiveAgentsStepLabel label={workingStepLabel} />
           ) : !hasActiveAgents && workingStepLabel ? (
-            // GHE #208 follow-up: the step label is the PRIMARY shrink
-            // point — with shrink-100 it surrenders nearly all the row's
-            // overflow, so a narrow panel truncates (then vanishes) the
-            // step before the timer text ever ellipsizes.
+            // The step label is the PRIMARY shrink point: with shrink-100 it surrenders nearly all the row's
+            // overflow, so a narrow panel truncates (then vanishes) the step before the timer text ellipsizes.
             <span className="ml-2 min-w-0 shrink-100 truncate text-muted-foreground/55">
               {workingStepLabel}
             </span>

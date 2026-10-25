@@ -200,7 +200,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             // field exists to fix.
             <span className="min-w-0 flex-1 truncate text-secondary-label">
               {activeQuestion.context
-                ? `${activeQuestion.context} — ${activeQuestion.question}`
+                ? `${activeQuestion.context}: ${activeQuestion.question}`
                 : activeQuestion.question}
             </span>
           ) : null}

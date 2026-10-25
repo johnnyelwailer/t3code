@@ -136,12 +136,9 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
           ) : null}
 
           {props.instanceEntries.map((entry) => {
-            // An instance that only needs a sign-in or an install is NOT the
-            // same as a genuine probe error: the user must be able to click
-            // through to it (that's the whole point of the connect panel the
-            // model list area renders instead of the model list). Only a
-            // real "otherError" (or the instance being disabled/unavailable,
-            // which also resolves to "otherError") keeps the tab disabled.
+            // An instance that only needs a sign-in or install is NOT a genuine probe error: the user must be
+            // able to click through to the connect panel. Only "otherError" (including a disabled/unavailable
+            // instance) keeps the tab disabled.
             const isUnavailable =
               !isProviderInstancePickerReady(entry) && !isProviderInstanceConnectable(entry);
             const isContextDisabled = props.disabledInstanceIds?.has(entry.instanceId) ?? false;

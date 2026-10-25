@@ -46,11 +46,10 @@ import Migration0039 from "./Migrations/t3team-039_WorkflowOrigin.ts";
 import Migration0040 from "./Migrations/t3team-040_ProjectionThreadMessageSequence.ts";
 import Migration0041 from "./Migrations/t3team-041_ProjectionThreadRetention.ts";
 import Migration0042 from "./Migrations/t3team-042_ProjectionThreadChildStatus.ts";
-// Upstream added these as 033/034, but this fork already occupies 33-42. The runner only
-// applies migrations with an id greater than the last applied one, so re-using 33/34 would
-// silently skip them on every existing fork database. They keep their upstream filenames and
-// contents; only the registered id moves. Rule for future syncs: append upstream migrations
-// above the fork's current maximum id instead of renumbering fork migrations.
+// Upstream added these as 033/034, but this fork already occupies 33-42. The runner only applies
+// ids above the last applied one, so re-using 33/34 would skip them on every existing fork DB.
+// Filenames and contents are upstream's; only the registered id moves. Future syncs: append
+// upstream migrations above the fork's current maximum id, never renumber fork migrations.
 import Migration0043 from "./Migrations/033_ProjectionThreadsSettled.ts";
 import Migration0044 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
 // This branch's own migrations. They were authored as 043/044 before main took those ids; by
@@ -102,9 +101,9 @@ import Migration0074 from "./Migrations/050_ProjectionThreadPullRequests.ts";
 import Migration0075 from "./Migrations/051_ProjectionThreadMessageContext.ts";
 import Migration0076 from "./Migrations/052_ProjectionThreadTitleState.ts";
 import Migration0077 from "./Migrations/t3team-059_SignalSources.ts";
-// Tail repair for the GHE #382 kind-index ledger collision: re-runs the
-// `idx_projection_thread_activities_kind_created` DDL for machines whose ledger
-// consumed id 60 with a different migration and therefore never ran it.
+// Tail repair for the kind-index ledger collision: re-runs the
+// `idx_projection_thread_activities_kind_created` DDL for machines whose ledger consumed id 60
+// with a different migration and therefore never ran it.
 import Migration0078 from "./Migrations/t3team-060_EnsureProjectionThreadActivitiesKindIndex.ts";
 import Migration0079 from "./Migrations/t3team-061_ResourcePressureEvents.ts";
 // New from the 2026-09-27 upstream sync (upstream 053/054). Appended above the fork's maximum id
@@ -128,10 +127,9 @@ import Migration0092 from "./Migrations/t3team-070_ThreadMailbox.ts";
 import Migration0097 from "./Migrations/t3team-075_DropProviderUsageHolds.ts";
 import Migration0098 from "./Migrations/t3team-076_ThreadSilenceWatches.ts";
 import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
-// Project main repository + feature flags: main's sprint migrations. Main originally registered
-// these at 84/85, which this fork's V2 sync already uses, so they move above the current maximum
-// id (101 at the time) to keep the ledger monotonic on every existing fork install.
-// Databases that already recorded them at 84/85 are relabelled before the Migrator runs; see
+// Main's sprint migrations (project main repository + feature flags). Main registered them at
+// 84/85, which this fork's V2 sync already uses, so they sit above the then-current maximum id (101).
+// Databases that recorded them at 84/85 are relabelled before the Migrator runs; see
 // t3team-reconcileForkSprintLedger.ts.
 import Migration0100 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
 import Migration0101 from "./Migrations/t3team-065_FeatureFlags.ts";
@@ -259,12 +257,10 @@ export const migrationEntries = [
   [81, "ProjectionThreadsAutoSettleDisabledAt", Migration0081],
   [82, "ProjectionThreadShellT3TeamFacts", Migration0082],
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
-  // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
-  // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 119) — never one of
-  // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
-  // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
-  // (fork ids 53/54 are never named OrchestrationV2).
+  // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger. A new migration must
+  // take an id ABOVE the highest registered here (currently 119), never one of the gaps (88-89,
+  // 93-96): upgraded databases recorded the maximum and the Migrator skips every id at or below it.
+  // Upstream's reconcileV2PreviewMigration stays a no-op here (fork ids 53/54 are never OrchestrationV2).
   [84, "OrchestrationV2", Migration0084],
   [85, "RemoveRedundantProjectionIndexes", Migration0085],
   [86, "ThreadFacts", Migration0086],
@@ -315,20 +311,16 @@ const makeMigrationLoader = (throughId?: number) =>
     ),
   );
 
-// V2's schema migrations start at upstream id 55, which this fork's ledger registers at 84
-// (OrchestrationV2). Upstream's guard below hard-coded 55, but on fork databases 55-83 hold
-// fork and earlier-sync migrations, including the known GHE #382 collision where id 60 was
-// recorded as ProjectionThreadsUnsettledAt (repaired by 78). Checking from 55 refused every
-// pre-sync fork install. Fork convention: upstream migrations keep upstream filenames but are
-// registered ABOVE the fork's current maximum id, so this constant is the fork id of upstream 055.
+// Fork id of upstream 055 (OrchestrationV2 is at 84). Upstream's guard hard-coded 55, but fork
+// databases hold fork and earlier-sync migrations at 55-83 (including the id 60 collision repaired
+// by 78), so checking from 55 refused every pre-sync install. Convention: upstream migrations keep
+// their filenames but register ABOVE the fork's current maximum id.
 export const FIRST_V2_MIGRATION_ID = 84;
 
-// The ledger ids that carry upstream-owned V2 migrations in this fork's ledger (upstream 055/056
-// at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109, 062 at 110, 064-067 at
-// 112-115, 068/069 at 118/119; 063 is held). Only these are checked for being
-// skipped: fork migrations (and the repair migrations for fork DBs that have gaps, e.g. 99, which
-// re-ensures 86-92 and 98) must keep starting on databases whose history has holes. Add each id a
-// sync appends from upstream.
+// Ledger ids carrying upstream-owned V2 migrations (upstream 055/056 at 84/85, 057/058 at 103/104,
+// 059/060 at 107/108, 061 at 109, 062 at 110, 064-067 at 112-115, 068/069 at 118/119; 063 is held).
+// Only these are checked for being skipped: fork migrations (and repair migrations for gapped DBs,
+// e.g. 99) must keep starting on databases with holes. Add each id a sync appends from upstream.
 export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
   84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115, 118, 119,
 ]);

@@ -352,11 +352,9 @@ const TurnCompletedPayload = Schema.Struct({
   errorMessage: Schema.optional(TrimmedNonEmptyStringSchema),
   tokenUsage: Schema.optional(TurnTokenUsage),
   /**
-   * Adapter-stamped from the provider's STRUCTURED failure data (Claude's
-   * rejected rate-limit window / `rate_limit` assistant error, Codex's
-   * `usageLimitExceeded`), never from message text: the turn failed because
-   * the account's usage or rate limit rejected it. Absent on every other
-   * outcome, and on emitters that cannot tell.
+   * Adapter-stamped from the provider's STRUCTURED failure data (Claude's rejected rate-limit window
+   * / `rate_limit` error, Codex's `usageLimitExceeded`), never message text: the account's usage or
+   * rate limit rejected the turn. Absent on every other outcome and on emitters that cannot tell.
    */
   failureKind: Schema.optional(Schema.Literal("usage_limit")),
 });
@@ -366,13 +364,10 @@ const TurnAbortedPayload = Schema.Struct({
   reason: TrimmedNonEmptyStringSchema,
   tokenUsage: Schema.optional(TurnTokenUsage),
   /**
-   * Host-stamped (NOT provider-derived): the server set this when the abort
-   * settles a turn a newer sendTurn superseded — a new message replaced the
-   * in-flight turn. The pack's free-text `reason` varies per pack and must
-   * not be matched; this structured marker is the only trusted signal that
-   * the interrupted session is about to run a NEW turn. Absent on genuine
-   * user stops and on every provider-emitted event (old emitters decode
-   * unchanged).
+   * Host-stamped (NOT provider-derived): the abort settled a turn that a newer sendTurn superseded.
+   * The pack's free-text `reason` varies per pack and must not be matched; this marker is the only
+   * trusted signal that the session is about to run a NEW turn. Absent on genuine user stops and on
+   * provider-emitted events.
    */
   superseded: Schema.optional(Schema.Boolean),
 });

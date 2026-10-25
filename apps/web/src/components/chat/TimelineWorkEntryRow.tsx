@@ -175,7 +175,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
   const ctx = use(TimelineRowCtx);
   const { threadRef, onImageExpand, timestampFormat } = ctx;
   const { retryableWorkspacePreparationRunIds, onRetryWorkspacePreparation } = ctx;
-  // t3team (GHE #209): name the target of an outbound inter-agent send.
+  // t3team: name the target of an outbound inter-agent send.
   const t3teamOutboundLabel = useT3TeamOutboundSendLabel(workEntry, threadRef);
   const backgroundJob = ctx.backgroundJobStarters.get(workEntry.id) ?? null;
   const threadTarget = useThreadReadTarget(workEntry, ctx.activeThreadEnvironmentId);

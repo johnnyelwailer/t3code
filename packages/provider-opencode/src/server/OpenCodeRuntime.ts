@@ -709,12 +709,8 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
           env: {
             ...input.environment,
             ...(serverPassword !== undefined ? { OPENCODE_SERVER_PASSWORD: serverPassword } : {}),
-            // A pack-provided declarative config wins; otherwise respect an
-            // OPENCODE_CONFIG_CONTENT provided by the caller or the inherited
-            // process environment, only falling back to the empty config when
-            // none is set. Setting it unconditionally previously clobbered the
-            // user's opencode config, hiding their providers/models. The value
-            // is set explicitly (rather than relying on inheritance) because
+            // A pack-provided config wins, then a caller/inherited OPENCODE_CONFIG_CONTENT; the empty config is
+            // only the fallback, since forcing it hid the user's providers/models. Set explicitly because
             // `extendEnv` is false whenever `input.environment` is provided.
             OPENCODE_CONFIG_CONTENT: resolveOpenCodeConfigContent(
               input.configContent,

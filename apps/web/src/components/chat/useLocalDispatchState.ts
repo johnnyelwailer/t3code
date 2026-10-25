@@ -35,11 +35,9 @@ export function useLocalDispatchState(input: {
     threadError: input.threadError,
   });
   const activeLocalDispatch = serverAcknowledgedLocalDispatch ? null : localDispatch;
-  // t3team GHE #301 stuck-busy backstop: if a dispatch is still unacknowledged and
-  // no server-visible field it watches (run timestamps, runtime status/updatedAt,
-  // the user message echo) has changed for the idle window, the run died on the
-  // provider side without a terminal event — abandon the dispatch and recover the
-  // composer without a manual thread switch.
+  // t3team stuck-busy backstop: if a dispatch is still unacknowledged and no server-visible field it
+  // watches has changed for the idle window, the run died provider-side without a terminal event;
+  // abandon the dispatch and recover the composer without a manual thread switch.
   useEffect(() => {
     if (localDispatch === null || serverAcknowledgedLocalDispatch) {
       return;

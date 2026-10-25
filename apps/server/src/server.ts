@@ -653,12 +653,10 @@ const layerCloudManagedEndpointRuntime = Layer.mergeAll(
   ),
 );
 
-// The workflow-engine singletons share one provideMerge slot (the `pipe` arity is capped):
-// the in-memory run registry (reactor's hot index) + the durable run record + the SQLite
-// journal store. Repo + store get the memoized SqlClient from layerPersistence (Epic 25
-// §Open question 2); the registry needs nothing. The scheduler's wake gate (Epic 27) is layered
-// on top; its sweep (`T3TeamWorkflowSchedulerSweepLive`, mounted with the workflow reactor)
-// resolves runs from the one registry and reads the sleeping set from the one repo.
+// The workflow-engine singletons share one provideMerge slot (the `pipe` arity is capped): the
+// in-memory run registry, the durable run record and the SQLite journal store. Repo + store get the
+// memoized SqlClient from layerPersistence; the scheduler's wake gate and sweep resolve runs from
+// the one registry and read the sleeping set from the one repo.
 const WorkflowEngineDurabilityLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
@@ -675,15 +673,10 @@ export const mountT3TeamBrokerBeforeRuntimeServices = <A, E, R, A2, E2, R2>(
   brokerLayer: Layer.Layer<A2, E2, R2>,
 ) => runtimeHead.pipe(Layer.provideMerge(brokerLayer));
 
-// Durable signal sources (GHE #332): the signal store (durable state), the delivery port
-// (event → parked runs / inbox), and the reconciler (the live source set, derived from the
-// journaled registrations). Chained provideMerge in DEPENDENCY ORDER — in `a.pipe(provideMerge(b))`
-// the inner accumulated layer's requirements are satisfied by b's services while b's own
-// requirements leak outward, so the reconciler (the fullest consumer) sits innermost and each
-// outer step supplies what the accumulated layer still needs. Boot rehydration must finish
-// before the boot reconcile starts source instances (GHE #332 review); the rehydrate layer runs
-// with the workflow host at the app level, and the reconciler waits for it on the shared
-// rehydrate gate rather than through a layer edge (which would pull the host in here).
+// Durable signal sources: the signal store, the delivery port and the reconciler (live source set).
+// Chained provideMerge in DEPENDENCY ORDER: in `a.pipe(provideMerge(b))` b's own requirements leak
+// outward, so the reconciler (fullest consumer) sits innermost. Boot rehydration must finish before
+// the reconcile starts sources; it waits on the shared rehydrate gate, not a layer edge (which would pull the host in).
 const WorkflowSignalSourcesLive = T3TeamWorkflowSignalReconcilerLive.pipe(
   Layer.provideMerge(T3TeamWorkflowSignalDeliveryLive),
   Layer.provideMerge(WorkflowSignalStoreLive),
@@ -710,11 +703,10 @@ const T3TeamProjectSourceIconReactorStartLive = Layer.effectDiscard(
 // single instance (layers memoize by reference).
 const T3TeamWorkflowHostLive = T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive));
 
-// t3team: recipe triggers (S5b) — reconcile the per-project `trigger:<recipe>:<id>` signal
-// registrations, drain the signal inbox on a timer, and launch headless runs. One shared
-// runner per process; the engine chain below is the SAME singletons the tool broker and the
-// thread-bound launch use (layer references memoize). Defined after T3TeamWorkflowHostLive so
-// it can share that const instead of rebuilding the host layer.
+// t3team: recipe triggers: reconcile the per-project `trigger:<recipe>:<id>` signal registrations,
+// drain the signal inbox on a timer, and launch headless runs. One shared runner per process, using
+// the SAME engine singletons as the tool broker and thread-bound launch. Defined after
+// T3TeamWorkflowHostLive so it can share that const instead of rebuilding the host layer.
 const T3TeamRecipeTriggerRunnerLayer = T3TeamRecipeTriggerRunnerLive.pipe(
   Layer.provideMerge(WorkflowTriggerLaunchStoreLive),
   Layer.provideMerge(WorkflowSignalSourcesLive),
@@ -950,10 +942,10 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),
   Layer.provideMerge(Layer.merge(ProjectStore.layer, ThreadSearch.layer)),
   Layer.provideMerge(layerServerSettings),
-  // Signal sources (GHE #332): placed BEFORE the PullRequestService + Persistence provides
-  // below — in `a.pipe(provideMerge(b))` the accumulated layer's requirements are satisfied
-  // by b at this step only, so the signal chain's external {PullRequestService, SqlClient}
-  // must be satisfied by a LATER step: PRS by the mergeAll below, SqlClient by layerPersistence.
+  // Signal sources: placed BEFORE the PullRequestService + Persistence provides below, because in
+  // `a.pipe(provideMerge(b))` b satisfies the accumulated requirements at this step only. The signal
+  // chain's external {PullRequestService, SqlClient} must come from a LATER step: PRS from the
+  // mergeAll below, SqlClient from layerPersistence.
   Layer.provideMerge(WorkflowSignalSourcesLive),
   // The asset route uses the registry's GitHub credential for private PR media.
   // t3team: PullRequestService is also exposed here (same memoized instance every consumer is
@@ -1524,7 +1516,7 @@ const layerMakeServer = Layer.unwrap(
       T3TeamChildStatusReactorLive,
       T3TeamActivityLabelReactorLive,
       T3TeamChildSettleSweeperLive,
-      // t3team: tells the cloud-session broker which projects to keep warm machines for (#562).
+      // t3team: tells the cloud-session broker which projects to keep warm machines for.
       StandbyInterestLive.pipe(
         Layer.provide(
           CloudSessionMachinesLayer.pipe(
@@ -1546,12 +1538,10 @@ const layerMakeServer = Layer.unwrap(
 
     return layerServerApplication.pipe(
       Layer.provide(CloudLink.layer.pipe(Layer.provideMerge(ConnectReachability.layer))),
-      // loadPullRequestContext (behind t3teamGitHubPullRequestContextRouteLayer, inside
-      // layerMakeRoutes) now requires PullRequestService directly. layerMakeRoutes already
-      // provides layerPullRequestService to the routes merged there, but that provision does
-      // not reach the requirement HttpRouter.serve's own effect carries at this outer level —
-      // so it is provided again here, ahead of the rest of this pipe. The pr-context route's
-      // own project resolver also reads PullRequestProviderRegistry directly, same story.
+      // loadPullRequestContext (behind t3teamGitHubPullRequestContextRouteLayer) requires
+      // PullRequestService directly. layerMakeRoutes provides it to the routes merged there, but not to
+      // the requirement HttpRouter.serve's own effect carries at this outer level, so it is provided
+      // again here. The pr-context route's project resolver also reads PullRequestProviderRegistry.
       Layer.provide(layerPullRequestService),
       // t3team: recipe scripts' `ctx.store` / `ctx.changeRequests`, for the recipe launch route
       // (served at this level, like the PR context route above) and boot rehydration.

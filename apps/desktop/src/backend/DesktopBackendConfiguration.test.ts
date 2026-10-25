@@ -396,13 +396,9 @@ describe("DesktopBackendConfiguration", () => {
         const baseDir = yield* fileSystem.makeTempDirectoryScoped({
           prefix: "t3-desktop-backend-config-test-",
         });
-        // Host-environment gate: resolveExtraCaCerts honors an inherited
-        // NODE_EXTRA_CA_CERTS over the user/pack fallbacks, and
-        // resolvePrimary defaults NODE_USE_SYSTEM_CA from the host env. A
-        // machine that exports either (e.g. one running under a corporate CA
-        // setup) would break the packaged-certs and default-flag assertions
-        // below, so isolate both for the test's duration and restore on
-        // scope close.
+        // Isolate NODE_EXTRA_CA_CERTS and NODE_USE_SYSTEM_CA: a host that exports either (e.g. a corporate
+        // CA setup) would break the packaged-certs and default-flag assertions below. Restored on scope
+        // close.
         const previousExtraCaCerts = process.env.NODE_EXTRA_CA_CERTS;
         const previousUseSystemCa = process.env.NODE_USE_SYSTEM_CA;
         delete process.env.NODE_EXTRA_CA_CERTS;

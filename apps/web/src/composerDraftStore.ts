@@ -2920,12 +2920,9 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           if (threadKey.length === 0) {
             return;
           }
-          // Composing heartbeat (inter-agent drain back-off): prompt mutation
-          // in a REAL thread's composer marks that thread actively-typed, so
-          // inter-agent digests hold there until the heartbeat lapses. Draft-
-          // only targets have no server thread (null) and are skipped. The
-          // signal is fire-and-forget and per-thread — it can never block this
-          // write or affect another thread.
+          // Composing heartbeat (inter-agent drain back-off): a prompt mutation in a REAL thread's composer
+          // marks it actively-typed so inter-agent digests hold until it lapses. Draft-only targets (null
+          // thread) are skipped. Fire-and-forget and per-thread: it never blocks this write.
           notifyThreadComposing(resolveComposerThreadId(get(), threadRef));
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();

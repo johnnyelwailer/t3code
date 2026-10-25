@@ -636,12 +636,9 @@ const SHELL_RESUME_MAX_GAP = 1_000;
 const ORCHESTRATION_REPLAY_PAYLOAD_BUDGET_BYTES = 8 * 1024 * 1024;
 
 /**
- * Narrows the service's internal (fake-inclusive) tool state to the wire
- * schema. Safe because every call site here only ever produces `claude` /
- * `codex` states: `toolAuthList`/`subscribeToolAuth` enumerate
- * `PRODUCTION_TOOLS`, and `toolAuthStart`/`toolAuthInstall`/`submitCode`/
- * `cancel` take `tool` from a payload already validated by the
- * `ToolAuthToolId` RPC schema.
+ * Narrows the service's internal (fake-inclusive) tool state to the wire schema. Safe because
+ * every call site only produces `claude` / `codex` states: enumeration uses `PRODUCTION_TOOLS`
+ * and the rest take `tool` from a payload already validated by the `ToolAuthToolId` RPC schema.
  */
 function toToolAuthWireState(state: ToolAuthInternalState): ToolAuthState {
   return state as ToolAuthState;
@@ -1912,10 +1909,8 @@ export const layerWsRpc = (
           shellThreadFamilies: true,
           threadResumeCompletionMarker: true,
           threadSnapshotPagination: true,
-          // Runtime feature flag (env NEXI_FF_THREAD_RESUB_STAGGER, default
-          // on): lets the client stagger thread resubscribe bursts so a
-          // session change cannot reopen hundreds of thread streams at once
-          // (GHE #382 disconnect storm).
+          // Runtime feature flag (env NEXI_FF_THREAD_RESUB_STAGGER, default on): lets the client stagger
+          // thread resubscribe bursts so a session change cannot reopen hundreds of streams at once.
           threadResubscribeStagger: isThreadResubscribeStaggerEnabled(),
           // Runtime feature flag (env NEXI_FF_RESOURCE_PRESSURE, default off).
           resourcePressure: isResourcePressureEnabled(),
@@ -2298,11 +2293,9 @@ export const layerWsRpc = (
             ),
           ),
         [WS_METHODS.orchestrationNoteComposing]: (input) =>
-          // Per-thread composing heartbeat: the user is actively typing in
-          // THIS thread's composer right now. While the signal is fresh
-          // (typing-lapse window) inter-agent drains back off; it lapses on
-          // its own, so no hard cap exists. Viewing a thread is NOT an
-          // engagement signal — an open thread must not starve its queue.
+          // Per-thread composing heartbeat: the user is typing in THIS thread's composer. While fresh
+          // (typing-lapse window) inter-agent drains back off; it lapses on its own, so no hard cap.
+          // Viewing a thread is NOT an engagement signal: an open thread must not starve its queue.
           threadEngagement === undefined
             ? Effect.succeed({ ok: true as const })
             : threadEngagement.noteTyping(input.threadId).pipe(Effect.as({ ok: true as const })),
@@ -3266,11 +3259,9 @@ export const layerWsRpc = (
             input.tool,
             toolAuth.start(input.tool, { hostname: input.hostname }),
           ).pipe(Effect.map(toToolAuthWireState)),
-        // One-click "install this CLI", chained into the real sign-in flow
-        // server-side (see `ToolAuthService.install`). The immediate
-        // response is just the `installing` snapshot; every later beat
-        // arrives over the client's existing `subscribeToolAuth`
-        // subscription — there is no separate progress stream to wire up.
+        // One-click "install this CLI", chained into the sign-in flow server-side (see
+        // `ToolAuthService.install`). The response is just the `installing` snapshot; later beats arrive
+        // over the existing `subscribeToolAuth` subscription, so there is no separate progress stream.
         [WS_METHODS.toolAuthInstall]: (input) =>
           whenToolAuthFlowEnabled(input.tool, toolAuth.install(input.tool)).pipe(
             Effect.map(toToolAuthWireState),
@@ -3664,14 +3655,10 @@ export const layer = Layer.unwrap(
                   // The create path hands the creator's live T3 Connect
                   // credential to the VM, so it needs the CLI token manager.
                   Layer.provide(CloudCliTokenManager.layer),
-                  // The create path mints the caller's credential in-app
-                  // before the handoff. It uses the SERVER's minter
-                  // (server.ts), not a per-connection copy: this layer's
-                  // scope closes right after setup, which would kill the
-                  // sign-in, and one shared minter keeps create and the
-                  // background top-up from opening two sign-ins at once.
-                  // A session for a project runs in its machine; the resolver reads the
-                  // project's checkouts (discovery, provided below) and the user's gh login.
+                  // The create path mints the caller's credential in-app before the handoff, using the SERVER's
+                  // minter (server.ts), not a per-connection copy: this layer's scope closes right after setup,
+                  // which would kill the sign-in, and one shared minter avoids two concurrent sign-ins with the
+                  // background top-up. A project session runs in its machine; the resolver reads its checkouts and gh login.
                   Layer.provide(CloudSessionMachinesLayer.pipe(Layer.provide(gitHubTransport))),
                 ),
               ),

@@ -608,12 +608,9 @@ export const ServerConfig = Schema.Struct({
   shellRevealInFileManagerKind: Schema.optionalKey(FileManagerRevealKind),
   threadResumeCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /**
-   * Whether the client should stagger thread-subscription resubscribes
-   * (first few of a burst immediate, the rest spread over time) instead of
-   * reopening every live thread stream in the same tick after a session
-   * change. Server-authoritative runtime feature flag (env
-   * `NEXI_FF_THREAD_RESUB_STAGGER`, default on); absent on older servers, so
-   * clients keep the legacy immediate behavior against them.
+   * Whether the client staggers thread-subscription resubscribes (first few immediate, rest spread)
+   * instead of reopening every live thread stream in one tick. Runtime flag (env
+   * `NEXI_FF_THREAD_RESUB_STAGGER`, default on); absent on older servers, so clients stay immediate.
    */
   threadResubscribeStagger: Schema.optionalKey(Schema.Boolean),
   /**
@@ -641,11 +638,9 @@ export const ServerConfig = Schema.Struct({
    */
   machineSetup: Schema.optionalKey(Schema.Boolean),
   /**
-   * Whether the work profile chooser is offered (first-run setup surface, the add-project
-   * wizard's profile step, the Settings default-profile picker). Runtime feature flag (env
-   * `NEXI_FF_WORK_PROFILE_CHOOSER`, default OFF); absent on older servers, which clients must
-   * also treat as off. While off, clients use the developer profile and leave any stored
-   * profile choice untouched.
+   * Whether the work profile chooser is offered (first-run setup, add-project wizard, Settings).
+   * Runtime flag (env `NEXI_FF_WORK_PROFILE_CHOOSER`, default OFF); absent on older servers, which
+   * clients treat as off. While off, clients use the developer profile and keep any stored choice.
    */
   workProfileChooser: Schema.optionalKey(Schema.Boolean),
   /**

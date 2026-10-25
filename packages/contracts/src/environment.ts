@@ -147,11 +147,9 @@ export const ExecutionEnvironmentDescriptor = Schema.Struct({
   platform: ExecutionEnvironmentPlatform,
   serverVersion: TrimmedNonEmptyString,
   /**
-   * Epoch milliseconds of this server process's boot. The server's
-   * in-memory state (notably the bash background-job registry) dies with the
-   * process, so a job that started before this instant can no longer be
-   * live — clients settle such jobs instead of showing them running until
-   * their hard deadline. Absent on older servers.
+   * Epoch milliseconds of this server process's boot. In-memory state (notably the bash background-job
+   * registry) dies with the process, so a job started before this instant cannot be live and clients
+   * settle it instead of showing it running until its hard deadline. Absent on older servers.
    */
   serverStartedAtMs: Schema.optionalKey(NonNegativeInt),
   orchestrationProtocolVersion: Schema.optionalKey(Schema.Int),

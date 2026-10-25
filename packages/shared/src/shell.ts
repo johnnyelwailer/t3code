@@ -324,14 +324,10 @@ export const readEnvironmentFromLoginShell: ShellEnvironmentReader = (
     return {};
   }
 
-  // Non-interactive login first: profile files (.zprofile/.profile) are where PATH
-  // canonically lives and they load in milliseconds. `-i` additionally sources rc
-  // files (.zshrc), which on a heavy setup takes longer than the whole timeout —
-  // an ETIMEDOUT here used to mean NO hydrated PATH at all, so every CLI the
-  // server shells out to (gh, provider CLIs) silently vanished. Fall back to the
-  // interactive form only for setups that export PATH exclusively in rc files.
-  // Detaching prevents job control on an inherited controlling TTY from stopping
-  // the probe while the parent waits.
+  // Non-interactive login first: profile files (.zprofile/.profile) hold PATH and load fast, while
+  // `-i` also sources rc files, which on a heavy setup outlasts the timeout (ETIMEDOUT meant NO
+  // hydrated PATH). Fall back to interactive only for setups exporting PATH solely in rc files.
+  // Detaching prevents job control on an inherited TTY from stopping the probe.
   const command = buildEnvironmentCaptureCommand(shell, names);
   const probeOptions: Parameters<ExecFileSyncLike>[2] = {
     encoding: "utf8",

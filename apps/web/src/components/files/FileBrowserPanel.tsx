@@ -51,12 +51,9 @@ interface FileBrowserPanelProps {
 }
 
 /**
- * Node rows render at 12px in the app's sans stack: San Francisco on macOS,
- * Segoe UI on Windows. Windows' ClearType subpixel rendering makes 400-weight
- * text at this size read visibly heavier than macOS' grayscale antialiasing,
- * so on Windows the tree's regular weight is pinned one step down (Segoe UI
- * Light) so the node text matches the macOS weight. macOS and Linux keep the
- * explicit 400 baseline. nexplore.ghe.com/pj/nexi-distribution#195
+ * Node rows render at 12px in the app's sans stack. Windows' ClearType makes 400-weight text at this
+ * size read heavier than macOS grayscale antialiasing, so on Windows the tree's regular weight is
+ * pinned one step down (Segoe UI Light) to match; macOS and Linux keep the explicit 400 baseline.
  */
 const TREE_REGULAR_FONT_WEIGHT =
   typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform) ? 300 : 400;

@@ -2032,12 +2032,9 @@ export const WsSubscribeToolAuthRpc = Rpc.make(WS_METHODS.subscribeToolAuth, {
 });
 
 /**
- * One-click "install this CLI", chained straight into the real sign-in flow
- * server-side. Mirrors `WsToolAuthStartRpc` exactly (same payload/success/
- * error shape) rather than introducing a parallel stream: the immediate
- * response is just the `installing` snapshot, and every later beat —
- * `installing` → `starting` → ... → `connected`/`failed` — arrives over the
- * client's existing `subscribeToolAuth` subscription.
+ * One-click "install this CLI", chained into the real sign-in flow server-side. Same
+ * payload/success/error shape as `WsToolAuthStartRpc`; the response is just the `installing`
+ * snapshot and later beats arrive over the existing `subscribeToolAuth` subscription.
  */
 export const WsToolAuthInstallRpc = Rpc.make(WS_METHODS.toolAuthInstall, {
   payload: ToolAuthInstallInput,

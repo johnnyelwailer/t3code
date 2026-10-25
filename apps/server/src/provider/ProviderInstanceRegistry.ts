@@ -146,10 +146,8 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
   return {
     kind: "live" as const,
     live: {
-      // The watchdog budget is a host-owned envelope field (GHE #113):
-      // the registry copies it onto the instance so host consumers
-      // (ProviderService's turn watchdog) can read it without touching
-      // the driver-specific config payload.
+      // The watchdog budget is a host-owned envelope field: the registry copies it onto the instance so
+      // ProviderService's turn watchdog can read it without touching the driver-specific config.
       instance: {
         ...createResult.success,
         ...(entry.turnInactivityTimeoutSeconds !== undefined

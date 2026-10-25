@@ -15,14 +15,10 @@ export const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   "node-addon-api",
   "bufferutil",
   "utf-8-validate",
-  // pi-coding-agent's image resizer. Its CJS loader does
-  // `readFileSync(join(__dirname, "photon_rs_bg.wasm"))` at init: the wasm is a
-  // separate package artifact, and pack (rolldown) has no asset pipeline, so
-  // inlining the JS loader emits a chunk whose wasm can never be found. Every
-  // image read then fails with "could not be resized below the inline image
-  // size limit" even for tiny images (GHE nexi-distribution#307). Declared as
-  // a direct dependency of apps/server so it is linked where the bundle can
-  // resolve it (dev, WSL, asar node_modules, Windows sidecar).
+  // pi-coding-agent's image resizer: its CJS loader reads `photon_rs_bg.wasm` from __dirname at
+  // init, and pack (rolldown) has no asset pipeline, so inlining emits a chunk whose wasm is never
+  // found and every image read fails. Declared as a direct dependency of apps/server so it is linked
+  // where the bundle can resolve it (dev, WSL, asar node_modules, Windows sidecar).
   "@silvia-odwyer/photon-node",
 ] as const;
 

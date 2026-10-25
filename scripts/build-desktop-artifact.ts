@@ -959,13 +959,10 @@ const hasDistroRootMarker = Effect.fn("hasDistroRootMarker")(function* (dir: str
 });
 
 /**
- * Resolves the distribution root by walking up from the vendor checkout's
- * parent to the nearest ancestor with the distribution marker. The build may
- * run with any cwd (the proven DBI recipe runs it from the vendor checkout
- * itself), so the roots are derived from where the script lives, never from
- * the process cwd. The vendor checkout itself never counts as a marker, even
- * if a previous buggy build left `.nexi-dev/desktop-installer` state inside
- * it — that stale state must not shadow the real distribution root.
+ * Resolves the distribution root by walking up from the vendor checkout's parent to the nearest
+ * ancestor with the distribution marker. The build may run with any cwd, so roots derive from where
+ * the script lives. The vendor checkout itself never counts as a marker, even with stale
+ * `.nexi-dev/desktop-installer` state inside it, which must not shadow the real root.
  */
 export const resolveDistroRoot = Effect.fn("resolveDistroRoot")(function* (vendorRoot: string) {
   let dir = NodePath.dirname(NodePath.resolve(vendorRoot));
@@ -2372,18 +2369,10 @@ export function ancestorNodeModulesPaths(
 }
 
 /**
- * Resolves esbuild's package `bin/esbuild` via Node module resolution.
- *
- * Prefer this over pnpm's `node_modules/.bin/esbuild` shims. Those shims can be
- * baked as `exec node <target>` while the published target is still a JS
- * placeholder; esbuild's postinstall then replaces the target with a native
- * Mach-O/ELF binary. Spawning the stale shim feeds the native binary to Node
- * and fails with `SyntaxError: Invalid or unexpected token` — the failure mode
- * seen on a fresh macOS `pnpm install` during `esbuild @t3team/pack-api`.
- *
- * The package bin itself is safe to spawn directly on POSIX (shebang JS before
- * postinstall; native binary after). On Windows the package bin stays JS, so
- * callers should invoke it via `node` / `process.execPath`.
+ * Resolves esbuild's package `bin/esbuild` via Node module resolution. Prefer it over pnpm's
+ * `.bin/esbuild` shims: a shim baked as `exec node <target>` can feed the native binary that
+ * postinstall later swaps in to Node (`SyntaxError: Invalid or unexpected token`). Safe to spawn
+ * directly on POSIX; on Windows the bin stays JS, so invoke it via `process.execPath`.
  */
 export function resolveRepoEsbuildPackageBin(repoRoot: string): string | undefined {
   const roots = [
@@ -3234,7 +3223,7 @@ interface BuildConfigOptions {
   // sidecar staging skips the archive in that case, and listing a resource
   // whose source file was never written fails the electron-builder step.
   readonly wslRuntimeBundled?: boolean | undefined;
-  // mac pty prebuild exclusions are arch-gated (#9240); omitted/`universal` keeps the plain set.
+  // mac pty prebuild exclusions are arch-gated; omitted/`universal` keeps the plain set.
   readonly arch?: typeof BuildArch.Type | undefined;
   // t3team: release flavor (lib/t3team-releaseFlavor.ts).
   readonly flagPresetStaged?: boolean | undefined;
@@ -3279,12 +3268,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId,
     productName: resolvedProductName,
-    // Built by concatenation, not a template literal: the ${version}/${arch}/
-    // ${ext} tokens are electron-builder placeholders that must reach the
-    // manifest VERBATIM for electron-builder to interpolate. A template
-    // literal would require escaping every one of them (\`...${"${version}"}...
-    // \`), which reads like a bug and invites "simplification" that breaks
-    // the escape.
+    // Built by concatenation, not a template literal: the ${version}/${arch}/${ext} tokens are
+    // electron-builder placeholders that must reach the manifest VERBATIM. A template literal would
+    // need escaping for each, which reads like a bug and invites a "simplification" that breaks it.
     artifactName:
       artifactBaseName +
       "-" +
@@ -3303,14 +3289,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           ? LINUX_FILE_EXCLUSIONS
           : []),
     ],
-    // electron-builder strips .d.ts from app.asar with hardcoded, non-configurable
-    // filters (the main matcher's trailing !**/*.d.ts plus the node-module
-    // collector's extension list), which removes the packaged typechecker's
-    // declaration closure. This hook re-injects it after packing, before signing.
-    // See scripts/t3team-desktop-asar-dts-afterpack.cjs. Not set here: electron-builder
-    // resolves a relative afterPack path against the process CWD, not the project
-    // dir, so the caller always pins it to the absolute staged location instead
-    // (see the `stagePackageJson.build.afterPack` assignment in buildDesktopArtifact).
+    // electron-builder strips .d.ts from app.asar with hardcoded filters, removing the packaged
+    // typechecker's declaration closure; this hook re-injects it after packing, before signing (see
+    // scripts/t3team-desktop-asar-dts-afterpack.cjs). Not set here: a relative afterPack path resolves
+    // against the process CWD, so the caller pins the absolute staged location (`stagePackageJson`).
     directories: {
       buildResources: "apps/desktop/resources",
     },
@@ -3736,13 +3718,10 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
     { label: "vp install --prod (server sidecar)", verbose: input.verbose },
   );
 
-  // The WSL backend runs the server from this extracted tree, so its
-  // node_modules must carry the authoring-type closure the packaged
-  // typechecker resolves against — including effect, which the sidecar
-  // inlines into the bundle and therefore does not stage as a dependency.
-  // The sidecar is packed manually (no electron-builder pruning), so the
-  // curated copies are written directly instead of being declared in the
-  // sidecar package.json.
+  // The WSL backend runs the server from this extracted tree, so its node_modules must carry the
+  // authoring-type closure the packaged typechecker resolves against, including effect (inlined into
+  // the sidecar bundle, so not staged as a dependency). The sidecar is packed manually, so the curated
+  // copies are written directly instead of being declared in its package.json.
   yield* stageAuthoringTypes({
     repoRoot: input.repoRoot,
     nodeModulesDir: path.join(serverStageDir, "node_modules"),
@@ -4305,14 +4284,10 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
         inlinedPackageCount: inlinedPackages.size,
       });
     }
-    // The orchestration host inlines the TypeScript compiler (see
-    // packages/runbook-ts/src/typescript.ts). If it is external again, the
-    // packaged app cannot parse or transpile workflow source at all — the asar
-    // ships no node_modules/typescript for it to load. The compiler is CJS,
-    // so rolldown inlines it inside the IMPORTER's region (a __commonJSMin
-    // wrapper) — the region scan above cannot see it. Assert on the emitted
-    // content instead: these identifiers exist only in typescript.js, never
-    // in this repo's source.
+    // The orchestration host inlines the TypeScript compiler (packages/runbook-ts/src/typescript.ts); if
+    // it is external again the packaged app cannot transpile workflow source (the asar ships no
+    // typescript). The CJS compiler is inlined inside the IMPORTER's region, which the region scan cannot
+    // see, so assert on emitted content: these identifiers exist only in typescript.js.
     let typescriptInlined = false;
     for (const chunkName of chunkNames) {
       const source = yield* fs.readFileString(path.join(distDirs.serverDist, chunkName));
@@ -4541,17 +4516,10 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     );
   }
 
-  // desktop main-process runtime deps, while the server bundle's deps live in
-  // the server.asar sidecar (see stageWindowsServerSidecar). macOS and Linux
-  // keep the single merged tree — their primary resolves everything from
-  // app.asar and there is no second consumer.
-  // The authoring-type closure the packaged typechecker resolves from the
-  // staged node_modules (see stageAuthoringTypes). Declared here so
-  // electron-builder's asar pruning keeps them; the staged install links the
-  // workspace copies, and stageAuthoringTypes replaces them with curated
-  // real-file copies before packing. Windows keeps them out of app.asar: the
-  // server (and its typechecker) runs from the sidecar, which stages its own
-  // copy.
+  // Desktop main-process runtime deps live here; the server bundle's deps live in the server.asar
+  // sidecar on Windows (see stageWindowsServerSidecar), while macOS/Linux keep one merged tree. The
+  // authoring-type closure is declared so electron-builder's asar pruning keeps it; stageAuthoringTypes
+  // swaps in curated real-file copies before packing. Windows keeps it out of app.asar (sidecar copy).
   const authoringTypeDependencies =
     options.platform === "win"
       ? {}
@@ -4713,21 +4681,10 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   pkgJson.exports = { ".": { import: "./index.mjs" } };
   yield* fs.writeFileString(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n");
 
-  // macOS and Linux run the server from the asar, so the asar's node_modules
-  // must carry the authoring-type closure the packaged typechecker resolves
-  // against. Windows stages its own copy into the sidecar instead.
-  //
-  // NOTE (verified by experiment): this call is NOT dead weight. The staged
-  // install leaves @t3team/sdk + @runbook/* as pnpm workspace symlinks pointing
-  // OUTSIDE node_modules (../../packages/*), which electron-builder's node
-  // collector cannot pack. stageAuthoringTypes replaces those symlinks with
-  // real curated directories under node_modules so electron-builder can pack
-  // them. Removing this call makes the mac/linux build fail during asar packing
-  // (no app.asar produced). electron-builder's own pnpm pass later renames the
-  // curated dirs to .ignored_* and restores the symlinks, so the asar ends up
-  // with the original (uncurated) manifests — but the curation is still
-  // required for the pack to succeed, and the .d.ts closure it cannot preserve
-  // is re-injected by the afterPack hook.
+  // macOS and Linux run the server from the asar, so its node_modules must carry the authoring-type
+  // closure; Windows stages its own copy into the sidecar. NOT dead weight: the staged install leaves
+  // @t3team/sdk + @runbook/* as workspace symlinks outside node_modules, which electron-builder cannot
+  // pack, so removing this call fails mac/linux asar packing. The afterPack hook re-injects the .d.ts.
   if (options.platform !== "win") {
     yield* stageAuthoringTypes({
       repoRoot,
@@ -4931,12 +4888,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     Effect.annotateLogs({ artifacts: copiedArtifacts }),
   );
 
-  // Best-effort: a changelog failure must not fail the build.
-  // The script lives in the t3code (vendor) repo, so `repoRoot` is the vendor
-  // root; the distribution root is the nearest ancestor with the distro
-  // marker (workspace packs and/or the desktop-installer state dir). Never
-  // assume the cwd is the distro — the proven DBI recipe runs from the
-  // vendor checkout.
+  // Best-effort: a changelog failure must not fail the build. `repoRoot` is the vendor root, so the
+  // distribution root is the nearest ancestor with the distro marker; never assume the cwd is the
+  // distro (the proven DBI recipe runs from the vendor checkout).
   const vendorRoot = repoRoot;
   const distroRoot =
     (yield* resolveDistroRoot(vendorRoot)) ??

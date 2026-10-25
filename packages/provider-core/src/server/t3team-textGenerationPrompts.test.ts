@@ -16,7 +16,7 @@ describe("buildThreadTitlePrompt regeneration", () => {
     expect(result.prompt).toContain('The previous title was "Investigate reconnect regressions".');
     // GHE #308: the regeneration prompt is driven by agent activity, never user prose.
     expect(result.prompt).toContain(
-      "User messages are intentionally omitted — the title must name the work the agent is doing,",
+      "User messages are intentionally omitted: the title must name the work the agent is doing,",
     );
     expect(result.prompt).toContain(
       "Read the ASSISTANT messages and name the work the thread is doing:",

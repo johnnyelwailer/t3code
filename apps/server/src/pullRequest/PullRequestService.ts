@@ -920,11 +920,9 @@ export const make = Effect.gen(function* () {
         const viewerRoots = new Map<string, string[]>();
         const seen = new Set<string>();
         /**
-         * One repository of a project, judged the same way whatever its source: the host's
-         * viewer lookup keeps every checkout it is asked about, worktrees of one repository are
-         * read once rather than repeated per local checkout, and a host this build cannot read
-         * is counted rather than dropped. The host is part of the key, so the same `owner/repo`
-         * on two hosts stays two repositories.
+         * One repository of a project, judged the same whatever its source: worktrees of one repository are
+         * read once, and a host this build cannot read is counted rather than dropped. The host is part of
+         * the key, so the same `owner/repo` on two hosts stays two repositories.
          */
         const addProjectRepository = (
           project: OrchestrationProjectShell,

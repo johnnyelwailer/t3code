@@ -354,10 +354,9 @@ export interface ThreadTitlePromptInput {
   instructions?: string | undefined;
 }
 
-// Keep shared editorial rules in these two prompts in sync. Regeneration
-// intentionally adds guidance for agent-side thread history and the previous
-// title: user prose is deliberately absent from the regeneration context
-// (GHE #308), so the title must be driven by the agent's own work.
+// Keep shared editorial rules in these two prompts in sync. Regeneration adds guidance for agent-side
+// thread history and the previous title: user prose is deliberately absent from the regeneration
+// context, so the title must be driven by the agent's own work.
 const INITIAL_THREAD_TITLE_PROMPT = `Generate a title that will help the user recognize this T3 Code thread weeks later.
 Return JSON with keys title and needsRefinement.
 Set needsRefinement to true only if the subject is still unknown, such as an unresolved link, "fix this", or an unexplained attachment. Otherwise set it to false.
@@ -391,7 +390,7 @@ The previous title was ${JSON.stringify(previousTitle)}.
 Return JSON with keys title and needsRefinement. Set needsRefinement to false.
 
 The thread contents below are the agent's own messages: what the agent has been working on.
-User messages are intentionally omitted — the title must name the work the agent is doing,
+User messages are intentionally omitted: the title must name the work the agent is doing,
 not restate what the user said.
 
 Determine the title in this order:

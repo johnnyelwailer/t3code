@@ -136,11 +136,10 @@ function SidebarBrand({
       aria-label="Go to threads"
       className={cn(
         "sidebar-brand relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex",
-        // Titlebar inset only where native window buttons exist — on the web the brand docks
-        // left, flush with the sidebar items below it, instead of reserving phantom control
-        // space (see the same rule in `t3team-ProjectSidebarHeader.tsx`). Electron always has
-        // native controls; on the web the inset only applies once the installed PWA is running
-        // in window-controls-overlay mode (the `.wco` class toggled by windowControlsOverlay.ts).
+        // Titlebar inset only where native window buttons exist; on the web the brand docks left instead of
+        // reserving phantom control space (same rule in `t3team-ProjectSidebarHeader.tsx`). Electron always
+        // has native controls; on the web the inset applies once the installed PWA runs in
+        // window-controls-overlay mode (the `.wco` class from windowControlsOverlay.ts).
         shouldInsetTitlebarBrand
           ? "ml-[var(--workspace-controls-left)]"
           : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",

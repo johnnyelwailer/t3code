@@ -69,9 +69,9 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
 
 /**
  * Sections this fork adds on top of upstream's. `settingsSearch.ts` is upstream's single source of
- * truth for sections, and it is NOT modified here — the fork's extra sections are declared alongside
- * it and spliced into the derived nav list after the upstream section they follow. Upstream's
- * `/settings/beta` is gone (folded into Legacy features, #5664), so the fork drops it too.
+ * truth and is NOT modified: the extra sections are declared alongside it and spliced into the
+ * derived nav list after the upstream section they follow. Upstream's `/settings/beta` is gone
+ * (folded into Legacy features), so the fork drops it too.
  */
 export type T3TeamSettingsSectionPath = "/settings/connected-tools" | "/settings/features";
 export type SettingsSectionPath = SettingsPath | T3TeamSettingsSectionPath;

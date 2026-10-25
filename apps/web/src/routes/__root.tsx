@@ -333,12 +333,9 @@ function RootRouteView() {
         <FontAppearanceSync />
         <ProviderAuthCallbackCoordinator />
         <ChatGptWelcomeCoordinator />
-        {/* t3team: pack appearance sync must run OUTSIDE the first-run gate — the
-            gate holds back its children on a fresh install, and the pack is what
-            brands the onboarding surface itself (title, theme tokens, provider
-            pins). Premerge baseline mounted these at this level; nesting them in
-            the gate's children made fresh homes render generic "T3 Code" until
-            onboarding finished. */}
+        {/* t3team: pack appearance sync must run OUTSIDE the first-run gate: the gate holds back its children
+            on a fresh install, and the pack is what brands the onboarding surface itself (title, theme
+            tokens, provider pins). */}
         <T3TeamPackAppearanceSync />
         <T3TeamPackAppearanceDefaultsSync />
         <FirstRunGate

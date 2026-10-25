@@ -77,8 +77,8 @@ describe("normalizeModelSlug", () => {
     expect(normalizeModelSlug("gpt-5")).toBe("gpt-5.4");
     expect(normalizeModelSlug("gpt-5-codex")).toBe("gpt-5.3-codex");
     expect(normalizeModelSlug("5.3")).toBe("gpt-5.3-codex");
-    // No bare-"sonnet" alias anymore: Claude aliases moved to remote-manifest
-    // discovery (upstream #9084), so an unknown claude slug is preserved.
+    // No bare-"sonnet" alias anymore: Claude aliases moved to remote-manifest discovery, so an unknown
+    // claude slug is preserved.
     expect(normalizeModelSlug("sonnet", claude)).toBe("sonnet");
   });
 

@@ -930,8 +930,8 @@ export function ThreadStatusLabel({
   // available, zero inference); the live LLM label is optional enrichment
   // appended as "{state} · {detail}". `label` stays the stable status key.
   const displayLabel = resolveActivityPillDisplay(status);
-  // GHE #201: the dot paints through the shared porcelain orb when the pill
-  // maps onto that vocabulary; unmapped pills keep their tailwind dot class.
+  // The dot paints through the shared porcelain orb when the pill maps onto that vocabulary;
+  // unmapped pills keep their tailwind dot class.
   const orbState = resolveStatusOrbState(status);
   const dotClass = orbState
     ? STATUS_ORB_CLASS
@@ -973,8 +973,7 @@ export function ThreadStatusLabel({
           data-t3team-state={orbState ?? undefined}
           className={`h-1.5 w-1.5 rounded-full ${dotClass} ${activityPulseClass(status)}`}
         />
-        {/* GHE #208: keyed so the soft fade (animate-label-fade) restarts on a label
-            change — state-word transitions never hard-swap. */}
+        {/* Keyed so the soft fade (animate-label-fade) restarts on a label change; state words never hard-swap. */}
         <span key={displayLabel} className="hidden animate-label-fade md:inline">
           {displayLabel}
         </span>

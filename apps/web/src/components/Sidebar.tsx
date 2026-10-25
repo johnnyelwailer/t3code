@@ -789,12 +789,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     projectGroupByScopeKey,
     projectScopeItems,
   } = useSidebarLookups();
-  // t3team: sub-runbook children stay out of this list (childThreadIds). They
-  // are opened from the thread's lineage rows, not as sidebar rows.
-  // useT3TeamSidebarThreadMeta is the consolidated hook: one useProjectStore()
-  // call that computes ChildThreadRelations AND mirrors attributionByThreadId
-  // to t3team-sidebarThreadDataStore. InboxThreadAttribution reads that map
-  // with a narrow Zustand selector — no per-row useProjectStore subscriptions.
+  // t3team: sub-runbook children stay out of this list (childThreadIds); they open from the thread's
+  // lineage rows. useT3TeamSidebarThreadMeta computes ChildThreadRelations AND mirrors
+  // attributionByThreadId to t3team-sidebarThreadDataStore, which InboxThreadAttribution reads with a
+  // narrow Zustand selector, so rows hold no per-row useProjectStore subscriptions.
   const { childThreadIds, childThreadsByParentId } = useT3TeamSidebarThreadMeta();
   // t3team: mirror the relation for chrome outside this component (the sub-run tree) —
   // see t3team-childThreadRelationsStore.ts for why this is a mirror rather than a second
@@ -970,11 +968,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const terminalFocused = useTerminalFocus();
   const openAddProjectCommandPalette = () => openCommandPalette({ open: "add-project" });
   const routeThreadRef = resolveActiveThreadRouteRef(routeTarget, routeDraftThread);
-  // t3team: fallback for Team routes — resolveThreadRouteTarget resolved to
-  // null (no environmentId param), but a threadId param is present. Thread
-  // ids are globally unique, so the environmentId can be recovered from the
-  // already-loaded thread shells and the same scoped ref built here, letting
-  // routeThreadKey match downstream exactly like an upstream thread route.
+  // t3team: fallback for Team routes: resolveThreadRouteTarget returned null (no environmentId param)
+  // but a threadId param is present. Thread ids are globally unique, so the environmentId is recovered
+  // from the loaded thread shells and the same scoped ref built, letting routeThreadKey match like an
+  // upstream thread route.
   const routeThreadShellFallback =
     routeThreadRef || !routeParamsThreadId
       ? null
@@ -2310,11 +2307,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         return;
       }
       if (clicked.value !== "delete") return;
-      // t3team: deleting a parent takes its sub-run children with it — same
-      // cascade rule as the single-row delete case in handleThreadContextMenu.
-      // Expanding the key set (rather than only expanding inside the loop)
-      // means the confirm dialog's count already reflects what's really
-      // going away.
+      // t3team: deleting a parent takes its sub-run children with it (same cascade as the single-row
+      // delete in handleThreadContextMenu). Expanding the key set up front makes the confirm dialog's
+      // count reflect what is really going away.
       const expandedThreadKeys = new Set(threadKeys);
       const cascadedChildThreadByKey = new Map<string, EnvironmentThreadShell>();
       for (const threadKey of threadKeys) {

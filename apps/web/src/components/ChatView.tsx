@@ -2952,7 +2952,7 @@ export default function ChatView(props: ChatViewProps) {
     void sendStandaloneCommand("/compact", "Failed to compact context.");
   };
 
-  // t3team #641: an access-mode switch on a started thread persists right away.
+  // t3team: an access-mode switch on a started thread persists right away.
   const persistThreadRuntimeModeStable = useStableCallback(
     (threadIdToUpdate: ThreadId, mode: RuntimeMode) => {
       void setThreadRuntimeMode({

@@ -70,15 +70,10 @@ const applyDevelopmentIconOverrides = Effect.fn("applyDevelopmentIconOverrides")
 });
 
 /**
- * A build invoked with T3CODE_DISTRIBUTION must ship that distribution compiled in, not the
- * empty distribution stub. String literals survive minification and stripping unchanged, so the
- * manifest's own strings — branding values and the asset entries under `assetsDir` (pack-root-
- * relative) that the inlined asset map carries — are markers only the inlined module can emit.
- * (The theme's `name` is deliberately NOT a marker: a distribution's theme name can collide with
- * strings in the fork's own source — the nexplore theme is called "Nexplore", which the server
- * source carries on its own.) The pack lands in a shared chunk (not necessarily the entry file),
- * so every emitted `*.mjs` under dist is scanned. Before this check a silent no-op shipped a
- * server that boots with no provider and no branding.
+ * A build invoked with T3CODE_DISTRIBUTION must ship that distribution compiled in, not the empty
+ * stub. String literals survive minification, so the manifest's branding values and `assetsDir`
+ * entries are markers only the inlined module emits (not the theme `name`, which can collide with
+ * fork source). Every emitted `*.mjs` under dist is scanned since the pack lands in a shared chunk.
  */
 const DistributionManifestJson = Schema.Struct({
   branding: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),

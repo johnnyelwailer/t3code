@@ -246,12 +246,10 @@ interface SubscriptionOptions<TTag extends EnvironmentSubscriptionRpcTag> {
     cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
   ) => Effect.Effect<void, never, never>;
   /**
-   * Runs after the subscribe input is built and before the stream opens, on
-   * every (re)subscribe attempt — the initial subscribe, the session-change
-   * resubscribe, and expected-failure retries alike. Return an effect that
-   * sleeps to stagger bursts where one event (a session replacement) would
-   * otherwise reopen hundreds of streams in the same tick and drown the
-   * server's event loop (GHE #382 storm).
+   * Runs after the subscribe input is built and before the stream opens, on every (re)subscribe
+   * attempt (initial, session-change, and expected-failure retries). Return an effect that sleeps to
+   * stagger bursts, since one session replacement would otherwise reopen hundreds of streams in one
+   * tick and drown the server's event loop.
    */
   readonly beforeSubscribe?: (session: RpcSession) => Effect.Effect<void, never, never> | undefined;
   readonly onExpectedFailure?: (

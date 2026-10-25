@@ -28,8 +28,8 @@ import {
 import { planRuntimeModeSwitch } from "~/t3team/chat/t3team-runtimeModeSwitch";
 interface ComposerSelectionInput {
   /**
-   * t3team (#641): the open server thread's persisted runtime mode, so an Access pick applies
-   * right away instead of on the next typed send. Null for drafts.
+   * t3team: the open server thread's persisted runtime mode, so an Access pick applies right away
+   * instead of on the next typed send. Null for drafts.
    */
   readonly serverThreadRuntime: {
     readonly threadId: ThreadId;

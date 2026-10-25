@@ -199,10 +199,9 @@ function resolveDeliveryIntent(
 }
 
 /**
- * Send during an active run when the provider cannot hold an app-owned queued
- * turn. Steer into the running turn when that is supported; otherwise
- * interrupt-and-restart. Returns undefined when neither is possible, so the
- * caller keeps the queued-message rejection. Providers that already queue
+ * Send during an active run when the provider cannot hold an app-owned queued turn. Steers into the
+ * running turn when supported, otherwise interrupt-and-restart. Returns undefined when neither is
+ * possible, so the caller keeps the queued-message rejection. Providers that already queue
  * (`supportsQueuedMessages`) are left alone.
  */
 export function redirectUnsupportedQueue(input: {

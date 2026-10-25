@@ -425,8 +425,8 @@ const verifyMigrationSlots = Effect.fn("verifyMigrationSlots")(function* () {
     SELECT migration_id, name FROM effect_sql_migrations`;
   const appliedById = new Map(applied.map((row) => [Number(row.migration_id), row.name]));
   for (const [slot, codeName] of migrationManifest) {
-    // Fork databases record fork ids under older names (the GHE #382 id 60 collision, repaired
-    // by 78); only upstream-owned slots decide whether the copy can run.
+    // Fork databases record fork ids under older names (the id 60 collision, repaired by 78); only
+    // upstream-owned slots decide whether the copy can run.
     if (!UPSTREAM_V2_MIGRATION_IDS.has(slot)) continue;
     const appliedName = appliedById.get(slot);
     if (appliedName !== undefined && appliedName !== codeName) {

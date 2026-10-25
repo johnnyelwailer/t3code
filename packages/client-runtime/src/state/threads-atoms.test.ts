@@ -228,18 +228,10 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
       ),
     ),
   );
-  // Two modes, on purpose.
-  //
-  // `productionTtl: true` constructs the atoms exactly as the apps do — no
-  // options, so the shipped `THREAD_STATE_IDLE_TTL_MS` applies. The idle-TTL
-  // cases below use this, so lowering the shipped default breaks them. Passing
-  // the TTL in explicitly would pin the argument instead of the default and
-  // guard nothing.
-  //
-  // Everything else opts OUT with `idleTtlMs: 0`. Those cases assert what
-  // survives *across* a teardown and use "the stream closed" as a
-  // synchronisation handle; under the real TTL every `Deferred.await(x.closed)`
-  // becomes a timer to drive, which tests the clock rather than the behaviour.
+  // Two modes, on purpose. `productionTtl: true` constructs the atoms as the apps do (no options, so
+  // the shipped `THREAD_STATE_IDLE_TTL_MS` applies); passing the TTL explicitly would pin the argument,
+  // not the default. Everything else opts OUT with `idleTtlMs: 0`: those cases assert what survives
+  // a teardown and use "the stream closed" as a sync handle, which under the real TTL tests the clock.
   const raw = options?.productionTtl
     ? createEnvironmentThreadStateAtoms(runtime)
     : createEnvironmentThreadStateAtoms(runtime, { idleTtlMs: 0 });
@@ -322,15 +314,10 @@ describe("createEnvironmentThreadStateAtoms", () => {
     }),
   );
 
-  // Live-state idle TTL. These pin WHEN teardown happens, at the shipped value;
-  // everything else pins what survives ACROSS a teardown, at TTL 0.
-  //
-  // The first case is the regression guard. Restoring `Atom.setIdleTTL(0)` (the
-  // upstream #9740 behaviour) makes it fail, because a remount inside the window
-  // would open a second subscription. On a live install that cost 1.35
-  // `subscribeThread` re-opens per persisted domain event — 17 of 19
-  // subscriptions aborted inside one second, median lifetime 2.9ms. Do not
-  // "simplify" this back to an immediate close.
+  // Live-state idle TTL: these pin WHEN teardown happens, at the shipped value. The first case is the
+  // regression guard: restoring `Atom.setIdleTTL(0)` makes it fail, because a remount inside the window
+  // would open a second subscription (1.35 `subscribeThread` re-opens per domain event on a live
+  // install). Do not "simplify" this back to an immediate close.
 
   it.effect("keeps the live stream open across a consumer gap inside the idle TTL", () =>
     Effect.gen(function* () {

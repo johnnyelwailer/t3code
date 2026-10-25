@@ -203,11 +203,9 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
         prefix: "t3-server-environment-test-",
       });
 
-      // The boot stamp identifies THIS server process (epoch ms, set once at
-      // layer construction): a background bash job that started before it
-      // cannot be live any more. Pin it with a Date-only fake clock: same
-      // layer → same stamp on every read; a rebuilt layer ("restart") gets
-      // the new time, never a persisted value.
+      // The boot stamp identifies THIS server process: a bash job that started before it cannot be live.
+      // Pinned with a Date-only fake clock: same layer, same stamp; a rebuilt layer ("restart") gets the
+      // new time, never a persisted value.
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(1_700_000_000_000);
       const first = yield* Effect.gen(function* () {

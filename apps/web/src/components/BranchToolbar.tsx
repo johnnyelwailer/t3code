@@ -728,11 +728,10 @@ export const BranchToolbar = memo(function BranchToolbar({
     [cloudSessionScopeKey, cloudSessions.selectorProps.cloudEnvironmentIds, onEnvironmentChange],
   );
 
-  // The same machine can reach the catalog under two environment ids (its T3
-  // Connect identity and a relay id minted when a cloud session's relay link
-  // was published). The Run-on menus must not list it twice; the dedupe is
-  // scoped to these menus so no other surface's environment list changes. The Run-on selector
-  // takes the full list: it de-duplicates itself, and must see every cloud machine.
+  // The same machine can reach the catalog under two environment ids (T3 Connect identity and a relay
+  // id), so the Run-on menus must not list it twice; the dedupe is scoped to these menus so no other
+  // surface changes. The Run-on selector takes the full list: it de-duplicates itself and must see
+  // every cloud machine.
   const runOnEnvironments = useMemo(
     () =>
       availableEnvironments ? dedupeRunOnEnvironments(availableEnvironments, environmentId) : null,

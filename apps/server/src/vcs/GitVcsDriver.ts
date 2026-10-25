@@ -804,14 +804,10 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   });
 
   /**
-   * `git add -A` re-indexes the whole worktree. In large repositories (many
-   * worktrees, submodules, thousands of files) it routinely exceeds the
-   * generic 30s VcsProcess default under disk pressure — and it can stall
-   * further behind an auto-gc repacking the shared object store. The index
-   * step gets its own budget; a timeout that still fires is self-healed by
-   * re-running the whole capture on a fresh temp index with the same backoff
-   * ladder pattern as the interrupted-turn re-drive
-   * (t3team-workflowEngineTurnRetrySupport.ts).
+   * `git add -A` re-indexes the whole worktree and can exceed the generic 30s VcsProcess default in
+   * large repositories under disk pressure or behind an auto-gc. The index step gets its own budget;
+   * a timeout that still fires self-heals by re-running the capture on a fresh temp index with the
+   * backoff ladder of the interrupted-turn re-drive (t3team-workflowEngineTurnRetrySupport.ts).
    */
   const CHECKPOINT_INDEX_TIMEOUT_MS = 120_000;
   /** Backoff ladder (ms) before capture attempts 2 and 3. */
@@ -819,14 +815,10 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   /** Total capture attempts before a timed-out capture surfaces to the caller. */
   const CHECKPOINT_MAX_CAPTURE_ATTEMPTS = CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS.length + 1;
   /**
-   * Total wall-clock budget for the whole self-heal. The per-step and
-   * per-attempt caps above bound each attempt, but 3 attempts + backoff can
-   * still block the single serial checkpoint worker for many minutes. This
-   * gate stops scheduling further retries once the capture has already spent
-   * this much real time, so the worst case is bounded to this budget plus one
-   * in-flight attempt. Sized well above a healthy (slow) capture — the 120s
-   * index deadline plus the fast steps — so a legitimate slow capture still
-   * gets its retries.
+   * Total wall-clock budget for the whole self-heal: 3 attempts plus backoff could otherwise block
+   * the single serial checkpoint worker for minutes. Stops scheduling retries once spent, bounding
+   * the worst case to this budget plus one attempt. Sized well above a healthy slow capture (120s
+   * index deadline plus fast steps) so legitimate slow captures still get their retries.
    */
   const CHECKPOINT_TOTAL_WALLCLOCK_BUDGET_MS = 180_000;
   const isVcsProcessTimeoutError = Schema.is(VcsProcessTimeoutError);

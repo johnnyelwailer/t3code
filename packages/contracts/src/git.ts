@@ -347,11 +347,9 @@ export const VcsPullResult = Schema.Struct({
 });
 export type VcsPullResult = typeof VcsPullResult.Type;
 
-// Git stderr can echo credentials from argv and remote URLs. A recognized
-// failure reaches the error as a fixed reason only; newer, unknown reasons
-// decode as absent through GitCommandError. When no reason matches, the driver
-// attaches argument-redacted, truncated stderr (see `stderr`) so an
-// unclassified failure stays diagnosable.
+// Git stderr can echo credentials from argv and remote URLs, so a recognized failure reaches the
+// error as a fixed reason only; unknown reasons decode as absent through GitCommandError. With no
+// match, the driver attaches argument-redacted, truncated stderr (see `stderr`) for diagnosability.
 export const GitCommandFailureReason = Schema.Literals([
   "authentication_failed",
   "branch_already_exists",

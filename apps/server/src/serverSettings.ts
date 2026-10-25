@@ -474,14 +474,10 @@ function migrateLegacyProviderSettings(
 }
 
 /**
- * Whether a model selection targets a provider that is currently enabled.
- *
- * `isModelSelectionProviderEnabled` only knows about user-persisted instance
- * configs (`providerInstances`) and legacy built-in providers (`providers`).
- * Distribution / pack providers are registered at boot via
- * the pack overlay and never land in user settings, so the settings-only
- * check would reject them and force the text-generation model back to the
- * legacy default.
+ * Whether a model selection targets a provider that is currently enabled. Distribution / pack
+ * providers are registered at boot via the pack overlay and never land in user settings, so the
+ * settings-only `isModelSelectionProviderEnabled` check would reject them and reset the
+ * text-generation model to the legacy default.
  */
 const isModelSelectionProviderEnabledPackAware = (
   settings: ServerSettings,
