@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import type { PlatformOSType } from "react-native";
 import distributionMobile from "@t3code/distribution-mobile";
 
-import type { HomeEmptyStateProps, MobileExtensions } from "./t3team-extensionTypes";
+import type { HomeEmptyStateProps, MobileExtensions } from "./t3team-api";
 
 /**
  * The active extensions: stock (empty) unless a distribution build resolves the
