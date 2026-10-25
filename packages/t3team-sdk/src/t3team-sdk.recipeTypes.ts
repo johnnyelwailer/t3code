@@ -95,7 +95,8 @@ export interface RecipeTriggerSpec<Payload = unknown> {
   /** Stable, unique within the recipe — the host's registration owner is `trigger:<recipe>:<id>`. */
   readonly id: string;
   /** The built-in signal source the trigger listens on (its host start behavior is engine-owned). */
-  readonly source: SignalSourceRef<unknown>;
+  /** Any built-in source declaration; its params are the host's to bind, never the trigger's. */
+  readonly source: SignalSourceRef<never, ReadonlyArray<Signal<unknown>>, unknown>;
   /** The signal to react to; must be one of `source.emits`. */
   readonly signal: Signal<Payload>;
   /**
@@ -121,6 +122,13 @@ export interface RecipeTriggerSpec<Payload = unknown> {
   readonly dailyCap?: number | null;
   /** The author's default; the host shows it and a per-project toggle can override it. */
   readonly defaultEnabled: boolean;
+  /**
+   * Narrows a project-scope source (`scm.project.items`, `work-item.project-updates`): the
+   * provider's own query language (search qualifiers, JQL). A per-project setting overrides it.
+   */
+  readonly scope?: { readonly query?: string };
+  /** A feature flag that must be on for the trigger to run (e.g. a pack flag shipped dark). */
+  readonly featureFlag?: string;
 }
 
 export interface RecipeApplicabilitySpec {

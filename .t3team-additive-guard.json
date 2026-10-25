@@ -21,6 +21,7 @@
     "apps/server/src/cli/thread.ts",
     "docs/t3team-mvp/12-profiles-and-skill-packs.md",
     "docs/t3team-mvp/40-code-and-team-modes.md",
+    "docs/t3team-mvp/42-signal-sources.md",
     "packages/agent-runner/README.md",
     "apps/desktop/src/ipc/DesktopIpcHandlers.ts",
     "apps/desktop/src/ipc/channels.ts",
@@ -392,6 +393,7 @@
     "apps/web/src/components/chat/ThreadErrorBanner.tsx",
     "apps/web/src/components/chat/ThreadRelationshipsControl.agents.test.tsx",
     "apps/web/src/components/chat/ThreadRelationshipsControl.tsx",
+    "apps/web/src/components/chat/TimelineAssistantRows.tsx",
     "apps/web/src/components/chat/useComposerFocusState.test.tsx",
     "apps/web/src/components/cloud/CloudEnvironmentConnectList.tsx",
     "apps/web/src/components/composerContextPresentation.tsx",
@@ -428,6 +430,7 @@
     "apps/web/src/components/settings/SettingsSidebarNav.tsx",
     "apps/web/src/components/settings/settingsSearch.ts",
     "apps/web/src/components/sidebar/SidebarChrome.tsx",
+    "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
     "apps/web/src/components/threadSidebarWidth.ts",
     "apps/web/src/components/ui/button.tsx",
     "apps/web/src/components/ui/input.tsx",
@@ -716,7 +719,9 @@
     "apps/server/src/orchestration-v2/testkit/fixtures/muse_workflow/muse_transcript.ndjson",
     "apps/server/src/orchestration-v2/testkit/fixtures/simple/muse_transcript.ndjson",
     "apps/server/src/orchestration-v2/testkit/fixtures/subagent_v2/muse_transcript.ndjson",
-    "apps/server/src/orchestration-v2/testkit/fixtures/turn_interrupt/muse_transcript.ndjson"
+    "apps/server/src/orchestration-v2/testkit/fixtures/turn_interrupt/muse_transcript.ndjson",
+    "apps/web/src/components/settings/ScheduledTasksSettings.tsx",
+    "apps/web/src/components/settings/settingsLayout.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

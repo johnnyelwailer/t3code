@@ -137,7 +137,10 @@ export const makeAccountSession = Effect.fn("account.session.make")(function* (
     yield* tokens.clear;
   });
 
-  const accessToken = (resource: string): Effect.Effect<string, AccountError> =>
+  const accessToken = (
+    resource: string,
+    options?: { readonly forceRefresh?: boolean },
+  ): Effect.Effect<string, AccountError> =>
     Effect.gen(function* () {
       if (!Object.hasOwn(account.resources, resource)) {
         return yield* new AccountError({
@@ -146,13 +149,13 @@ export const makeAccountSession = Effect.fn("account.session.make")(function* (
         });
       }
       const hit = yield* tokens.fresh(resource);
-      if (Option.isSome(hit)) return hit.value;
+      if (!options?.forceRefresh && Option.isSome(hit)) return hit.value;
       // One refresh at a time: two concurrent refreshes with one rotating grant would make the loser
       // look "rejected" and sign the user out right after the winner stored the new grant.
       return yield* refreshLock.withPermits(1)(
         Effect.gen(function* () {
           const raced = yield* tokens.fresh(resource);
-          if (Option.isSome(raced)) return raced.value;
+          if (!options?.forceRefresh && Option.isSome(raced)) return raced.value;
           const refresh = yield* tokens.grant;
           if (Option.isNone(refresh)) return yield* signInRequired();
           const before = yield* Ref.get(generation);

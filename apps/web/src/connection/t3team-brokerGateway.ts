@@ -2,12 +2,15 @@ import {
   BrokerEnvironmentGateway,
   ConnectionBlockedError,
   ConnectionTransientError,
+  sessionEndedError,
 } from "@t3tools/client-runtime/connection";
+import type { CloudSession } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import { CredentialRequestError } from "~/account/t3team-credentialRequest";
 import { cloudBrokerApi } from "~/cloud/t3team-cloudBrokerApi";
 import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary/target";
+import { appAtomRegistry } from "~/rpc/atomRegistry";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -24,21 +27,32 @@ function clientSharesServerMachine(): boolean {
   }
 }
 
+/**
+ * How a failed broker call maps onto the connection supervisor. Sign-in problems and an ended
+ * session block (retrying cannot help); everything else is transient and retried with backoff.
+ */
+export function mapBrokerCallFailure(
+  cause: unknown,
+): ConnectionBlockedError | ConnectionTransientError {
+  if (cause instanceof CredentialRequestError && cause.reason === "session_ended") {
+    return sessionEndedError(cause.message);
+  }
+  if (
+    cause instanceof CredentialRequestError &&
+    (cause.reason === "broker_sign_in_required" || cause.reason === "unauthorized")
+  ) {
+    return new ConnectionBlockedError({ reason: "authentication", detail: cause.message });
+  }
+  return new ConnectionTransientError({
+    reason: "remote-unavailable",
+    detail: cause instanceof Error ? cause.message : String(cause),
+  });
+}
+
 const call = <A>(run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
-    catch: (cause) => {
-      if (
-        cause instanceof CredentialRequestError &&
-        (cause.reason === "broker_sign_in_required" || cause.reason === "unauthorized")
-      ) {
-        return new ConnectionBlockedError({ reason: "authentication", detail: cause.message });
-      }
-      return new ConnectionTransientError({
-        reason: "remote-unavailable",
-        detail: cause instanceof Error ? cause.message : String(cause),
-      });
-    },
+    catch: mapBrokerCallFailure,
   });
 
 const requireSameMachine = Effect.suspend(() =>
@@ -58,29 +72,44 @@ const requireSameMachine = Effect.suspend(() =>
  * and asks the broker for pairing credentials, so each is one authenticated call to it. Failures map
  * to what the connection UI already understands: sign-in problems block, everything else retries.
  */
-export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
-  attach: (input) =>
-    Effect.gen(function* () {
-      yield* requireSameMachine;
-      const result = yield* call(() =>
-        cloudBrokerApi.attach(input.sessionId, String(input.expectedEnvironmentId)),
-      );
-      if (String(result.environmentId) !== String(input.expectedEnvironmentId)) {
-        return yield* new ConnectionBlockedError({
-          reason: "configuration",
-          detail:
-            "The cloud session now runs a different environment. Connect to it again from the cloud session list.",
-        });
-      }
-      return {
-        sessionId: result.sessionId ?? input.sessionId,
-        httpBaseUrl: result.httpBaseUrl,
-        wsBaseUrl: result.wsBaseUrl,
-      };
-    }),
-  pair: (input) =>
-    requireSameMachine.pipe(
-      Effect.andThen(call(() => cloudBrokerApi.pair(input.sessionId))),
-      Effect.map((result) => result.pairingCredential),
-    ),
+export const makeWebBrokerEnvironmentGateway = (
+  readSessions: () => Promise<ReadonlyArray<CloudSession>>,
+) =>
+  BrokerEnvironmentGateway.of({
+    attach: (input) =>
+      Effect.gen(function* () {
+        yield* requireSameMachine;
+        const sessions = yield* Effect.promise(readSessions);
+        const endsAt = sessions.find(
+          (session) =>
+            session.sessionId === input.sessionId &&
+            session.environmentId === String(input.expectedEnvironmentId) &&
+            session.phase === "ready",
+        )?.endsAt;
+        const result = yield* call(() =>
+          cloudBrokerApi.attach(input.sessionId, String(input.expectedEnvironmentId), endsAt),
+        );
+        if (String(result.environmentId) !== String(input.expectedEnvironmentId)) {
+          return yield* new ConnectionBlockedError({
+            reason: "configuration",
+            detail:
+              "The cloud session now runs a different environment. Connect to it again from the cloud session list.",
+          });
+        }
+        return {
+          sessionId: result.sessionId ?? input.sessionId,
+          httpBaseUrl: result.httpBaseUrl,
+          wsBaseUrl: result.wsBaseUrl,
+        };
+      }),
+    pair: (input) =>
+      requireSameMachine.pipe(
+        Effect.andThen(call(() => cloudBrokerApi.pair(input.sessionId))),
+        Effect.map((result) => result.pairingCredential),
+      ),
+  });
+
+export const webBrokerEnvironmentGateway = makeWebBrokerEnvironmentGateway(async () => {
+  const { cloudSessionListAtom } = await import("~/state/t3team-cloudSessions");
+  return appAtomRegistry.get(cloudSessionListAtom).sessions;
 });

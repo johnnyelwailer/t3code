@@ -252,7 +252,7 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
   it.effect("returns an explicit workflow-UI handoff through the broker result", () =>
     Effect.gen(function* () {
       const result = yield* callT3TeamWorkflowRunTool({
-        scopeLabel: "for this thread.",
+        scopeLabel: "for this thread",
         toolArgs: { intent },
         workflowRunTools: {
           runWorkflow: () =>
@@ -279,7 +279,7 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         const { handlers } = yield* makeHarness();
         const call = (toolArgs: unknown) =>
           callT3TeamWorkflowRunTool({
-            scopeLabel: "for this thread.",
+            scopeLabel: "for this thread",
             toolArgs,
             workflowRunTools: handlers,
           });

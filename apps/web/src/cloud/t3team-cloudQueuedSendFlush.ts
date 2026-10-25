@@ -5,6 +5,8 @@
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
+import type { CloudProjectWait } from "./t3team-cloudProjectWait";
+import { cloudProjectWaitDetail } from "./t3team-cloudProjectWaitPresentation";
 import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
@@ -20,7 +22,13 @@ export type CloudQueuedSendFlushAction =
   | { readonly kind: "connect"; readonly session: CloudSession }
   /** A "No project" draft: open the machine's scratch project, then send there. */
   | { readonly kind: "open-scratch"; readonly environmentId: EnvironmentId }
-  | { readonly kind: "fail"; readonly message: string; readonly retryable: boolean }
+  | {
+      readonly kind: "fail";
+      readonly message: string;
+      readonly retryable: boolean;
+      /** Set when the failure is typed; the message only words it. */
+      readonly failure?: CloudQueuedSendFailure;
+    }
   /** The draft's thread already exists on the machine: an earlier dispatch went through. */
   | { readonly kind: "delivered"; readonly environmentId: EnvironmentId }
   | {
@@ -28,6 +36,18 @@ export type CloudQueuedSendFlushAction =
       readonly environmentId: EnvironmentId;
       readonly projectId: ProjectId;
     };
+
+export interface CloudQueuedSendFailure {
+  readonly kind: "project_not_resolved" | "session_ended";
+  /** The classifier's reason (`CloudProjectWaitReason`) for `project_not_resolved`. */
+  readonly reason: string | null;
+  readonly environmentId: string | null;
+}
+
+/** The words of a send that gave up waiting for its project; the message is kept. */
+function cloudProjectNotResolvedMessage(wait: CloudProjectWait): string {
+  return `The project did not appear on the cloud machine in time. ${cloudProjectWaitDetail(wait)}. Your message is kept: retry, send it in the machine's own project, start a plain session, or cancel to edit it.`;
+}
 
 export function decideCloudQueuedSendFlush(input: {
   readonly queued: CloudQueuedSend;
@@ -43,6 +63,12 @@ export function decideCloudQueuedSendFlush(input: {
   readonly scratch: boolean;
   /** The draft's thread is already known on that machine. */
   readonly threadExists: boolean;
+  /** What the project is waiting on (`CloudQueuedSendFacts.projectWait`). */
+  readonly projectWait?: CloudProjectWait | null;
+  /** The "Project ready" bound has run out (`isCloudProjectWaitExpired`). */
+  readonly projectWaitExpired?: boolean;
+  /** The machine's connection is parked because its session no longer exists. */
+  readonly environmentSessionEnded?: boolean;
 }): CloudQueuedSendFlushAction {
   const { queued, session } = input;
   if (isCloudQueuedSendFailed(queued)) return { kind: "wait" };
@@ -62,11 +88,16 @@ export function decideCloudQueuedSendFlush(input: {
   if (environmentId !== undefined && input.machineConnected && input.threadExists) {
     return { kind: "delivered", environmentId };
   }
-  if (isTerminalCloudSessionPhase(session.phase)) {
+  // The list is a bounded, polled history; the attach's `session_ended` can say so sooner.
+  if (
+    isTerminalCloudSessionPhase(session.phase) ||
+    (input.environmentSessionEnded === true && !input.machineConnected)
+  ) {
     return {
       kind: "fail",
       message: session.failureReason ?? CLOUD_QUEUED_SEND_ENDED_MESSAGE,
       retryable: false,
+      failure: { kind: "session_ended", reason: null, environmentId: environmentId ?? null },
     };
   }
   if (input.connectFailure !== null && input.connectFailure.sessionId === session.sessionId) {
@@ -81,7 +112,16 @@ export function decideCloudQueuedSendFlush(input: {
   }
   if (!input.machineConnected) return { kind: "connect", session };
   if (input.projectId === null) {
-    return input.scratch ? { kind: "open-scratch", environmentId } : { kind: "wait" };
+    if (input.scratch) return { kind: "open-scratch", environmentId };
+    const wait = input.projectWait ?? null;
+    if (input.projectWaitExpired !== true || wait === null) return { kind: "wait" };
+    // A project that has not appeared by the bound is a typed, kept failure, not a wait.
+    return {
+      kind: "fail",
+      message: cloudProjectNotResolvedMessage(wait),
+      retryable: true,
+      failure: { kind: "project_not_resolved", reason: wait.reason, environmentId },
+    };
   }
   return { kind: "dispatch", environmentId, projectId: input.projectId };
 }

@@ -13,6 +13,7 @@ import * as Stream from "effect/Stream";
 
 import * as Settings from "../serverSettings.ts";
 import { getPackProviderDrivers, getPackProviderOverlay } from "../t3team-pack-providerOverlay.ts";
+import { hostProviderDrivers, hostProviderInstances } from "../t3team-hostProviderInstances.ts";
 import { BUILT_IN_DRIVERS, type BuiltInDriversEnv } from "./builtInDrivers.ts";
 import * as ProviderInstanceRegistry from "./ProviderInstanceRegistry.ts";
 import * as ProviderInstanceRegistryMutator from "./ProviderInstanceRegistryMutator.ts";
@@ -38,6 +39,7 @@ export const deriveProviderInstanceConfigMap = (
   settings: ServerSettings,
 ): ProviderInstanceConfigMap => {
   const merged: Record<string, ProviderInstanceConfig> = {
+    ...hostProviderInstances(),
     ...getPackProviderOverlay(),
     ...settings.providerInstances,
   };
@@ -115,7 +117,7 @@ export const layer: Layer.Layer<
 
     const layerMutable = ProviderInstanceRegistry.layer({
       // t3team: pack-registered provider drivers join the built-ins.
-      drivers: [...BUILT_IN_DRIVERS, ...getPackProviderDrivers()],
+      drivers: [...BUILT_IN_DRIVERS, ...getPackProviderDrivers(), ...hostProviderDrivers()],
       configMap: initialConfigMap,
     }).pipe(
       Layer.provide(ProviderOrchestrationAdapterInfrastructure.layer),

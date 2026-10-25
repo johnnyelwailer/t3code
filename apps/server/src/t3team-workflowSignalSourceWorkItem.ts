@@ -42,6 +42,7 @@ export function toNeutralWorkItem(input: {
   readonly provider: string;
   readonly issueKey: string;
   readonly title: string;
+  readonly url?: string;
   readonly state?: string;
   readonly assignee?: string;
   readonly labels?: string[];
@@ -56,6 +57,7 @@ export function toNeutralWorkItem(input: {
     provider: "atlassian",
     issueKey: input.issueKey,
     title: input.title,
+    ...(input.url === undefined ? {} : { url: input.url }),
     ...(typeof status === "string" ? { state: status } : {}),
     ...(typeof assignee === "string" ? { assignee } : {}),
     ...(Array.isArray(labels)

@@ -76,6 +76,7 @@ import { T3TeamToolkitHandlersLive } from "./toolkits/t3team/handlers.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./toolkits/t3team/t3team-mcpToolAliases.ts";
 import { withToolNameAliases } from "./toolkits/t3team/t3team-mcpToolAliasProtocol.ts";
 import { withFeatureGatedToolList } from "./toolkits/t3team/t3team-mcpToolFeatureGate.ts";
+import { withThreadScopedToolList } from "./toolkits/t3team/t3team-mcpToolThreadList.ts";
 import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
 
 const mcpResourceMetadataUrl = (request: HttpServerRequest.HttpServerRequest) =>
@@ -1069,8 +1070,10 @@ export const layerDeviceToolkit = Layer.mergeAll(
 
 /** The wire protocol, with the deprecated `t3team_*` tool names resolved at dispatch only and
  * flag-switched t3 tools left out of `tools/list` while their flag is off. */
-export const T3_MCP_PROTOCOL = withFeatureGatedToolList(
-  withToolNameAliases(McpProtocol.v2025_06_18, T3TEAM_DEPRECATED_MCP_TOOL_ALIASES),
+export const T3_MCP_PROTOCOL = withThreadScopedToolList(
+  withFeatureGatedToolList(
+    withToolNameAliases(McpProtocol.v2025_06_18, T3TEAM_DEPRECATED_MCP_TOOL_ALIASES),
+  ),
 );
 
 export const layerMcpTransport = McpServer.layerHttp({

@@ -108,4 +108,13 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  DELEGATE_CLOUD: {
+    group: "Cloud & machines",
+    subgroup: "Cloud sessions",
+    label: "Delegate to a cloud session",
+    description:
+      "delegate_task accepts extensions.cloudSession: the child runs its turns on a Nexi cloud session of its project (a fitting one, or one it starts), and its messages and completion come back here. Off: the option is not offered and no remote environment instance exists.",
+    defaultEnabled: false,
+    requiresRestart: true,
+  },
 } as const satisfies Record<string, FeatureFlagDefinition>;

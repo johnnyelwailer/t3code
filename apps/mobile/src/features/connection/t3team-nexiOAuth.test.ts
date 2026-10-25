@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createNexiOAuth, type NexiTokenStorage } from "./t3team-nexiOAuth";
+import {
+  createNexiOAuth,
+  NexiSignInRequiredError,
+  type NexiTokenStorage,
+} from "./t3team-nexiOAuth";
 import fc from "fast-check";
 
 function fixture() {
@@ -207,6 +211,142 @@ describe("Nexplore mobile public-client OAuth", () => {
     respond(json(tokens));
     await expect(pending).rejects.toThrow("cancelled");
     expect(f.raw()).toBeNull();
+  });
+  describe("in-flight refresh across account generations", () => {
+    const deferred = <A>() => {
+      let resolve!: (value: A) => void;
+      const promise = new Promise<A>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+    /** Starts a refresh whose issuer response the test releases explicitly. */
+    const startStaleRefresh = async (f: ReturnType<typeof fixture>) => {
+      f.seed();
+      const reached = deferred<void>();
+      const issuer = deferred<Response>();
+      f.fetcher.mockImplementationOnce(() => {
+        reached.resolve();
+        return issuer.promise;
+      });
+      const pending = f.account.accessToken();
+      await reached.promise;
+      return { pending, issuer };
+    };
+    const countClears = (f: ReturnType<typeof fixture>) => {
+      const clear = f.storage.clear;
+      const calls = { count: 0 };
+      f.storage.clear = async () => {
+        calls.count++;
+        await clear();
+      };
+      return calls;
+    };
+
+    it("does not clear a newer sign-in when a stale refresh is rejected", async () => {
+      const f = fixture();
+      const { pending, issuer } = await startStaleRefresh(f);
+      await f.account.signOut();
+      f.fetcher.mockResolvedValueOnce(json({ ...tokens, access_token: "new-account" }));
+      await f.account.poll(code, new AbortController().signal);
+      issuer.resolve(json({ error: "invalid_grant" }, 400));
+      await expect(pending).rejects.toThrow("cancelled");
+      expect(JSON.parse(f.raw()!).access_token).toBe("new-account");
+    });
+    it("does not invalidate a pending sign-in poll when a stale refresh is rejected", async () => {
+      const f = fixture();
+      const { pending, issuer } = await startStaleRefresh(f);
+      await f.account.signOut();
+      const pollReached = deferred<void>();
+      const pollIssuer = deferred<Response>();
+      f.fetcher.mockImplementationOnce(() => {
+        pollReached.resolve();
+        return pollIssuer.promise;
+      });
+      const poll = f.account.poll(code, new AbortController().signal);
+      await pollReached.promise;
+      issuer.resolve(json({ error: "interaction_required" }, 400));
+      await expect(pending).rejects.toThrow("cancelled");
+      pollIssuer.resolve(json(tokens));
+      expect(await poll).toBe("access");
+    });
+    it("signs out only once when the signed-out refresh is then rejected", async () => {
+      const f = fixture();
+      const clears = countClears(f);
+      const { pending, issuer } = await startStaleRefresh(f);
+      await f.account.signOut();
+      issuer.resolve(json({ error: "invalid_grant" }, 400));
+      await expect(pending).rejects.toThrow("cancelled");
+      expect(clears.count).toBe(1);
+      expect(f.raw()).toBeNull();
+    });
+    it("leaves a signed-out account alone when its refresh fails transiently", async () => {
+      const f = fixture();
+      const clears = countClears(f);
+      const { pending, issuer } = await startStaleRefresh(f);
+      await f.account.signOut();
+      issuer.resolve(json({}, 503));
+      await expect(pending).rejects.toThrow("refresh");
+      expect(clears.count).toBe(1);
+      expect(f.raw()).toBeNull();
+    });
+    it("refreshes a new account instead of joining the signed-out account's refresh", async () => {
+      const f = fixture();
+      const { pending, issuer } = await startStaleRefresh(f);
+      await f.account.signOut();
+      // Short-lived tokens are inside the refresh window as soon as they are saved.
+      f.fetcher.mockResolvedValueOnce(
+        json({ access_token: "new-account", refresh_token: "r2", expires_in: 30 }),
+      );
+      await f.account.poll(code, new AbortController().signal);
+      f.fetcher.mockResolvedValueOnce(
+        json({ access_token: "new-account-refreshed", refresh_token: "r3", expires_in: 3600 }),
+      );
+      const second = f.account.accessToken();
+      issuer.resolve(json(tokens));
+      await expect(pending).rejects.toThrow("cancelled");
+      expect(await second).toBe("new-account-refreshed");
+      const bodies = f.fetcher.mock.calls.map(([, init]) =>
+        new URLSearchParams(init?.body as string).get("refresh_token"),
+      );
+      expect(bodies).toEqual(["refresh", null, "r2"]);
+      expect(JSON.parse(f.raw()!).access_token).toBe("new-account-refreshed");
+    });
+    it("shares one rejected refresh between concurrent callers and signs out once", async () => {
+      const f = fixture();
+      const clears = countClears(f);
+      f.seed();
+      f.fetcher.mockResolvedValueOnce(json({ error: "invalid_grant" }, 400));
+      const results = await Promise.allSettled([f.account.accessToken(), f.account.accessToken()]);
+      expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+      expect(clears.count).toBe(1);
+      expect(f.raw()).toBeNull();
+    });
+    it("starts a new refresh after the previous one failed", async () => {
+      const f = fixture();
+      f.seed();
+      f.fetcher.mockResolvedValueOnce(json({}, 503)).mockResolvedValueOnce(json(tokens));
+      await expect(f.account.accessToken()).rejects.toThrow("refresh");
+      expect(await f.account.accessToken()).toBe("access");
+      expect(f.fetcher).toHaveBeenCalledTimes(2);
+    });
+    it.each([
+      ["a network error", () => Promise.reject(new TypeError("Network request failed"))],
+      ["a throttled response", () => Promise.resolve(json({ error: "slow_down" }, 429))],
+      [
+        "a temporary issuer error",
+        () => Promise.resolve(json({ error: "temporarily_unavailable" }, 400)),
+      ],
+    ])("keeps the refresh grant after %s and does not ask for sign-in", async (_name, respond) => {
+      const f = fixture();
+      f.seed();
+      f.fetcher.mockImplementationOnce(respond);
+      const error = await f.account.accessToken().catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(NexiSignInRequiredError);
+      expect(f.raw()).toContain("refresh");
+    });
   });
   it("rejects corrupt persisted tokens and malformed issuer responses", async () => {
     const f = fixture();

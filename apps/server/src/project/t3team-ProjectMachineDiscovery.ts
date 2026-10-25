@@ -1,10 +1,9 @@
 /**
- * ProjectMachineDiscovery - finds the machine definitions a project's checkouts hold, and which
- * one is the project's default template for new cloud sessions (issue #562 in the distribution).
- *
- * Reads the checkouts already on this environment: the project's own repository, then the linked
- * repositories its reference manifest lists, in manifest order. No provider API reads remote files,
- * so a linked repository that was never cloned here contributes nothing.
+ * Finds the project's machine. Its own repository's definition is the project's machine; linked
+ * repositories are scanned and reported but never used (`t3team-projectMachineOwnership`). Local checkouts are
+ * authoritative; repositories without a checkout use a cached, immutable default-branch scan
+ * behind CLOUD_PROJECT_MACHINE. Remote availability failures never reject a definition.
+ * Standby callers request cached remote results only, so the background loop cannot fetch.
  *
  * @module t3team-ProjectMachineDiscovery
  */
@@ -12,29 +11,31 @@ import {
   type ProjectId,
   type ProjectMachineDiscovery as Discovery,
   ProjectMachineDiscoveryError,
-  TrimmedNonEmptyString,
 } from "@t3tools/contracts";
+import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as Context from "effect/Context";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Schema from "effect/Schema";
 
 import { ProjectService } from "./ProjectService.ts";
-import {
-  HIDDEN_T3TEAM_DIR,
-  MANIFEST_FILE_NAME,
-  REFERENCES_DIR_NAME,
-} from "../t3team-project-repository-utils.ts";
-import { repositoryLookupCandidates } from "../t3team-toolBrokerStartChildLinkedRepository.ts";
-import { type ScannedMachine, scanCheckout } from "./t3team-projectMachineScan.ts";
+import { scanCheckout } from "./t3team-projectMachineScan.ts";
+import type { ScannedMachine } from "./t3team-machineDefinitionScan.ts";
+import { machineRepositories } from "./t3team-projectMachineRepositories.ts";
+import { logMachineSelection } from "./t3team-projectMachineLog.ts";
+import { selectProjectMachine } from "./t3team-projectMachineOwnership.ts";
+import { makeRemoteMachineCache } from "./t3team-remoteMachineCache.ts";
+import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
+import { VcsProcess } from "../vcs/VcsProcess.ts";
+import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 
-/** The project's default machine and the checkout it was found in, for starting a session. */
 export interface ProjectMachineSource {
-  /** Absolute path of the checkout holding the definition. */
+  /** Local checkout root, or the workspace used for remote git requests. */
   readonly root: string;
+  readonly remote?: { readonly url: string; readonly commit: string };
   readonly machine: ScannedMachine;
 }
 
@@ -45,10 +46,16 @@ export class ProjectMachineDiscovery extends Context.Service<
       projectId: ProjectId,
     ) => Effect.Effect<Discovery, ProjectMachineDiscoveryError>;
     /** Like `discover`, plus where the default definition lives (null when there is none). */
-    readonly resolveDefault: (projectId: ProjectId) => Effect.Effect<
+    readonly resolveDefault: (
+      projectId: ProjectId,
+      options?: { readonly remote: "cached-only" },
+    ) => Effect.Effect<
       {
         readonly discovery: Discovery;
+        /** The project's own machine, or null: linked repositories' machines are never used. */
         readonly source: ProjectMachineSource | null;
+        /** Linked repositories whose definitions were found and deliberately not used. */
+        readonly ignoredRepositories: ReadonlyArray<string>;
         /** Checkouts that were scanned, own repository first. Empty when the project has none. */
         readonly checkouts: ReadonlyArray<{ readonly repository: string; readonly root: string }>;
         /** The project's title, so a session without a checkout can name its workspace after it. */
@@ -59,56 +66,20 @@ export class ProjectMachineDiscovery extends Context.Service<
   }
 >()("t3/project/t3team-ProjectMachineDiscovery/ProjectMachineDiscovery") {}
 
-const decodeManifest = Schema.decodeUnknownOption(
-  Schema.fromJsonString(
-    Schema.Struct({ linkedRepositories: Schema.optional(Schema.Array(Schema.Unknown)) }),
-  ),
-);
-/** One usable manifest entry. Entries that do not decode are skipped, never trusted by cast. */
-const decodeLinkedRepository = Schema.decodeUnknownOption(
-  Schema.Struct({
-    url: TrimmedNonEmptyString,
-    localPath: TrimmedNonEmptyString,
-    status: Schema.Literals(["cloned", "updated"]),
-  }),
-);
-
-/** `owner/repo` for a linked repository's remote URL (the host is dropped, as `start_child` does). */
-const repositoryName = (url: string) => {
-  const candidates = repositoryLookupCandidates(url);
-  return candidates[1] ?? candidates[0] ?? url;
-};
-
-/** Pointer-backed definitions first: a committed `.nexi/machine.json` is a stated choice. */
-const byIntent = <A extends { readonly machineFilePath: string | null }>(a: A, b: A) =>
-  Number(a.machineFilePath === null) - Number(b.machineFilePath === null);
-
 const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const projects = yield* ProjectService;
 
-  const checkouts = Effect.fn("projectMachine.checkouts")(function* (workspaceRoot: string) {
-    const own = (yield* fileSystem
-      .exists(path.join(workspaceRoot, ".git"))
-      .pipe(Effect.orElseSucceed(() => false)))
-      ? [{ repository: ".", root: workspaceRoot }]
-      : [];
-    const manifestText = yield* fileSystem
-      .readFileString(
-        path.join(workspaceRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME, MANIFEST_FILE_NAME),
-      )
-      .pipe(Effect.orElseSucceed(() => null));
-    const manifest = manifestText === null ? Option.none() : decodeManifest(manifestText);
-    const linked = Option.isNone(manifest)
-      ? []
-      : (manifest.value.linkedRepositories ?? [])
-          .flatMap((raw) => Option.toArray(decodeLinkedRepository(raw)))
-          .map((entry) => ({ repository: repositoryName(entry.url), root: entry.localPath }));
-    return [...own, ...linked];
-  });
+  const providers = yield* PullRequestProviderRegistry;
+  const vcs = yield* VcsProcess;
+  const config = yield* ConfigProvider.ConfigProvider;
+  const scanRemote = yield* makeRemoteMachineCache;
 
-  const resolveDefault: ProjectMachineDiscovery["Service"]["resolveDefault"] = (projectId) =>
+  const resolveDefault: ProjectMachineDiscovery["Service"]["resolveDefault"] = (
+    projectId,
+    options,
+  ) =>
     Effect.gen(function* () {
       const project = yield* projects.getById(projectId).pipe(
         Effect.mapError(
@@ -125,37 +96,97 @@ const make = Effect.gen(function* () {
           message: "That project does not exist on this environment.",
         });
       }
-      const roots = yield* checkouts(project.value.workspaceRoot);
+      const repositories = yield* machineRepositories(project.value);
+      const remoteEnabled = yield* readFeatureFlagFromConfig("CLOUD_PROJECT_MACHINE");
+      const roots = repositories
+        .filter((location) => location.local)
+        .map(({ repository, root }) => ({ repository, root }));
       const scans = yield* Effect.forEach(
-        roots,
-        (checkout) =>
-          scanCheckout(checkout).pipe(
-            Effect.map((scan) => ({
-              rejected: scan.rejected,
-              sources: scan.candidates.map((machine) => ({ root: checkout.root, machine })),
-            })),
+        repositories,
+        (location) =>
+          Effect.gen(function* () {
+            if (location.local) {
+              const scan = yield* scanCheckout(location);
+              return {
+                rejected: scan.rejected,
+                sources: scan.candidates.map((machine): ProjectMachineSource => ({
+                  root: location.root,
+                  machine,
+                })),
+                notFoundRepository: undefined,
+                hint: undefined,
+              };
+            }
+            const scan =
+              location.url === undefined || !remoteEnabled
+                ? null
+                : yield* scanRemote(
+                    {
+                      repository: location.repository,
+                      url: location.url,
+                      cwd: project.value.workspaceRoot,
+                      provider: location.provider,
+                    },
+                    options?.remote === "cached-only",
+                  );
+            return {
+              rejected: scan?.rejected ?? [],
+              sources:
+                scan?.candidates.map((machine): ProjectMachineSource => ({
+                  root: project.value.workspaceRoot,
+                  machine,
+                  remote: scan.remote,
+                })) ?? [],
+              notFoundRepository: scan?.notFoundRepository,
+              hint: undefined,
+            };
+          }).pipe(
+            Effect.catchTags({
+              RemoteUnavailable: (error) =>
+                Effect.succeed({
+                  rejected: [],
+                  sources: [],
+                  notFoundRepository: undefined,
+                  hint: error.reason,
+                }),
+            }),
           ),
         { concurrency: 4 },
       );
-      const sources = scans
-        .flatMap((scan) => scan.sources)
-        .toSorted((a, b) => byIntent(a.machine, b.machine));
-      // The file list is how a session pins the definition; it never goes over the wire.
-      const candidates = sources.map(({ machine: { files: _files, ...definition } }) => definition);
-      const first = candidates[0];
+      const missing = [
+        ...new Set(
+          scans.flatMap((scan) =>
+            scan.notFoundRepository === undefined ? [] : [scan.notFoundRepository],
+          ),
+        ),
+      ];
+      const hints = [
+        ...new Set(scans.flatMap((scan) => (scan.hint === undefined ? [] : [scan.hint]))),
+      ];
+      if (missing.length > 0)
+        hints.unshift(
+          `No remote machine definition was found in ${missing.join(", ")} at the default branch. Checked .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json; subfolder discovery needs a local checkout or a .nexi/machine.json pointer.`,
+        );
+      const selection = selectProjectMachine({
+        sources: scans.flatMap((scan) => scan.sources),
+        rejected: scans.flatMap((scan) => scan.rejected),
+        hints,
+      });
+      yield* logMachineSelection(projectId, repositories, selection);
       return {
-        discovery: {
-          status: first === undefined ? { _tag: "None" } : { _tag: "Detected", definition: first },
-          candidates,
-          rejected: scans.flatMap((scan) => scan.rejected),
-        } satisfies Discovery,
-        source: sources[0] ?? null,
+        discovery: selection.discovery,
+        source: selection.source,
+        ignoredRepositories: selection.ignoredRepositories,
         checkouts: roots,
         title: project.value.title,
       };
     }).pipe(
+      Effect.withSpan("projectMachine.resolveDefault"),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
+      Effect.provideService(PullRequestProviderRegistry, providers),
+      Effect.provideService(VcsProcess, vcs),
+      Effect.provideService(ConfigProvider.ConfigProvider, config),
     );
 
   const discover: ProjectMachineDiscovery["Service"]["discover"] = (projectId) =>
@@ -164,4 +195,6 @@ const make = Effect.gen(function* () {
   return ProjectMachineDiscovery.of({ discover, resolveDefault });
 });
 
-export const layer = Layer.effect(ProjectMachineDiscovery, make);
+export const layer = Layer.effect(ProjectMachineDiscovery, make).pipe(
+  Layer.provide(SourceControlRateLimit.layer),
+);

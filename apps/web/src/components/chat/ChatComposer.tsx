@@ -201,6 +201,7 @@ import {
   composerSuggestionOptionId,
 } from "./ComposerCommandMenu";
 import { ComposerMicInput } from "./t3team-ComposerMicInput";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { VoiceComposerDock } from "../../t3team/voice/t3team-VoiceComposerDock";
 import { VoiceComposerInline } from "../../t3team/voice/t3team-VoiceComposerInline";
 import { applyT3TeamComposerMenuReplacement } from "~/t3team/composer/t3team-composerMenuApply";
@@ -955,6 +956,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     uploadsByImageId,
   ]);
 
+  const preferReadyProvider = useFeatureFlag("AGENTS_PREFER_READY_PROVIDER");
   const {
     providerInstanceEntries,
     selectedProviderEntry,
@@ -983,6 +985,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     lockedProvider,
     lockedInstanceId:
       activeThread?.runtime?.providerInstanceId ?? activeThreadModelSelection?.instanceId,
+    preferReadyProvider,
   });
   const noProviderAvailable =
     selectedProviderEntry === undefined && multipleModelSelections === null;
