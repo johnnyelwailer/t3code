@@ -39,11 +39,10 @@ export function createMobileBrokerClient(deps: {
         detail: "Enable Nexi Work mobile broker in Settings → Features on a paired environment.",
       });
   };
-  const request = async (path: string, method = "GET") => {
-    await checkEnabled();
-    let token: string;
+  /** The signed-in account's token, with sign-in failures classified for the connection supervisor. */
+  const acquireToken = async () => {
     try {
-      token = await deps.accessToken();
+      return await deps.accessToken();
     } catch (error) {
       if (error instanceof NexiSignInRequiredError)
         throw new ConnectionBlockedError({
@@ -55,6 +54,10 @@ export function createMobileBrokerClient(deps: {
         detail: "Nexplore sign-in could not be refreshed. Retrying when available.",
       });
     }
+  };
+  const request = async (path: string, method = "GET") => {
+    await checkEnabled();
+    const token = await acquireToken();
     const response = await deps.fetch(`${deps.brokerUrl}${path}`, {
       method,
       headers: { Authorization: `Bearer ${token}` },
@@ -75,6 +78,11 @@ export function createMobileBrokerClient(deps: {
   const attach = async (sessionId: string) => {
     await checkEnabled();
     if (!/^[\w-]{1,128}$/.test(sessionId)) throw new Error("Invalid broker session.");
+    // A saved connection reattaches without any broker request. Without this check an expired or
+    // revoked sign-in only surfaces when the native tunnel finds no token and closes the socket, which
+    // the supervisor retries as a network failure instead of asking the user to sign in. The token is
+    // not passed on: the tunnel still asks for a fresh one per stream.
+    await acquireToken();
     const stream = new URL("/v1/client/stream", deps.brokerUrl);
     stream.protocol = "wss:";
     stream.searchParams.set("session", sessionId);
