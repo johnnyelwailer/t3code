@@ -7,6 +7,7 @@
     "apps/mobile/package.json",
     "apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx",
     "apps/mobile/src/components/CompactBrandTitle.tsx",
+    "apps/mobile/src/features/home/HomeRouteScreen.tsx",
     "apps/mobile/src/features/home/HomeScreen.tsx",
     "apps/mobile/src/features/settings/SettingsRouteScreen.tsx",
     "apps/mobile/src/lib/mobileThemeVariables.ts",

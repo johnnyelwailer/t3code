@@ -23,6 +23,7 @@ import { useDeviceType, useNativeColumnLayoutMetrics } from "../../native/native
 import { WorkspaceEmptyDetail } from "../layout/WorkspaceEmptyDetail";
 import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
 import { checkForAppUpdateOnLaunch, startAppUpdateForegroundRecheck } from "../updates/app-updates";
+import { showsNexiWelcome } from "../connection/t3team-nexiFirstRun";
 import { AndroidHomeFabLayout } from "./AndroidHomeFab";
 import { HomeScreen } from "./HomeScreen";
 import { HomeHeader } from "./HomeHeader";
@@ -157,6 +158,12 @@ export function HomeRouteScreen() {
     ? resolvedProjectKey
     : null;
 
+  const hasAnyThreads =
+    threads.some((thread) => thread.archivedAt === null) || pendingTasks.length > 0;
+  // First-run Nexi welcome owns the brand; skip the thread-list chrome that
+  // would otherwise stack CompactBrandTitle / NexiBrandTitle above it.
+  const nexiFirstRun = !hasAnyThreads && showsNexiWelcome(catalogState, Platform.OS);
+
   if (layout.usesSplitView && !nativePrimaryColumn) {
     return (
       <>
@@ -204,13 +211,15 @@ export function HomeRouteScreen() {
 
   return (
     <AndroidHomeFabLayout
-      disabled={workspace !== null && Platform.OS !== "android"}
+      disabled={nexiFirstRun || (workspace !== null && Platform.OS !== "android")}
       onStartNewTask={startNewTask}
     >
       <>
         {/* Restore the header after leaving split view; screen options are
             shallow-merged. */}
-        {workspace !== null && Platform.OS === "ios" ? null : (
+        {nexiFirstRun ? (
+          <NativeStackScreenOptions options={{ headerShown: false }} />
+        ) : workspace !== null && Platform.OS === "ios" ? null : (
           <NativeStackScreenOptions
             optionsVersion={headerWidth}
             options={{
@@ -227,29 +236,31 @@ export function HomeRouteScreen() {
             }}
           />
         )}
-        <HomeHeader
-          environments={environments}
-          projects={projectFilterOptions}
-          searchQuery={searchQuery}
-          selectedEnvironmentId={selectedEnvironmentId}
-          selectedProjectKey={selectedProjectKey}
-          onEnvironmentChange={setSelectedEnvironmentId}
-          onProjectChange={setSelectedProjectKey}
-          onOpenEnvironments={() =>
-            navigation.navigate("SettingsSheet", {
-              screen: "SettingsContent",
-              params: { screen: "SettingsEnvironments" },
-            })
-          }
-          onOpenSettings={() =>
-            navigation.navigate("SettingsSheet", {
-              screen: "SettingsContent",
-              params: { screen: "Settings" },
-            })
-          }
-          onSearchQueryChange={setSearchQuery}
-          onStartNewTask={startNewTask}
-        />
+        {nexiFirstRun ? null : (
+          <HomeHeader
+            environments={environments}
+            projects={projectFilterOptions}
+            searchQuery={searchQuery}
+            selectedEnvironmentId={selectedEnvironmentId}
+            selectedProjectKey={selectedProjectKey}
+            onEnvironmentChange={setSelectedEnvironmentId}
+            onProjectChange={setSelectedProjectKey}
+            onOpenEnvironments={() =>
+              navigation.navigate("SettingsSheet", {
+                screen: "SettingsContent",
+                params: { screen: "SettingsEnvironments" },
+              })
+            }
+            onOpenSettings={() =>
+              navigation.navigate("SettingsSheet", {
+                screen: "SettingsContent",
+                params: { screen: "Settings" },
+              })
+            }
+            onSearchQueryChange={setSearchQuery}
+            onStartNewTask={startNewTask}
+          />
+        )}
 
         <HomeScreen
           catalogState={catalogState}
