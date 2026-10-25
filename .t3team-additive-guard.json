@@ -1,5 +1,7 @@
 {
   "allowedModifiedFiles": [
+    "apps/mobile/src/features/home/HomeScreen.tsx",
+    "apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx",
     "apps/web/src/components/settings/FoldedSettingsSection.tsx",
     "scripts/package.json",
     "packages/contracts/src/clientRpcPermissions.ts",

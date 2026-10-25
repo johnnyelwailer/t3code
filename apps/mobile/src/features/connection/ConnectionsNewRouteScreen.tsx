@@ -32,6 +32,9 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { CloudEnvironmentRows } from "./CloudEnvironmentRows";
 import { splitEnvironmentSections } from "./environmentSections";
+import { mobileExtensions } from "../../extensions/t3team-extensions";
+
+const ConnectionsNewTop = mobileExtensions.connectionsNewTop;
 
 type ConnectionsNewRouteParams = {
   readonly mode?: string;
@@ -216,6 +219,7 @@ export function ConnectionsNewRouteScreen({
         }}
       >
         <View collapsable={false} className="gap-6.5">
+          {ConnectionsNewTop ? <ConnectionsNewTop /> : null}
           <PairingScanCard
             cameraActive={cameraPermission?.granted === true && screenFocused && !scanComplete}
             onScan={handleQrScan}

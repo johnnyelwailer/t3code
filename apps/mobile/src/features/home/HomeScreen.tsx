@@ -91,6 +91,7 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { homeEmptyStateFor, mobileExtensions } from "../../extensions/t3team-extensions";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -740,6 +741,17 @@ export function HomeScreen(props: HomeScreenProps) {
     catalogState: props.catalogState,
     projectCount: props.projects.length,
   });
+
+  const EmptyStateExtension = hasAnyThreads
+    ? null
+    : homeEmptyStateFor(mobileExtensions, props.catalogState, Platform.OS);
+  if (EmptyStateExtension) {
+    return (
+      <View className={containerClassName}>
+        <EmptyStateExtension onAddConnection={props.onAddConnection} />
+      </View>
+    );
+  }
 
   if (!hasAnyThreads) {
     return (
