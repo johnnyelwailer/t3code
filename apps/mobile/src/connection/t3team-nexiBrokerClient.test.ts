@@ -6,7 +6,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 function fixture(enabled = true) {
   const fetcher = vi.fn<typeof fetch>();
   const start = vi.fn(async () => 12345);
-  const token = vi.fn(async () => "entra-user-token");
+  const token = vi.fn<(options?: { readonly fresh?: boolean }) => Promise<string>>(
+    async () => "entra-user-token",
+  );
   const client = createMobileBrokerClient({
     brokerUrl: "https://broker.test",
     enabled: async () => enabled,
@@ -51,6 +53,48 @@ describe("Android broker connection", () => {
       headers: { Authorization: "Bearer entra-user-token" },
     });
     expect(f.token).toHaveBeenCalledTimes(2);
+  });
+  it("asks for a freshly issued Entra token only when pairing: the host refuses one older than ten minutes", async () => {
+    const f = fixture();
+    f.fetcher
+      .mockResolvedValueOnce(json({ hosts: [] }))
+      .mockResolvedValueOnce(json({ credential: "once" }));
+    await f.client.hosts();
+    await f.client.pair("h-owned");
+    expect(f.token.mock.calls).toEqual([[undefined], [{ fresh: true }]]);
+  });
+  it("parks on 'fresh owner token required' instead of retrying forever as an outage", async () => {
+    const f = fixture();
+    f.fetcher.mockResolvedValue(json({ error: "fresh owner token required" }, 502));
+    const failure = await f.client.pair("h-owned").catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      _tag: "ConnectionBlockedError",
+      reason: "authentication",
+      detail: "Sign in again to pair this desktop.",
+    });
+    // Blocked errors are parked by the supervisor: one request, no retry loop here either.
+    expect(f.fetcher).toHaveBeenCalledTimes(1);
+    f.fetcher.mockResolvedValueOnce(json({ error: "host not connected" }, 502));
+    await expect(f.client.pair("h-owned")).rejects.toMatchObject({
+      _tag: "ConnectionTransientError",
+      reason: "remote-unavailable",
+    });
+  });
+  it("sends the refreshed token to the broker and never pairs on a failed refresh", async () => {
+    const f = fixture();
+    f.token.mockImplementation(async (options) =>
+      options?.fresh ? "fresh-token" : "cached-token",
+    );
+    f.fetcher.mockResolvedValueOnce(json({ credential: "once" }));
+    await f.client.pair("h-owned");
+    expect(f.fetcher.mock.calls[0]![1]).toMatchObject({
+      headers: { Authorization: "Bearer fresh-token" },
+    });
+    f.token.mockRejectedValueOnce(new NexiSignInRequiredError("Sign in again"));
+    await expect(f.client.pair("h-owned")).rejects.toMatchObject({ reason: "authentication" });
+    f.token.mockRejectedValueOnce(new Error("offline"));
+    await expect(f.client.pair("h-owned")).rejects.toMatchObject({ reason: "network" });
+    expect(f.fetcher).toHaveBeenCalledTimes(1);
   });
   it("discovers environment identity through the native tunnel without leaking Entra to the host", async () => {
     const f = fixture();

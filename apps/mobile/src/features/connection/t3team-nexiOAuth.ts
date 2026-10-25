@@ -119,7 +119,11 @@ export function createNexiOAuth(
       }
       throw new Error("Sign-in code expired. Start again.");
     },
-    accessToken: async (): Promise<string> => {
+    /**
+     * `fresh` skips the cached token: an owner-enrolled host mints a pairing credential only for an
+     * Entra token issued minutes ago (its `iat` bound), whereas a cached one lives for hours.
+     */
+    accessToken: async (options: { readonly fresh?: boolean } = {}): Promise<string> => {
       const readGeneration = generation;
       // Read behind queued writes and clears so a call made right after sign-out cannot see the old tokens.
       const raw = await persist(() => storage.read());
@@ -132,8 +136,11 @@ export function createNexiOAuth(
         await signOut();
         throw new NexiSignInRequiredError("Sign in to Nexplore again.");
       }
-      if (tokens.expiresAt > deps.now() + 60_000) return tokens.access_token;
+      if (!options.fresh && tokens.expiresAt > deps.now() + 60_000) return tokens.access_token;
       if (!tokens.refresh_token) {
+        // A fresh read of an account that cannot refresh must not wipe it: the token is still valid,
+        // so serve it (the host decides whether it is recent enough). Only an expired one is final.
+        if (tokens.expiresAt > deps.now() + 60_000) return tokens.access_token;
         await signOut();
         throw new NexiSignInRequiredError("Sign in to Nexplore again.");
       }

@@ -28,7 +28,7 @@ export function mobileBrokerEnabled(
 export function createMobileBrokerClient(deps: {
   brokerUrl: string;
   enabled: () => Promise<boolean>;
-  accessToken: () => Promise<string>;
+  accessToken: (options?: { readonly fresh?: boolean }) => Promise<string>;
   start: (session: string, streamUrl: string) => Promise<number>;
   fetch: typeof fetch;
 }) {
@@ -39,10 +39,13 @@ export function createMobileBrokerClient(deps: {
         detail: "Enable Nexi Work mobile broker in Settings → Features on a paired environment.",
       });
   };
-  /** The signed-in account's token, with sign-in failures classified for the connection supervisor. */
-  const acquireToken = async () => {
+  /**
+   * The signed-in account's token, with sign-in failures classified for the connection supervisor.
+   * `fresh` skips the cache: the host refuses a pairing token issued more than ten minutes ago.
+   */
+  const acquireToken = async (fresh = false) => {
     try {
-      return await deps.accessToken();
+      return await deps.accessToken(fresh ? { fresh } : undefined);
     } catch (error) {
       if (error instanceof NexiSignInRequiredError)
         throw new ConnectionBlockedError({
@@ -55,9 +58,9 @@ export function createMobileBrokerClient(deps: {
       });
     }
   };
-  const request = async (path: string, method = "GET") => {
+  const request = async (path: string, method = "GET", fresh = false) => {
     await checkEnabled();
-    const token = await acquireToken();
+    const token = await acquireToken(fresh);
     const response = await deps.fetch(`${deps.brokerUrl}${path}`, {
       method,
       headers: { Authorization: `Bearer ${token}` },
@@ -68,11 +71,22 @@ export function createMobileBrokerClient(deps: {
         reason: "authentication",
         detail: "The broker refused access. Sign in with the account that owns this host.",
       });
-    if (!response.ok)
+    if (!response.ok) {
+      // The host refused a token older than ten minutes and the broker relays that as a 5xx. An
+      // account that cannot issue a newer token never will until the user signs in again, so this
+      // is not a temporary outage and must not be retried.
+      const text = await response.text().catch(() => "");
+      if (/fresh owner token required/i.test(text))
+        throw new ConnectionBlockedError({
+          reason: "authentication",
+          detail: "Sign in again to pair this desktop.",
+          httpStatus: response.status,
+        });
       throw new ConnectionTransientError({
         reason: "remote-unavailable",
         detail: `The broker is unavailable (HTTP ${response.status}). Check host enrollment and broker host support.`,
       });
+    }
     return response.json();
   };
   const attach = async (sessionId: string) => {
@@ -99,7 +113,10 @@ export function createMobileBrokerClient(deps: {
     attach,
     pair: async (sessionId: string) => {
       if (!/^[\w-]{1,128}$/.test(sessionId)) throw new Error("Invalid broker session.");
-      return decodePairing(await request(`/v1/sessions/${sessionId}/pairing`, "POST")).credential;
+      // The host verifies this token itself and refuses one issued more than ten minutes ago, so a
+      // cached token (valid for hours) would pair on first sign-in and fail ever after.
+      return decodePairing(await request(`/v1/sessions/${sessionId}/pairing`, "POST", true))
+        .credential;
     },
     discoverHost: async (host: NexiHost) => {
       if (!host.online) throw new Error("This desktop host is offline.");
