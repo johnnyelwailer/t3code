@@ -91,6 +91,9 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { NexiWelcome } from "../connection/t3team-NexiWelcome";
+import { showsNexiWelcome } from "../connection/t3team-nexiFirstRun";
+import { showsDistributionScrollIndicator } from "../../components/ui/t3team-scrollIndicators";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -741,6 +744,14 @@ export function HomeScreen(props: HomeScreenProps) {
     projectCount: props.projects.length,
   });
 
+  if (!hasAnyThreads && showsNexiWelcome(props.catalogState, Platform.OS)) {
+    return (
+      <View className={containerClassName}>
+        <NexiWelcome onOtherWays={props.onAddConnection} />
+      </View>
+    );
+  }
+
   if (!hasAnyThreads) {
     return (
       <View className={containerClassName}>
@@ -893,7 +904,7 @@ export function HomeScreen(props: HomeScreenProps) {
                   ? initialScrollOffset - (Platform.OS === "ios" ? insets.top : 0)
                   : undefined
               }
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={showsDistributionScrollIndicator}
               keyboardDismissMode="on-drag"
               keyboardShouldPersistTaps="handled"
               {...scrollGateHandlers}

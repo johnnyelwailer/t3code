@@ -4,7 +4,7 @@ import {
 } from "@t3tools/client-runtime/connection";
 import * as Effect from "effect/Effect";
 import { appAtomRegistry } from "../state/atom-registry";
-import { resolveNexiConfig } from "../features/connection/t3team-nexiConfig";
+import { nexiFeatureFlagPreset, resolveNexiConfig } from "../features/connection/t3team-nexiConfig";
 import { nexiAccount } from "../features/connection/t3team-nexiAccount";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
 import { createBrokerFlagWatcher } from "./t3team-nexiBrokerFlag";
@@ -12,6 +12,7 @@ import { nexiNative, closeNexiTunnels } from "./t3team-nexiNative";
 import { wakeNexiBrokerConnections } from "./t3team-nexiWakeups";
 
 const config = resolveNexiConfig();
+const flagPreset = nexiFeatureFlagPreset();
 let watchingFlags = false;
 export const mobileBroker = createMobileBrokerClient({
   brokerUrl: config?.brokerUrl ?? "",
@@ -20,7 +21,7 @@ export const mobileBroker = createMobileBrokerClient({
     const { environmentServerConfigsAtom } = await import("../state/server");
     const enabled =
       config !== null &&
-      mobileBrokerEnabled(appAtomRegistry.get(environmentServerConfigsAtom).values());
+      mobileBrokerEnabled(appAtomRegistry.get(environmentServerConfigsAtom).values(), flagPreset);
     if (!watchingFlags) {
       watchingFlags = true;
       const observe = createBrokerFlagWatcher(enabled, {
@@ -28,7 +29,7 @@ export const mobileBroker = createMobileBrokerClient({
         wake: wakeNexiBrokerConnections,
       });
       appAtomRegistry.subscribe(environmentServerConfigsAtom, (configs) => {
-        observe(config !== null && mobileBrokerEnabled(configs.values()));
+        observe(config !== null && mobileBrokerEnabled(configs.values(), flagPreset));
       });
     }
     return enabled;

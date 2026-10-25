@@ -9,6 +9,7 @@ export function withNexiMobileConfig(
   const publicEnv = resolveNexiMobileEnv(env);
   if (!publicEnv.T3CODE_NEXI_BROKER_URL) return config;
   const mark = "./assets/t3team-nexplore-mark.png";
+  const maskedMark = "./assets/t3team-nexplore-adaptive-mark.png";
   return {
     ...config,
     name: "Nexi Work",
@@ -21,7 +22,11 @@ export function withNexiMobileConfig(
       ...config.android,
       package: "com.nexplore.nexiwork",
       icon: mark,
-      adaptiveIcon: { foregroundImage: mark, backgroundColor: "#ffffff" },
+      adaptiveIcon: {
+        foregroundImage: maskedMark,
+        monochromeImage: maskedMark,
+        backgroundColor: "#ffffff",
+      },
     },
     extra: { ...config.extra, nexi: { env: publicEnv } },
     plugins: (config.plugins ?? []).map((entry) => {
@@ -36,9 +41,9 @@ export function withNexiMobileConfig(
           name,
           {
             ...options,
-            image: mark,
-            dark: { ...options.dark, image: mark },
-            android: { ...options.android, image: mark, dark: { image: mark } },
+            image: maskedMark,
+            dark: { ...options.dark, image: maskedMark },
+            android: { ...options.android, image: maskedMark, dark: { image: maskedMark } },
           },
         ];
       return entry;

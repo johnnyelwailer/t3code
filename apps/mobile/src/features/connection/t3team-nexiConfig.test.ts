@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import fc from "fast-check";
-import { resolveNexiConfig } from "./t3team-nexiConfig";
+import { isNexiDistribution, nexiFeatureFlagPreset, resolveNexiConfig } from "./t3team-nexiConfig";
 
 vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
 const env = {
@@ -48,5 +48,19 @@ describe("mobile Nexi public config", () => {
         ).toBeNull();
       }),
     );
+  });
+  it("recognises the distribution only when extra.nexi is present", () => {
+    expect(isNexiDistribution({ nexi: { env } })).toBe(true);
+    expect(isNexiDistribution({})).toBe(false);
+    expect(isNexiDistribution(undefined)).toBe(false);
+  });
+  it("keeps only boolean feature flag defaults from the profile", () => {
+    expect(
+      nexiFeatureFlagPreset({
+        nexi: { featureFlags: { NEXI_MOBILE_BROKER: true, OTHER: "yes", OFF: false } },
+      }),
+    ).toEqual({ NEXI_MOBILE_BROKER: true, OFF: false });
+    expect(nexiFeatureFlagPreset({ nexi: { featureFlags: ["NEXI_MOBILE_BROKER"] } })).toEqual({});
+    expect(nexiFeatureFlagPreset({})).toEqual({});
   });
 });
