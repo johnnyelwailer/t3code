@@ -58,6 +58,7 @@ import {
 } from "./lib/t3team-authoring-types.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import { preflightInlinedTypeScript } from "./lib/t3team-inlined-typescript-preflight.ts";
+import { isolatedBrandingFields, t3codeProtocolClaims } from "./lib/t3team-isolatedInstanceEnv.ts";
 import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
@@ -3266,6 +3267,7 @@ interface PackagedDesktopBrandingResource {
   readonly legacyUserDataDirName: string;
   readonly linuxDesktopEntryName: string;
   readonly linuxWmClass: string;
+  readonly isolatedInstance?: true;
 }
 
 interface BuildConfigOptions {
@@ -3472,10 +3474,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         ],
       },
       protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
+        ...t3codeProtocolClaims(process.env),
         {
           name: "Web site URL",
           schemes: ["http", "https"],
@@ -3529,12 +3528,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
       maintainer: "T3 Tools <hello@t3.codes>",
-      protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
-      ],
+      protocols: [...t3codeProtocolClaims(process.env)],
       desktop: {
         entry: {
           StartupWMClass: "t3code",
@@ -4585,6 +4579,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       legacyUserDataDirName: options.productName,
       linuxDesktopEntryName: `${slug}.desktop`,
       linuxWmClass: slug,
+      ...isolatedBrandingFields(process.env),
     };
     yield* fs.writeFileString(
       path.join(stageProdResourcesDir, "desktop-branding.json"),

@@ -149,6 +149,21 @@ const stateBytes = (userdataDir: string, join: (first: string, ...segments: stri
   );
 
 /**
+ * `~/.t3` is a symlink to the branded home on machines that moved their state there by hand. A
+ * string comparison calls those different, and the move below would then rename the live home's
+ * contents into a second home. A symlinked legacy dir is never a pre-branding home, and neither
+ * is one that resolves to the branded dir.
+ */
+const legacyIsBrandedHome = (legacyDir: string, brandedDir: string): boolean => {
+  try {
+    if (NodeFS.lstatSync(legacyDir).isSymbolicLink()) return true;
+    return NodeFS.realpathSync(legacyDir) === NodeFS.realpathSync(brandedDir);
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Move a pre-branding home (`~/.t3`) into the branded one, once.
  *
  * A build with bundled packs stores state under
@@ -176,6 +191,7 @@ export const migrateLegacyHomeIfNeeded = (input: {
 }): string => {
   const { legacyDir, brandedDir, join, stamp } = input;
   if (legacyDir === brandedDir) return brandedDir;
+  if (legacyIsBrandedHome(legacyDir, brandedDir)) return brandedDir;
 
   if (stateBytes(join(legacyDir, "userdata"), join) === 0) return brandedDir;
 

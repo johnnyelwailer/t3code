@@ -21,6 +21,11 @@ import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePat
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import { installPackagedFlagPreset } from "./t3team-desktopFlagPreset.ts";
 import {
+  resolveEffectiveT3Home,
+  resolveIsolatedHome,
+  resolveIsolatedProfileDir,
+} from "./t3team-isolatedInstance.ts";
+import {
   applyDistributionProductName,
   readDistributionProductNameFromEnv,
 } from "./t3team-desktopDistributionBrand.ts";
@@ -90,6 +95,10 @@ export class DesktopEnvironment extends Context.Service<
     /** t3team: app-data directory name, overridable by packaged branding. */
     readonly userDataDirName: string;
     readonly legacyUserDataDirName: string;
+    /** t3team: an isolated instance owns `<appData>/<userDataDirName>` and shares nothing with another install. */
+    readonly isolatedInstance: boolean;
+    /** t3team: the Electron `userData` path of an isolated instance; undefined otherwise. */
+    readonly isolatedProfileDir: string | undefined;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
     readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => Option.Option<string>;
@@ -104,6 +113,7 @@ interface PackagedDesktopBrandingResource {
   readonly displayName?: string;
   readonly userDataDirName?: string;
   readonly legacyUserDataDirName?: string;
+  readonly isolatedInstance?: boolean;
   readonly linuxDesktopEntryName?: string;
   readonly linuxWmClass?: string;
 }
@@ -194,10 +204,24 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : input.platform === "darwin"
         ? path.join(homeDirectory, "Library", "Application Support")
         : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
+  const packagedBranding = input.isPackaged
+    ? readPackagedDesktopBranding(input.resourcesPath)
+    : undefined;
+  // t3team: an isolated instance behaves as if T3CODE_HOME were its own app-data directory.
+  const isolatedUserDataDirName = packagedBranding?.userDataDirName?.trim();
+  const isolatedHome =
+    packagedBranding?.isolatedInstance === true && isolatedUserDataDirName
+      ? resolveIsolatedHome({
+          appDataDirectory,
+          userDataDirName: isolatedUserDataDirName,
+          join: path.join,
+        })
+      : undefined;
+  const t3Home = resolveEffectiveT3Home({ configured: config.t3Home, isolatedHome });
   const baseDir = resolveDesktopBaseDir({
     homeDirectory,
     joinPath: path.join,
-    t3Home: config.t3Home,
+    t3Home,
   });
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
@@ -212,16 +236,13 @@ const make = Effect.fn("desktop.environment.make")(function* (
     }),
     readDistributionProductNameFromEnv(),
   );
-  const packagedBranding = input.isPackaged
-    ? readPackagedDesktopBranding(input.resourcesPath)
-    : undefined;
   if (input.isPackaged) installPackagedFlagPreset(input.resourcesPath);
   const displayName = packagedBranding?.displayName?.trim() || branding.displayName;
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment,
     joinPath: path.join,
-    t3Home: config.t3Home,
+    t3Home,
   });
   // t3team: branded installs keep their own app-data directory names (read by the
   // branded T3 home in DesktopBackendConfiguration).
@@ -304,6 +325,9 @@ const make = Effect.fn("desktop.environment.make")(function* (
     appImagePath: config.appImagePath,
     userDataDirName,
     legacyUserDataDirName,
+    isolatedInstance: isolatedHome !== undefined,
+    isolatedProfileDir:
+      isolatedHome === undefined ? undefined : resolveIsolatedProfileDir(isolatedHome, path.join),
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),
     runtimeInfo: resolveDesktopRuntimeInfo({
       platform: input.platform,

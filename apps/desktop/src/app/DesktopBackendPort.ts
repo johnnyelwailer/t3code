@@ -50,7 +50,8 @@ export type DesktopBackendPortSelection = {
 
 export const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(function* (
   configuredPort: Option.Option<number>,
-  pinDefaultPort: boolean,
+  /** `true` pins the default port; a number pins that port (isolated instances); false scans. */
+  pinPort: boolean | number,
 ) {
   if (Option.isSome(configuredPort)) {
     return {
@@ -61,23 +62,24 @@ export const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(
   }
 
   const net = yield* NetService.NetService;
-  if (pinDefaultPort) {
+  if (pinPort !== false) {
+    const pinnedPort = typeof pinPort === "number" ? pinPort : DEFAULT_DESKTOP_BACKEND_PORT;
     let availableOnEveryHost = true;
     for (const host of DESKTOP_BACKEND_PORT_PROBE_HOSTS) {
-      if (!(yield* net.canListenOnHost(DEFAULT_DESKTOP_BACKEND_PORT, host))) {
+      if (!(yield* net.canListenOnHost(pinnedPort, host))) {
         availableOnEveryHost = false;
         break;
       }
     }
     if (availableOnEveryHost) {
       return {
-        port: DEFAULT_DESKTOP_BACKEND_PORT,
+        port: pinnedPort,
         selectedByScan: false,
         pinned: true,
       } as const;
     }
     return yield* new DesktopPinnedBackendPortBusyError({
-      port: DEFAULT_DESKTOP_BACKEND_PORT,
+      port: pinnedPort,
       hosts: DESKTOP_BACKEND_PORT_PROBE_HOSTS,
     });
   }
