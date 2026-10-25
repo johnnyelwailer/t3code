@@ -13,9 +13,19 @@ function ask<A>(read: (policy: UrlPolicy) => A | undefined): A | undefined {
 
 export const APP_PRIVATE_URL_MESSAGE = "This address only works inside this app.";
 
-/** True when the URL only works inside this app (never true in a stock build). */
+/**
+ * True when the URL only works inside this app (never true in a stock build). A policy that
+ * exists but throws while classifying fails closed: the URL is treated as private, so it is
+ * never handed to an external app on the strength of a broken hook.
+ */
 export function isAppPrivateUrl(url: string): boolean {
-  return ask((policy) => policy.isAppPrivate?.(url)) === true;
+  const policy = mobileExtensions.urlPolicy;
+  if (policy?.isAppPrivate === undefined) return false;
+  try {
+    return policy.isAppPrivate(url) === true;
+  } catch {
+    return true;
+  }
 }
 
 /** Shares `url` through `share` unless it is app-private; returns whether it was shared. */
@@ -46,11 +56,16 @@ export async function openAssetLink(input: {
     input.report(APP_PRIVATE_URL_MESSAGE);
     return;
   }
-  await policy.openAppPrivate({
-    url: input.url,
-    attachment: input.attachment,
-    report: input.report,
-  });
+  try {
+    await policy.openAppPrivate({
+      url: input.url,
+      attachment: input.attachment,
+      report: input.report,
+    });
+  } catch {
+    // Never fall back to an external app for an app-private URL.
+    input.report(APP_PRIVATE_URL_MESSAGE);
+  }
 }
 
 /** The distribution's base URL for the stream document of an environment, if it has one. */
