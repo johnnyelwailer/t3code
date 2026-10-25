@@ -91,8 +91,6 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
-import { ExtensionBoundary } from "../../extensions/t3team-ExtensionBoundary";
-import { homeEmptyStateFor, mobileExtensions } from "../../extensions/t3team-extensions";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -260,7 +258,6 @@ export function HomeScreen(props: HomeScreenProps) {
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
   const workspace = useWorkspaceTabs();
   const [initialScrollOffset] = useState(() => workspace?.getScrollOffset("threads") ?? 0);
-  const [emptyStateFailed, setEmptyStateFailed] = useState(false);
   const primaryColumn = use(NativePrimaryColumnContext);
   const contentBackground = primaryColumn ? "bg-drawer" : "bg-screen";
   const containerClassName = cn(
@@ -743,20 +740,6 @@ export function HomeScreen(props: HomeScreenProps) {
     catalogState: props.catalogState,
     projectCount: props.projects.length,
   });
-
-  const EmptyStateExtension =
-    hasAnyThreads || emptyStateFailed
-      ? null
-      : homeEmptyStateFor(mobileExtensions, props.catalogState, Platform.OS);
-  if (EmptyStateExtension) {
-    return (
-      <View className={containerClassName}>
-        <ExtensionBoundary onFailure={() => setEmptyStateFailed(true)}>
-          <EmptyStateExtension onAddConnection={props.onAddConnection} />
-        </ExtensionBoundary>
-      </View>
-    );
-  }
 
   if (!hasAnyThreads) {
     return (
