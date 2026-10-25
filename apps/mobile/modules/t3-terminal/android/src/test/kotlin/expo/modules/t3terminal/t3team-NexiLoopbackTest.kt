@@ -5,12 +5,11 @@ package expo.modules.t3terminal
 
 import java.net.ConnectException
 import java.net.Socket
-import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -19,71 +18,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-private class Harness(
-  headTimeoutMs: Long = 60_000,
-  maxAuthenticated: Int = 16,
-  maxPending: Int = 16,
-  val secret: String = NexiLoopbackAuth.newSecret()
-) {
-  val admitted = LinkedBlockingQueue<Pair<Socket, ByteArray>>()
-  val logs = CopyOnWriteArrayList<String>()
-  private val logQueue = LinkedBlockingQueue<String>()
-  val closedCount = AtomicInteger()
-  val listener = NexiLoopbackListener(
-    secret = secret,
-    onAdmitted = { tcp, initial -> admitted.add(tcp to initial) },
-    securityLog = {
-      logs.add(it)
-      logQueue.add(it)
-    },
-    onClosed = { closedCount.incrementAndGet() },
-    limits = LoopbackLimits(headTimeoutMs, maxAuthenticated, maxPending),
-  ).also { it.start() }
-  private val sockets = CopyOnWriteArrayList<Socket>()
-
-  fun connect(port: Int = listener.port): Socket =
-    Socket("127.0.0.1", port).also {
-      it.soTimeout = 10_000
-      sockets.add(it)
-    }
-
-  fun request(vararg headers: String): ByteArray {
-    val lines = listOf("GET /.well-known/t3/environment HTTP/1.1", "Host: 127.0.0.1") + headers
-    return (lines.joinToString("\r\n") + "\r\n\r\n").toByteArray()
-  }
-
-  fun cookie(value: String, port: Int = listener.port) = "Cookie: ${NexiLoopbackAuth.cookieName(
-    port
-  )}=$value"
-
-  /** True once the server side has closed the connection (blocks until it does). */
-  fun isClosedByServer(tcp: Socket) = try {
-    tcp.getInputStream().read() == -1
-  } catch (_: java.net.SocketException) {
-    true
-  }
-
-  fun take(): Pair<Socket, ByteArray> =
-    admitted.poll(10, TimeUnit.SECONDS) ?: throw AssertionError("connection was not admitted")
-
-  /** Blocks until `count` security events have been logged. */
-  fun awaitLogs(count: Int) = repeat(count) {
-    logQueue.poll(10, TimeUnit.SECONDS) ?: throw AssertionError("no security event logged")
-  }
-
-  fun close() {
-    listener.close()
-    sockets.forEach { it.close() }
-  }
-}
-
 class NexiLoopbackTest {
   private val harnesses = mutableListOf<Harness>()
-  private fun harness(
-    headTimeoutMs: Long = 60_000,
-    maxAuthenticated: Int = 16,
-    maxPending: Int = 16
-  ) = Harness(headTimeoutMs, maxAuthenticated, maxPending).also { harnesses.add(it) }
+  private fun harness(limits: LoopbackLimits = PATIENT) = Harness(limits).also { harnesses.add(it) }
 
   @After fun tearDown() = harnesses.forEach { it.close() }
 
@@ -110,13 +47,17 @@ class NexiLoopbackTest {
     assertTrue(h.logs.all { "bad-credential" in it || "no-credential" in it })
   }
 
-  @Test fun rightSecretIsAdmittedWithEveryByteReadForForwarding() {
+  @Test fun rightSecretIsAdmittedAndForwardedWithoutTheCredentialButWithEveryOtherByte() {
     val h = harness()
-    val body = "POST /x HTTP/1.1\r\nHost: a\r\n${h.cookie(
-      h.secret
-    )}\r\nContent-Length: 2\r\n\r\nhi".toByteArray()
-    h.connect().getOutputStream().write(body)
-    assertArrayEquals(body, h.take().second)
+    val cookie = h.cookie(h.secret)
+    val body = "POST /x HTTP/1.1\r\nHost: a\r\n$cookie; theme=dark\r\nContent-Length: 2\r\n\r\nhi"
+    h.connect().getOutputStream().write(body.toByteArray())
+    val forwarded = String(h.take().second, Charsets.ISO_8859_1)
+    assertEquals(
+      "POST /x HTTP/1.1\r\nHost: a\r\nCookie: theme=dark\r\nContent-Length: 2\r\n\r\nhi",
+      forwarded
+    )
+    assertFalse(h.secret in forwarded)
     assertTrue(h.logs.isEmpty())
   }
 
@@ -141,7 +82,7 @@ class NexiLoopbackTest {
       out.write(it.toByteArray())
       out.flush()
     }
-    assertArrayEquals(bytes, h.take().second)
+    assertEquals(String(h.request()), String(h.take().second))
   }
 
   @Test fun secretOfAClosedTunnelIsRejectedByItsReplacement() {
@@ -197,7 +138,7 @@ class NexiLoopbackTest {
   }
 
   @Test fun releasingAnAuthenticatedConnectionFreesItsSlot() {
-    val h = harness(maxAuthenticated = 1)
+    val h = harness(PATIENT.copy(maxAuthenticated = 1))
     h.connect().getOutputStream().write(h.request(h.cookie(h.secret)))
     val (first, _) = h.take()
     h.listener.release(first)
@@ -205,29 +146,102 @@ class NexiLoopbackTest {
     h.take()
   }
 
-  @Test fun floodOfUnauthenticatedConnectionsCannotStarveLegitimateOnes() {
-    val h = harness(maxAuthenticated = 2, maxPending = 4)
-    // Never send a head: backlog order is FIFO, so each is evicted by its successors.
-    val idle = (1..24).map { h.connect() }
-    val legit = h.connect()
-    legit.getOutputStream().write(h.request(h.cookie(h.secret)))
-    h.take()
-    val second = h.connect()
-    second.getOutputStream().write(h.request(h.cookie(h.secret)))
-    h.take()
-    // The oldest idle sockets were evicted, and none of them counted against the authenticated limit
-    // (two authenticated connections fit with maxAuthenticated = 2).
-    assertTrue(h.isClosedByServer(idle.first()))
+  @Test fun silentConnectionIsDroppedAtTheFirstByteDeadline() {
+    val h = harness(PATIENT.copy(firstByteMs = 50))
+    assertTrue(h.isClosedByServer(h.connect()))
+    h.awaitLogs(1)
+    assertTrue(h.logs.single().contains("first-byte-timeout"))
     assertTrue(h.admitted.isEmpty())
   }
 
-  @Test fun idleConnectionIsDroppedAfterTheHeadTimeoutAndLoggedWithoutContent() {
-    val h = harness(headTimeoutMs = 50)
-    val idle = h.connect()
-    assertTrue(h.isClosedByServer(idle))
+  @Test fun clientThatStallsMidHeadIsDroppedAtTheHeadDeadline() {
+    val h = harness(PATIENT.copy(headTimeoutMs = 200))
+    val tcp = h.connect()
+    tcp.getOutputStream().write("GET / HTTP/1.1\r\n".toByteArray())
+    assertTrue(h.isClosedByServer(tcp))
     h.awaitLogs(1)
     assertTrue(h.logs.single().contains("head-timeout"))
+  }
+
+  @Test fun foreignOriginsAreRefusedEvenWithTheRightSecret() {
+    val h = harness()
+    val port = h.listener.port
+    val refused = listOf(
+      "Origin: http://127.0.0.1:${port + 1}",
+      "Origin: null",
+      "Origin: https://localhost",
+      "Origin: http://localhost:$port",
+      "Origin: https://127.0.0.1:$port",
+      "Sec-Fetch-Site: cross-site",
+      "Sec-Fetch-Site: same-site"
+    )
+    for (extra in refused) {
+      val tcp = h.connect()
+      tcp.getOutputStream().write(h.request(h.cookie(h.secret), extra))
+      assertTrue(extra, h.isClosedByServer(tcp))
+    }
     assertTrue(h.admitted.isEmpty())
+    h.awaitLogs(5)
+    assertTrue(h.logs.all { "bad-origin" in it })
+  }
+
+  @Test fun ownOriginAndNoOriginAreAdmitted() {
+    val h = harness()
+    val port = h.listener.port
+    for (extra in listOf(
+      "Origin: http://127.0.0.1:$port",
+      "Sec-Fetch-Site: same-origin",
+      "Sec-Fetch-Site: none",
+      "Accept: */*"
+    )) {
+      h.connect().getOutputStream().write(h.request(h.cookie(h.secret), extra))
+      h.take()
+    }
+  }
+
+  @Test fun ambiguousHeadsAreRefusedEvenWithTheRightSecret() {
+    val h = harness()
+    val cookie = h.cookie(h.secret)
+    val heads = listOf(
+      h.request(cookie, " folded: continuation"),
+      h.request(cookie, "\tfolded: continuation"),
+      h.request(cookie, "Cookie: other=1"),
+      h.request(cookie, "Origin: http://127.0.0.1:${h.listener.port}", "origin: http://x")
+    )
+    for (head in heads) {
+      val tcp = h.connect()
+      tcp.getOutputStream().write(head)
+      assertTrue(h.isClosedByServer(tcp))
+    }
+    assertTrue(h.admitted.isEmpty())
+    h.awaitLogs(4)
+    assertEquals(
+      listOf("folded-header", "folded-header", "duplicate-cookie", "duplicate-origin"),
+      h.logs.map { it.substringAfter("reason=").substringBefore(" ") }
+    )
+  }
+
+  @Test fun closeWaitsForAHandshakeThatIsAdmittingSoNoSocketIsAdmittedAfterIt() {
+    val inside = CountDownLatch(1)
+    val proceed = CountDownLatch(1)
+    val limits = PATIENT.copy(
+      insideAdmitLock = {
+        inside.countDown()
+        proceed.await()
+      }
+    )
+    val h = harness(limits)
+    val client = h.connect()
+    client.getOutputStream().write(h.request(h.cookie(h.secret)))
+    // The handshake has decided "room" and holds the admit lock, but has not added the socket.
+    assertTrue(inside.await(10, TimeUnit.SECONDS))
+    val closing = Thread { h.listener.close() }.apply { start() }
+    // close() must be waiting for that lock; a close that does not take it finishes here and the
+    // socket is then added to a listener that is already closed.
+    closing.join(500)
+    proceed.countDown()
+    closing.join(10_000)
+    assertTrue(h.isClosedByServer(client))
   }
 
   @Test fun oversizedHeadAndEarlyDisconnectAreRejected() {
@@ -247,7 +261,7 @@ class NexiLoopbackTest {
   }
 
   @Test fun secretsNeverAppearInLogs() {
-    val h = harness(maxAuthenticated = 1)
+    val h = harness(PATIENT.copy(maxAuthenticated = 1))
     val wrong = NexiLoopbackAuth.newSecret()
     val attempts = listOf(h.cookie(wrong), "X-T3-Loopback: $wrong", h.cookie(h.secret.dropLast(2)))
     for (header in attempts) {
@@ -300,16 +314,6 @@ class NexiLoopbackTest {
       assertFalse(NexiLoopbackAuth.matches(s, other))
     }
     assertFalse(NexiLoopbackAuth.matches("", "a"))
-  }
-
-  @Test fun credentialsAreOnlyReadFromTheHeadOfTheRightPort() {
-    val head = "GET / HTTP/1.1\r\nCookie: t3lb1=aa; t3lb2=bb; t3lb22=cc\r\nx-t3-loopback: dd\r\n" +
-      "X-Other: t3lb2=ee"
-    assertEquals(listOf("dd", "bb").sorted(), NexiLoopbackAuth.presented(head, 2).sorted())
-    assertEquals(listOf("cc", "dd"), NexiLoopbackAuth.presented(head, 22).sorted())
-    assertEquals(listOf("dd"), NexiLoopbackAuth.presented(head, 9))
-    // The request line is never a credential source.
-    assertEquals(emptyList<String>(), NexiLoopbackAuth.presented("GET /t3lb2=ff HTTP/1.1", 2))
   }
 
   @Test fun registryReusesALiveTunnelAndReplacesADeadOneWithANewSecret() {

@@ -11,13 +11,17 @@ let installed = false;
 export const registerLoopbackPort = (port: number) => void loopbackPorts.add(port);
 export const clearLoopbackPorts = () => loopbackPorts.clear();
 
+/** True for an `http://127.0.0.1:<port>` URL whose port belongs to a live broker tunnel. */
+export function isLoopbackTunnelUrl(url: URL) {
+  return (
+    url.protocol === "http:" && url.hostname === "127.0.0.1" && loopbackPorts.has(Number(url.port))
+  );
+}
+
 function isLoopbackTunnel(input: Parameters<typeof fetch>[0]) {
   try {
-    const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
-    return (
-      url.protocol === "http:" &&
-      url.hostname === "127.0.0.1" &&
-      loopbackPorts.has(Number(url.port))
+    return isLoopbackTunnelUrl(
+      new URL(typeof input === "string" || input instanceof URL ? input : input.url),
     );
   } catch {
     return false;

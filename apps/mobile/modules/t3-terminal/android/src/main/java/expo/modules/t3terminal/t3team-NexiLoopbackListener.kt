@@ -3,6 +3,7 @@
 
 package expo.modules.t3terminal
 
+import java.io.Closeable
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -11,20 +12,36 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Tunables; the defaults are the production values. */
 data class LoopbackLimits(
   val headTimeoutMs: Long = 3_000,
+  /** A socket that has sent nothing by now is dropped. */
+  val firstByteMs: Long = 500,
+  /** A full pending queue only evicts silent sockets at least this old. */
+  val minEvictAgeMs: Long = 250,
   val maxAuthenticated: Int = 16,
-  val maxPending: Int = 16
+  val maxPending: Int = 32,
+  val nanoTime: () -> Long = System::nanoTime,
+  /** Test seam: called when a pending socket's first byte has been read. */
+  val onFirstByte: () -> Unit = {},
+  /** Test seam: runs inside the lock that admits a socket, before it is added. */
+  val insideAdmitLock: () -> Unit = {}
 )
+
+private class Pending(val tcp: Socket, val acceptedAt: Long) {
+  @Volatile var sawByte = false
+}
 
 /**
  * Loopback TCP listener that hands a connection to `onAdmitted` only after [NexiLoopbackAuth] admits
  * it. Unauthenticated sockets never reach the broker (no token request, no outbound stream), wait at
- * most `headTimeoutMs`, and do not count against `maxAuthenticated`. At most `maxPending` sockets may
- * be mid-handshake: a newcomer evicts the oldest, so idle floods cannot starve a client that
- * presents its head immediately.
+ * most `firstByteMs` for a first byte and `headTimeoutMs` for the whole head, and do not count
+ * against `maxAuthenticated`. At most `maxPending` sockets may be mid-handshake. When full, a
+ * newcomer evicts the oldest socket that has sent nothing and is at least `minEvictAgeMs` old; with
+ * none, the newcomer is refused. A socket that is sending, or is young, is never evicted, so a
+ * flood cannot knock out a legitimate client that is mid-handshake.
  */
 class NexiLoopbackListener(
   private val secret: String,
@@ -34,10 +51,10 @@ class NexiLoopbackListener(
   private val limits: LoopbackLimits = LoopbackLimits()
 ) {
   private val server = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
-  private val pending = ArrayDeque<Socket>()
+  private val pending = ArrayDeque<Pending>()
   private val admitted = ConcurrentHashMap.newKeySet<Socket>()
   private val closed = AtomicBoolean(false)
-  private val denied = java.util.concurrent.atomic.AtomicInteger()
+  private val denied = AtomicInteger()
   private val handshakes = Executors.newCachedThreadPool { task ->
     Thread(task, "nexi-broker-handshake").apply { isDaemon = true }
   }
@@ -65,30 +82,54 @@ class NexiLoopbackListener(
     if (!closed.compareAndSet(false, true)) return
     quietly(server)
     synchronized(pending) {
-      pending.forEach { quietly(it) }
+      pending.forEach { quietly(it.tcp) }
       pending.clear()
     }
-    admitted.forEach { quietly(it) }
-    admitted.clear()
+    // The same lock `handshake` admits under, so no socket is admitted after this point.
+    synchronized(admitted) {
+      admitted.forEach { quietly(it) }
+      admitted.clear()
+    }
     handshakes.shutdownNow()
     onClosed()
   }
 
   private fun beginHandshake(tcp: Socket) {
-    synchronized(pending) {
-      if (pending.size >= limits.maxPending) quietly(pending.removeFirst())
-      pending.addLast(tcp)
+    val entry = Pending(tcp, limits.nanoTime())
+    val refused = synchronized(pending) {
+      val room = pending.size < limits.maxPending || evictOldestSilent()
+      if (room) pending.addLast(entry)
+      !room
+    }
+    if (refused) {
+      deny(tcp, "pending-full")
+      return
     }
     try {
-      handshakes.execute { handshake(tcp) }
+      handshakes.execute { handshake(entry) }
     } catch (_: RejectedExecutionException) {
       quietly(tcp)
     }
   }
 
-  private fun handshake(tcp: Socket) {
-    val admission = NexiLoopbackAuth.admit(tcp, port, secret, limits.headTimeoutMs)
-    synchronized(pending) { pending.remove(tcp) }
+  /** Caller holds the `pending` lock. */
+  private fun evictOldestSilent(): Boolean {
+    val cutoff = limits.nanoTime() - limits.minEvictAgeMs * 1_000_000
+    val victim = pending.firstOrNull { !it.sawByte && it.acceptedAt <= cutoff }
+    victim?.let {
+      pending.remove(it)
+      quietly(it.tcp)
+    }
+    return victim != null
+  }
+
+  private fun handshake(entry: Pending) {
+    val tcp = entry.tcp
+    val admission = NexiLoopbackAuth.admit(tcp, port, secret, limits) {
+      entry.sawByte = true
+      limits.onFirstByte()
+    }
+    synchronized(pending) { pending.remove(entry) }
     if (admission is LoopbackAdmission.Denied) {
       deny(tcp, admission.reason)
       return
@@ -96,6 +137,7 @@ class NexiLoopbackListener(
     val initial = (admission as LoopbackAdmission.Allowed).initial
     val accepted = synchronized(admitted) {
       val room = admitted.size < limits.maxAuthenticated && !closed.get()
+      limits.insideAdmitLock()
       if (room) admitted.add(tcp)
       room
     }
@@ -119,7 +161,7 @@ class NexiLoopbackListener(
     }
   }
 
-  private fun quietly(closeable: java.io.Closeable) {
+  private fun quietly(closeable: Closeable) {
     try {
       closeable.close()
     } catch (_: IOException) {

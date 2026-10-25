@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
+import {
+  isSessionEndedFailure,
+  type ConnectionAttemptError,
+} from "@t3tools/client-runtime/connection";
 import { NexiSignInRequiredError } from "../features/connection/t3team-nexiOAuth";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -131,7 +135,6 @@ describe("Android broker connection", () => {
       [400, "ConnectionBlockedError", "configuration"],
       [401, "ConnectionBlockedError", "authentication"],
       [403, "ConnectionBlockedError", "authentication"],
-      [404, "ConnectionBlockedError", "configuration"],
       [410, "ConnectionBlockedError", "configuration"],
       [429, "ConnectionTransientError", "remote-unavailable"],
       [500, "ConnectionTransientError", "remote-unavailable"],
@@ -148,6 +151,23 @@ describe("Android broker connection", () => {
         detail: "broker says no",
         httpStatus: status,
       });
+    });
+    it("treats 404 for a host session as the desktop being offline: the broker deletes it on host.down", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "no such session" }, 404));
+      await expect(f.client.pair("h-owned")).rejects.toMatchObject({
+        _tag: "ConnectionTransientError",
+        reason: "remote-unavailable",
+        httpStatus: 404,
+        detail: expect.stringContaining("offline or reconnecting"),
+      });
+    });
+    it("treats 404 for a cloud session as ended, the state the UI already renders", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "no such session" }, 404));
+      const failure = await f.client.pair("run-123").catch((error: unknown) => error);
+      expect(isSessionEndedFailure(failure as ConnectionAttemptError)).toBe(true);
+      expect(failure).toMatchObject({ _tag: "ConnectionBlockedError", detail: "no such session" });
     });
     it("classifies a fetch that never answered as a transient network or timeout failure", async () => {
       const f = fixture();

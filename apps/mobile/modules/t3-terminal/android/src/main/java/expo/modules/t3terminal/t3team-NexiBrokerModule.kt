@@ -5,6 +5,7 @@ package expo.modules.t3terminal
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import android.content.pm.PackageManager
 import android.util.Log
 import android.webkit.CookieManager
 import java.net.Socket
@@ -31,8 +32,10 @@ class NexiBrokerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("NexiBroker")
     Events("tokenRequested")
+    OnCreate { clearStaleCredentials() }
     AsyncFunction("start") { session: String, streamUrl: String ->
-      require(streamUrl.startsWith("wss://")) { "The broker requires TLS" }
+      val refusal = NexiStreamPolicy.refusal(streamUrl, pinnedBrokerOrigin())
+      require(refusal == null) { refusal.orEmpty() }
       val acquired = tunnels.acquire(session) { Tunnel(session, streamUrl) }
       // Delivered on every start, including reuse: it repairs a cleared cookie jar. The secret
       // stays native; JS only ever sees the bare loopback port.
@@ -55,6 +58,27 @@ class NexiBrokerModule : Module() {
       workers.shutdownNow()
       client.dispatcher.executorService.shutdown()
       client.connectionPool.evictAll()
+    }
+  }
+
+  /** The https broker origin the build was configured with (manifest meta-data), if any. */
+  private fun pinnedBrokerOrigin(): String? = try {
+    val context = appContext.reactContext
+    context?.packageManager
+      ?.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+      ?.metaData?.getString(BROKER_ORIGIN_KEY)
+  } catch (_: PackageManager.NameNotFoundException) {
+    null
+  }
+
+  /** A previous process's `t3lb*` cookies authorize nothing, but should not outlive it. */
+  private fun clearStaleCredentials() {
+    try {
+      val manager = CookieManager.getInstance()
+      val stale = NexiLoopbackHead.staleCookieNames(manager.getCookie("http://127.0.0.1/"))
+      stale.forEach { manager.setCookie("http://127.0.0.1/", "$it=; Path=/; Max-Age=0") }
+    } catch (_: RuntimeException) {
+      // No WebView provider: there is no cookie jar to clear.
     }
   }
 
@@ -83,7 +107,9 @@ class NexiBrokerModule : Module() {
 
     fun deliverSecret() {
       try {
-        val cookie = "${NexiLoopbackAuth.cookieName(listener.port)}=$secret; Path=/; HttpOnly"
+        val cookie = "${NexiLoopbackAuth.cookieName(
+          listener.port
+        )}=$secret; Path=/; HttpOnly; SameSite=Strict"
         CookieManager.getInstance().setCookie(cookieUrl, cookie)
       } catch (_: RuntimeException) {
         // Fail closed: without the cookie no client could connect, and the cause may name the secret.
@@ -176,3 +202,5 @@ class NexiBrokerModule : Module() {
     }
   }
 }
+
+private const val BROKER_ORIGIN_KEY = "com.nexplore.nexiwork.NEXI_BROKER_ORIGIN"

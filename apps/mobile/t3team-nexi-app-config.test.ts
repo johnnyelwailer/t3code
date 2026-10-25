@@ -45,5 +45,9 @@ describe("Nexi mobile branding", () => {
       "expo-font",
       { fonts: ["base.ttf", "./assets/t3team-buenos-aires-vf.ttf"] },
     ]);
+    expect(next.plugins).toContainEqual([
+      "./plugins/t3team-withNexiBrokerOrigin.cjs",
+      { origin: "https://broker.test" },
+    ]);
   });
 });
