@@ -5,6 +5,8 @@ import type {
 } from "@t3tools/contracts";
 import { Image } from "expo-image";
 import { Linking, Pressable, View } from "react-native";
+import * as Dialog from "../../components/ui/Dialog";
+import { openAssetLink } from "../../lib/t3team-urlPolicy";
 import { getQuestionAnswerText } from "@t3tools/client-runtime/work-log/user-input";
 import { AppText as Text } from "../../components/ui/AppText";
 import { assetImageSource } from "../../lib/assetImageSource";
@@ -22,7 +24,14 @@ function AnswerFile(props: {
       accessibilityLabel={props.attachment.name}
       disabled={!url}
       onPress={() => {
-        if (url) void Linking.openURL(url);
+        if (url) {
+          void openAssetLink({
+            url,
+            attachment: props.attachment,
+            open: (target) => Linking.openURL(target),
+            report: (message) => Dialog.alert("Could not open the file", message),
+          });
+        }
       }}
       className="gap-1"
     >

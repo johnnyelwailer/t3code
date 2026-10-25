@@ -29,7 +29,28 @@ export interface HomeEmptyStateSlot {
 /** What the stock app does not provide: attaching and pairing broker cloud sessions on this device. */
 export type BrokerGatewayImplementation = Parameters<typeof BrokerEnvironmentGateway.of>[0];
 
+/**
+ * Decisions about URLs that leave the app's own HTTP stack. Every function is optional; absent
+ * means stock behavior.
+ */
+export interface UrlPolicy {
+  /** True when a URL only works inside this app and must not be handed to another app. */
+  readonly isAppPrivate?: (url: string) => boolean;
+  /** Opens an app-private asset for the user (typically a download, then the native viewer). */
+  readonly openAppPrivate?: (input: {
+    readonly url: string;
+    readonly attachment: { readonly name: string; readonly mimeType: string };
+    readonly report: (message: string) => void;
+  }) => Promise<void>;
+  /** Called with a URL right before the app's native HTTP client downloads it. */
+  readonly beforeNativeFetch?: (url: string) => void;
+  /** Base URL of the synthetic document that hosts a stream WebView; undefined keeps the default. */
+  readonly documentBaseUrl?: (httpBase: string) => string | undefined;
+}
+
 export interface MobileExtensions {
+  /** Policy for URLs handed to other apps, native downloads and stream documents. */
+  readonly urlPolicy?: UrlPolicy;
   /** Replaces the stock "broker sessions connect from the desktop app" capability. */
   readonly brokerGateway?: BrokerGatewayImplementation;
   /** Extra wakeup sources for the connection supervisor, merged with the stock ones. */
