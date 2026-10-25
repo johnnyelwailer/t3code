@@ -52,6 +52,21 @@ export function explicitBackendHome(input: {
 }
 
 /**
+ * The environment an isolated instance gives its backend child. The child inherits the app's
+ * environment, and the server ranks `T3CODE_HOME` above the home it is handed in its bootstrap
+ * (apps/server/src/cli/config.ts: explicitBaseDir), so an inherited `T3CODE_HOME` naming the live
+ * app's home would win over the isolated home. Naming the isolated home explicitly closes that; it
+ * is the only variable the server resolves its home from (the other inputs are the `--base-dir`
+ * flag and the bootstrap, which the desktop controls).
+ */
+export function isolatedBackendChildEnv(input: {
+  readonly isolatedInstance: boolean;
+  readonly home: string;
+}): Readonly<Record<string, string>> {
+  return input.isolatedInstance ? { T3CODE_HOME: input.home } : {};
+}
+
+/**
  * Why a packaged build that says `isolatedInstance` cannot start here, or `undefined`. Isolation is
  * all or nothing: a build that cannot isolate everything must not run half-isolated.
  */

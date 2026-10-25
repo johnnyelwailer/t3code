@@ -17,7 +17,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import { explicitBackendHome } from "../app/t3team-isolatedInstance.ts";
+import { explicitBackendHome, isolatedBackendChildEnv } from "../app/t3team-isolatedInstance.ts";
 import serverPackageJson from "../../../server/package.json" with { type: "json" };
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
@@ -782,6 +782,10 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       cwd: environment.backendCwd,
       env: {
         ...backendChildEnvPatch(),
+        ...isolatedBackendChildEnv({
+          isolatedInstance: environment.isolatedInstance,
+          home: resolvedHomeDir,
+        }),
         ELECTRON_RUN_AS_NODE: "1",
         // Secure corporate-CA fallback. Unlike NODE_TLS_REJECT_UNAUTHORIZED=0,
         // this keeps certificate verification enabled and adds the OS trust store.

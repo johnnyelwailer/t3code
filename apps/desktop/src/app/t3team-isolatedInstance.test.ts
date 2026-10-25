@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 
 import {
   explicitBackendHome,
+  isolatedBackendChildEnv,
   pinnedBackendPortFromDefine,
   resolveEffectiveT3Home,
   resolveIsolatedHome,
@@ -75,5 +76,14 @@ describe("explicitBackendHome", () => {
     );
     assert.isUndefined(explicitBackendHome({ isolatedInstance: false, envHome: "  " }));
     assert.isUndefined(explicitBackendHome({ isolatedInstance: false, envHome: undefined }));
+  });
+});
+
+describe("isolatedBackendChildEnv", () => {
+  it("names the isolated home for an isolated instance and nothing otherwise", () => {
+    assert.deepEqual(isolatedBackendChildEnv({ isolatedInstance: true, home: "/iso" }), {
+      T3CODE_HOME: "/iso",
+    });
+    assert.deepEqual(isolatedBackendChildEnv({ isolatedInstance: false, home: "/iso" }), {});
   });
 });
