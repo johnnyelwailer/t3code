@@ -718,7 +718,11 @@
     "apps/web/src/components/settings/ScheduledTasksSettings.tsx",
     "apps/web/src/components/settings/settingsLayout.tsx",
     "apps/mobile/src/features/browser/PreviewStreamWebView.tsx",
-    "apps/mobile/src/features/devices/device-stream-document.ts"
+    "apps/mobile/src/features/devices/device-stream-document.ts",
+    "packages/client-runtime/src/state/assets.ts",
+    "apps/mobile/src/lib/attachmentDownload.ts",
+    "packages/client-runtime/src/state/assets.test.ts",
+    "apps/mobile/src/lib/attachmentDownload.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

@@ -23,6 +23,9 @@ data class LoopbackLimits(
   val minEvictAgeMs: Long = 250,
   val maxAuthenticated: Int = 16,
   val maxPending: Int = 32,
+  /** How long a registered signed URL admits connections, and how many are kept. */
+  val capabilityTtlMs: Long = 60 * 60_000,
+  val maxCapabilities: Int = 512,
   val nanoTime: () -> Long = System::nanoTime,
   /** Test seam: called when a pending socket's first byte has been read. */
   val onFirstByte: () -> Unit = {},
@@ -55,10 +58,12 @@ class NexiLoopbackListener(
   private val admitted = ConcurrentHashMap.newKeySet<Socket>()
   private val closed = AtomicBoolean(false)
   private val denied = AtomicInteger()
+  private val capabilities = LinkedHashMap<String, Long>()
   private val handshakes = Executors.newCachedThreadPool { task ->
     Thread(task, "nexi-broker-handshake").apply { isDaemon = true }
   }
   val port: Int = server.localPort
+  private val credentials = LoopbackCredentials(port, secret, ::isCapable)
   val isClosed: Boolean get() = closed.get()
 
   fun start() {
@@ -71,6 +76,31 @@ class NexiLoopbackListener(
       }
       close()
     }, "nexi-broker-accept").apply { isDaemon = true }.start()
+  }
+
+  /** Registers a signed URL on this tunnel; false for any other URL or a closed listener. */
+  fun allowUrl(url: String): Boolean =
+    NexiCapabilityTargets.targetFor(url, port)?.let { allowTarget(it) } ?: false
+
+  fun allowTarget(rawTarget: String): Boolean {
+    val target = NexiCapabilityTargets.normalize(rawTarget)
+    if (target == null || closed.get()) return false
+    synchronized(capabilities) {
+      capabilities.remove(target)
+      capabilities[target] = limits.nanoTime() + limits.capabilityTtlMs * 1_000_000
+      while (capabilities.size > limits.maxCapabilities) {
+        capabilities.remove(capabilities.keys.first())
+      }
+    }
+    return true
+  }
+
+  private fun isCapable(method: String, target: String): Boolean = synchronized(capabilities) {
+    val expiresAt = capabilities[target]
+    val live = method in NexiCapabilityTargets.METHODS && expiresAt != null &&
+      expiresAt > limits.nanoTime()
+    if (expiresAt != null && !live) capabilities.remove(target)
+    live
   }
 
   fun release(tcp: Socket) {
@@ -90,6 +120,7 @@ class NexiLoopbackListener(
       admitted.forEach { quietly(it) }
       admitted.clear()
     }
+    synchronized(capabilities) { capabilities.clear() }
     handshakes.shutdownNow()
     onClosed()
   }
@@ -125,7 +156,7 @@ class NexiLoopbackListener(
 
   private fun handshake(entry: Pending) {
     val tcp = entry.tcp
-    val admission = NexiLoopbackAuth.admit(tcp, port, secret, limits) {
+    val admission = NexiLoopbackAuth.admit(tcp, credentials, limits) {
       entry.sawByte = true
       limits.onFirstByte()
     }

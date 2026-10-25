@@ -114,7 +114,7 @@ describe("Android broker connection", () => {
   });
   it.each([401, 403])("classifies broker refusal %s as authentication blocked", async (status) => {
     const f = fixture();
-    f.fetcher.mockResolvedValueOnce(json({}, status));
+    f.fetcher.mockImplementation(async () => json({}, status));
     await expect(f.client.hosts()).rejects.toMatchObject({ reason: "authentication" });
   });
   it("classifies host support being disabled as retryable remote availability", async () => {
@@ -129,6 +129,59 @@ describe("Android broker connection", () => {
       .mockResolvedValueOnce(json({ credential: "" }));
     await expect(f.client.hosts()).rejects.toThrow();
     await expect(f.client.pair("h-x")).rejects.toThrow();
+  });
+  describe("a 401 from a token the phone still believes is valid (clock moved backwards)", () => {
+    const skewed = () => {
+      const f = fixture();
+      // The cache trusts "stale-token" until a local expiry that the broker's clock has already passed.
+      f.token.mockImplementation(async (options) =>
+        options?.fresh ? "fresh-token" : "stale-token",
+      );
+      f.fetcher.mockImplementation(async (_url, init) => {
+        const bearer = (init?.headers as Record<string, string>).Authorization;
+        return bearer === "Bearer fresh-token"
+          ? json({ hosts: [] })
+          : json({ error: "token expired" }, 401);
+      });
+      return f;
+    };
+    it("retries once with a freshly issued token before blocking", async () => {
+      const f = skewed();
+      expect(await f.client.hosts()).toEqual([]);
+      expect(f.token.mock.calls).toEqual([[undefined], [{ fresh: true }]]);
+      expect(f.fetcher).toHaveBeenCalledTimes(2);
+    });
+    it("blocks when the fresh token is refused too, after exactly one retry", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValue(json({ error: "wrong tenant" }, 401));
+      await expect(f.client.hosts()).rejects.toMatchObject({
+        _tag: "ConnectionBlockedError",
+        reason: "authentication",
+        detail: "wrong tenant",
+      });
+      expect(f.fetcher).toHaveBeenCalledTimes(2);
+      expect(f.token.mock.calls).toEqual([[undefined], [{ fresh: true }]]);
+    });
+    it("does not retry pairing, which already asked for a fresh token", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValue(json({ error: "fresh owner token required" }, 401));
+      await expect(f.client.pair("h-owned")).rejects.toMatchObject({ reason: "authentication" });
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+    });
+    it("does not retry other statuses, and parks when the fresh token needs a new sign-in", async () => {
+      const f = fixture();
+      f.fetcher.mockResolvedValueOnce(json({ error: "busy" }, 429));
+      await expect(f.client.hosts()).rejects.toMatchObject({ _tag: "ConnectionTransientError" });
+      expect(f.fetcher).toHaveBeenCalledTimes(1);
+      f.fetcher.mockResolvedValueOnce(json({}, 401));
+      f.token.mockResolvedValueOnce("stale-token");
+      f.token.mockRejectedValueOnce(new NexiSignInRequiredError("Sign in again"));
+      await expect(f.client.hosts()).rejects.toMatchObject({
+        _tag: "ConnectionBlockedError",
+        reason: "authentication",
+        detail: "Sign in to Nexplore again.",
+      });
+    });
   });
   describe("pairing failures", () => {
     const rows = [

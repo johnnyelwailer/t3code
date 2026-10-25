@@ -7,6 +7,7 @@ declare class BrokerNative extends NativeModule<{
 }> {
   start(session: string, streamUrl: string): Promise<number>;
   provideToken(requestId: string, token: string | null): void;
+  allowRequest(url: string): boolean;
   closeAll(): void;
 }
 let native: BrokerNative | null = null;

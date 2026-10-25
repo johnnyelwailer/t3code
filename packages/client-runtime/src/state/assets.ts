@@ -56,12 +56,30 @@ function parseAssetCollectionKey(
   }
 }
 
+let assetUrlObserver: ((url: string) => void) | null = null;
+
+/**
+ * Lets a platform see each asset URL before it reaches a consumer. The Android broker authenticates
+ * its loopback by cookie, which native HTTP clients (downloads, uploads, image and media loaders)
+ * cannot send, so the platform registers the exact signed URL it hands them.
+ */
+export function setAssetUrlObserver(observer: ((url: string) => void) | null): void {
+  assetUrlObserver = observer;
+}
+
 export function resolveAssetUrl(httpBaseUrl: string, relativeUrl: string): string | null {
+  let url: string;
   try {
-    return new URL(relativeUrl, httpBaseUrl).toString();
+    url = new URL(relativeUrl, httpBaseUrl).toString();
   } catch {
     return null;
   }
+  try {
+    assetUrlObserver?.(url);
+  } catch {
+    // An observer must never turn a good URL into a failure.
+  }
+  return url;
 }
 
 export const EMPTY_ASSET_URL_ATOM = Atom.make(AsyncResult.initial<never, never>(false)).pipe(

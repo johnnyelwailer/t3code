@@ -43,6 +43,11 @@ class NexiBrokerModule : Module() {
       if (acquired.fresh) acquired.tunnel.listener.start()
       acquired.tunnel.listener.port
     }
+    // Native HTTP clients (downloads, uploads, image and media loaders) cannot send the loopback
+    // cookie. JS registers each signed URL it hands them; only that exact request is admitted.
+    Function("allowRequest") { url: String ->
+      tunnels.snapshot().any { !it.isClosed && it.listener.allowUrl(url) }
+    }
     Function("provideToken") { requestId: String, token: String? ->
       tokens.remove(requestId)?.let {
         if (token.isNullOrBlank()) {

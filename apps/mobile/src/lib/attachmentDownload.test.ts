@@ -10,6 +10,11 @@ const mocks = vi.hoisted(() => ({
   available: vi.fn(),
   open: vi.fn(),
   uuid: vi.fn(),
+  authorize: vi.fn(),
+}));
+
+vi.mock("../connection/t3team-nexiNativeFetchAuth", () => ({
+  authorizeNativeFetch: mocks.authorize,
 }));
 
 vi.mock("expo-file-system", () => {
@@ -74,6 +79,7 @@ vi.mock("./shareFileFromSource", () => ({ shareFileFromSource: mocks.shareFromSo
 import {
   downloadAndShareAttachment,
   downloadAttachmentForPreview,
+  openAttachmentInViewer,
   shareLocalAttachment,
 } from "./attachmentDownload";
 import { isForegroundHandoffActive } from "./foreground-handoff";
@@ -96,6 +102,7 @@ beforeEach(() => {
   mocks.shareFromSource.mockReset();
   mocks.available.mockReset();
   mocks.uuid.mockReset();
+  mocks.authorize.mockReset();
   mocks.download.mockImplementation(async (_url: string, file: { uri: string }) => file);
   mocks.copy.mockResolvedValue(undefined);
   mocks.share.mockResolvedValue(undefined);
@@ -111,6 +118,53 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   expect(isForegroundHandoffActive()).toBe(false);
+});
+
+describe("native downloads over the Android broker loopback", () => {
+  const tunnelUrl = "http://127.0.0.1:4100/api/assets/signed-token/report.pdf";
+
+  it("authorizes the exact URL with the tunnel before Expo's downloader requests it", async () => {
+    await downloadAttachmentForPreview({
+      ...input,
+      url: tunnelUrl,
+      signal: new AbortController().signal,
+    });
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(tunnelUrl);
+    expect(mocks.authorize.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.download.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("does the same when opening an attachment in the native viewer, and shares via the same path", async () => {
+    await openAttachmentInViewer({
+      uri: tunnelUrl,
+      attachment: input.attachment,
+      signal: new AbortController().signal,
+    });
+    expect(mocks.authorize).toHaveBeenCalledWith(tunnelUrl);
+    expect(mocks.authorize.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.download.mock.invocationCallOrder[0]!,
+    );
+    mocks.authorize.mockClear();
+    await downloadAndShareAttachment({
+      ...input,
+      url: tunnelUrl,
+      signal: new AbortController().signal,
+    });
+    expect(mocks.authorize).toHaveBeenCalledExactlyOnceWith(tunnelUrl);
+  });
+
+  it("does not authorize a local file copy, and a cancelled download never asks", async () => {
+    await openAttachmentInViewer({
+      uri: "file:///cache/a.pdf",
+      attachment: input.attachment,
+      signal: new AbortController().signal,
+    });
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await downloadAttachmentForPreview({ ...input, url: tunnelUrl, signal: cancelled.signal });
+    expect(mocks.authorize).not.toHaveBeenCalled();
+  });
 });
 
 describe("downloadAndShareAttachment", () => {

@@ -25,6 +25,8 @@ class NexiTunnelRegistry<T : Any>(private val isClosed: (T) -> Boolean) {
 
   fun remove(session: String, tunnel: T) = tunnels.remove(session, tunnel)
 
+  fun snapshot(): List<T> = tunnels.values.toList()
+
   @Synchronized
   fun drain(): List<T> = tunnels.values.toList().also { tunnels.clear() }
 }

@@ -19,6 +19,13 @@ sealed interface LoopbackAdmission {
   class Denied(val reason: String) : LoopbackAdmission
 }
 
+/** What a connection may present: the tunnel's secret, or a registered capability target. */
+class LoopbackCredentials(
+  val port: Int,
+  val secret: String,
+  val capability: (method: String, target: String) -> Boolean = { _, _ -> false }
+)
+
 /**
  * Pure admission logic for the per-tunnel loopback listener. The listener is reachable by every app
  * on the phone, so a connection only reaches the broker stream when its first HTTP request head
@@ -59,30 +66,36 @@ object NexiLoopbackAuth {
    */
   fun admit(
     tcp: Socket,
-    port: Int,
-    secret: String,
+    credentials: LoopbackCredentials,
     limits: LoopbackLimits,
     onFirstByte: () -> Unit = {}
   ): LoopbackAdmission = when (val read = readHead(tcp, limits, onFirstByte)) {
     is LoopbackAdmission.Denied -> read
-    is LoopbackAdmission.Allowed -> decide(read.initial, port, secret)
+    is LoopbackAdmission.Allowed -> decide(read.initial, credentials)
   }
 
-  private fun decide(bytes: ByteArray, port: Int, secret: String): LoopbackAdmission {
+  private fun decide(bytes: ByteArray, credentials: LoopbackCredentials): LoopbackAdmission {
     val head = String(bytes, 0, NexiLoopbackHead.headEnd(bytes), StandardCharsets.ISO_8859_1)
-    val parsed = NexiLoopbackHead.parse(head, port)
+    val parsed = NexiLoopbackHead.parse(head, credentials.port)
     val reason = when {
       parsed.malformed != null -> parsed.malformed
-      !NexiLoopbackHead.originAllowed(parsed, port) -> "bad-origin"
+      !NexiLoopbackHead.originAllowed(parsed, credentials.port) -> "bad-origin"
+      authorized(parsed, credentials.secret) || capable(head, credentials) -> null
       parsed.credentials.isEmpty() -> "no-credential"
-      !authorized(parsed, secret) -> "bad-credential"
-      else -> null
+      else -> "bad-credential"
     }
     return if (reason == null) {
       LoopbackAdmission.Allowed(NexiLoopbackHead.sanitize(bytes))
     } else {
       LoopbackAdmission.Denied(reason)
     }
+  }
+
+  private fun capable(head: String, credentials: LoopbackCredentials): Boolean {
+    val (method, rawTarget) = NexiCapabilityTargets.requestLine(head) ?: return false
+    val target = NexiCapabilityTargets.normalize(rawTarget)
+    return method in NexiCapabilityTargets.METHODS && target != null &&
+      credentials.capability(method, target)
   }
 
   /** `Allowed` here only means a complete head was read; [decide] checks the credential. */

@@ -44,16 +44,9 @@ export function createMobileBrokerClient(deps: {
         detail: "Enable Nexi Work mobile broker in Settings → Features on a paired environment.",
       });
   };
-  const request = async (
-    path: string,
-    method = "GET",
-    fresh = false,
-    sessionId: string | null = null,
-  ) => {
-    await checkEnabled();
-    let token: string;
+  const issueToken = async (fresh: boolean) => {
     try {
-      token = await deps.accessToken(fresh ? { fresh } : undefined);
+      return await deps.accessToken(fresh ? { fresh } : undefined);
     } catch (error) {
       if (error instanceof NexiSignInRequiredError)
         throw new ConnectionBlockedError({
@@ -65,9 +58,10 @@ export function createMobileBrokerClient(deps: {
         detail: "Nexplore sign-in could not be refreshed. Retrying when available.",
       });
     }
-    let response: Response;
+  };
+  const send = async (path: string, method: string, token: string) => {
     try {
-      response = await deps.fetch(`${deps.brokerUrl}${path}`, {
+      return await deps.fetch(`${deps.brokerUrl}${path}`, {
         method,
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(30_000),
@@ -75,6 +69,19 @@ export function createMobileBrokerClient(deps: {
     } catch (error) {
       throw classifyBrokerNetworkFailure(error);
     }
+  };
+  const request = async (
+    path: string,
+    method = "GET",
+    fresh = false,
+    sessionId: string | null = null,
+  ) => {
+    await checkEnabled();
+    let response = await send(path, method, await issueToken(fresh));
+    // A cached token can be one the broker already considers expired (the phone's clock moved
+    // backwards): ask for a freshly issued one once before parking the user on a 401.
+    if (response.status === 401 && !fresh)
+      response = await send(path, method, await issueToken(true));
     if (!response.ok) {
       const text = await brokerErrorText(response);
       throw classifyBrokerFailure(response.status, text, sessionId);
