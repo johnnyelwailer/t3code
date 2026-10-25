@@ -26,18 +26,6 @@ export function NexiWordmark(props: { readonly height: number }) {
   );
 }
 
-export function NexiMark(props: { readonly size: number }) {
-  return (
-    <Image
-      source={require("../../assets/t3team-nexplore-mark.png")}
-      style={{ width: props.size, height: props.size }}
-      contentFit="contain"
-      accessibilityIgnoresInvertColors
-      accessibilityLabel="Nexplore"
-    />
-  );
-}
-
 /** Header title for the Nexi Work distribution, in place of the T3 Code wordmark. */
 export function NexiBrandTitle(props: {
   readonly scale: number;

@@ -1,42 +1,27 @@
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { NexiMark, NexiWordmark, useNexiDisplayFont } from "../../components/t3team-NexiBrand";
-import { AppText as Text } from "../../components/ui/AppText";
-import { Button } from "../../components/ui/Button";
-import { NexiSignInPanel } from "./t3team-NexiSignInPanel";
-import { useNexiHosts } from "./t3team-useNexiHosts";
+import { NexiStartPanel } from "./t3team-NexiStartPanel";
+import { useNexiStart } from "./t3team-useNexiStart";
 
 const stayOnHome = () => {};
 
+/**
+ * First run on Android Nexi Work. The header already carries the brand, so the body holds only
+ * the actions that fit the current state (sign in, enrol a desktop, pick one, recover).
+ */
 export function NexiWelcome(props: { readonly onOtherWays: () => void }) {
-  const state = useNexiHosts({ onConnected: stayOnHome });
-  const displayFont = useNexiDisplayFont();
+  const start = useNexiStart({ onPair: props.onOtherWays, onConnected: stayOnHome });
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
       className="flex-1 bg-screen"
-      contentContainerClassName="grow justify-center px-6 py-8"
+      contentContainerClassName="grow px-6 pt-8"
       contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 24 }}
       showsVerticalScrollIndicator
       keyboardShouldPersistTaps="handled"
     >
-      <View className="w-full max-w-[430px] gap-6 self-center">
-        <View className="items-center gap-4">
-          <NexiMark size={72} />
-          <NexiWordmark height={34} />
-          <Text
-            textRole="title"
-            className="text-center font-t3-bold text-foreground"
-            style={displayFont}
-          >
-            Welcome to Nexi Work
-          </Text>
-          <Text textRole="body" className="text-center leading-normal text-foreground-muted">
-            Sign in with your Nexplore account to reach the desktops you enrolled.
-          </Text>
-        </View>
-        <NexiSignInPanel state={state} />
-        <Button tone="text" fullWidth label="Other ways to connect" onPress={props.onOtherWays} />
+      <View className="w-full max-w-[430px] self-center">
+        <NexiStartPanel {...start} />
       </View>
     </ScrollView>
   );
