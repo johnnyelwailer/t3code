@@ -91,6 +91,7 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { RenderErrorBoundary } from "../../components/RenderErrorBoundary";
 import { homeEmptyStateFor, mobileExtensions } from "../../extensions/t3team-extensions";
 
 interface HomeScreenProps {
@@ -748,7 +749,9 @@ export function HomeScreen(props: HomeScreenProps) {
   if (EmptyStateExtension) {
     return (
       <View className={containerClassName}>
-        <EmptyStateExtension onAddConnection={props.onAddConnection} />
+        <RenderErrorBoundary>
+          <EmptyStateExtension onAddConnection={props.onAddConnection} />
+        </RenderErrorBoundary>
       </View>
     );
   }

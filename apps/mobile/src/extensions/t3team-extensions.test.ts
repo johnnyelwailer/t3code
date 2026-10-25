@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import { homeEmptyStateFor, mobileExtensions } from "./t3team-extensions";
+import { homeEmptyStateFor, mobileExtensions, runExtensionInstall } from "./t3team-extensions";
 
 const catalog = { isLoadingConnections: false, hasConnections: false };
 
@@ -44,5 +44,36 @@ describe("homeEmptyStateFor", () => {
       },
     };
     expect(homeEmptyStateFor(extensions, catalog, "ios")).toBeNull();
+  });
+});
+
+describe("slot rules and the startup hook", () => {
+  const Component = () => null;
+
+  it("treats a throwing rule as no opinion, so the stock screen stays", () => {
+    const extensions = {
+      homeEmptyState: {
+        shouldRender: () => {
+          throw new Error("rule failed");
+        },
+        Component,
+      },
+    };
+    expect(homeEmptyStateFor(extensions, catalog, "android")).toBeNull();
+  });
+
+  it("runs the startup hook once and survives a hook that throws", () => {
+    let calls = 0;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    runExtensionInstall({
+      install: () => {
+        calls += 1;
+        throw new Error("install failed");
+      },
+    });
+    runExtensionInstall({ install: () => (calls += 1) });
+    expect(calls).toBe(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

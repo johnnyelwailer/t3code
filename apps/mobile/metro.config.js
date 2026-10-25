@@ -4,6 +4,7 @@ const { pathToFileURL } = require("node:url");
 const { getDefaultConfig } = require("expo/metro-config");
 const { withUniwindConfig } = require("uniwind/metro");
 const extraThemes = require("./generated-uniwind-theme-names.json");
+const distributionMobile = require("./t3team-distributionMobileMetro.cjs");
 
 /** @type {import("expo/metro-config").MetroConfig} */
 const config = getDefaultConfig(__dirname);
@@ -139,8 +140,8 @@ async function prepareStreamScripts() {
 
 module.exports = Promise.all([generateMobileThirdPartyLicenses(), prepareStreamScripts()]).then(
   () =>
-    withUniwindConfig(config, {
-      cssEntryFile: "./global.css",
+    withUniwindConfig(distributionMobile.withDistributionMobile(config, { appRoot: __dirname }), {
+      cssEntryFile: distributionMobile.cssEntryFile("./global.css", { appRoot: __dirname }),
       extraThemes,
       polyfills: { rem: 14 },
     }),
