@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import {
   BUILT_IN_THEME_IDS,
   BUILT_IN_THEMES,
@@ -24,6 +24,9 @@ import {
   themeColorWithAlpha,
   themeColorToNativeColor,
 } from "./mobileTheme";
+
+// mobileThemeVariables reads the distribution theme from expo-constants, which Vitest cannot load.
+vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
 
 function relativeLuminance(hex: string): number {
   const channels = hex
