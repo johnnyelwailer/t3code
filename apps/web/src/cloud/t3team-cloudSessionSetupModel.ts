@@ -1,7 +1,7 @@
 import type { CloudSession } from "@t3tools/contracts";
 
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
-import type { CloudQueuedSendRecoveryAction } from "./t3team-useCloudProjectNotResolvedActions";
+import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotResolvedActions";
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {

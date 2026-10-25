@@ -62,7 +62,8 @@ export function trackMachineConnectedSince(
     return null;
   }
   const known = connectedSince.get(environmentId);
-  if (known !== undefined) return known;
+  // A sighting from the future is a clock that was set back: start over from the present one.
+  if (known !== undefined && known <= nowMs) return known;
   connectedSince.set(environmentId, nowMs);
   return nowMs;
 }

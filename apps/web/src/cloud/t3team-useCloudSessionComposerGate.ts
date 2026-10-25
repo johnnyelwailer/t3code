@@ -11,15 +11,15 @@ import { createElement, Fragment, useCallback, useMemo } from "react";
 import type { ComposerBannerStackItem } from "~/components/chat/ComposerBannerStack";
 import { Button } from "~/components/ui/button";
 import { useEnvironments } from "~/state/environments";
-import { isProjectNotResolved, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   cancelDraftCloudQueuedSend,
   retryDraftCloudQueuedSend,
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
 import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
-import { logCloudProjectWaitOutcome } from "./t3team-cloudProjectWaitLog";
-import { useCloudProjectNotResolvedActions } from "./t3team-useCloudProjectNotResolvedActions";
+import { logCloudProjectWaitCancelled } from "./t3team-cloudProjectWaitLog";
+import { cloudProjectNotResolvedActions } from "./t3team-cloudProjectNotResolvedActions";
 import {
   queuedSendEnvironmentIds,
   useCloudQueuedSendEnvironmentFacts,
@@ -88,10 +88,7 @@ export function useCloudSessionComposerGate(input: {
   const projects = useProjects();
   const settings = useClientSettings();
   const machineFacts = useCloudQueuedSendEnvironmentFacts(
-    useMemo(
-      () => queuedSendEnvironmentIds(queued === null ? [] : [queued], cloud.sessions),
-      [cloud.sessions, queued],
-    ),
+    queuedSendEnvironmentIds(queued === null ? [] : [queued], cloud.sessions),
   );
   // The same facts the app-level flusher acts on; the card and the banner both render them.
   const stepFacts = useMemo<CloudQueuedSendStepFacts | null>(() => {
@@ -111,18 +108,15 @@ export function useCloudSessionComposerGate(input: {
   const cancelQueuedSend = useCallback(() => {
     if (draftId === null) return;
     const waitingOnProject = stepFacts !== null && currentCloudProjectWait(stepFacts) !== null;
-    const cancelled = cancelDraftCloudQueuedSend(draftId);
-    if (cancelled !== null && (waitingOnProject || isProjectNotResolved(cancelled))) {
-      logCloudProjectWaitOutcome({
-        queued: cancelled,
-        outcome: "cancelled",
-        environmentId: stepFacts?.session?.environmentId ?? null,
-        reason: cancelled.failureReason ?? stepFacts?.projectWait?.reason ?? null,
-        nowMs: Date.now(),
-      });
-    }
+    logCloudProjectWaitCancelled({
+      cancelled: cancelDraftCloudQueuedSend(draftId),
+      waitingOnProject,
+      environmentId: stepFacts?.session?.environmentId ?? null,
+      reason: stepFacts?.projectWait?.reason ?? null,
+      nowMs: Date.now(),
+    });
   }, [draftId, stepFacts]);
-  const recoveryActions = useCloudProjectNotResolvedActions({
+  const recoveryActions = cloudProjectNotResolvedActions({
     draftId,
     queued,
     scopeKey: input.scopeKey,

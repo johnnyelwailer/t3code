@@ -2,7 +2,6 @@ import { useAtomValue } from "@effect/atom-react";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
-import { useMemo } from "react";
 
 import { environmentAtomList, environmentIdsKey } from "~/state/environmentAtomList";
 import { serverEnvironment } from "~/state/server";
@@ -40,18 +39,16 @@ export function useCloudQueuedSendEnvironmentFacts(environmentIds: ReadonlyArray
   const key = environmentIdsKey(environmentIds);
   const welcomes = useAtomValue(welcomesAtom(key));
   const ended = useAtomValue(sessionEndedListAtom(key));
-  return useMemo(() => {
-    const ids = key === "" ? [] : key.split("\n");
-    const projects = new Map<string, ProjectId>();
-    const endedIds = new Set<string>();
-    ids.forEach((id, index) => {
-      const welcome = Option.getOrNull(AsyncResult.value(welcomes[index]!));
-      if (welcome?.bootstrapProjectId !== undefined) projects.set(id, welcome.bootstrapProjectId);
-      if (ended[index] === true) endedIds.add(id);
-    });
-    return {
-      bootstrapProjectIdOf: (environmentId: EnvironmentId) => projects.get(environmentId) ?? null,
-      sessionEndedOf: (environmentId: EnvironmentId) => endedIds.has(environmentId),
-    };
-  }, [ended, key, welcomes]);
+  const ids = key === "" ? [] : key.split("\n");
+  const projects = new Map<string, ProjectId>();
+  const endedIds = new Set<string>();
+  ids.forEach((id, index) => {
+    const welcome = Option.getOrNull(AsyncResult.value(welcomes[index]!));
+    if (welcome?.bootstrapProjectId !== undefined) projects.set(id, welcome.bootstrapProjectId);
+    if (ended[index] === true) endedIds.add(id);
+  });
+  return {
+    bootstrapProjectIdOf: (environmentId: EnvironmentId) => projects.get(environmentId) ?? null,
+    sessionEndedOf: (environmentId: EnvironmentId) => endedIds.has(environmentId),
+  };
 }

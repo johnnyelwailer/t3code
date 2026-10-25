@@ -5,7 +5,7 @@
  * cloud-session controller only mounts while something is queued.
  */
 import { useLocation } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
@@ -63,19 +63,17 @@ function ActiveCloudQueuedSendFlusher() {
   const requestsRef = useRef<CloudQueuedSendRequests>(new Map());
   const connectedSinceRef = useRef(new Map<string, number>());
   // Re-evaluates when the earliest "Project ready" bound runs out: nothing else would wake it.
-  const [boundTick, setBoundTick] = useState(0);
-  const queuedList = useMemo(() => Object.values(queuedByDraft), [queuedByDraft]);
+  const [boundClockMs, setBoundClockMs] = useState(0);
+  const queuedList = Object.values(queuedByDraft);
   const machineFacts = useCloudQueuedSendEnvironmentFacts(
-    useMemo(
-      () => queuedSendEnvironmentIds(queuedList, cloud.sessions),
-      [cloud.sessions, queuedList],
-    ),
+    queuedSendEnvironmentIds(queuedList, cloud.sessions),
   );
 
   useEffect(() => {
     const groupingSettings = selectProjectGroupingSettings(settings);
     const requests = requestsRef.current;
-    const nowMs = Date.now();
+    // The timer's own reading counts even when it fires a hair early.
+    const nowMs = Math.max(Date.now(), boundClockMs);
     let nextBoundMs: number | null = null;
     for (const [draftId, queued] of Object.entries(queuedByDraft)) {
       const draft = draftThreadsByKey[draftId];
@@ -141,10 +139,11 @@ function ActiveCloudQueuedSendFlusher() {
     }
     pruneCloudQueuedSendRequests(requests, Object.values(queuedByDraft));
     if (nextBoundMs === null) return undefined;
-    const timer = setTimeout(() => setBoundTick((tick) => tick + 1), nextBoundMs - Date.now());
+    const deadlineMs = nextBoundMs;
+    const timer = setTimeout(() => setBoundClockMs(deadlineMs), deadlineMs - Date.now());
     return () => clearTimeout(timer);
   }, [
-    boundTick,
+    boundClockMs,
     machineFacts,
     cloud,
     draftThreadsByKey,

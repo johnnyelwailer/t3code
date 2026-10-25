@@ -45,7 +45,7 @@ export interface CloudQueuedSendFailure {
 }
 
 /** The words of a send that gave up waiting for its project; the message is kept. */
-export function cloudProjectNotResolvedMessage(wait: CloudProjectWait): string {
+function cloudProjectNotResolvedMessage(wait: CloudProjectWait): string {
   return `The project did not appear on the cloud machine in time. ${cloudProjectWaitDetail(wait)}. Your message is kept: retry, send it in the machine's own project, start a plain session, or cancel to edit it.`;
 }
 

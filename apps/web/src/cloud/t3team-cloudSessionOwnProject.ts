@@ -39,7 +39,7 @@ export interface CloudSessionOwnProject {
   /** Null while the session's server has not listed its own project yet: the environment is
    * held for it rather than offered through another project that merely groups the same. */
   readonly projectId: ProjectId | null;
-  /** How the project was found on the machine; absent while it is not listed yet. */
+  /** Set when the machine's welcome named the project; absent when it was found by folder. */
   readonly resolvedBy?: MachineProjectBinding;
 }
 
@@ -105,7 +105,7 @@ export function resolveCloudSessionOwnProject(input: {
   return {
     environmentId: own.environmentId,
     projectId: own.id,
-    ...(machine.by === null ? {} : { resolvedBy: machine.by }),
+    ...(machine.by === "bootstrap-id" ? { resolvedBy: machine.by } : {}),
   };
 }
 

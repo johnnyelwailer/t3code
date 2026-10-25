@@ -34,6 +34,7 @@ const consoleSink: CloudProjectWaitLogSink = (line) =>
 export const resolvedOutcomeOf = (by: MachineProjectBinding | null): CloudProjectWaitOutcome =>
   by === "bootstrap-id" ? "resolved-bootstrap-id" : "resolved-folder";
 
+const PARKED_KIND = "project_not_resolved";
 const written = new Set<string>();
 const WRITTEN_LIMIT = 200;
 
@@ -67,6 +68,38 @@ export function logCloudProjectWaitOutcome(
     messageId: queued.messageId,
   });
   return true;
+}
+
+/**
+ * A cancel that ended a wait on the project (still waiting, or already parked as
+ * `project_not_resolved`) writes its line; cancelling any other send writes nothing. `cancelled`
+ * is what `cancelDraftCloudQueuedSend` returned: null when the cancel was refused.
+ */
+export function logCloudProjectWaitCancelled(
+  input: {
+    readonly cancelled: CloudQueuedSend | null;
+    readonly waitingOnProject: boolean;
+    readonly environmentId: string | null;
+    /** The classifier's reason while still waiting. */
+    readonly reason: string | null;
+    readonly nowMs: number;
+  },
+  sink?: CloudProjectWaitLogSink,
+): boolean {
+  const { cancelled } = input;
+  if (cancelled === null || !(input.waitingOnProject || cancelled.failureKind === PARKED_KIND)) {
+    return false;
+  }
+  return logCloudProjectWaitOutcome(
+    {
+      queued: cancelled,
+      outcome: "cancelled",
+      environmentId: input.environmentId,
+      reason: cancelled.failureReason ?? input.reason,
+      nowMs: input.nowMs,
+    },
+    sink,
+  );
 }
 
 /** Forgets what was written (tests). */
