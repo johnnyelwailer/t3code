@@ -6,6 +6,9 @@ export type ConnectionWakeup =
   | "application-active"
   | "application-active-probe"
   | "application-active-reconnect"
+  // A broker became available. Only unparks blocked waits; unlike "credentials-changed" it never
+  // ends a healthy T3 Connect relay lease.
+  | "broker-availability-changed"
   | "credentials-changed"
   | "network-changed";
 
