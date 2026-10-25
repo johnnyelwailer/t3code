@@ -1,5 +1,6 @@
 {
   "allowedModifiedFiles": [
+    "apps/mobile/src/features/home/HomeScreen.tsx",
     "apps/mobile/src/features/browser/PreviewStreamWebView.tsx",
     "apps/mobile/src/features/devices/device-stream-document.ts",
     "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx",

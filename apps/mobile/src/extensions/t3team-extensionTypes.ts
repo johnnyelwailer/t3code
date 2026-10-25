@@ -44,6 +44,11 @@ export interface MobileExtensions {
    * do not rely on module import order for startup side effects.
    */
   readonly install?: () => void | Promise<void>;
+  /**
+   * Rendered at the top of the Chats list, and above the stock empty state when there is no thread
+   * yet, so a distribution can offer its own sessions and sign-in where the user starts.
+   */
+  readonly homeTop?: ComponentType;
   /** Rendered above the stock options on the "add connection" screen. */
   readonly connectionsNewTop?: ComponentType;
 }

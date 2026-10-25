@@ -91,6 +91,7 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { HomeTopSlot } from "../../extensions/t3team-HomeTopSlot";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -758,6 +759,7 @@ export function HomeScreen(props: HomeScreenProps) {
           }}
         >
           <View className="w-full max-w-[430px]">
+            <HomeTopSlot />
             <EmptyState
               title={emptyState.title}
               detail={emptyState.detail}
@@ -792,6 +794,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const v2ListHeader = (
     <>
       {listHeader}
+      <HomeTopSlot />
       {Platform.OS === "ios" && workspace ? (
         <ThreadListFilters
           environments={props.environments}
