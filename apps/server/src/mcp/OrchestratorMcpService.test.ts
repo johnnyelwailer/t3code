@@ -2712,6 +2712,62 @@ describe("provider usage echo", () => {
     }),
   );
 
+  describe("task_status", () => {
+    const statusFor = (
+      providers: ReadonlyArray<ServerProvider>,
+      childInstanceId: ProviderInstanceId,
+    ) =>
+      Effect.gen(function* () {
+        const childTask = {
+          id: taskId,
+          threadId: parentThreadId,
+          runId: parentRunId,
+          parentNodeId,
+          origin: "app_owned" as const,
+          createdBy: "agent" as const,
+          driver: ProviderDriverKind.make("claudeAgent"),
+          providerInstanceId: childInstanceId,
+          providerThreadId: null,
+          childThreadId,
+          nativeTaskRef: null,
+          prompt: "Summarize the diff.",
+          title: null,
+          model: "claude-sonnet-4-6",
+          status: "running" as const,
+          result: null,
+          startedAt: null,
+          completedAt: null,
+        };
+        const layer = baseLayers(providers, {
+          getThreadRecords: (threadId: unknown) =>
+            Effect.succeed(
+              threadId === parentThreadId ? parentProjection([childTask]) : childProjection,
+            ),
+        });
+        return yield* Effect.gen(function* () {
+          const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+          return yield* service.taskStatus(scope, taskId);
+        }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(layer))));
+      });
+
+    it.effect("adds the child instance's usage line when it has window data", () =>
+      Effect.gen(function* () {
+        const result = yield* statusFor([nexplore, claude], claudeInstanceId);
+        assert.equal(
+          result.providerUsage,
+          "claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · Weekly 90% · severity: warning",
+        );
+      }),
+    );
+
+    it.effect("omits providerUsage when the child instance has no window data", () =>
+      Effect.gen(function* () {
+        const result = yield* statusFor([nexplore, claude], nexploreInstanceId);
+        assert.notProperty(result, "providerUsage");
+      }),
+    );
+  });
+
   it.effect(
     "includes the target's windows when delegation fails because the provider is unavailable",
     () =>
