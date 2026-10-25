@@ -1,0 +1,5 @@
+{
+  "$comment": "SEAM REGISTRY. A seam is a small, generic, additive hook the distribution (nx-nexi) fills to swap out UI (apps/mobile) or extend the protocol (packages/contracts, client-runtime). Registered files are budgeted by maxLoc (<= 300) instead of counting against the placement baseline. See t3team-placement-teach.mjs for the rules and docs/shared/guides/placement.md in nx-nexi.",
+  "ignoreGlobs": [],
+  "seams": []
+}
