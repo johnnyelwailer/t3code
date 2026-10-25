@@ -558,3 +558,14 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 
 - `apps/web/src/components/settings/ScheduledTasksSettings.tsx` — tooltip exposes the full scheduled-task prompt while preserving its two-line clamp.
 - `apps/web/src/components/settings/settingsLayout.tsx` — settings row titles wrap long unbroken text within the existing content grid.
+
+## Mobile extension seams (2026-10-25)
+
+Reasons for the upstream files the mobile extension registry touches. Each edit is additive and a no-op without a distribution.
+
+- `apps/mobile/src/features/home/HomeScreen.tsx` — reads the `homeEmptyState` slot (inside an error boundary) before the stock empty home.
+- `apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx` — renders the `connectionsNewTop` slot (inside an error boundary) above the stock pairing options.
+- `apps/mobile/src/App.tsx` — one call that runs the distribution's startup hook before the first render, instead of relying on import order.
+- `apps/mobile/metro.config.js` — wraps the config with the distribution hook (`t3team-distributionMobileMetro.cjs`) and takes the CSS entry from it; both are identity for a build without a selected overlay.
+- `apps/mobile/tsconfig.json` — `paths` for `@t3code/distribution-mobile` (the stock stub) and `@t3code/mobile-api` (the overlay's explicit surface), as `apps/web/tsconfig.json` does for `@t3code/distribution-web`.
+- `apps/mobile/vite.config.ts` — `resolve.tsconfigPaths` so the mobile unit tests resolve those two specifiers like the app does.
