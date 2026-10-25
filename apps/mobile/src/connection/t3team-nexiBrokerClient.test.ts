@@ -182,7 +182,9 @@ describe("Android broker connection", () => {
     ])("falls back to the status text for %s", async (_name, response) => {
       const f = fixture();
       f.fetcher.mockResolvedValueOnce(response());
-      await expect(f.client.pair("h-owned")).rejects.toThrow("The broker is unavailable (HTTP 502)");
+      await expect(f.client.pair("h-owned")).rejects.toThrow(
+        "The broker is unavailable (HTTP 502)",
+      );
     });
     it("keeps a missing host list endpoint retryable: 404 only means definitive for a session", async () => {
       const f = fixture();

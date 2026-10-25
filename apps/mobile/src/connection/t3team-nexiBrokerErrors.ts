@@ -9,10 +9,14 @@ const MAX_DETAIL = 200;
 export async function brokerErrorText(response: Response): Promise<string | null> {
   try {
     const body: unknown = await response.json();
-    const error = typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
+    const error =
+      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
     if (typeof error !== "string") return null;
     // eslint-disable-next-line no-control-regex
-    const text = error.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, MAX_DETAIL);
+    const text = error
+      .replace(/[\u0000-\u001f\u007f]/g, " ")
+      .trim()
+      .slice(0, MAX_DETAIL);
     return text.length > 0 ? text : null;
   } catch {
     return null;
