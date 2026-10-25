@@ -17,6 +17,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
+import { explicitBackendHome, isolatedBackendChildEnv } from "../app/t3team-isolatedInstance.ts";
 import serverPackageJson from "../../../server/package.json" with { type: "json" };
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
@@ -149,6 +150,21 @@ const stateBytes = (userdataDir: string, join: (first: string, ...segments: stri
   );
 
 /**
+ * `~/.t3` is a symlink to the branded home on machines that moved their state there by hand. A
+ * string comparison calls those different, and the move below would then rename the live home's
+ * contents into a second home. A symlinked legacy dir is never a pre-branding home, and neither
+ * is one that resolves to the branded dir.
+ */
+const legacyIsBrandedHome = (legacyDir: string, brandedDir: string): boolean => {
+  try {
+    if (NodeFS.lstatSync(legacyDir).isSymbolicLink()) return true;
+    return NodeFS.realpathSync(legacyDir) === NodeFS.realpathSync(brandedDir);
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Move a pre-branding home (`~/.t3`) into the branded one, once.
  *
  * A build with bundled packs stores state under
@@ -176,6 +192,7 @@ export const migrateLegacyHomeIfNeeded = (input: {
 }): string => {
   const { legacyDir, brandedDir, join, stamp } = input;
   if (legacyDir === brandedDir) return brandedDir;
+  if (legacyIsBrandedHome(legacyDir, brandedDir)) return brandedDir;
 
   if (stateBytes(join(legacyDir, "userdata"), join) === 0) return brandedDir;
 
@@ -709,7 +726,10 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       ? environment.path.join(environment.appDataDirectory, environment.userDataDirName)
       : environment.baseDir;
 
-    const explicitT3Home = process.env.T3CODE_HOME?.trim();
+    const explicitT3Home = explicitBackendHome({
+      isolatedInstance: environment.isolatedInstance,
+      envHome: process.env.T3CODE_HOME,
+    });
     // An explicit T3CODE_HOME is an operator decision and is never migrated.
     const resolvedHomeDir =
       explicitT3Home ??
@@ -762,6 +782,10 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       cwd: environment.backendCwd,
       env: {
         ...backendChildEnvPatch(),
+        ...isolatedBackendChildEnv({
+          isolatedInstance: environment.isolatedInstance,
+          home: resolvedHomeDir,
+        }),
         ELECTRON_RUN_AS_NODE: "1",
         // Secure corporate-CA fallback. Unlike NODE_TLS_REJECT_UNAUTHORIZED=0,
         // this keeps certificate verification enabled and adds the OS trust store.
