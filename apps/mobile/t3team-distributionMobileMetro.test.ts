@@ -281,3 +281,25 @@ describe("the bundle check fails closed", () => {
     expect(wrapped.serializer.customSerializer("entry", [], ok, {})).toBe("serialized");
   });
 });
+
+describe("the generated CSS entry", () => {
+  const generatedCss = () =>
+    NodeFS.readFileSync(
+      NodePath.join(real(appRoot), ".generated", "distribution-mobile", "global.css"),
+      "utf8",
+    );
+
+  it("imports the app's CSS entry by a relative path, as Uniwind's theme scan only follows those", () => {
+    // Uniwind reads the entry's relative imports from disk but hands every other import to Tailwind,
+    // which rejects the theme variants (`@variant t3-chat-light`) before Uniwind has declared them:
+    // the first Gradle build with an absolute import failed with "unknown variant".
+    hook.cssEntryFile("./global.css", { appRoot, env: selected() });
+    expect(generatedCss()).toContain('@import "../../global.css";');
+  });
+
+  it("scans the app and the overlay's own directories only", () => {
+    hook.cssEntryFile("./global.css", { appRoot, env: selected() });
+    const sources = [...generatedCss().matchAll(/@source "([^"]+)"/g)].map((match) => match[1]);
+    expect(sources).toEqual([real(appRoot), NodePath.join(packDir, "mobile")]);
+  });
+});
