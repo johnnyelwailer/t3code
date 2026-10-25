@@ -86,6 +86,17 @@ describe("the runtime version of a build with a selected overlay", () => {
     expect(source()?.contents).toBe(before);
   });
 
+  it("includes the assets the overlay declares, and only its declared directories", () => {
+    write(
+      NodePath.join(packDir, "mobile.json"),
+      JSON.stringify({ overlay: { entry: "mobile/index.tsx", assets: "assets" } }),
+    );
+    write(NodePath.join(packDir, "assets", "font.ttf"), "v1");
+    const before = source()?.contents;
+    write(NodePath.join(packDir, "assets", "font.ttf"), "v2");
+    expect(source()?.contents).not.toBe(before);
+  });
+
   it("includes the native modules the overlay declares", () => {
     write(
       NodePath.join(packDir, "mobile.json"),

@@ -1,6 +1,7 @@
 const { withAppBuildGradle } = require("expo/config-plugins");
 
 const MARKER = "// t3team-distribution-mobile";
+const END_MARKER = "// t3team-distribution-mobile end";
 
 /**
  * Makes the selected distribution and its overlay files inputs of the Android JavaScript bundle task
@@ -24,18 +25,31 @@ function bundleInputsSnippet({ distribution, roots }) {
     `    task.inputs.property('t3codeDistribution', ${JSON.stringify(distribution)})`,
     trees,
     "}",
+    END_MARKER,
     "",
   ].join("\n");
 }
 
+/** The generated block removed (and the build file unchanged when there is none). */
+function withoutBlock(contents) {
+  const start = contents.indexOf(MARKER);
+  if (start === -1) return contents;
+  const end = contents.indexOf(END_MARKER, start);
+  const stop = end === -1 ? contents.length : end + END_MARKER.length;
+  return contents.slice(0, start).replace(/\n+$/, "\n") + contents.slice(stop).replace(/^\n/, "");
+}
+
 module.exports = function withDistributionMobileGradle(config, options) {
   return withAppBuildGradle(config, (nextConfig) => {
-    if (!nextConfig.modResults.contents.includes(MARKER)) {
-      nextConfig.modResults.contents += bundleInputsSnippet(options);
-    }
+    // Regenerated on every prebuild: a block left from an earlier distribution would keep Gradle
+    // watching the old pack.
+    nextConfig.modResults.contents =
+      withoutBlock(nextConfig.modResults.contents) + bundleInputsSnippet(options);
     return nextConfig;
   });
 };
 
 module.exports.bundleInputsSnippet = bundleInputsSnippet;
 module.exports.MARKER = MARKER;
+module.exports.END_MARKER = END_MARKER;
+module.exports.withoutBlock = withoutBlock;
