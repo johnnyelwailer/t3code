@@ -40,7 +40,7 @@ const decodeRuntimeRequest = Schema.decodeUnknownSync(
 );
 const AT = "2026-10-24T22:00:00.000Z";
 export const REPOSITORY = "nexplore.ghe.com/pj/nexi-machine-qa";
-export const REMOTE_MODEL = { instanceId: ProviderInstanceId.make("nexplore"), model: "Standard" };
+const REMOTE_MODEL = { instanceId: ProviderInstanceId.make("nexplore"), model: "Standard" };
 
 export const turn = {
   ...Schema.decodeUnknownSync(PackCodec.turnInput)(turnInputJson("thread-child", "session-1")),

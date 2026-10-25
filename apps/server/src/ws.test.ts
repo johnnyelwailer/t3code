@@ -612,9 +612,9 @@ it.effect("projects pack provider instances on every client-facing settings path
                 }),
               ),
             ),
+            Layer.provideMerge(Layer.succeed(RpcScopeAuthorization)((effect) => effect)),
           ),
         ),
-        Effect.provide(Layer.succeed(RpcScopeAuthorization)((effect) => effect)),
       );
       const request = (id: string, tag: ServerRpcs["_tag"], payload: object) =>
         server.write(0, {

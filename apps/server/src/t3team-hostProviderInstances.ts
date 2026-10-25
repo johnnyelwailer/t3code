@@ -24,7 +24,7 @@ import { REMOTE_ENVIRONMENT_DRIVER } from "./t3team-remoteEnvironmentTurn.ts";
 type ReadEnv = (key: string) => string | undefined;
 const processEnv: ReadEnv = (key) => process.env[key];
 
-export function isDelegateCloudEnabled(readEnv: ReadEnv = processEnv): boolean {
+function isDelegateCloudEnabled(readEnv: ReadEnv = processEnv): boolean {
   return readFeatureFlag("DELEGATE_CLOUD", readEnv);
 }
 

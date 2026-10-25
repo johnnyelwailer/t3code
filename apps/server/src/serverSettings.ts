@@ -187,7 +187,7 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
   );
 }
 
-export const projectPackProviderInstances = (
+const projectPackProviderInstances = (
   settings: ServerSettings,
   overlay: ProviderInstanceConfigMap = getPackProviderOverlay(),
 ): ServerSettings => {
