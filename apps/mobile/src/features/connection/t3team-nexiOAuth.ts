@@ -25,7 +25,7 @@ export function createNexiOAuth(
     sleep: (ms: number, signal: AbortSignal) => Promise<void>;
   },
 ) {
-  let refresh: Promise<string> | undefined;
+  let refresh: { readonly generation: number; readonly promise: Promise<string> } | undefined;
   let generation = 0;
   let persistence = Promise.resolve();
   const persist = (action: () => Promise<void>) => {
@@ -120,9 +120,12 @@ export function createNexiOAuth(
         await signOut();
         throw new NexiSignInRequiredError("Sign in to Nexplore again.");
       }
-      if (!refresh) {
+      // A refresh belongs to the generation that started it: after sign-out or an account switch a
+      // new caller must not join it, and its outcome must not touch the newer session's state.
+      let current = refresh;
+      if (!current || current.generation !== generation) {
         const expected = generation;
-        refresh = (async () => {
+        const promise: Promise<string> = (async () => {
           const response = await post(config.tokenEndpoint, {
             grant_type: "refresh_token",
             refresh_token: tokens.refresh_token!,
@@ -132,6 +135,7 @@ export function createNexiOAuth(
             if (response.status === 400 || response.status === 401) {
               const body = await response.json();
               if (body.error === "invalid_grant" || body.error === "interaction_required") {
+                if (expected !== generation) throw new Error("Sign-in was cancelled.");
                 await signOut();
                 throw new NexiSignInRequiredError(
                   "Could not refresh Nexplore sign-in. Sign in again.",
@@ -142,10 +146,11 @@ export function createNexiOAuth(
           }
           return save(await response.json(), tokens.refresh_token, expected);
         })().finally(() => {
-          refresh = undefined;
+          if (refresh?.promise === promise) refresh = undefined;
         });
+        current = refresh = { generation: expected, promise };
       }
-      return refresh;
+      return current.promise;
     },
   };
 }
