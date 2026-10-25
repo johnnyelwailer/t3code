@@ -1,10 +1,9 @@
-import * as DateTime from "effect/DateTime";
 import {
   CLOUD_SESSION_HOLD_CEILING_SECONDS,
   type CloudSessionMachineStage,
 } from "@t3tools/contracts";
 
-import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-cloudSessionActionsRequests.ts";
 
 /**
  * Derive a cloud session's phase from its provisioning job.
@@ -180,7 +179,7 @@ export function cloudSessionHoldEnd(
   return {
     ...(holdStep?.startedAt === undefined
       ? {}
-      : { endsAt: DateTime.formatIso(DateTime.makeUnsafe(endsAtMs)) }),
+      : { endsAt: new Date(endsAtMs).toISOString() }),
     remainingSeconds: Math.max(0, Math.floor((endsAtMs - nowMs) / 1000)),
   };
 }

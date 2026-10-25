@@ -9,7 +9,7 @@ import {
   type GitHubActionsResponse,
   sessionTagMarker,
   type WorkflowRunSummary,
-} from "./t3team-githubActionsSessionClient.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 /**
  * Deleting a session's spent credential payload issue from the creator side.

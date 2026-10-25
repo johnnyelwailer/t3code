@@ -1,4 +1,4 @@
-import type { WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowRunSummary } from "./t3team-cloudSessionActionsRequests.ts";
 
 /** `actor.login` from a workflow run, or "" when the payload omits it. */
 export function actorLogin(value: unknown): string {

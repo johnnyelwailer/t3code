@@ -13,10 +13,17 @@
  *
  * @module t3team-cloudSessionPlainProject
  */
-import type { CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
+/** What the dispatch needs of a checkout; the server's richer `CloudSessionSetup` also carries a token. */
+export interface CloudSessionPlainCheckout {
+  readonly repository: { readonly url: string };
+  readonly commit: string;
+}
 
-export type CloudSessionPlainProject =
-  | { readonly kind: "checkout"; readonly checkout: CloudSessionSetup }
+/** Generic so the server can keep its richer checkout (token, author) in the same union. */
+export type CloudSessionPlainProject<
+  Checkout extends CloudSessionPlainCheckout = CloudSessionPlainCheckout,
+> =
+  | { readonly kind: "checkout"; readonly checkout: Checkout }
   /** `folder` is `plainProjectFolderName(title, projectId)` (contracts), the workflow's `project_name`. */
   | { readonly kind: "workspace"; readonly folder: string; readonly title: string };
 

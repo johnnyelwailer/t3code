@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
 import { claimedSessions, isClaimed, makeClaimLedger } from "./t3team-CloudSessionClaim.ts";
-import { standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
+import { standbyPoolKey } from "@t3tools/shared/t3team-cloudSessionWorkspace";
 
 const repoRef = {
   host: "ghe.test",

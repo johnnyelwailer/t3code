@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as CliTokenManager from "./CliTokenManager.ts";
-import { cancelRunRequest } from "./t3team-githubActionsSessionClient.ts";
+import { cancelRunRequest } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
 import { makeSingleFlight } from "./t3team-CloudSessionReadCache.ts";
@@ -20,7 +20,7 @@ import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFle
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
-import { sessionWorkspaceName, standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
+import { sessionWorkspaceName, standbyPoolKey } from "@t3tools/shared/t3team-cloudSessionWorkspace";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";

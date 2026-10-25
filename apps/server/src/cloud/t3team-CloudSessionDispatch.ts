@@ -1,45 +1,22 @@
-import { CloudSessionFailedError, ORCHESTRATION_PROTOCOL_VERSION } from "@t3tools/contracts";
-import * as Clock from "effect/Clock";
-import * as Duration from "effect/Duration";
-import * as Effect from "effect/Effect";
-
+import type { CloudSessionFailedError } from "@t3tools/contracts";
 import {
   dispatchSessionRequest,
-  sessionTagMarker,
   type CloudSessionRepoRef,
   type GitHubActionsRequest,
   type GitHubActionsResponse,
   type WorkflowRunSummary,
-} from "./t3team-githubActionsSessionClient.ts";
-import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
-import type { CloudSessionMachine, CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 import {
-  type CloudSessionPlainProject,
-  plainProjectDispatchInputs,
-} from "./t3team-cloudSessionPlainProject.ts";
+  discoveryDelayMs,
+  findTaggedRun,
+  sessionDispatchInputs,
+} from "@t3tools/shared/t3team-cloudSessionDispatchPlan";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
 
-/**
- * Which published session-server build the session installs (`server_ref`): the one tagged for this
- * client's orchestration protocol, so the server on the VM always speaks what the client that
- * dispatched it speaks. A rolling tag per protocol, not one shared "latest": a desktop on an older
- * protocol keeps getting a server it can talk to after a newer one is published.
- */
-const sessionServerRef = `protocol-${ORCHESTRATION_PROTOCOL_VERSION}`;
-
-const DISCOVERY_FIRST_DELAY_MS = 1_000;
-const DISCOVERY_MAX_DELAY_MS = 8_000;
-const DISCOVERY_GROWTH = 1.6;
-
-/**
- * Wait before the `attempt`th look for the dispatched run (0-based): a quick first look, then
- * backing off, so a slow host is not asked ten times in ten seconds.
- */
-export function discoveryDelayMs(attempt: number): number {
-  return Math.min(
-    Math.round(DISCOVERY_FIRST_DELAY_MS * DISCOVERY_GROWTH ** attempt),
-    DISCOVERY_MAX_DELAY_MS,
-  );
-}
+import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import type { CloudSessionMachine, CloudSessionPlainProject, CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
 
 type RunExecutor = (
   request: GitHubActionsRequest,
@@ -76,38 +53,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     /** Set for a plain session: the project its server runs in (never with machine or setup). */
     readonly plain?: CloudSessionPlainProject | null;
   }) {
-    const marker = sessionTagMarker(input.sessionTag);
-
-    yield* input.run(
-      dispatchSessionRequest(input.repoRef, {
-        hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
-        session_tag: input.sessionTag,
-        workspace: input.workspace,
-        server_ref: sessionServerRef,
-        ...(input.brokerGrant ? { broker_grant: input.brokerGrant } : {}),
-        ...(input.machine
-          ? {
-              machine_repository: input.machine.repository.url,
-              machine_commit: input.machine.commit,
-              machine_devcontainer: input.machine.devcontainerPath,
-              ...(input.machine.healthCheck
-                ? { machine_health_check: input.machine.healthCheck }
-                : {}),
-              ...(input.machine.teamSecretNames.length > 0
-                ? { machine_team_secrets: input.machine.teamSecretNames.join(",") }
-                : {}),
-            }
-          : {}),
-        ...(input.setup
-          ? {
-              machine_repository: input.setup.repository.url,
-              machine_commit: input.setup.commit,
-              machine_setup: "true",
-            }
-          : {}),
-        ...plainProjectDispatchInputs(input.plain),
-      }),
-    );
+    yield* input.run(dispatchSessionRequest(input.repoRef, sessionDispatchInputs(input)));
 
     // The run does not appear instantly, so poll for the one carrying our tag.
     const pollForTaggedRun = (
@@ -118,7 +64,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
         : Effect.gen(function* () {
             yield* Effect.sleep(Duration.millis(discoveryDelayMs(attempt)));
             const runs = yield* input.listRuns;
-            const mine = runs.find((item) => item.name.includes(marker));
+            const mine = findTaggedRun(runs, input.sessionTag);
             return mine === undefined ? yield* pollForTaggedRun(attempt + 1) : mine;
           });
 

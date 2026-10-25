@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { sessionTagMarker } from "./t3team-githubActionsSessionClient.ts";
+import { sessionTagMarker } from "./t3team-cloudSessionActionsRequests.ts";
 import {
   jobsMatchAttempt,
   parseJobStepsResponse,
   parseLogin,
   parseRunsResponse,
-} from "./t3team-githubActionsSessionParse.ts";
+} from "./t3team-cloudSessionActionsParse.ts";
 
 describe("parseLogin", () => {
   it("reads the login out of GET /user", () => {

@@ -7,8 +7,8 @@ import {
   cloudSessionHoldEnd,
   deriveCloudSessionPhase,
   deriveMachineStage,
-} from "./t3team-cloudSessionPhase.ts";
-import { environmentIdFromSteps } from "./t3team-cloudSessionEnvironmentStep.ts";
+} from "@t3tools/shared/t3team-cloudSessionPhase";
+import { environmentIdFromSteps } from "@t3tools/shared/t3team-cloudSessionEnvironmentStep";
 import { sessionNameFromRunName } from "./t3team-cloudSessionName.ts";
 import {
   cachedFailureReason,
@@ -23,8 +23,8 @@ import {
   type GitHubActionsResponse,
   type WorkflowJobStep,
   type WorkflowRunSummary,
-} from "./t3team-githubActionsSessionClient.ts";
-import { parseJobStepsResponse } from "./t3team-githubActionsSessionParse.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
+import { parseJobStepsResponse } from "@t3tools/shared/t3team-cloudSessionActionsParse";
 
 /**
  * Session identity and the run → session projection: turning raw GitHub

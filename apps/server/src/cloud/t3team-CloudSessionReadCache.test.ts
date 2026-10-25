@@ -7,7 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as TestClock from "effect/testing/TestClock";
 
 import { makeSessionReadCache, makeSingleFlight } from "./t3team-CloudSessionReadCache.ts";
-import { jobStepsRequest, type CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
+import { jobStepsRequest, type CloudSessionRepoRef } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 const REPO: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",

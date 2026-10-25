@@ -4,7 +4,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
-import type { WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowRunSummary } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 import { attachFailure } from "./t3team-brokerAttach.ts";
 
 const CREATED_AT = "2026-10-24T08:00:00Z";

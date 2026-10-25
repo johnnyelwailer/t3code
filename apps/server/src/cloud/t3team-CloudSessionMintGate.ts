@@ -9,7 +9,7 @@ import {
   runCredentialHandoff,
 } from "./t3team-CloudSessionCredential.ts";
 import type { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
-import type { CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
+import type { CloudSessionRepoRef } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 /** Friendly copy for the `connect_sign_in_pending` failure. */
 const CONNECT_SIGN_IN_PENDING_TEXT =

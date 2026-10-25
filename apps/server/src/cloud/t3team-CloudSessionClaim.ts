@@ -4,8 +4,8 @@ import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
 import type { CloudSessionMachine } from "./t3team-CloudSessionMachine.ts";
-import { standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
-import type { CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
+import { standbyPoolKey } from "@t3tools/shared/t3team-cloudSessionWorkspace";
+import type { CloudSessionRepoRef } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 import type { BrokerSession } from "./t3team-NexiBrokerClient.ts";
 import type { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 

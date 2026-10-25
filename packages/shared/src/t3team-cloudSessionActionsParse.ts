@@ -11,7 +11,7 @@
  */
 
 import { actorLogin } from "./t3team-cloudSessionRunOwnership.ts";
-import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-cloudSessionActionsRequests.ts";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";

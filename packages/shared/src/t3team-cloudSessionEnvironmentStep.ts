@@ -1,4 +1,4 @@
-import type { WorkflowJobStep } from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowJobStep } from "./t3team-cloudSessionActionsRequests.ts";
 
 /**
  * Reading the relay environment id a session's machine linked under, from the

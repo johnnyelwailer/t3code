@@ -9,7 +9,7 @@ import {
 } from "@t3tools/source-control-github/server/t3team-githubApiTestHarness";
 import { discoveryDelayMs } from "./t3team-CloudSessionDispatch.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
-import { type CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
+import { type CloudSessionRepoRef } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 const REPO: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",

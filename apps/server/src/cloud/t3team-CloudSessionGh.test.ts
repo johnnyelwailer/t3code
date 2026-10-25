@@ -11,7 +11,7 @@ import {
   jobStepsRequest,
   type CloudSessionRepoRef,
   type WorkflowRunSummary,
-} from "./t3team-githubActionsSessionClient.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 const REPO: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",

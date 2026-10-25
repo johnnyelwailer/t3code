@@ -5,14 +5,14 @@ import * as Schema from "effect/Schema";
 import {
   ENVIRONMENT_STEP_PREFIX,
   environmentIdFromSteps,
-} from "./t3team-cloudSessionEnvironmentStep.ts";
+} from "@t3tools/shared/t3team-cloudSessionEnvironmentStep";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import type {
   CloudSessionRepoRef,
   GitHubActionsResponse,
   WorkflowJobStep,
   WorkflowRunSummary,
-} from "./t3team-githubActionsSessionClient.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 const ENVIRONMENT_ID = "3f2b9c1e-6d4a-4b8e-9f10-2a7c5d8e1b34";
 

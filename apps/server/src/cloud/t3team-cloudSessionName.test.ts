@@ -1,7 +1,9 @@
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { makeSessionTag, sessionNameFromRunName } from "./t3team-cloudSessionName.ts";
+import { sessionNameFromRunName } from "@t3tools/shared/t3team-cloudSessionName";
+
+import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 
 const runName = (tag: string) => `nexi-session [${tag}] · broker · machine`;
 

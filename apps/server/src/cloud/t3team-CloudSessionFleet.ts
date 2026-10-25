@@ -1,7 +1,7 @@
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 
-import type { CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
+import type { CloudSessionRepoRef } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 /**
  * Where the cloud sessions' compute lives: the GitHub host, the repository

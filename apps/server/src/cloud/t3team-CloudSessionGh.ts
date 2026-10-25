@@ -21,9 +21,9 @@ import {
   type CloudSessionRepoRef,
   type GitHubActionsRequest,
   type GitHubActionsResponse,
-} from "./t3team-githubActionsSessionClient.ts";
-import { parseLogin, parseRunsResponse } from "./t3team-githubActionsSessionParse.ts";
-import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
+import { parseLogin, parseRunsResponse } from "@t3tools/shared/t3team-cloudSessionActionsParse";
+import { sessionRunsForLogin } from "@t3tools/shared/t3team-cloudSessionRunOwnership";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
 import { makeLoginMemo } from "./t3team-CloudSessionLoginMemo.ts";
 import { isCacheableRead, makeSessionReadCache } from "./t3team-CloudSessionReadCache.ts";

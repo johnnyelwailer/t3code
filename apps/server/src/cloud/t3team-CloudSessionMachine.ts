@@ -26,10 +26,10 @@ import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 import {
   type MachineGitAuthor,
   type MachineRepository,
-  machineRepositoryFromRemote,
   standbyPoolKey,
-} from "./t3team-cloudSessionMachineNames.ts";
-import type { CloudSessionPlainProject } from "./t3team-cloudSessionPlainProject.ts";
+} from "@t3tools/shared/t3team-cloudSessionWorkspace";
+import { machineRepositoryFromRemote } from "./t3team-cloudSessionMachineNames.ts";
+import type { CloudSessionPlainProject as PlainProject } from "@t3tools/shared/t3team-cloudSessionPlainProject";
 
 export interface CloudSessionMachine {
   readonly repository: MachineRepository;
@@ -52,6 +52,9 @@ export interface CloudSessionSetup {
   readonly token: string;
   readonly author: MachineGitAuthor;
 }
+
+/** A plain session's project, with the checkout's token and author the service needs. */
+export type CloudSessionPlainProject = PlainProject<CloudSessionSetup>;
 
 const unavailable = (message: string) =>
   new CloudSessionFailedError({ reason: "machine_unavailable", message });

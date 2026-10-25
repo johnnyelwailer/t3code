@@ -12,7 +12,7 @@ import type {
   CloudSessionRepoRef,
   GitHubActionsRequest,
   GitHubActionsResponse,
-} from "./t3team-githubActionsSessionClient.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 const REF: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",

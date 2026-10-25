@@ -12,7 +12,7 @@ import type {
   CloudSessionRepoRef,
   GitHubActionsRequest,
   WorkflowRunSummary,
-} from "./t3team-githubActionsSessionClient.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 const repoRef: CloudSessionRepoRef = {
   host: "ghe.example",

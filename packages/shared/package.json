@@ -27,6 +27,42 @@
       "types": "./src/t3team-cloudSessionFit.ts",
       "import": "./src/t3team-cloudSessionFit.ts"
     },
+    "./t3team-cloudSessionActionsRequests": {
+      "types": "./src/t3team-cloudSessionActionsRequests.ts",
+      "import": "./src/t3team-cloudSessionActionsRequests.ts"
+    },
+    "./t3team-cloudSessionActionsParse": {
+      "types": "./src/t3team-cloudSessionActionsParse.ts",
+      "import": "./src/t3team-cloudSessionActionsParse.ts"
+    },
+    "./t3team-cloudSessionRunOwnership": {
+      "types": "./src/t3team-cloudSessionRunOwnership.ts",
+      "import": "./src/t3team-cloudSessionRunOwnership.ts"
+    },
+    "./t3team-cloudSessionPhase": {
+      "types": "./src/t3team-cloudSessionPhase.ts",
+      "import": "./src/t3team-cloudSessionPhase.ts"
+    },
+    "./t3team-cloudSessionEnvironmentStep": {
+      "types": "./src/t3team-cloudSessionEnvironmentStep.ts",
+      "import": "./src/t3team-cloudSessionEnvironmentStep.ts"
+    },
+    "./t3team-cloudSessionWorkspace": {
+      "types": "./src/t3team-cloudSessionWorkspace.ts",
+      "import": "./src/t3team-cloudSessionWorkspace.ts"
+    },
+    "./t3team-cloudSessionPlainProject": {
+      "types": "./src/t3team-cloudSessionPlainProject.ts",
+      "import": "./src/t3team-cloudSessionPlainProject.ts"
+    },
+    "./t3team-cloudSessionName": {
+      "types": "./src/t3team-cloudSessionName.ts",
+      "import": "./src/t3team-cloudSessionName.ts"
+    },
+    "./t3team-cloudSessionDispatchPlan": {
+      "types": "./src/t3team-cloudSessionDispatchPlan.ts",
+      "import": "./src/t3team-cloudSessionDispatchPlan.ts"
+    },
     "./t3team-widgetIconSprite": {
       "types": "./src/t3team-widgetIconSprite.ts",
       "import": "./src/t3team-widgetIconSprite.ts"

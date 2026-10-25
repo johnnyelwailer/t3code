@@ -8,8 +8,8 @@ import * as Exit from "effect/Exit";
 import type {
   GitHubActionsRequest,
   GitHubActionsResponse,
-} from "./t3team-githubActionsSessionClient.ts";
-import { jobsMatchAttempt } from "./t3team-githubActionsSessionParse.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
+import { jobsMatchAttempt } from "@t3tools/shared/t3team-cloudSessionActionsParse";
 
 /**
  * How the cloud session list spends fewer GHE calls on data it already read.

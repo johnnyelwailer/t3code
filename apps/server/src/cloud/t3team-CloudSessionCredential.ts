@@ -9,7 +9,7 @@ import {
   type CloudSessionRepoRef,
   type GitHubActionsRequest,
   type GitHubActionsResponse,
-} from "./t3team-githubActionsSessionClient.ts";
+} from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 import { parseCreatedPayloadIssue } from "./t3team-CloudSessionPayloadCleanup.ts";
 
 /**

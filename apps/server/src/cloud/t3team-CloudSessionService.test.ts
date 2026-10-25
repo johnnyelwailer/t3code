@@ -22,8 +22,7 @@ import type { StandbyClaim } from "./t3team-NexiBrokerClient.ts";
 import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
-import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
-import type { CloudSessionPlainProject } from "./t3team-cloudSessionPlainProject.ts";
+import { CloudSessionMachines, type CloudSessionPlainProject } from "./t3team-CloudSessionMachine.ts";
 
 /** Sessions here are plain ones: no project, so the machine resolver is never consulted. */
 const noMachines = Layer.mock(CloudSessionMachines)({

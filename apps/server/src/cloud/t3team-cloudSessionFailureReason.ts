@@ -1,4 +1,4 @@
-import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowJobStep, WorkflowRunSummary } from "@t3tools/shared/t3team-cloudSessionActionsRequests";
 
 /**
  * The user-visible reason a cloud session failed, read from the provisioning

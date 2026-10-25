@@ -12,11 +12,8 @@ import * as Schema from "effect/Schema";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
 import type { ProjectMachineSource } from "../project/t3team-ProjectMachineDiscovery.ts";
-import {
-  machineGitAuthor,
-  machineRepositoryFromRemote,
-  type MachineRepository,
-} from "./t3team-cloudSessionMachineNames.ts";
+import { machineGitAuthor, type MachineRepository } from "@t3tools/shared/t3team-cloudSessionWorkspace";
+import { machineRepositoryFromRemote } from "./t3team-cloudSessionMachineNames.ts";
 const unavailable = (message: string) =>
   new CloudSessionFailedError({ reason: "machine_unavailable", message });
 

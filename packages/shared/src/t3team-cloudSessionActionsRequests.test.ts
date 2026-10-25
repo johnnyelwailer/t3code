@@ -6,7 +6,7 @@ import {
   dispatchSessionRequest,
   jobStepsRequest,
   listRunsRequest,
-} from "./t3team-githubActionsSessionClient.ts";
+} from "./t3team-cloudSessionActionsRequests.ts";
 import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 
 const REF: CloudSessionRepoRef = {

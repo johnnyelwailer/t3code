@@ -6,7 +6,7 @@ import {
   deriveCloudSessionPhase,
   deriveMachineStage,
 } from "./t3team-cloudSessionPhase.ts";
-import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
+import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-cloudSessionActionsRequests.ts";
 
 const CREATED_AT = "2026-09-12T21:28:18Z";
 
