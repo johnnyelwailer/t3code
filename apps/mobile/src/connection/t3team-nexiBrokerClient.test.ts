@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
-import { NexiSignInRequiredError } from "../features/connection/t3team-nexiOAuth";
+import { createNexiOAuth, NexiSignInRequiredError } from "../features/connection/t3team-nexiOAuth";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 function fixture(enabled = true) {
@@ -62,6 +62,23 @@ describe("Android broker connection", () => {
     await f.client.hosts();
     await f.client.pair("h-owned");
     expect(f.token.mock.calls).toEqual([[undefined], [{ fresh: true }]]);
+  });
+  it("parks on 'fresh owner token required' instead of retrying forever as an outage", async () => {
+    const f = fixture();
+    f.fetcher.mockResolvedValue(json({ error: "fresh owner token required" }, 502));
+    const failure = await f.client.pair("h-owned").catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      _tag: "ConnectionBlockedError",
+      reason: "authentication",
+      detail: "Sign in again to pair this desktop.",
+    });
+    // Blocked errors are parked by the supervisor: one request, no retry loop here either.
+    expect(f.fetcher).toHaveBeenCalledTimes(1);
+    f.fetcher.mockResolvedValueOnce(json({ error: "host not connected" }, 502));
+    await expect(f.client.pair("h-owned")).rejects.toMatchObject({
+      _tag: "ConnectionTransientError",
+      reason: "remote-unavailable",
+    });
   });
   it("sends the refreshed token to the broker and never pairs on a failed refresh", async () => {
     const f = fixture();
@@ -125,5 +142,94 @@ describe("Android broker connection", () => {
       .mockResolvedValueOnce(json({ credential: "" }));
     await expect(f.client.hosts()).rejects.toThrow();
     await expect(f.client.pair("h-x")).rejects.toThrow();
+  });
+  describe("attaching a saved connection", () => {
+    /** The real account logic behind the client, with an in-memory token store and issuer. */
+    function withAccount(stored: string | null) {
+      let raw = stored;
+      const issuer = vi.fn<typeof fetch>();
+      const account = createNexiOAuth(
+        {
+          app: "public-app",
+          deviceEndpoint: "https://entra/device",
+          tokenEndpoint: "https://entra/token",
+        },
+        {
+          read: async () => raw,
+          write: async (value) => {
+            raw = value;
+          },
+          clear: async () => {
+            raw = null;
+          },
+        },
+        { fetch: issuer, now: () => 0, sleep: async () => {} },
+      );
+      const start = vi.fn(async () => 12345);
+      const client = createMobileBrokerClient({
+        brokerUrl: "https://broker.test",
+        enabled: async () => true,
+        accessToken: () => account.accessToken(),
+        start,
+        fetch: vi.fn<typeof fetch>(),
+      });
+      return { client, issuer, start, account, raw: () => raw };
+    }
+    const expired = JSON.stringify({
+      access_token: "old",
+      refresh_token: "refresh",
+      expires_in: 3600,
+      expiresAt: 0,
+    });
+
+    it("blocks on sign-in instead of returning an attachment when signed out", async () => {
+      const f = withAccount(null);
+      await expect(f.client.attach("h-owned")).rejects.toMatchObject({
+        reason: "authentication",
+      });
+      expect(f.start).not.toHaveBeenCalled();
+    });
+    it("blocks on sign-in when the refresh grant is rejected", async () => {
+      const f = withAccount(expired);
+      f.issuer.mockResolvedValueOnce(json({ error: "invalid_grant" }, 400));
+      await expect(f.client.attach("h-owned")).rejects.toMatchObject({
+        reason: "authentication",
+      });
+      expect(f.start).not.toHaveBeenCalled();
+      expect(f.raw()).toBeNull();
+    });
+    it("attaches once the expired token refreshes", async () => {
+      const f = withAccount(expired);
+      f.issuer.mockResolvedValueOnce(json({ access_token: "new", expires_in: 3600 }));
+      expect(await f.client.attach("h-owned")).toMatchObject({
+        sessionId: "h-owned",
+        httpBaseUrl: "http://127.0.0.1:12345",
+      });
+      expect(f.start).toHaveBeenCalledTimes(1);
+    });
+    it.each([
+      ["a network error", () => Promise.reject(new TypeError("Network request failed"))],
+      ["an issuer outage", () => Promise.resolve(json({}, 503))],
+    ])("stays retryable after %s and keeps the account signed in", async (_name, respond) => {
+      const f = withAccount(expired);
+      f.issuer.mockImplementationOnce(respond);
+      await expect(f.client.attach("h-owned")).rejects.toMatchObject({ reason: "network" });
+      expect(f.start).not.toHaveBeenCalled();
+      expect(f.raw()).toContain("refresh");
+    });
+    it("stays retryable when the account is switched while attaching", async () => {
+      const f = fixture();
+      f.token.mockRejectedValueOnce(new Error("Sign-in was cancelled."));
+      await expect(f.client.attach("h-owned")).rejects.toMatchObject({ reason: "network" });
+      expect(f.start).not.toHaveBeenCalled();
+    });
+    it("does not hand the validated token to the native tunnel", async () => {
+      const f = fixture();
+      await f.client.attach("h-owned");
+      expect(f.start).toHaveBeenCalledWith(
+        "h-owned",
+        expect.not.stringContaining("entra-user-token"),
+      );
+    });
   });
 });
