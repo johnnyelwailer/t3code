@@ -1,6 +1,13 @@
 import distributionMobile from "@t3code/distribution-mobile";
 
-import type { MobileExtensions } from "./t3team-extensionTypes";
+import type { ComponentType } from "react";
+import type { PlatformOSType } from "react-native";
+
+import type {
+  HomeCatalogState,
+  HomeEmptyStateProps,
+  MobileExtensions,
+} from "./t3team-extensionTypes";
 
 /**
  * The active extensions: stock (empty) unless a distribution build resolves the
@@ -9,6 +16,24 @@ import type { MobileExtensions } from "./t3team-extensionTypes";
  * imports the app (a drift guard test enforces it).
  */
 export const mobileExtensions: MobileExtensions = distributionMobile;
+
+/**
+ * The extension that replaces the empty home screen, or null for the stock empty home. A rule that
+ * throws means "no opinion": the stock screen stays.
+ */
+export function homeEmptyStateFor(
+  extensions: MobileExtensions,
+  catalog: HomeCatalogState,
+  platform: PlatformOSType,
+): ComponentType<HomeEmptyStateProps> | null {
+  const slot = extensions.homeEmptyState;
+  if (slot === undefined) return null;
+  try {
+    return slot.shouldRender(catalog, platform) ? slot.Component : null;
+  } catch {
+    return null;
+  }
+}
 
 let installed = false;
 

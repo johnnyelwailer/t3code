@@ -1,4 +1,5 @@
 import defaultThemeVariables from "../../generated-uniwind-default-theme-variables.json";
+import { mobileExtensions } from "../extensions/t3team-extensions";
 import {
   DEFAULT_MOBILE_THEME_ID,
   getMobileThemeVariables,
@@ -19,7 +20,7 @@ export function getMobileThemeRuntimeVariables(
 ): MobileThemeVariables {
   const usesDefaultPalette = themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you";
   const variables = usesDefaultPalette
-    ? defaults[appearance]
+    ? (mobileExtensions.themeVariables?.(defaults[appearance], appearance) ?? defaults[appearance])
     : getMobileThemeVariables(themeId, appearance);
   const frame = themeColorWithAlpha(
     variables[usesDefaultPalette ? "--color-row-hover" : "--color-drawer"],

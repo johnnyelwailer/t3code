@@ -9,6 +9,7 @@ import { T3Wordmark } from "./T3Wordmark";
 import { IPAD_HOME_TITLE_OFFSET } from "../lib/layoutMetrics";
 import { resolveMobileStageLabel } from "../lib/mobileBranding";
 import { useAndroidControlSizing } from "./ui/useAndroidControlSizing";
+import { mobileExtensions } from "../extensions/t3team-extensions";
 
 export function brandTitleOffset(): number {
   if (Platform.OS !== "ios") return 0;
@@ -34,6 +35,16 @@ export function CompactBrandTitle(
   const [fullWidth, setFullWidth] = useState<number | null>(null);
   const showStage =
     !props.fit || availableWidth === null || fullWidth === null || fullWidth <= availableWidth;
+  const BrandTitle = mobileExtensions.brandTitle;
+  if (BrandTitle) {
+    return (
+      <BrandTitle
+        scale={scale}
+        accessibilityLabel={props.accessibilityLabel}
+        allowFontScaling={props.allowFontScaling}
+      />
+    );
+  }
 
   const title = (
     <View

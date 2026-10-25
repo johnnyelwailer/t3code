@@ -1,6 +1,32 @@
 import type { BrokerEnvironmentGateway } from "@t3tools/client-runtime/connection";
 import type * as Stream from "effect/Stream";
 import type { ComponentType } from "react";
+import type { PlatformOSType } from "react-native";
+
+import type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
+
+/** What the home screen knows about the connections catalog. */
+export interface HomeCatalogState {
+  readonly isLoadingConnections: boolean;
+  readonly hasConnections: boolean;
+}
+
+export interface HomeEmptyStateProps {
+  /** Opens the stock "add connection" flow, for an extension that offers other ways to connect. */
+  readonly onAddConnection: () => void;
+}
+
+export interface HomeEmptyStateSlot {
+  /** True when the extension should replace the stock empty home (no threads yet). */
+  readonly shouldRender: (catalog: HomeCatalogState, platform: PlatformOSType) => boolean;
+  readonly Component: ComponentType<HomeEmptyStateProps>;
+}
+
+export interface BrandTitleProps {
+  readonly scale: number;
+  readonly accessibilityLabel?: string | undefined;
+  readonly allowFontScaling?: boolean | undefined;
+}
 
 /**
  * Extension seams for the mobile app. A distribution fills the slots it wants to change; every
@@ -48,7 +74,18 @@ export interface MobileExtensions {
    * Rendered at the top of the Chats list, and above the stock empty state when there is no thread
    * yet, so a distribution can offer its own sessions and sign-in where the user starts.
    */
-  readonly homeTop?: ComponentType;
+  readonly homeTop?: ComponentType<{ readonly catalog: HomeCatalogState }>;
+  /** Replaces the empty home screen shown before any thread exists. */
+  readonly homeEmptyState?: HomeEmptyStateSlot;
+  /** Replaces the wordmark title of the home header. */
+  readonly brandTitle?: ComponentType<BrandTitleProps>;
+  /** False hides the app's brand mark on the loading screen (default: shown). */
+  readonly showsLoadingBrandMark?: boolean;
+  /** Repaints the default theme's variables (a distribution's palette). */
+  readonly themeVariables?: (
+    defaults: MobileThemeVariables,
+    appearance: MobileThemeAppearance,
+  ) => MobileThemeVariables;
   /** Rendered above the stock options on the "add connection" screen. */
   readonly connectionsNewTop?: ComponentType;
 }

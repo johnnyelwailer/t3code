@@ -31,6 +31,11 @@ const OVERLAY_PACKAGES = new Set([
   "@t3tools/client-runtime", // connection errors, asset URL observer: the protocol client the app runs on
   "@t3tools/contracts", // protocol types
   "@react-navigation/native", // navigation hooks of the hosts list
+  "@t3tools/shared", // the theme palettes and the pack theme overlay the web app uses too
+  "expo-clipboard", // copy the device sign-in code
+  "expo-network", // offline state of the start screen
+  "react-native-reanimated", // the start screen's loading skeleton
+  "react-native-safe-area-context", // insets of the start screen
 ]);
 
 /** @param {string} message @returns {never} */
