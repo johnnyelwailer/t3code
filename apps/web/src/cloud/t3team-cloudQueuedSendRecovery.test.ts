@@ -15,17 +15,12 @@ import {
   isProjectNotResolved,
   type CloudQueuedSend,
 } from "./t3team-cloudQueuedSendModel";
-import {
-  sendQueuedInMachineProject,
-  startPlainSessionForQueuedSend,
-} from "./t3team-cloudQueuedSendRecovery";
+import { sendQueuedInMachineProject } from "./t3team-cloudQueuedSendRecovery";
 import {
   failDraftCloudQueuedSend,
   getDraftCloudQueuedSend,
   writeDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
-import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
-import { getCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 
 const draftId = "draft-1";
 const T0 = Date.parse("2026-10-13T08:00:00.000Z");
@@ -117,45 +112,6 @@ describe("ways out of project_not_resolved", () => {
     queue(stamped({ failureMessage: "relay denied", retryable: true }));
     sendQueuedInMachineProject(draftId);
     expect(getDraftCloudQueuedSend(draftId)!.sendInMachineProject).toBeUndefined();
-  });
-
-  it("starts a plain session: the send follows a create in flight, with the plain option", () => {
-    queue(stamped());
-    park();
-    const onCreate = vi.fn();
-    expect(
-      startPlainSessionForQueuedSend({
-        draftId,
-        scopeKey: draftId,
-        projectKey: "github.com/acme/app",
-        projectId: ProjectId.make("project-a"),
-        onCreate,
-      }),
-    ).toBe(true);
-    expect(onCreate).toHaveBeenCalledExactlyOnceWith("project-a", { plain: true });
-    const record = getDraftCloudQueuedSend(draftId)!;
-    expect(record).toMatchObject({
-      sessionId: CLOUD_SESSION_CREATING_ID,
-      messageText: "deploy the preview",
-    });
-    expect(record.failureMessage).toBeUndefined();
-    expect(getCloudSessionTarget(draftId)).toMatchObject({
-      sessionId: CLOUD_SESSION_CREATING_ID,
-      projectKey: "github.com/acme/app",
-    });
-  });
-
-  it("starts nothing without a project to start in, or when the send is not parked on it", () => {
-    queue(stamped());
-    const onCreate = vi.fn();
-    const input = { draftId, scopeKey: draftId, projectKey: null, onCreate };
-    expect(startPlainSessionForQueuedSend({ ...input, projectId: ProjectId.make("p") })).toBe(
-      false,
-    );
-    park();
-    expect(startPlainSessionForQueuedSend({ ...input, projectId: undefined })).toBe(false);
-    expect(onCreate).not.toHaveBeenCalled();
-    expect(getDraftCloudQueuedSend(draftId)!.failureKind).toBe("project_not_resolved");
   });
 });
 

@@ -1,4 +1,5 @@
 import type { ProjectId } from "@t3tools/contracts";
+import type { CloudSessionCreateOptions } from "./t3team-useCloudSessionCreate";
 import { isProjectNotResolved, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   sendQueuedInMachineProject,
@@ -22,9 +23,11 @@ export function cloudProjectNotResolvedActions(input: {
   readonly projectKey: string | null;
   /** The draft's project when it is on the primary environment, else undefined. */
   readonly projectId: ProjectId | undefined;
-  readonly onCreate: (projectId?: ProjectId, options?: { readonly plain?: boolean }) => void;
+  /** Another create is running: the plain session cannot be started now. */
+  readonly createPending: boolean;
+  readonly onCreate: (projectId?: ProjectId, options?: CloudSessionCreateOptions) => boolean;
 }): ReadonlyArray<CloudQueuedSendRecoveryAction> {
-  const { draftId, queued, scopeKey, projectKey, projectId, onCreate } = input;
+  const { draftId, queued, scopeKey, projectKey, projectId, createPending, onCreate } = input;
   if (draftId === null || queued === null || !isProjectNotResolved(queued)) return [];
   const actions: CloudQueuedSendRecoveryAction[] = [
     {
@@ -33,7 +36,7 @@ export function cloudProjectNotResolvedActions(input: {
       onClick: () => sendQueuedInMachineProject(draftId),
     },
   ];
-  if (projectId !== undefined && scopeKey !== null) {
+  if (projectId !== undefined && scopeKey !== null && !createPending) {
     actions.push({
       id: "plain-session",
       label: "Start a plain session",
@@ -43,6 +46,7 @@ export function cloudProjectNotResolvedActions(input: {
           scopeKey,
           projectKey,
           projectId,
+          createPending,
           onCreate,
         }),
     });

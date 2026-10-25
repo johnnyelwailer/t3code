@@ -125,6 +125,7 @@ export function useCloudSessionComposerGate(input: {
       input.projectRef !== null && input.projectRef.environmentId === cloud.primaryEnvironmentId
         ? input.projectRef.projectId
         : undefined,
+    createPending: cloud.createPending,
     onCreate: cloud.onCreate,
   });
   const projectWaitNow = useCloudQueuedSendProjectWaitNow(stepFacts);
@@ -172,6 +173,7 @@ export function useCloudSessionComposerGate(input: {
       sessions: cloud.sessions,
       loading: cloud.loading,
       onCreate: cloud.onCreate,
+      createPending: cloud.createPending,
       primaryEnvironmentId: cloud.primaryEnvironmentId,
     },
     card:
