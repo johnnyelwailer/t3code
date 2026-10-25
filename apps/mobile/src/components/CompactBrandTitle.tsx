@@ -10,23 +10,40 @@ import { IPAD_HOME_TITLE_OFFSET } from "../lib/layoutMetrics";
 import { resolveMobileStageLabel } from "../lib/mobileBranding";
 import { useAndroidControlSizing } from "./ui/useAndroidControlSizing";
 import { mobileExtensions } from "../extensions/t3team-extensions";
+import { ExtensionBoundary } from "../extensions/t3team-ExtensionBoundary";
 
 export function brandTitleOffset(): number {
   if (Platform.OS !== "ios") return 0;
   return Platform.isPad && !NATIVE_WORKSPACE_COLUMNS_SUPPORTED ? IPAD_HOME_TITLE_OFFSET : 0;
 }
 
-export function CompactBrandTitle(
-  props: {
-    readonly allowFontScaling?: boolean;
-    readonly accessibilityLabel?: string;
-    /**
-     * Fills the parent row and drops the stage badge when the full title does not fit.
-     * Narrow Android sidebar headers otherwise draw their actions over the badge.
-     */
-    readonly fit?: boolean;
-  } = {},
-) {
+interface CompactBrandTitleProps {
+  readonly allowFontScaling?: boolean;
+  readonly accessibilityLabel?: string;
+  /**
+   * Fills the parent row and drops the stage badge when the full title does not fit.
+   * Narrow Android sidebar headers otherwise draw their actions over the badge.
+   */
+  readonly fit?: boolean;
+}
+
+/** The distribution's title when it has one (a failing one falls back to the stock title). */
+export function CompactBrandTitle(props: CompactBrandTitleProps = {}) {
+  const BrandTitle = mobileExtensions.brandTitle;
+  const { scale } = useAndroidControlSizing();
+  if (!BrandTitle) return <StockCompactBrandTitle {...props} />;
+  return (
+    <ExtensionBoundary fallback={<StockCompactBrandTitle {...props} />}>
+      <BrandTitle
+        scale={scale}
+        accessibilityLabel={props.accessibilityLabel}
+        allowFontScaling={props.allowFontScaling}
+      />
+    </ExtensionBoundary>
+  );
+}
+
+function StockCompactBrandTitle(props: CompactBrandTitleProps) {
   const stageLabel = resolveMobileStageLabel(Constants.expoConfig?.extra?.appVariant);
   const titleOffset = brandTitleOffset();
   const { scale } = useAndroidControlSizing();
@@ -35,16 +52,6 @@ export function CompactBrandTitle(
   const [fullWidth, setFullWidth] = useState<number | null>(null);
   const showStage =
     !props.fit || availableWidth === null || fullWidth === null || fullWidth <= availableWidth;
-  const BrandTitle = mobileExtensions.brandTitle;
-  if (BrandTitle) {
-    return (
-      <BrandTitle
-        scale={scale}
-        accessibilityLabel={props.accessibilityLabel}
-        allowFontScaling={props.allowFontScaling}
-      />
-    );
-  }
 
   const title = (
     <View

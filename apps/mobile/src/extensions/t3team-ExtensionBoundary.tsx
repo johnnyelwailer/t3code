@@ -6,7 +6,12 @@ import { Component, type ReactNode } from "react";
  * its stock content.
  */
 export class ExtensionBoundary extends Component<
-  { readonly children: ReactNode; readonly onFailure?: () => void },
+  {
+    readonly children: ReactNode;
+    readonly onFailure?: () => void;
+    /** Rendered instead of the slot when it failed (default: nothing), e.g. the stock content. */
+    readonly fallback?: ReactNode;
+  },
   { readonly failed: boolean }
 > {
   override state = { failed: false };
@@ -21,6 +26,6 @@ export class ExtensionBoundary extends Component<
   }
 
   override render() {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? (this.props.fallback ?? null) : this.props.children;
   }
 }
