@@ -29,7 +29,7 @@ const compareSources = (a: Source, b: Source) =>
   a.machine.devcontainerPath.localeCompare(b.machine.devcontainerPath);
 
 /** What the user is told when linked repositories define machines the project does not use. */
-export const linkedMachinesNotice = (repositories: ReadonlyArray<string>) =>
+const linkedMachinesNotice = (repositories: ReadonlyArray<string>) =>
   `Linked ${repositories.length === 1 ? "repository" : "repositories"} ${repositories.join(", ")} ` +
   `${repositories.length === 1 ? "defines a machine" : "define machines"} that this project does not use: ` +
   `a project's machine comes from its own repository, so its cloud sessions start plain.`;
