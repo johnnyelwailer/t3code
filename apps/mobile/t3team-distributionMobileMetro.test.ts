@@ -113,6 +113,7 @@ describe("reading the declared overlay", () => {
       entryPath: NodePath.join(packDir, "mobile", "index.tsx"),
       nativeModulesDir: null,
       assetsDir: null,
+      packages: [],
     });
   });
 
@@ -128,6 +129,96 @@ describe("reading the declared overlay", () => {
         /distribution-mobile/,
       );
     }
+  });
+});
+
+describe("packages the overlay declares outside its pack", () => {
+  /** A shared source package next to the pack, as nx-nexi's shared/packages/cloud-dispatch is. */
+  const declarePackage = (main = "src/index.ts") => {
+    const dir = NodePath.join(root, "distro", "shared", "dispatch");
+    write(NodePath.join(dir, "package.json"), JSON.stringify({ name: "@nexi/dispatch", main }));
+    write(NodePath.join(dir, "src", "index.ts"), "export const x = 1;");
+    write(NodePath.join(dir, "test", "x.test.ts"), "x");
+    write(
+      NodePath.join(packDir, "mobile.json"),
+      JSON.stringify({
+        overlay: {
+          entry: "mobile/index.tsx",
+          packages: { "@nexi/dispatch": "../shared/dispatch" },
+        },
+      }),
+    );
+    return dir;
+  };
+
+  it("resolves only the declared name, to the package's main file", () => {
+    const dir = declarePackage();
+    const { resolve } = resolveWith(selected());
+    expect(resolve(NodePath.join(packDir, "mobile", "index.tsx"), "@nexi/dispatch")).toEqual({
+      type: "sourceFile",
+      filePath: NodePath.join(real(dir), "src", "index.ts"),
+    });
+    expect(() =>
+      resolve(NodePath.join(packDir, "mobile", "index.tsx"), "@nexi/dispatch/src/x"),
+    ).toThrow(/not on the overlay's list/);
+    expect(() => resolve(NodePath.join(packDir, "mobile", "index.tsx"), "@nexi/other")).toThrow(
+      /not on the overlay's list/,
+    );
+  });
+
+  it("holds the package's own files to the overlay's rules", () => {
+    const dir = declarePackage();
+    const { resolve } = resolveWith(selected());
+    const origin = NodePath.join(dir, "src", "index.ts");
+    expect(() => resolve(origin, "left-pad")).toThrow(/not on the overlay's list/);
+    const config = baseConfig();
+    config.resolver = {
+      resolveRequest: () => ({ type: "sourceFile", filePath: NodePath.join(root, "elsewhere.ts") }),
+    } as never;
+    const wrapped = hook.withDistributionMobile(config, { appRoot, env: selected() });
+    expect(() =>
+      wrapped.resolver.resolveRequest(
+        { originModulePath: origin },
+        "../../../elsewhere",
+        "android",
+      ),
+    ).toThrow(/outside the overlay's directories/);
+  });
+
+  it("tracks the package's source directory (not its tests) and watches the package", () => {
+    const dir = declarePackage();
+    const hookRequire = NodeModule.createRequire(import.meta.url);
+    const { trackedRoots } = hookRequire("./t3team-distributionMobileSelection.cjs") as {
+      trackedRoots: (selection: unknown) => string[];
+    };
+    const selection = hook.readDistributionMobile({ appRoot, env: selected() });
+    expect(trackedRoots(selection)).toContain(NodePath.join(real(dir), "src"));
+    expect(trackedRoots(selection)).not.toContain(real(dir));
+    const wrapped = hook.withDistributionMobile(baseConfig(), { appRoot, env: selected() });
+    expect(wrapped.watchFolders).toContain(real(dir));
+  });
+
+  it("fails the build for a package that is not what mobile.json says it is", () => {
+    for (const bad of [
+      { "@nexi/dispatch": "../missing" },
+      { react: "../shared/dispatch" },
+      { "@t3code/mobile-api": "../shared/dispatch" },
+      { "@nexi/renamed": "../shared/dispatch" },
+      "x",
+    ]) {
+      declarePackage();
+      write(
+        NodePath.join(packDir, "mobile.json"),
+        JSON.stringify({ overlay: { entry: "mobile/index.tsx", packages: bad } }),
+      );
+      expect(() => hook.readDistributionMobile({ appRoot, env: selected() })).toThrow(
+        /distribution-mobile/,
+      );
+    }
+    declarePackage("../../outside.ts");
+    expect(() => hook.readDistributionMobile({ appRoot, env: selected() })).toThrow(
+      /inside the package/,
+    );
   });
 });
 

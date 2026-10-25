@@ -5,6 +5,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+const {
+  overlayPackageFor,
+  overlayRoots,
+  readOverlayPackages,
+  trackedRoots,
+} = require("./t3team-distributionMobilePackages.cjs");
+
 const SPECIFIER = "@t3code/distribution-mobile";
 const API_SPECIFIER = "@t3code/mobile-api";
 /**
@@ -74,12 +81,12 @@ const packageName = (source) => {
  * error: an overlay that silently drops out of the build reads as "declared, so it must work".
  *
  * @param {{ env?: Record<string, string | undefined>, appRoot: string }} input
- * @returns {{ packDir: string, entryPath: string, nativeModulesDir: string | null, assetsDir: string | null } | null}
+ * @returns {{ packDir: string, entryPath: string, nativeModulesDir: string | null, assetsDir: string | null, packages: import("./t3team-distributionMobilePackages.cjs").OverlayPackage[] } | null}
  */
 function readDistributionMobile({ env = process.env, appRoot }) {
   void appRoot;
   const dir = env.T3CODE_DISTRIBUTION?.trim();
-  // Only an unset variable means "stock". A set one that names nothing usable is a mistake that
+  // Only an unset or blank variable means "stock". A set one that names nothing usable is a mistake that
   // must not quietly produce a stock app (web fails the same way: readJson(distribution.json)).
   if (!dir) return null;
   const packDir = canonical(dir);
@@ -129,31 +136,15 @@ function readDistributionMobile({ env = process.env, appRoot }) {
     entryPath,
     nativeModulesDir: declaredDirectory("nativeModules"),
     assetsDir: declaredDirectory("assets"),
+    packages: readOverlayPackages(
+      /** @type {Record<string, unknown>} */ (mobile.overlay).packages,
+      {
+        packDir,
+        reserved: new Set([...OVERLAY_PACKAGES, API_SPECIFIER]),
+        fail,
+      },
+    ),
   };
-}
-
-/**
- * The directories with the overlay's code: its entry's directory and its native modules. Tailwind
- * scans these for class names.
- *
- * @param {{ entryPath: string, nativeModulesDir: string | null }} selection
- */
-function overlayRoots(selection) {
-  return [
-    path.dirname(selection.entryPath),
-    ...(selection.nativeModulesDir ? [selection.nativeModulesDir] : []),
-  ];
-}
-
-/**
- * Every directory the overlay may import from: its code, its native modules and its assets. Relative
- * imports and assets must resolve inside them, so the runtime version, the Gradle bundle task
- * inputs and Tailwind's scan cover everything that can reach a bundle.
- *
- * @param {{ entryPath: string, nativeModulesDir: string | null, assetsDir: string | null }} selection
- */
-function trackedRoots(selection) {
-  return [...overlayRoots(selection), ...(selection.assetsDir ? [selection.assetsDir] : [])];
 }
 
 /**
@@ -207,6 +198,7 @@ module.exports = {
   importProblem,
   isBare,
   isInside,
+  overlayPackageFor,
   overlayRoots,
   readDistributionMobile,
   trackedRoots,
