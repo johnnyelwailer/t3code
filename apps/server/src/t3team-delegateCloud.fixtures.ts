@@ -26,7 +26,7 @@ import {
 } from "./t3team-cloudChildPlacementMarkers.ts";
 import { makeRemoteEnvironmentPlacements } from "./t3team-remoteEnvironmentPlacements.ts";
 
-export const PROJECT_ID = ProjectId.make("project:qa");
+const PROJECT_ID =ProjectId.make("project:qa");
 export const REPOSITORY_KEY = "nexplore.ghe.com/pj/nexi-machine-qa";
 export const MODEL = { instanceId: ProviderInstanceId.make("nexplore"), model: "Standard" };
 
