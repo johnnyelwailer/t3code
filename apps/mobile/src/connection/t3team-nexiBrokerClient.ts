@@ -59,6 +59,8 @@ export function createMobileBrokerClient(deps: {
       });
     }
   };
+  /** The signed-in account's token, with sign-in failures classified for the connection supervisor. */
+  const acquireToken = (fresh = false) => issueToken(fresh);
   const send = async (path: string, method: string, token: string) => {
     try {
       return await deps.fetch(`${deps.brokerUrl}${path}`, {
@@ -91,6 +93,11 @@ export function createMobileBrokerClient(deps: {
   const attach = async (sessionId: string) => {
     await checkEnabled();
     if (!/^[\w-]{1,128}$/.test(sessionId)) throw new Error("Invalid broker session.");
+    // A saved connection reattaches without any broker request. Without this check an expired or
+    // revoked sign-in only surfaces when the native tunnel finds no token and closes the socket, which
+    // the supervisor retries as a network failure instead of asking the user to sign in. The token is
+    // not passed on: the tunnel still asks for a fresh one per stream.
+    await acquireToken();
     const stream = new URL("/v1/client/stream", deps.brokerUrl);
     stream.protocol = "wss:";
     stream.searchParams.set("session", sessionId);

@@ -42,6 +42,14 @@ export function classifyBrokerFailure(
   sessionId: string | null,
 ) {
   const detail = (fallback: string) => text ?? fallback;
+  // The host refused a token older than ten minutes and the broker relays that as a 5xx. An account
+  // that cannot issue a newer token never will until the user signs in again: not an outage.
+  if (text !== null && /fresh owner token required/i.test(text))
+    return new ConnectionBlockedError({
+      reason: "authentication",
+      detail: "Sign in again to pair this desktop.",
+      httpStatus: status,
+    });
   if (status === 401 || status === 403)
     return new ConnectionBlockedError({
       reason: "authentication",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import {
   BrokerConnectionRegistration,
@@ -12,6 +12,7 @@ import { mobileBroker } from "../../connection/t3team-nexiBroker";
 import { mobileBrokerEnabled, type NexiHost } from "../../connection/t3team-nexiBrokerClient";
 import { closeNexiTunnels } from "../../connection/t3team-nexiNative";
 import { nexiAccount } from "./t3team-nexiAccount";
+import { createNexiOperationRunner } from "./t3team-nexiOperation";
 import type { NexiDeviceCode } from "./t3team-nexiOAuth";
 
 export function useNexiHosts() {
@@ -20,44 +21,21 @@ export function useNexiHosts() {
   const [code, setCode] = useState<NexiDeviceCode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const operation = useRef<AbortController | null>(null);
+  const [operations] = useState(() =>
+    createNexiOperationRunner({ setBusy, setError, clearCode: () => setCode(null) }),
+  );
   const navigation = useNavigation();
   const register = useAtomCommand(environmentCatalog.register, { reportFailure: false });
-  const cancel = () => {
-    operation.current?.abort();
-    setCode(null);
-    setBusy(false);
-  };
-  useEffect(
-    () => () => {
-      operation.current?.abort();
-    },
-    [],
-  );
+  const cancel = operations.cancel;
+  useEffect(() => operations.abort, [operations]);
   useEffect(() => {
     if (!enabled) {
-      operation.current?.abort();
+      // Reset as well as abort: an aborted operation never clears its own busy state.
+      operations.cancel();
       closeNexiTunnels();
     }
-  }, [enabled]);
-  const run = (action: (signal: AbortSignal) => Promise<void>) => {
-    operation.current?.abort();
-    const controller = new AbortController();
-    operation.current = controller;
-    setBusy(true);
-    setError(null);
-    void action(controller.signal)
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted)
-          setError(cause instanceof Error ? cause.message : "Could not connect to Nexplore.");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setBusy(false);
-          setCode(null);
-        }
-      });
-  };
+  }, [enabled, operations]);
+  const run = operations.run;
   const refresh = async (signal: AbortSignal) => {
     const mine = await mobileBroker.hosts();
     if (!signal.aborted) setHosts(mine);
