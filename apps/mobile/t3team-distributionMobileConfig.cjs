@@ -17,7 +17,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const {
-  overlayRoots,
+  trackedRoots,
   readDistributionMobile,
 } = require("./t3team-distributionMobileSelection.cjs");
 
@@ -35,7 +35,7 @@ function filesUnder(root) {
 /** A hash of the overlay's files (paths and contents, in a fixed order). */
 function overlayContentHash(selection) {
   const hash = crypto.createHash("sha256");
-  for (const root of overlayRoots(selection)) {
+  for (const root of trackedRoots(selection)) {
     for (const file of filesUnder(root).sort()) {
       hash.update(path.relative(selection.packDir, file)).update("\0");
       hash.update(fs.readFileSync(file)).update("\0");
@@ -58,7 +58,7 @@ function applyDistributionMobile(config, env = process.env) {
     updates: { ...config.updates, enabled: false },
     plugins: [
       ...(config.plugins ?? []),
-      [GRADLE_PLUGIN, { distribution: selection.packDir, roots: overlayRoots(selection) }],
+      [GRADLE_PLUGIN, { distribution: selection.packDir, roots: trackedRoots(selection) }],
     ],
   };
 }
