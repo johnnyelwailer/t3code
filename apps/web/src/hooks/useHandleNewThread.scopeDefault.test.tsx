@@ -36,6 +36,9 @@ vi.mock("../state/environments", () => ({
   useEnvironments: () => ({ environments: harness.environments }),
   usePrimaryEnvironmentId: () => "env-local",
 }));
+vi.mock("../state/presentation", () => ({
+  environmentSummaries: { connectedEnvironmentIdsAtom: "connected-environment-ids" },
+}));
 vi.mock("../state/server", () => ({ environmentServerConfigsAtom: {} }));
 vi.mock("../uiStateStore", () => ({
   legacyProjectCwdPreferenceKey: (root: string) => root,
