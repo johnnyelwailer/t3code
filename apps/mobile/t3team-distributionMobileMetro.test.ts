@@ -112,6 +112,7 @@ describe("reading the declared overlay", () => {
       packDir,
       entryPath: NodePath.join(packDir, "mobile", "index.tsx"),
       nativeModulesDir: null,
+      assetsDir: null,
     });
   });
 
@@ -207,7 +208,50 @@ describe("resolution of overlay files", () => {
         "../../../outside.png",
         "android",
       ),
-    ).toThrow(/outside the pack/);
+    ).toThrow(/outside the overlay's directories/);
+  });
+
+  it("fails the build for a relative import into a pack directory the overlay does not declare", () => {
+    // The overlay's code, native modules and assets are tracked (runtime version, Gradle inputs):
+    // a sibling directory of the pack is not, so a change there could ship a stale bundle.
+    const config = baseConfig();
+    config.resolver = {
+      resolveRequest: () => ({
+        type: "sourceFile",
+        filePath: NodePath.join(packDir, "web", "x.ts"),
+      }),
+    } as never;
+    const wrapped = hook.withDistributionMobile(config, { appRoot, env: selected() });
+    expect(() =>
+      wrapped.resolver.resolveRequest(
+        { originModulePath: NodePath.join(packDir, "mobile", "index.tsx") },
+        "../web/x",
+        "android",
+      ),
+    ).toThrow(/outside the overlay's directories/);
+  });
+
+  it("lets an overlay import from its declared assets directory", () => {
+    write(
+      NodePath.join(packDir, "mobile.json"),
+      JSON.stringify({ overlay: { entry: "mobile/index.tsx", assets: "assets" } }),
+    );
+    write(NodePath.join(packDir, "assets", "font.ttf"), "x");
+    const config = baseConfig();
+    config.resolver = {
+      resolveRequest: () => ({
+        type: "assetFiles",
+        filePaths: [NodePath.join(packDir, "assets", "font.ttf")],
+      }),
+    } as never;
+    const wrapped = hook.withDistributionMobile(config, { appRoot, env: selected() });
+    expect(
+      wrapped.resolver.resolveRequest(
+        { originModulePath: NodePath.join(packDir, "mobile", "index.tsx") },
+        "../assets/font.ttf",
+        "android",
+      ),
+    ).toMatchObject({ type: "assetFiles" });
   });
 
   it("fails the build for a relative import that leaves the pack", () => {
@@ -222,7 +266,7 @@ describe("resolution of overlay files", () => {
         "../../../outside",
         "android",
       ),
-    ).toThrow(/outside the pack/);
+    ).toThrow(/outside the overlay's directories/);
   });
 
   it("lets the app's own files resolve normally", () => {

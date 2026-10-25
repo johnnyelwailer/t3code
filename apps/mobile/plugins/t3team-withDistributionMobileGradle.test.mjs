@@ -20,12 +20,24 @@ describe("the bundle task inputs", () => {
     expect(plugin.bundleInputsSnippet(options)).toContain("excludes: ['**/build/**'");
   });
 
+  it("replaces the block of an earlier distribution on every prebuild", () => {
+    const first = "android {}\n" + plugin.bundleInputsSnippet(options) + "dependencies {}\n";
+    const regenerated =
+      plugin.withoutBlock(first) +
+      plugin.bundleInputsSnippet({ distribution: "/other/pack", roots: ["/other/pack/mobile"] });
+    expect(regenerated.split(plugin.MARKER + "\n")).toHaveLength(2);
+    expect(regenerated).toContain("/other/pack/mobile");
+    expect(regenerated).not.toContain("/d/pack/mobile");
+    expect(regenerated).toContain("android {}");
+    expect(regenerated).toContain("dependencies {}");
+  });
+
   it("is appended to app/build.gradle once", async () => {
     const { withAppBuildGradle } = require("expo/config-plugins");
     expect(typeof withAppBuildGradle).toBe("function");
     // Applying the plugin twice must not duplicate the snippet: the marker guards it.
     const contents = "android {}\n";
     const once = contents + plugin.bundleInputsSnippet(options);
-    expect(once.split(plugin.MARKER)).toHaveLength(2);
+    expect(once.split(plugin.MARKER + "\n")).toHaveLength(2);
   });
 });
