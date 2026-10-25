@@ -19,9 +19,7 @@ export async function captureDeviceScreenshot(target: DeviceStreamTarget, signal
   );
   const response = await fetch(url, {
     method: "POST",
-    // Never "omit": React Native then bypasses the cookie jar that carries the Android broker
-    // loopback credential. Same-origin is what the stream requests already use (stream.ts).
-    credentials: target.access.credentials ? "include" : "same-origin",
+    credentials: target.access.credentials ? "include" : "omit",
     signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
   });
   if (!response.ok) throw new DeviceScreenshotError(response.status);

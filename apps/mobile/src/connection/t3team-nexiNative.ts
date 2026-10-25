@@ -1,4 +1,5 @@
 import { requireOptionalNativeModule, NativeModule } from "expo";
+import { clearLoopbackPorts } from "./t3team-nexiLoopbackFetch";
 import { nexiAccount } from "../features/connection/t3team-nexiAccount";
 
 declare class BrokerNative extends NativeModule<{
@@ -30,5 +31,6 @@ export function nexiNative() {
   return native;
 }
 export function closeNexiTunnels() {
+  clearLoopbackPorts();
   native?.closeAll();
 }

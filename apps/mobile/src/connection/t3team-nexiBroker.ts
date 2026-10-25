@@ -9,6 +9,7 @@ import { nexiAccount } from "../features/connection/t3team-nexiAccount";
 import { createMobileBrokerClient, mobileBrokerEnabled } from "./t3team-nexiBrokerClient";
 import { createBrokerFlagWatcher } from "./t3team-nexiBrokerFlag";
 import { nexiNative, closeNexiTunnels } from "./t3team-nexiNative";
+import { installLoopbackCookieFetch, registerLoopbackPort } from "./t3team-nexiLoopbackFetch";
 import { wakeNexiBrokerConnections } from "./t3team-nexiWakeups";
 
 const config = resolveNexiConfig();
@@ -37,7 +38,12 @@ export const mobileBroker = createMobileBrokerClient({
     if (!nexiAccount) throw new Error("Nexplore account is not configured.");
     return nexiAccount.accessToken(options);
   },
-  start: (session, stream) => nexiNative().start(session, stream),
+  start: async (session, stream) => {
+    const port = await nexiNative().start(session, stream);
+    registerLoopbackPort(port);
+    installLoopbackCookieFetch();
+    return port;
+  },
   fetch: (...args) => fetch(...args),
 });
 

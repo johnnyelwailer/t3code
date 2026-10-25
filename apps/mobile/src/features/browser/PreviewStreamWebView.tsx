@@ -85,9 +85,7 @@ async function sendFilesToPage(chooser: PreviewStreamFileChooser, pick: boolean)
   const response = await fetch(chooser.uploadUrl, {
     method: "POST",
     body,
-    // Never "omit": React Native then bypasses the cookie jar that carries the Android broker
-    // loopback credential (see t3team-NexiLoopbackAuth.kt).
-    credentials: chooser.credentials ? "include" : "same-origin",
+    credentials: chooser.credentials ? "include" : "omit",
   });
   if (!response.ok) throw new Error((await response.text()) || "The upload was refused.");
 }
