@@ -50,7 +50,8 @@ function cssEntryFile(original, { appRoot, env = process.env }) {
   if (selection === null) return original;
   const generated = generatedCss(appRoot);
   const css = [
-    `@import ${JSON.stringify(path.resolve(appRoot, original))};`,
+    // Relative: Uniwind follows only relative imports itself; see the test for the failure otherwise.
+    `@import ${JSON.stringify(relativeImport(generated, path.resolve(appRoot, original)))};`,
     `@source ${JSON.stringify(canonical(appRoot))};`,
     ...overlayRoots(selection).map((root) => `@source ${JSON.stringify(root)};`),
     "",
@@ -62,6 +63,12 @@ function cssEntryFile(original, { appRoot, env = process.env }) {
   // Uniwind joins the entry to process.cwd().
   return path.relative(process.cwd(), generated);
 }
+
+/** A relative import specifier, with forward slashes, from one file to another. */
+const relativeImport = (from, to) => {
+  const relative = path.relative(path.dirname(from), to).split(path.sep).join("/");
+  return relative.startsWith(".") ? relative : `./${relative}`;
+};
 
 /** @param {string} appRoot */
 const generatedCss = (appRoot) =>
