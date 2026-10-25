@@ -11,6 +11,12 @@ import {
   presentCloudSession,
 } from "~/components/cloud/t3team-cloudSessionProvisionPresentation";
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
+import type { CloudProjectWait } from "./t3team-cloudProjectWait";
+import {
+  type CloudProjectWaitNotice,
+  cloudProjectWaitDetail,
+} from "./t3team-cloudProjectWaitPresentation";
+import { presentCloudProjectWaitAt } from "./t3team-cloudProjectWaitClock";
 import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 
 const CLOUD_QUEUED_SEND_STEP_IDS = [
@@ -37,6 +43,8 @@ export interface CloudQueuedSendStepFacts {
   readonly session: CloudSession | null;
   readonly machineConnected: boolean;
   readonly projectReady: boolean;
+  /** What the project is waiting on while it is not ready; names the "Project ready" step. */
+  readonly projectWait?: CloudProjectWait | null | undefined;
   /** A flusher in this window is dispatching the message right now. */
   readonly flushing: boolean;
 }
@@ -60,6 +68,8 @@ export interface CloudQueuedSendProgressView {
   readonly failed: boolean;
   /** The composer banner's title for the current step. */
   readonly title: string;
+  /** What the "Project ready" step waits on, escalated by its elapsed time; null off that step. */
+  readonly projectWait: CloudProjectWaitNotice | null;
   /** 0–1 from the session's provisioning estimate; full once the machine is up. */
   readonly progress: number;
 }
@@ -89,7 +99,11 @@ export function resolveCloudQueuedSendStepId(facts: CloudSessionStepFacts): Clou
   return "sent";
 }
 
-function stepTitle(id: CloudQueuedSendStepId, machineDetail: string | null): string {
+function stepTitle(
+  id: CloudQueuedSendStepId,
+  machineDetail: string | null,
+  projectWait: CloudProjectWaitNotice | null,
+): string {
   switch (id) {
     case "queued":
       return "Queued for cloud session…";
@@ -100,10 +114,21 @@ function stepTitle(id: CloudQueuedSendStepId, machineDetail: string | null): str
     case "connect":
       return "Connecting to cloud session…";
     case "project":
-      return "Syncing project on cloud session…";
+      if (projectWait === null) return "Syncing project on cloud session…";
+      return projectWait.blocking ? projectWait.detail : `${projectWait.detail}…`;
     case "sent":
       return "Sending to cloud session…";
   }
+}
+
+/** What the "Project ready" step waits on while it is the current, live step; null otherwise. */
+export function currentCloudProjectWait(facts: CloudSessionStepFacts): CloudProjectWait | null {
+  const failed =
+    (facts.queued !== undefined && isCloudQueuedSendFailed(facts.queued)) ||
+    (facts.session !== null && isTerminalCloudSessionPhase(facts.session.phase));
+  return !failed && resolveCloudQueuedSendStepId(facts) === "project"
+    ? (facts.projectWait ?? null)
+    : null;
 }
 
 export function presentCloudQueuedSendProgress(
@@ -118,6 +143,7 @@ export function presentCloudQueuedSendProgress(
   const stamps = facts.queued?.stepStartedAt ?? {};
   const presentation = facts.session === null ? null : presentCloudSession(facts.session);
   const machineDetail = facts.session?.phase === "preparing" ? (presentation?.title ?? null) : null;
+  const projectWait = currentCloudProjectWait(facts);
   const steps = CLOUD_QUEUED_SEND_STEP_IDS.map((id, index): CloudQueuedSendStepView => {
     const startedAt = stamps[id] === undefined ? Number.NaN : Date.parse(stamps[id]);
     const nextStamp = CLOUD_QUEUED_SEND_STEP_IDS.slice(index + 1)
@@ -129,24 +155,33 @@ export function presentCloudQueuedSendProgress(
       label: STEP_LABELS[id],
       status:
         index < current ? "done" : index > current ? "pending" : failed ? "failed" : "running",
-      detail: id === "machine" && index === current ? machineDetail : null,
+      detail:
+        index !== current
+          ? null
+          : id === "machine"
+            ? machineDetail
+            : id === "project" && projectWait !== null
+              ? cloudProjectWaitDetail(projectWait)
+              : null,
       elapsedSeconds:
         index <= current && Number.isFinite(startedAt)
           ? Math.max(0, Math.floor((endedAt - startedAt) / 1000))
           : null,
     };
   });
+  const notice = presentCloudProjectWaitAt(projectWait, facts.queued, nowMs);
   const provisioning =
     facts.session !== null && isCloudSessionProvisionPending(facts.session.phase);
   return {
     steps,
     currentStepId,
     failed,
+    projectWait: notice,
     title: failed
       ? "Cloud session failed"
       : facts.session === null
         ? "Waiting for cloud session status…"
-        : stepTitle(currentStepId, machineDetail),
+        : stepTitle(currentStepId, machineDetail, notice),
     progress: provisioning
       ? (presentation?.progress ?? 0)
       : current >= CLOUD_QUEUED_SEND_STEP_IDS.indexOf("connect")

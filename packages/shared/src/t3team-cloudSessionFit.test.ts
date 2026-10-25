@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
-import { type CloudSession, ProjectId, type RepositoryIdentity } from "@t3tools/contracts";
+import {
+  type CloudSession,
+  plainProjectFolderName,
+  ProjectId,
+  type RepositoryIdentity,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
 import {
   CLOUD_SESSION_MIN_REMAINING_SECONDS,
   cloudSessionNameSegment,
+  cloudSessionProjectMismatchOf,
   isSameCloudSessionProject,
   ownProjectOnMachine,
   projectCwdOf,
@@ -171,5 +177,51 @@ describe("own project on the machine", () => {
         repositoryIdentity: identity("ghe/hive/other"),
       }),
     ).toBe(false);
+  });
+});
+
+describe("cloudSessionProjectMismatchOf", () => {
+  const withRemote = {
+    id: ProjectId.make("p1"),
+    title: "Nexi",
+    workspaceRoot: "/Users/pj/nx-nexi",
+    repositoryIdentity: identity("ghe/hive/nx-nexi"),
+  };
+  const plain = {
+    id: ProjectId.make("p2"),
+    title: "notes",
+    workspaceRoot: "/Users/pj/notes",
+    repositoryIdentity: null,
+  };
+  const cases = [
+    {
+      local: withRemote,
+      own: { workspaceRoot: "/w/a", repositoryIdentity: identity("ghe/hive/nx-nexi") },
+      kind: null,
+    },
+    { local: withRemote, own: { workspaceRoot: "/w/a" }, kind: null },
+    {
+      local: withRemote,
+      own: { workspaceRoot: "/w/a", repositoryIdentity: identity("ghe/hive/other") },
+      kind: "repository",
+    },
+    {
+      local: plain,
+      own: { workspaceRoot: "/w/a", repositoryIdentity: identity("ghe/hive/other") },
+      kind: "repository",
+    },
+    { local: plain, own: { workspaceRoot: "/w/a" }, kind: "folder" },
+    {
+      local: plain,
+      own: { workspaceRoot: `/w/${plainProjectFolderName(plain.title, plain.id)}` },
+      kind: null,
+    },
+  ] as const;
+
+  it("names why a machine project is not the session's, and agrees with isSameCloudSessionProject", () => {
+    for (const { local, own, kind } of cases) {
+      expect(cloudSessionProjectMismatchOf(local, own)).toBe(kind);
+      expect(isSameCloudSessionProject(local, own)).toBe(kind === null);
+    }
   });
 });

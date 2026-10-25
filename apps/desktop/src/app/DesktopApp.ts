@@ -39,6 +39,7 @@ import { configureDesktopVoiceLog } from "../voice/t3team-voiceRuntime.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { pinnedBackendPortFromDefine } from "./t3team-isolatedInstance.ts";
 
 const makeDesktopRunId = Crypto.Crypto.pipe(
   Effect.flatMap((crypto) => crypto.randomUUIDv4()),
@@ -65,11 +66,12 @@ export {
  * Console — always lands on a listening server instead of the port the scan happened to pick.
  * Dev builds and self-hosted builds leave this undefined and keep the sequential scan.
  */
-declare const __DESKTOP_PIN_BACKEND_PORT__: boolean | undefined;
-const PIN_DESKTOP_BACKEND_PORT =
+declare const __DESKTOP_PIN_BACKEND_PORT__: boolean | number | undefined;
+// t3team: the define is `true` (the default port) or a port number for an isolated instance.
+const PIN_DESKTOP_BACKEND_PORT: boolean | number =
   typeof __DESKTOP_PIN_BACKEND_PORT__ === "undefined"
     ? false
-    : __DESKTOP_PIN_BACKEND_PORT__ === true;
+    : (pinnedBackendPortFromDefine(__DESKTOP_PIN_BACKEND_PORT__) ?? false);
 
 const { logInfo: logBootstrapInfo, logWarning: logBootstrapWarning } =
   DesktopObservability.makeComponentLogger("desktop-bootstrap");
@@ -83,11 +85,13 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
 ): Effect.fn.Return<
   void,
   never,
+  | DesktopEnvironment.DesktopEnvironment
   | DesktopShutdown.DesktopShutdown
   | DesktopState.DesktopState
   | ElectronApp.ElectronApp
   | ElectronDialog.ElectronDialog
 > {
+  const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const shutdown = yield* DesktopShutdown.DesktopShutdown;
   const state = yield* DesktopState.DesktopState;
   const electronApp = yield* ElectronApp.ElectronApp;
@@ -103,7 +107,7 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
   const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
   if (!wasQuitting) {
     yield* electronDialog.showErrorBox(
-      "T3 Code failed to start",
+      `${environment.displayName} failed to start`,
       `Stage: ${stage}\n${message}${detail}`,
     );
   }

@@ -37,6 +37,7 @@
     "scripts/t3team-distributionWebPlugin.ts",
     "../../scripts/lib/public-config.ts",
     "../../scripts/lib/t3team-nexiMobileConfig.ts",
+    "../../scripts/lib/t3team-isolatedInstanceEnv.ts",
     "../../scripts/lib/third-party-licenses.ts"
   ]
 }
