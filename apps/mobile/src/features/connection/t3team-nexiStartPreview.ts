@@ -19,7 +19,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-function apply(url: string | null) {
+function apply(url: string | null | undefined) {
   const name = url ? new URL(url).searchParams.get("nexiPreview") : null;
   if (name === null) return;
   current = name || null;
