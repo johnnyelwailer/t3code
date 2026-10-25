@@ -5,6 +5,11 @@ import {
   ConnectionBlockedError,
   ConnectionTransientError,
 } from "@t3tools/client-runtime/connection";
+import {
+  brokerErrorText,
+  classifyBrokerFailure,
+  classifyBrokerNetworkFailure,
+} from "./t3team-nexiBrokerErrors";
 
 const Host = Schema.Struct({
   id: Schema.NonEmptyString,
@@ -55,21 +60,20 @@ export function createMobileBrokerClient(deps: {
         detail: "Nexplore sign-in could not be refreshed. Retrying when available.",
       });
     }
-    const response = await deps.fetch(`${deps.brokerUrl}${path}`, {
-      method,
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (response.status === 401 || response.status === 403)
-      throw new ConnectionBlockedError({
-        reason: "authentication",
-        detail: "The broker refused access. Sign in with the account that owns this host.",
+    let response: Response;
+    try {
+      response = await deps.fetch(`${deps.brokerUrl}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(30_000),
       });
-    if (!response.ok)
-      throw new ConnectionTransientError({
-        reason: "remote-unavailable",
-        detail: `The broker is unavailable (HTTP ${response.status}). Check host enrollment and broker host support.`,
-      });
+    } catch (error) {
+      throw classifyBrokerNetworkFailure(error);
+    }
+    if (!response.ok) {
+      const text = await brokerErrorText(response);
+      throw classifyBrokerFailure(response.status, text, path.startsWith("/v1/sessions/"));
+    }
     return response.json();
   };
   const attach = async (sessionId: string) => {
