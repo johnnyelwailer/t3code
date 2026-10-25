@@ -11,13 +11,13 @@ describe("the bundle task inputs", () => {
     const snippet = plugin.bundleInputsSnippet(options);
     expect(snippet).toContain("createBundle");
     expect(snippet).toContain(`task.inputs.property('t3codeDistribution', "/d/pack")`);
-    expect(snippet).toContain(`fileTree(dir: "/d/pack/mobile")`);
-    expect(snippet).toContain(`fileTree(dir: "/d/pack/native")`);
+    expect(snippet).toContain(`project.fileTree(dir: "/d/pack/mobile"`);
+    expect(snippet).toContain(`project.fileTree(dir: "/d/pack/native"`);
   });
 
   it("excludes build outputs: an overlay's native module builds inside the overlay directory", () => {
     // Gradle rejects an input that overlaps another task's output without a dependency.
-    expect(plugin.bundleInputsSnippet(options)).toContain("exclude '**/build/**'");
+    expect(plugin.bundleInputsSnippet(options)).toContain("excludes: ['**/build/**'");
   });
 
   it("is appended to app/build.gradle once", async () => {
