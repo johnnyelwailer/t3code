@@ -14,7 +14,7 @@ function bundleInputsSnippet({ distribution, roots }) {
   const trees = roots
     .map(
       (root, index) =>
-        `    task.inputs.files(fileTree(dir: ${JSON.stringify(root)}) { exclude '**/build/**', '**/node_modules/**', '**/.gradle/**', '**/.cxx/**' }).withPropertyName('t3codeOverlay${index}')`,
+        `    task.inputs.files(project.fileTree(dir: ${JSON.stringify(root)}, excludes: ['**/build/**', '**/node_modules/**', '**/.gradle/**', '**/.cxx/**'])).withPropertyName('t3codeOverlay${index}')`,
     )
     .join("\n");
   return [
