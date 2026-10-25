@@ -10,7 +10,9 @@ import { seamFor } from "./t3team-placement-registry.mjs";
 //             -> violation: run --write-placement-baseline so the reduction cannot be undone
 //   reference is the baseline at the merge-base with origin/main when readable, so a PR cannot
 //             raise the committed baseline to match its own growth; else the committed baseline.
-// An upstream sync only relaxes `modified` entries (conflict resolution can move added-line counts).
+// An upstream sync relaxes only the INCREASE rule for `modified` entries (a sync moves upstream's
+// lines under ours, so added-line counts shift): such growth is a warning, but the committed
+// baseline must then be regenerated in the same PR, so main never carries a stale baseline.
 
 const describeItem = (item) =>
   item.kind === "modified"
@@ -68,6 +70,12 @@ export function evaluatePlacement({
     const ref = referenceFor(item, reference, renames);
     const relax = isSync && item.kind === "modified";
     const sink = relax ? result.warnings : result.increases;
+    const committed = baseline.get(item.path);
+    if (relax && (!committed || item.loc > committed.loc)) {
+      result.lockIns.push(
+        `Baseline is out of date after the upstream sync: ${item.path} (${describeItem(item)}). Regenerate it: node t3team-additive-guard.mjs --write-placement-baseline`,
+      );
+    }
     if (!ref) {
       sink.push(
         `Nexi footprint grew in ${item.area}: ${item.path} (${describeItem(item)}) is not in the baseline and not inside a registered seam.`,
@@ -83,9 +91,8 @@ export function evaluatePlacement({
     if (!isRestrictedArea(entry.area)) continue;
     const current = result.tracked.get(path);
     if (current && current.loc >= entry.loc) continue;
-    const sink = isSync && entry.kind === "modified" ? result.warnings : result.lockIns;
     const now = current ? `${current.loc} lines` : seamFor(registry, path) ? "covered by a seam" : "gone";
-    sink.push(
+    result.lockIns.push(
       `Baseline is higher than reality: ${path} is listed at ${entry.loc} but is now ${now}. Lock the reduction in: node t3team-additive-guard.mjs --write-placement-baseline`,
     );
   }

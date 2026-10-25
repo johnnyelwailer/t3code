@@ -364,6 +364,9 @@ describe("placement ratchet evaluation", () => {
     expect(result.warnings.join()).toMatch(/ipc\.ts/);
     expect(result.increases).toHaveLength(1);
     expect(result.increases[0]).toMatch(/t3team-x\.ts/);
+    expect(result.lockIns[0]).toMatch(/out of date after the upstream sync/);
+    const regenerated = evaluate({ ...options, baseline: baselineOf(item(edited.path, 14, "modified")) });
+    expect(regenerated.lockIns).toEqual([]);
   });
 
   it("flags legacy footprint that a PR parks under a new seam", () => {
