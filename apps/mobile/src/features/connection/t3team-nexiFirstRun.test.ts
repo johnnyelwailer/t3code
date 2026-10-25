@@ -17,14 +17,15 @@ const nexi = {
 const firstRun = { isLoadingConnections: false, hasConnections: false };
 
 describe("Nexi first run", () => {
-  it("leads with Entra sign-in on a fresh Android Nexi Work install", () => {
+  it("leads with Entra sign-in on a fresh Nexi Work install (Android and iOS)", () => {
     expect(showsNexiWelcome(firstRun, "android", nexi)).toBe(true);
+    expect(showsNexiWelcome(firstRun, "ios", nexi)).toBe(true);
   });
 
-  it("keeps upstream's first run for stock builds, iOS, loading and paired devices", () => {
+  it("keeps upstream's first run for stock builds, loading and paired devices", () => {
     expect(showsNexiWelcome(firstRun, "android", {})).toBe(false);
     expect(showsNexiWelcome(firstRun, "android", { nexi: {} })).toBe(false);
-    expect(showsNexiWelcome(firstRun, "ios", nexi)).toBe(false);
+    expect(showsNexiWelcome(firstRun, "ios", {})).toBe(false);
     expect(showsNexiWelcome({ ...firstRun, isLoadingConnections: true }, "android", nexi)).toBe(
       false,
     );

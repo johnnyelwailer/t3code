@@ -63,7 +63,11 @@ function HostList(props: { readonly state: NexiHostsState }) {
 }
 
 /** Entra sign-in and the signed-in user's desktops; shared by first run and Add environment. */
-export function NexiSignInPanel(props: { readonly state: NexiHostsState }) {
+export function NexiSignInPanel(props: {
+  readonly state: NexiHostsState;
+  /** Defaults to the Microsoft-named label used on Add environment. */
+  readonly signInLabel?: string;
+}) {
   const { state } = props;
   if (!state.enabled) {
     return (
@@ -83,7 +87,7 @@ export function NexiSignInPanel(props: { readonly state: NexiHostsState }) {
           tone="primary"
           fullWidth
           icon="person.crop.circle"
-          label="Sign in with Microsoft"
+          label={props.signInLabel ?? "Sign in with Microsoft"}
           loading={state.busy}
           onPress={state.signIn}
         />
