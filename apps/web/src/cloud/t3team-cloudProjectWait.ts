@@ -8,10 +8,10 @@
  * elapsed time are in `t3team-cloudProjectWaitPresentation`. Pure.
  */
 import type { EnvironmentId } from "@t3tools/contracts";
-import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import {
   type CloudSessionLocalProject as ComposerProject,
   cloudSessionProjectMismatchOf as projectMismatchOf,
+  ownProjectOnMachine,
 } from "@t3tools/shared/t3team-cloudSessionFit";
 
 export type CloudProjectWaitReason =
@@ -70,10 +70,7 @@ export function classifyCloudProjectWait(input: CloudProjectWaitInput): CloudPro
   }
   if (input.projects.length === 0) return wait("project-list-pending");
   if (input.expectedCwd === null) return wait("no-matching-project");
-  const root = normalizeProjectPathForComparison(input.expectedCwd);
-  const own = input.projects.find(
-    (project) => normalizeProjectPathForComparison(project.workspaceRoot) === root,
-  );
+  const own = ownProjectOnMachine(input.expectedCwd, input.projects);
   if (own === undefined) return wait("project-not-listed");
   const mismatch = input.composer === null ? null : projectMismatchOf(input.composer, own);
   if (mismatch === null) return wait("no-matching-project", own.title);
