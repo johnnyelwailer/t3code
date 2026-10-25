@@ -77,6 +77,9 @@ export function useNexiHosts() {
         if (signal.aborted) return;
         setCode(next);
         await nexiAccount!.poll(next, signal);
+        // Signing in again replaces the account without a sign-out: streams opened as the previous
+        // account must not outlive it, exactly as on sign-out.
+        closeNexiTunnels();
         await refresh(signal);
       }),
     refresh: () => run(refresh),
