@@ -30,7 +30,6 @@ class NexiBrokerModule : Module() {
   private val workers = Executors.newFixedThreadPool(32)
   private val tunnels = NexiTunnelRegistry<Tunnel> { it.isClosed }
   private val tokens = ConcurrentHashMap<String, CompletableFuture<String>>()
-  private val revocations = CapabilityRevocations()
 
   override fun definition() = ModuleDefinition {
     Name("NexiBroker")
@@ -107,8 +106,7 @@ class NexiBrokerModule : Module() {
         tunnels.remove(session, this)
       },
       // Elapsed realtime keeps counting in deep sleep; the host's asset tokens expire by wall clock.
-      limits = LoopbackLimits(nanoTime = SystemClock::elapsedRealtimeNanos),
-      revocations = revocations
+      limits = LoopbackLimits(nanoTime = SystemClock::elapsedRealtimeNanos)
     )
     private val streams = ConcurrentHashMap<WebSocket, Boolean>()
     val isClosed get() = listener.isClosed

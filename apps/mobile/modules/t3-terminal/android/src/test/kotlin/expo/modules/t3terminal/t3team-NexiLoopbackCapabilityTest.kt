@@ -133,22 +133,121 @@ class NexiLoopbackCapabilityTest {
     }
   }
 
-  @Test fun aReplacedTunnelsUrlsAreNotAdmittedByItsSuccessor() {
-    val revocations = CapabilityRevocations()
-    fun tunnel() = Harness(limits, revocations = revocations).also { harnesses.add(it) }
-    val first = tunnel()
-    assertTrue(first.listener.allowTarget(target))
-    first.listener.close()
-    // Another app that bound the dead port captured the URL; replaying it on the new tunnel fails.
-    val second = tunnel()
-    assertFalse(second.listener.allowTarget(target))
-    assertTrue(second.isClosedByServer(second.send("GET", target)))
-    assertTrue(second.listener.allowTarget("/api/assets/fresh-token/f"))
-    second.send("GET", "/api/assets/fresh-token/f")
-    second.take()
-    // The revocation lapses with the URL's own lifetime.
-    now.addAndGet(limits.capabilityTtlMs * 1_000_000 + 1)
-    assertTrue(second.listener.allowTarget(target))
+  private fun tunnel(preferredPort: Int = 0) = Harness(limits, preferredPort = preferredPort).also {
+    harnesses.add(it)
+  }
+
+  private fun Harness.admits(path: String): Boolean {
+    val tcp = send("GET", path)
+    return if (admitted.poll(500, java.util.concurrent.TimeUnit.MILLISECONDS) != null) {
+      true
+    } else {
+      isClosedByServer(tcp) && false
+    }
+  }
+
+  @Test fun theSameUrlRegisteredAgainOnTheReplacementTunnelIsUsableThere() {
+    val a = tunnel()
+    assertTrue(a.listener.allowTarget(target))
+    a.listener.close()
+    // The app re-resolves the same relativeUrl (the host mints identical targets within a signing
+    // bucket) and registers it on the new tunnel: that must work.
+    val b = tunnel()
+    assertTrue(b.listener.allowTarget(target))
+    assertTrue(b.admits(target))
+  }
+
+  @Test fun aUrlRegisteredOnTheOldTunnelIsNotValidOnTheNewOneUntilTheAppRegistersIt() {
+    val a = tunnel()
+    a.listener.allowTarget(target)
+    a.listener.close()
+    val b = tunnel()
+    assertFalse(b.admits(target))
+    assertTrue(a.listener.isClosed)
+    assertFalse(a.listener.allowTarget(target))
+    b.listener.allowTarget(target)
+    assertTrue(b.admits(target))
+  }
+
+  @Test fun aTunnelThatReusesTheOldPortStillHasNoRegistrationsFromTheOldOne() {
+    val a = tunnel()
+    val port = a.listener.port
+    a.listener.allowTarget(target)
+    a.listener.close()
+    val c = tunnel(preferredPort = port)
+    assertEquals(port, c.listener.port)
+    // An app that bound the old port could replay what it captured: the new tunnel never saw it.
+    assertFalse(c.admits(target))
+    c.listener.allowTarget("/api/assets/other-token/f")
+    assertTrue(c.admits("/api/assets/other-token/f"))
+  }
+
+  @Test fun rapidReplacementKeepsOnlyTheLatestTunnelsRegistrations() {
+    val a = tunnel()
+    val b = tunnel()
+    val c = tunnel()
+    a.listener.allowTarget(target)
+    b.listener.allowTarget(target)
+    a.listener.close()
+    b.listener.close()
+    assertFalse(c.admits(target))
+    c.listener.allowTarget(target)
+    assertTrue(c.admits(target))
+    // Closing the old tunnels did not touch the live one's entries.
+    val d = tunnel()
+    d.listener.allowTarget(target)
+    a.listener.close()
+    assertTrue(d.admits(target))
+  }
+
+  @Test fun registeringTheSameUrlAgainRenewsItsLifetime() {
+    val ttl = limits.capabilityTtlMs * 1_000_000
+    val a = tunnel()
+    a.listener.allowTarget(target)
+    now.addAndGet(ttl * 2 / 3)
+    a.listener.allowTarget(target)
+    // 4/3 of a lifetime since the first registration, 2/3 since the renewal.
+    now.addAndGet(ttl * 2 / 3)
+    assertTrue(a.admits(target))
+  }
+
+  @Test fun closingOneTunnelDoesNotRevokeTheSameUrlOnAnotherLiveOne() {
+    val a = tunnel()
+    val b = tunnel()
+    a.listener.allowTarget(target)
+    b.listener.allowTarget(target)
+    a.listener.close()
+    assertTrue(b.admits(target))
+  }
+
+  @Test fun theRegistryReplacingADeadSessionTunnelStartsFromNoRegistrations() {
+    class Fake(val harness: Harness)
+    val registry = NexiTunnelRegistry<Fake> { it.harness.listener.isClosed }
+    val first = registry.acquire("h-1") { Fake(tunnel()) }
+    first.tunnel.harness.listener.allowTarget(target)
+    first.tunnel.harness.listener.close()
+    val second = registry.acquire("h-1") { Fake(tunnel()) }
+    assertTrue(second.fresh)
+    assertFalse(second.tunnel.harness.admits(target))
+    second.tunnel.harness.listener.allowTarget(target)
+    assertTrue(second.tunnel.harness.admits(target))
+  }
+
+  @Test fun expiryIsPerTunnelSoReplacementNeitherExtendsNorShortensAnEntry() {
+    val ttl = limits.capabilityTtlMs * 1_000_000
+    val a = tunnel()
+    a.listener.allowTarget(target)
+    now.addAndGet(ttl * 5 / 6)
+    val b = tunnel()
+    b.listener.allowTarget(target)
+    // Past A's lifetime, inside B's own fresh one.
+    now.addAndGet(ttl / 3)
+    assertTrue(b.admits(target))
+    now.addAndGet(ttl)
+    assertFalse(b.admits(target))
+    // A registration that raced replacement and expired is simply gone, and can be renewed.
+    assertTrue(b.listener.allowTarget(target))
+    assertTrue(b.admits(target))
   }
 
   @Test fun expiryFollowsTheInjectedElapsedClockNotWallTime() {

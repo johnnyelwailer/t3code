@@ -16,7 +16,7 @@ val PATIENT = LoopbackLimits(headTimeoutMs = 60_000, firstByteMs = 60_000)
 class Harness(
   limits: LoopbackLimits = PATIENT,
   val secret: String = NexiLoopbackAuth.newSecret(),
-  revocations: CapabilityRevocations = CapabilityRevocations()
+  preferredPort: Int = 0
 ) {
   val admitted = LinkedBlockingQueue<Pair<Socket, InputStream>>()
   val logs = CopyOnWriteArrayList<String>()
@@ -31,7 +31,7 @@ class Harness(
     },
     onClosed = { closedCount.incrementAndGet() },
     limits = limits,
-    revocations = revocations
+    preferredPort = preferredPort
   ).also { it.start() }
   private val sockets = CopyOnWriteArrayList<Socket>()
 

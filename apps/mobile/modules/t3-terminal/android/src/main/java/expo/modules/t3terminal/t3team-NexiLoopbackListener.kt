@@ -55,14 +55,15 @@ class NexiLoopbackListener(
   private val securityLog: (String) -> Unit,
   private val onClosed: () -> Unit = {},
   private val limits: LoopbackLimits = LoopbackLimits(),
-  revocations: CapabilityRevocations = CapabilityRevocations()
+  /** 0 lets the OS choose; tests ask for a specific port to model the OS reusing one. */
+  preferredPort: Int = 0
 ) {
-  private val server = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
+  private val server = ServerSocket(preferredPort, 16, InetAddress.getByName("127.0.0.1"))
   private val pending = ArrayDeque<Pending>()
   private val admitted = ConcurrentHashMap.newKeySet<Socket>()
   private val closed = AtomicBoolean(false)
   private val denied = AtomicInteger()
-  private val capabilities = CapabilityStore(limits, revocations)
+  private val capabilities = CapabilityStore(limits, NexiLoopbackAuth.newSecret().take(16))
   private val handshakes = Executors.newCachedThreadPool { task ->
     Thread(task, "nexi-broker-handshake").apply { isDaemon = true }
   }
@@ -84,8 +85,8 @@ class NexiLoopbackListener(
 
   /**
    * Registers a signed URL on this tunnel, bound to the methods its shape allows (assets read,
-   * the upload posts). False for any other URL or path shape, a closed listener, or a URL that a
-   * replaced tunnel held.
+   * the upload posts). False for any other URL or path shape, or a closed listener. A URL a closed
+   * tunnel held is not carried over: the app registers it again on the tunnel it uses.
    */
   fun allowUrl(url: String): Boolean =
     NexiCapabilityTargets.targetFor(url, port)?.let { allowTarget(it) } ?: false
@@ -93,7 +94,9 @@ class NexiLoopbackListener(
   fun allowTarget(rawTarget: String): Boolean {
     val target = NexiCapabilityTargets.normalize(rawTarget)
     val methods = target?.let { NexiCapabilityTargets.methodsFor(it) }
-    return target != null && methods != null && !closed.get() && capabilities.allow(methods, target)
+    val registrable = target != null && methods != null && !closed.get()
+    if (registrable) capabilities.allow(methods, target)
+    return registrable
   }
 
   fun release(tcp: Socket) {
@@ -113,7 +116,7 @@ class NexiLoopbackListener(
       admitted.forEach { quietly(it) }
       admitted.clear()
     }
-    capabilities.revokeAll()
+    capabilities.clear()
     handshakes.shutdownNow()
     onClosed()
   }
