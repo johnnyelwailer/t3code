@@ -124,6 +124,19 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 
 ## Allowed Modified Upstream Files
 
+### Upstream sync 2026-10-25
+
+- `apps/server/src/persistence/Migrations/069_ThreadMessageSearch.test.ts`
+  - Migrates to fork id 118 first: upstream 068/069 register at fork ids 118/119.
+- `packages/source-control-github/src/shared/definition.ts`, `definition.test.ts`, `packages/client-runtime/src/sourceControlClients.test.ts`
+  - The fork's GitHub Enterprise host recognition moved from the deleted `shared/changeRequestUrl.ts` into GitHub's own `recognizeRemote`.
+- `packages/source-control-github/src/server/driver.ts`
+  - `makeOverServerTransport`: the GitHub driver runs over the server's one shared GitHub transport, which the fork's `GitHubApi` readers also use.
+- `apps/web/src/components/settings/SourceControlAccountSettings.tsx`
+  - Upstream renamed `GitHubAccountSettings`; the fork's in-app GitHub sign-in stays, shown for GitHub hosts only.
+- `packages/client-runtime/src/connection/pullRequestRoutingPermissions.ts`
+  - Upstream moved the file; the fork's `BrokerConnectionTarget` route key comes along.
+
 ### Upstream sync 2026-10-22
 
 - `apps/server/src/cli/thread.ts`

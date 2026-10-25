@@ -1,5 +1,12 @@
 {
   "allowedModifiedFiles": [
+    "packages/source-control-github/src/shared/definition.ts",
+    "packages/source-control-github/src/shared/definition.test.ts",
+    "packages/source-control-github/src/server/driver.ts",
+    "packages/client-runtime/src/sourceControlClients.test.ts",
+    "packages/client-runtime/src/connection/pullRequestRoutingPermissions.ts",
+    "apps/web/src/components/settings/SourceControlAccountSettings.tsx",
+    "apps/server/src/persistence/Migrations/069_ThreadMessageSearch.test.ts",
     "apps/web/src/components/settings/FoldedSettingsSection.tsx",
     "scripts/package.json",
     "packages/contracts/src/clientRpcPermissions.ts",
