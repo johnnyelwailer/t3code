@@ -13,8 +13,13 @@ import {
   packCompletionWakeRendererLive,
   setPackCompletionWakeRenderer,
 } from "./t3team-pack-completionWakeRenderer.ts";
+import { delegatedCompletionWakeDetail } from "./orchestration-v2/Orchestrator.ts";
 import { providerUsageWakeRendererLive } from "./t3team-providerUsageWakeRenderer.ts";
-import { DelegatedCompletionWakeRenderer } from "./t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
+import {
+  DelegatedCompletionWakeRenderer,
+  delegatedCompletionPlaceholderText,
+  keepsRenderedWakeText,
+} from "./t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 
 const claudeId = ProviderInstanceId.make("claudeAgent");
 const codexId = ProviderInstanceId.make("codex");
@@ -44,7 +49,16 @@ const provider = (instanceId: ProviderInstanceId, withUsage: boolean) =>
 
 const CLAUDE_LINE = "claudeAgent: Session 42% (resets 2026-09-28 18:00 UTC) · severity: normal";
 
-const task = (id: string, providerInstanceId: ProviderInstanceId) => ({ id, providerInstanceId });
+const task = (id: string, providerInstanceId: ProviderInstanceId) => ({
+  id,
+  providerInstanceId,
+  title: `Task ${id}`,
+  status: "completed" as const,
+  result: `Result of ${id}.`,
+});
+
+const PLACEHOLDER = delegatedCompletionPlaceholderText(["node:a"]);
+const ORCHESTRATOR_DEFAULT = "Delegated task node:a (Task node:a) [completed]:\nResult of node:a.";
 
 const render = (input: {
   readonly providers: ReadonlyArray<ServerProvider>;
@@ -69,7 +83,7 @@ const render = (input: {
       threadId: ThreadId.make("thread:parent"),
       parentRunId: RunId.make("run:parent"),
       taskIds: input.taskIds,
-      defaultText: "Delegated task node:a reached a terminal state.",
+      defaultText: PLACEHOLDER,
     });
   }).pipe(Effect.provide(layer));
 };
@@ -83,7 +97,7 @@ it.effect("appends the child instance's usage line to the default wake text", ()
       tasks: [task("node:a", claudeId)],
       taskIds: ["node:a"],
     });
-    assert.equal(text, `Delegated task node:a reached a terminal state.\n\n${CLAUDE_LINE}`);
+    assert.equal(text, `${ORCHESTRATOR_DEFAULT}\n\n${CLAUDE_LINE}`);
   }),
 );
 
@@ -106,7 +120,7 @@ it.effect("leaves the text untouched when the child instance has no usage data",
       tasks: [task("node:a", claudeId)],
       taskIds: ["node:a"],
     });
-    assert.equal(text, "Delegated task node:a reached a terminal state.");
+    assert.equal(text, PLACEHOLDER);
   }),
 );
 
@@ -118,7 +132,7 @@ it.effect("leaves the text untouched when the usage read fails", () =>
       tasks: [task("node:a", claudeId)],
       taskIds: ["node:a"],
     });
-    assert.equal(text, "Delegated task node:a reached a terminal state.");
+    assert.equal(text, PLACEHOLDER);
   }),
 );
 
@@ -143,5 +157,72 @@ it.effect("does not repeat a line the pack renderer already wrote", () =>
       taskIds: ["node:a"],
     });
     assert.equal(text, `node:a done.\n${CLAUDE_LINE}`);
+  }),
+);
+
+it.effect("delivers the child's title, status and result alongside the usage line", () =>
+  Effect.gen(function* () {
+    const tasks = [task("node:a", claudeId)];
+    const text = yield* render({
+      providers: [provider(claudeId, true)],
+      tasks,
+      taskIds: ["node:a"],
+    });
+    // Mirrors Orchestrator.dispatchMessage: a text that differs from the placeholder is flagged
+    // as rendered (ProviderContinuationService) and kept for the live cohort; otherwise the
+    // orchestrator swaps in its own detail.
+    const delivered = keepsRenderedWakeText(
+      {
+        text,
+        renderedWakeText: text !== PLACEHOLDER,
+        delegatedCompletion: { taskIds: ["node:a"] },
+      },
+      ["node:a"],
+    )
+      ? text
+      : delegatedCompletionWakeDetail(["node:a"], tasks as never);
+    assert.include(delivered, "Task node:a");
+    assert.include(delivered, "[completed]");
+    assert.include(delivered, "Result of node:a.");
+    assert.include(delivered, CLAUDE_LINE);
+  }),
+);
+
+it.effect("keeps a usage line whose text is a suffix of another instance's line", () =>
+  Effect.gen(function* () {
+    const backup = ProviderInstanceId.make("backupCodex");
+    const providers = [
+      { ...provider(backup, true), displayName: "Backup Codex" },
+      { ...provider(codexId, true), displayName: "Codex" },
+    ] as ReadonlyArray<ServerProvider>;
+    const text = yield* render({
+      providers,
+      tasks: [task("node:a", backup), task("node:b", codexId)],
+      taskIds: ["node:a", "node:b"],
+    });
+    const lines = text.split("\n");
+    assert.include(
+      lines,
+      "Backup Codex: Session 42% (resets 2026-09-28 18:00 UTC) · severity: normal",
+    );
+    assert.include(lines, "Codex: Session 42% (resets 2026-09-28 18:00 UTC) · severity: normal");
+  }),
+);
+
+it.effect("drops a line the pack already wrote only on a whole-line match", () =>
+  Effect.gen(function* () {
+    setPackCompletionWakeRenderer({
+      render: () =>
+        "node:a done.\nBackup Codex: Session 42% (resets 2026-09-28 18:00 UTC) · severity: normal",
+    });
+    const text = yield* render({
+      providers: [{ ...provider(codexId, true), displayName: "Codex" } as ServerProvider],
+      tasks: [task("node:a", codexId)],
+      taskIds: ["node:a"],
+    });
+    assert.include(
+      text.split("\n"),
+      "Codex: Session 42% (resets 2026-09-28 18:00 UTC) · severity: normal",
+    );
   }),
 );
