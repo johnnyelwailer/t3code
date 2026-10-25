@@ -35,6 +35,7 @@ const {
   isInside,
   overlayRoots,
   readDistributionMobile,
+  trackedRoots,
 } = require("./t3team-distributionMobileSelection.cjs");
 
 /**
@@ -148,9 +149,16 @@ function withDistributionMobile(config, { appRoot, env = process.env }) {
               ? resolution.filePaths
               : [];
         if (fromOverlay && !isBare(moduleName)) {
-          const outside = resolved.find((file) => !isInside(selection.packDir, canon(file)));
-          if (outside !== undefined)
-            fail(`${origin}: "${moduleName}" resolves outside the pack (${outside})`);
+          const tracked = trackedRoots(selection);
+          const outside = resolved.find(
+            (file) => !tracked.some((root) => isInside(root, canon(file))),
+          );
+          if (outside !== undefined) {
+            fail(
+              `${origin}: "${moduleName}" resolves outside the overlay's directories (${outside}); ` +
+                `an overlay may import only from its code, its native modules and its assets`,
+            );
+          }
         }
         return resolution;
       },

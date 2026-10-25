@@ -69,7 +69,7 @@ const packageName = (source) => {
  * error: an overlay that silently drops out of the build reads as "declared, so it must work".
  *
  * @param {{ env?: Record<string, string | undefined>, appRoot: string }} input
- * @returns {{ packDir: string, entryPath: string, nativeModulesDir: string | null } | null}
+ * @returns {{ packDir: string, entryPath: string, nativeModulesDir: string | null, assetsDir: string | null } | null}
  */
 function readDistributionMobile({ env = process.env, appRoot }) {
   void appRoot;
@@ -109,24 +109,27 @@ function readDistributionMobile({ env = process.env, appRoot }) {
     return fail(`overlay entry "${entry}" must stay inside the pack ${packDir}`);
   }
   if (!fs.existsSync(entryPath)) return fail(`overlay entry not found: ${entryPath}`);
-  const modules = /** @type {{ nativeModules?: unknown }} */ (mobile.overlay).nativeModules;
-  let nativeModulesDir = null;
-  if (modules !== undefined) {
-    nativeModulesDir = typeof modules === "string" ? canonical(path.resolve(packDir, modules)) : "";
-    if (
-      !nativeModulesDir ||
-      !isInside(packDir, nativeModulesDir) ||
-      !fs.existsSync(nativeModulesDir)
-    ) {
-      return fail(`overlay.nativeModules must name a directory inside the pack ${packDir}`);
+  /** @param {string} field */
+  const declaredDirectory = (field) => {
+    const value = /** @type {Record<string, unknown>} */ (mobile.overlay)[field];
+    if (value === undefined) return null;
+    const dir = typeof value === "string" ? canonical(path.resolve(packDir, value)) : "";
+    if (!dir || !isInside(packDir, dir) || !fs.existsSync(dir)) {
+      return fail(`overlay.${field} must name a directory inside the pack ${packDir}`);
     }
-  }
-  return { packDir, entryPath, nativeModulesDir };
+    return dir;
+  };
+  return {
+    packDir,
+    entryPath,
+    nativeModulesDir: declaredDirectory("nativeModules"),
+    assetsDir: declaredDirectory("assets"),
+  };
 }
 
 /**
- * The directories whose files make up the overlay: its entry's directory and its native modules.
- * They are what Tailwind scans and what the runtime version is hashed from.
+ * The directories with the overlay's code: its entry's directory and its native modules. Tailwind
+ * scans these for class names.
  *
  * @param {{ entryPath: string, nativeModulesDir: string | null }} selection
  */
@@ -135,6 +138,17 @@ function overlayRoots(selection) {
     path.dirname(selection.entryPath),
     ...(selection.nativeModulesDir ? [selection.nativeModulesDir] : []),
   ];
+}
+
+/**
+ * Every directory the overlay may import from: its code, its native modules and its assets. Relative
+ * imports and assets must resolve inside them, so the runtime version, the Gradle bundle task
+ * inputs and Tailwind's scan cover everything that can reach a bundle.
+ *
+ * @param {{ entryPath: string, nativeModulesDir: string | null, assetsDir: string | null }} selection
+ */
+function trackedRoots(selection) {
+  return [...overlayRoots(selection), ...(selection.assetsDir ? [selection.assetsDir] : [])];
 }
 
 /**
@@ -190,4 +204,5 @@ module.exports = {
   isInside,
   overlayRoots,
   readDistributionMobile,
+  trackedRoots,
 };

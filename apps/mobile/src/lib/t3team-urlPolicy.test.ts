@@ -92,7 +92,7 @@ describe("a build with a url policy", () => {
     expect(previewDocumentBaseUrl("not json", "https://localhost/")).toBe("https://localhost/");
   });
 
-  it("treats a hook that throws as no opinion", () => {
+  it("fails closed when the classifier throws, and stays quiet when other hooks throw", async () => {
     policy({
       isAppPrivate: () => {
         throw new Error("boom");
@@ -101,7 +101,33 @@ describe("a build with a url policy", () => {
         throw new Error("boom");
       },
     });
-    expect(isAppPrivateUrl(PRIVATE)).toBe(false);
+    expect(isAppPrivateUrl(PRIVATE)).toBe(true);
+    const share = vi.fn();
+    expect(shareUnlessPrivate(PRIVATE, share)).toBe(false);
+    expect(share).not.toHaveBeenCalled();
+    const open = vi.fn();
+    const report = vi.fn();
+    await openAssetLink({ url: PRIVATE, attachment, open, report });
+    expect(open).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledWith(APP_PRIVATE_URL_MESSAGE);
     expect(() => beforeNativeFetch(PRIVATE)).not.toThrow();
+  });
+
+  it("reports a generic message, never an external open, when openAppPrivate throws or rejects", async () => {
+    for (const openAppPrivate of [
+      () => {
+        throw new Error("sync boom");
+      },
+      () => Promise.reject(new Error("async boom")),
+    ]) {
+      policy({ openAppPrivate });
+      const open = vi.fn();
+      const report = vi.fn();
+      await expect(
+        openAssetLink({ url: PRIVATE, attachment, open, report }),
+      ).resolves.toBeUndefined();
+      expect(open).not.toHaveBeenCalled();
+      expect(report).toHaveBeenCalledWith(APP_PRIVATE_URL_MESSAGE);
+    }
   });
 });
