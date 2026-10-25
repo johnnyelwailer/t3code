@@ -61,8 +61,14 @@ function readLocalBaseline(cwd) {
 
 /** Loads everything the ratchet needs from git; null when upstream/main is not fetched. */
 export function loadPlacementContext({ cwd, git }) {
-  const mergeBase = tryGit(git, ["merge-base", "HEAD", "upstream/main"]);
+  let mergeBase = tryGit(git, ["merge-base", "HEAD", "upstream/main"]);
   if (!mergeBase) return null;
+  // `git merge --no-commit upstream/main` (the sync skill's verification step): HEAD does not
+  // contain the incoming upstream commits yet, so measure against the commit being merged.
+  const pending = tryGit(git, ["rev-parse", "-q", "--verify", "MERGE_HEAD"]);
+  const pendingSync =
+    pending !== null && tryGit(git, ["merge-base", "--is-ancestor", pending, "upstream/main"]) !== null;
+  if (pendingSync) mergeBase = pending;
   const mainBase = tryGit(git, ["merge-base", "HEAD", "origin/main"]);
   const baseText = mainBase ? tryGit(git, ["show", `${mainBase}:${BASELINE_FILE}`]) : null;
   const registry = loadSeamRegistry(cwd);
@@ -82,7 +88,7 @@ export function loadPlacementContext({ cwd, git }) {
     local,
     baseBaseline: baseText === null ? null : parseBaseline(baseText).entries,
     renames: parseRenames(mainBase ? (tryGit(git, ["diff", "--name-status", "-M", mainBase]) ?? "") : ""),
-    isSync: detectUpstreamSync(git),
+    isSync: pendingSync || detectUpstreamSync(git),
   };
 }
 

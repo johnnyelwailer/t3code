@@ -353,7 +353,7 @@ describe("placement ratchet evaluation", () => {
       renames: new Map([[moved.path, legacy.path]]),
     });
     expect(result.increases).toEqual([]);
-    expect(result.lockIns).toHaveLength(1);
+    expect(result.lockIns).toHaveLength(2); // old path gone + new path not listed: rewrite the baseline
     const crossArea = item("apps/mobile/src/t3team-renamed.ts", 100);
     const escaped = evaluate({
       items: itemsOf(crossArea),
@@ -373,9 +373,22 @@ describe("placement ratchet evaluation", () => {
     expect(result.warnings.join()).toMatch(/ipc\.ts/);
     expect(result.increases).toHaveLength(1);
     expect(result.increases[0]).toMatch(/t3team-x\.ts/);
-    expect(result.lockIns[0]).toMatch(/out of date after the upstream sync/);
+    expect(result.lockIns[0]).toMatch(/Baseline is out of date/);
     const regenerated = evaluate({ ...options, baseline: baselineOf(item(edited.path, 14, "modified")) });
     expect(regenerated.lockIns).toEqual([]);
+  });
+
+  it("rejects a PR that deletes or lowers a baseline entry while the source is unchanged", () => {
+    const base = baselineOf(legacy, edited);
+    const deleted = evaluate({ items: itemsOf(legacy, edited), baseline: baselineOf(edited), baseBaseline: base });
+    expect(deleted.increases).toEqual([]);
+    expect(deleted.lockIns[0]).toMatch(/Baseline is out of date.*not listed/);
+    const lowered = evaluate({
+      items: itemsOf(legacy, edited),
+      baseline: baselineOf(item(legacy.path, 40), edited),
+      baseBaseline: base,
+    });
+    expect(lowered.lockIns[0]).toMatch(/listed at 40/);
   });
 
   it("flags legacy footprint that a PR parks under a new seam", () => {
@@ -469,6 +482,24 @@ describe("placement ratchet against a real git repository", () => {
     const baseline = NodeFS.readFileSync(NodePath.join(dir, ".t3team-placement-baseline.jsonl"), "utf8");
     expect(baseline).toContain("t3team-legacy.ts");
     expect(baseline).not.toContain("upstreamNew.ts");
+  });
+
+  it("measures a pending `git merge --no-commit upstream/main` as a sync, not as new footprint", () => {
+    const { dir, git, write } = makeRepo();
+    expect(writePlacementBaseline({ cwd: dir, git, init: true }).ok).toBe(true);
+    git(["add", "-A"]);
+    git(["commit", "-qm", "baseline"]);
+    git(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(["checkout", "-q", "-b", "incoming", "upstream/main"]);
+    write("packages/contracts/src/upstreamNew.ts", "export const u = 1;\n");
+    git(["add", "-A"]);
+    git(["commit", "-qm", "upstream moves"]);
+    git(["update-ref", "refs/remotes/upstream/main", "HEAD"]);
+    git(["checkout", "-q", "main"]);
+    git(["merge", "-q", "--no-commit", "--no-ff", "upstream/main"]);
+    const result = runPlacementCheck({ cwd: dir, git });
+    expect(result.violations).toEqual([]);
+    expect(writePlacementBaseline({ cwd: dir, git }).ok).toBe(true);
   });
 
   it("skips quietly when upstream/main is not fetched", () => {

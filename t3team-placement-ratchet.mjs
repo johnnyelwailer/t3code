@@ -78,9 +78,12 @@ export function evaluatePlacement({
     const relax = isSync && item.kind === "modified";
     const sink = relax ? result.warnings : result.increases;
     const committed = baseline.get(item.path);
-    if (relax && (!committed || item.loc > committed.loc)) {
+    const grew = !ref || item.loc > ref.loc;
+    // The committed baseline must list what the tree has, whether or not it grew: otherwise an
+    // entry could be deleted or lowered in a PR and the next change would be misjudged as growth.
+    if ((!grew || relax) && (!committed || item.loc > committed.loc)) {
       result.lockIns.push(
-        `Baseline is out of date after the upstream sync: ${item.path} (${describeItem(item)}). Regenerate it: node t3team-additive-guard.mjs --write-placement-baseline`,
+        `Baseline is out of date: ${item.path} (${describeItem(item)}) is ${committed ? `listed at ${committed.loc}` : "not listed"}. Regenerate it: node t3team-additive-guard.mjs --write-placement-baseline`,
       );
     }
     if (!ref) {
