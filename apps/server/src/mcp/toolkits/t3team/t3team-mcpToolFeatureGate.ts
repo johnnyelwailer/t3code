@@ -26,6 +26,7 @@ const MCP_TOOL_FEATURE_FLAGS: ReadonlyMap<string, FeatureFlagKey> = new Map([
   ["t3_show_widget", "AGENTS_WIDGETS"],
   ["t3_change_request_publish", "AGENTS_CHANGE_REQUEST_PUBLISH"],
   ["t3_linked_repository_sync", "PROJECT_LINKED_REPOSITORIES"],
+  ["t3_user_secret_run", "AGENTS_USER_SECRET_INJECTION"],
   ["t3_mywork_digest", "MYWORK_DIGEST"],
   ["t3_mywork_arrange", "MYWORK_DIGEST"],
   ["t3_orchestration_run", "AGENTS_ORCHESTRATION_TOOLS"],

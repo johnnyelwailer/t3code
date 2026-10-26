@@ -35,6 +35,7 @@ import { ProjectMachineDiscovery } from "./project/t3team-ProjectMachineDiscover
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
+import { UserSecretApprovals } from "./secrets/t3team-UserSecretApprovals.ts";
 import * as ServerBrowser from "./preview/ServerBrowser.ts";
 import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
@@ -380,6 +381,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
     subscribeChanges: Effect.succeed(Stream.empty),
   }),
   Layer.mock(ToolAuthService.ToolAuthService)({}),
+  Layer.mock(UserSecretApprovals)({}),
 );
 
 const layerConfigSources = Layer.mergeAll(

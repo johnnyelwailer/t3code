@@ -381,6 +381,12 @@ import {
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import {
+  UserSecretApprovalAnswerError,
+  UserSecretApprovalAnswerInput,
+  UserSecretApprovalsSnapshot,
+  UserSecretApprovalsSubscribeInput,
+} from "./t3team-userSecretApprovalCard.ts";
+import {
   ProjectCloneActionInput,
   ProjectCloneActionResult,
   ProjectCloneListEvent,
@@ -592,6 +598,8 @@ export const WS_METHODS = {
   scheduledTasksRunNow: "scheduledTasks.runNow",
   scheduledTasksRotateWebhookToken: "scheduledTasks.rotateWebhookToken",
   secretsAnswerRequest: "secrets.answerRequest",
+  userSecretsSubscribeApprovals: "userSecrets.subscribeApprovals",
+  userSecretsAnswerApproval: "userSecrets.answerApproval",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
 
@@ -2108,6 +2116,18 @@ const WsSecretsAnswerRequestRpc = Rpc.make(WS_METHODS.secretsAnswerRequest, {
   error: Schema.Union([SecretRequestError, EnvironmentAuthorizationError]),
 });
 
+const WsUserSecretsSubscribeApprovalsRpc = Rpc.make(WS_METHODS.userSecretsSubscribeApprovals, {
+  payload: UserSecretApprovalsSubscribeInput,
+  success: UserSecretApprovalsSnapshot,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
+const WsUserSecretsAnswerApprovalRpc = Rpc.make(WS_METHODS.userSecretsAnswerApproval, {
+  payload: UserSecretApprovalAnswerInput,
+  error: Schema.Union([UserSecretApprovalAnswerError, EnvironmentAuthorizationError]),
+});
+
 const WsScheduledTasksListWebhookDeliveriesRpc = Rpc.make(
   WS_METHODS.scheduledTasksListWebhookDeliveries,
   {
@@ -2218,6 +2238,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsScheduledTasksRunNowRpc,
   WsScheduledTasksRotateWebhookTokenRpc,
   WsSecretsAnswerRequestRpc,
+  WsUserSecretsSubscribeApprovalsRpc,
+  WsUserSecretsAnswerApprovalRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
   WsServerReportClientActivityRpc,

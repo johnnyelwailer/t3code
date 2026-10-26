@@ -206,6 +206,7 @@ import { WorkflowSignalStoreLive } from "./persistence/WorkflowSignalStore.ts";
 import { WorkflowTriggerLaunchStoreLive } from "./persistence/t3team-WorkflowTriggerLaunchStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
+import { UserSecretInjectionLive } from "./secrets/t3team-UserSecretInjectionLive.ts";
 import {
   T3TeamThreadToolContextEvictionReactor,
   T3TeamThreadToolContextEvictionReactorLive,
@@ -955,7 +956,16 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(RuntimeLayer.layerProjectService),
   Layer.provideMerge(layerGit),
   Layer.provideMerge(layerVcs),
-  Layer.provideMerge(Layer.mergeAll(layerTerminal, layerPreview, layerDevice, layerToolAuth)),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      layerTerminal,
+      layerPreview,
+      layerDevice,
+      layerToolAuth,
+      // t3team: user-secret injection (hive/nx-nexi#658): the agent tool and the approval card RPCs.
+      UserSecretInjectionLive,
+    ),
+  ),
   Layer.provideMerge(layerPersistence),
   Layer.provideMerge(
     Layer.mergeAll(Keybindings.layer, EnvironmentTheme.layer, UsageLimitSources.layer),

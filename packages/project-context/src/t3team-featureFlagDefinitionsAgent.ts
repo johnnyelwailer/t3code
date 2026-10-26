@@ -20,6 +20,15 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  AGENTS_USER_SECRET_INJECTION: {
+    group: "Agent",
+    subgroup: "Tools",
+    label: "Use your secrets by injection",
+    description:
+      "Agents run a command with secrets granted to the session; the values stay hidden from them.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   AGENTS_PREFER_READY_PROVIDER: {
     group: "Agent",
     subgroup: "Providers",

@@ -94,6 +94,7 @@ import type { CloudSessionService } from "./cloud/t3team-CloudSessionService.ts"
 import type { ProjectMachineDiscovery } from "./project/t3team-ProjectMachineDiscovery.ts";
 import type { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import type { FeatureFlags } from "./t3team-FeatureFlags.ts";
+import type { UserSecretApprovals } from "./secrets/t3team-UserSecretApprovals.ts";
 
 export type WsRpcHandlerServices =
   | AcpRegistrySupport.AcpRegistryCatalog
@@ -173,6 +174,7 @@ export type WsRpcHandlerServices =
   | ThreadManagementService.ThreadManagementService
   | ThreadSearch.ThreadSearch
   | ToolAuthService.ToolAuthService
+  | UserSecretApprovals
   | TraceDiagnostics.TraceDiagnostics
   | UsageLimitSources.UsageLimitSources
   | UsageService.UsageService

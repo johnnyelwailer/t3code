@@ -1115,6 +1115,11 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:scheduled-tasks:live",
       tag: WS_METHODS.scheduledTasksSubscribe,
     }),
+    // t3team: pending approvals for agent use of the user's secrets, per thread.
+    userSecretApprovals: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:user-secrets:approvals",
+      tag: WS_METHODS.userSecretsSubscribeApprovals,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan.
     usageSummary: createEnvironmentRpcQueryAtomFamily(runtime, {
@@ -1369,6 +1374,14 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: ({ environmentId, input }) =>
           JSON.stringify([environmentId, input.threadId, input.turnItemId]),
+      },
+    }),
+    answerUserSecretApproval: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:user-secrets:answer-approval",
+      tag: WS_METHODS.userSecretsAnswerApproval,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.approvalId]),
       },
     }),
     refreshUsageRates: createEnvironmentRpcCommand(runtime, {

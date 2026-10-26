@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { ThreadId, type EnvironmentId } from "@t3tools/contracts";
 import ChatView from "~/components/ChatView";
 import type { ChatComposerHandle } from "~/components/chat/ChatComposer";
 import { ComposerHandleContext, useComposerHandleContext } from "~/composerHandleContext";
@@ -13,6 +13,7 @@ import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatCo
 import { useT3TeamThreadOutboxDock } from "~/t3team/chat/t3team-useThreadOutboxDock";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
+import { T3TeamUserSecretApprovalDock } from "~/t3team/chat/t3team-UserSecretApprovalDock";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 import type { ChatMessage } from "~/types";
 
@@ -79,12 +80,18 @@ export function ThreadChatViewBody({
   // Handed over unconditionally: the accessory self-gates (attachment strip, staged action card,
   // staged note rows), so this must NOT re-derive "is anything staged" from attachments alone.
   const contextAttachmentSlot = (
-    <T3TeamThreadComposerAccessory
-      projectId={projectId}
-      {...(ticketId ? { ticketId } : {})}
-      attachments={contextAttachments}
-      onRemoveAttachment={removeContextAttachment}
-    />
+    <>
+      <T3TeamUserSecretApprovalDock
+        environmentId={environmentId}
+        threadId={ThreadId.make(threadId)}
+      />
+      <T3TeamThreadComposerAccessory
+        projectId={projectId}
+        {...(ticketId ? { ticketId } : {})}
+        attachments={contextAttachments}
+        onRemoveAttachment={removeContextAttachment}
+      />
+    </>
   );
   // ChatView reads its send model from the context handle, and the app-wide one belongs to the
   // primary thread. An embedded peer thread scopes its own, or its composer hijacks the primary's.
