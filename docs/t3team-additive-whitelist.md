@@ -558,3 +558,9 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 
 - `apps/web/src/components/settings/ScheduledTasksSettings.tsx` — tooltip exposes the full scheduled-task prompt while preserving its two-line clamp.
 - `apps/web/src/components/settings/settingsLayout.tsx` — settings row titles wrap long unbroken text within the existing content grid.
+
+## Slow login shell keeps Homebrew on the backend PATH (2026-10-26)
+
+- `apps/desktop/src/shell/DesktopShellEnvironment.ts` — when neither the login-shell probe nor launchctl yields a PATH on macOS (a loaded machine times the 5 s probe out), appends the existing well-known user bin dirs after the current PATH entries, so Homebrew `gh`/`codex`/`claude` are found. darwin only; the timeout is unchanged.
+- `apps/desktop/src/app/DesktopCliCommand.ts` — exports `unixCandidates` (one word) so the fallback shares that list instead of duplicating it.
+- `apps/desktop/src/shell/DesktopShellEnvironment.test.ts` — covers the fallback on macOS and its absence on linux.
