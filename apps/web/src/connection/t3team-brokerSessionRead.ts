@@ -4,7 +4,7 @@ import type { Atom, AtomRegistry } from "effect/reactivity";
 import { waitForAtomValue } from "~/state/waitForAtomValue";
 
 /** How long a broker attach waits for the session list before it goes without a deadline. */
-export const BROKER_ATTACH_LIST_WAIT_MS = 5_000;
+const BROKER_ATTACH_LIST_WAIT_MS = 5_000;
 
 /**
  * The cloud sessions a broker attach reads its deadline from. The list loads only for a surface or
