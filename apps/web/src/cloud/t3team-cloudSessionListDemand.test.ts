@@ -8,6 +8,7 @@ import {
 
 const NOTHING: CloudSessionListDemand = {
   menuOpen: false,
+  triggerHinted: false,
   panelVisible: false,
   bound: false,
   creating: false,
