@@ -581,6 +581,12 @@ export const OrchestratorMcpThreadInterruptResult = Schema.Struct({
 export type OrchestratorMcpThreadInterruptResult = typeof OrchestratorMcpThreadInterruptResult.Type;
 
 export const OrchestratorMcpCapabilitiesInput = Schema.Struct({
+  includeLegacy: Schema.optional(
+    Schema.Boolean.annotate({
+      description:
+        "Include legacy models in the catalog (default false). Explicit legacy ids remain valid for delegation.",
+    }),
+  ),
   search: Schema.optional(
     TrimmedNonEmptyString.check(Schema.isMaxLength(200)).annotate({
       description:
@@ -606,6 +612,7 @@ export const OrchestratorMcpProviderCapability = Schema.Struct({
       id: Schema.String,
       /** Omitted when it only restates the id. */
       label: Schema.optional(Schema.String),
+      legacy: Schema.optional(Schema.Boolean),
       options: Schema.optional(Schema.Array(OrchestratorMcpModelOption)),
     }),
   ),

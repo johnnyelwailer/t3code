@@ -130,11 +130,7 @@ export const DEFAULT_MODEL = "gpt-6-astra";
  * `model/list` response as default; when none are available, Codex's own
  * `isDefault` flag wins.
  */
-export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [
-  DEFAULT_MODEL,
-  "gpt-5.6-sol",
-  "gpt-5.6-terra",
-];
+export const PREFERRED_DEFAULT_CODEX_MODELS: ReadonlyArray<string> = [DEFAULT_MODEL];
 export const DEFAULT_TEXT_GENERATION_MODEL = "gpt-6-luna";
 /** Keep the official Antigravity session's current model. Never send this ID to ACP. */
 export const ANTIGRAVITY_DEFAULT_MODEL = "antigravity-default";

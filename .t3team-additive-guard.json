@@ -736,7 +736,10 @@
     "apps/web/src/components/settings/settingsLayout.tsx",
     "apps/desktop/src/app/DesktopCliCommand.ts",
     "apps/desktop/src/shell/DesktopShellEnvironment.ts",
-    "apps/desktop/src/shell/DesktopShellEnvironment.test.ts"
+    "apps/desktop/src/shell/DesktopShellEnvironment.test.ts",
+    "apps/server/src/provider/Drivers/CodexManagedProvider.ts",
+    "apps/server/src/provider/CodexProvider.test.ts",
+    "packages/contracts/src/orchestratorMcp.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

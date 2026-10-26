@@ -63,6 +63,14 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: true,
   },
+  ORCHESTRATOR_LATEST_ONLY: {
+    group: "Orchestration",
+    label: "Current orchestrator models",
+    description:
+      "Hide manifest-classified legacy models from orchestrator capabilities unless includeLegacy is requested. Off: preserve pinned and search visibility.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
   ORCHESTRATION_CHILD_THREADS: {
     group: "Orchestration",
     label: "Child-thread management",
