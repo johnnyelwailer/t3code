@@ -455,6 +455,34 @@ describe("MessagesTimeline t3team working row (GHE #201/#208/#236)", () => {
     expect(withAgents).not.toContain("-translate-y-[3px]");
   });
 
+  // Live report (cloud, 2026-10-26): the agent ended its turn on "the child will wake me", and the
+  // thread read as finished — chips alone, then nothing — until the completion wake resumed it.
+  it("says what an ended turn still waits for, and that the agent resumes once it finished", async () => {
+    const idle = { ...baseProps(), timelineEntries: [] };
+    const settled = {
+      ...agent("agent:triage", "Triage open issues"),
+      dotState: "settled" as const,
+    };
+
+    const waiting = await renderMarkup(
+      <MessagesTimeline {...idle} t3team={{ activeAgents: [agent("child:t", "Triage")] }} />,
+    );
+    expect(waiting).toContain(">Waiting for Triage</span>");
+
+    const resuming = await renderMarkup(
+      <MessagesTimeline {...idle} t3team={{ activeAgents: [settled] }} />,
+    );
+    expect(resuming).toContain(">Triage open issues finished · resuming</span>");
+    expect(resuming).toContain('data-t3team-state="settled"');
+
+    // The wake turn is running: the delivered task is no longer an agent of this row.
+    const resumed = await renderMarkup(
+      <MessagesTimeline {...workingProps()} t3team={{ activeAgents: [settled] }} />,
+    );
+    expect(resumed).not.toContain('data-t3team-state="settled"');
+    expect(resumed).not.toContain("finished · resuming");
+  });
+
   it("gives the state timer a last-resort ellipsis on narrow panels instead of a hard clip (GHE #208 follow-up)", async () => {
     const markup = await renderMarkup(
       <MessagesTimeline {...workingProps()} t3team={{ threadActivityState: "thinking" }} />,

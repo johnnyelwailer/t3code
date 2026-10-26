@@ -60,10 +60,12 @@ export const readWorkflowRunFacts = (sql: SqlClient.SqlClient, launchThreadId: s
         }
       | undefined;
     const runId = typeof latest?.runId === "string" ? latest.runId : undefined;
+    // A recipe's body is conventionally `workflow.ts`, whose basename names nothing.
+    const bodyName = workflowIdentity(latest?.workflowPath);
+    const recipeName = workflowIdentity(latest?.recipePath);
     const durableTitle =
       (latest?.origin === "ephemeral" ? intentGoal(latest.intentJson) : undefined) ??
-      workflowIdentity(latest?.workflowPath) ??
-      workflowIdentity(latest?.recipePath);
+      (bodyName === "workflow" ? (recipeName ?? bodyName) : (bodyName ?? recipeName));
     const projected =
       latest === undefined
         ? undefined

@@ -40,6 +40,7 @@ import { TimelineRowTimestamp, ActivityShimmerOverlay } from "./TimelineRowParts
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { T3TeamActiveAgentsStepLabel } from "~/t3team/chat/t3team-activeAgentsStepLabel";
+import { awaitingAgentsLead, liveActiveAgents } from "~/t3team/chat/t3team-awaitingResultAgents";
 import {
   ACTIVITY_STATE_WORDS,
   resolveActivityPillDisplay,
@@ -278,7 +279,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     isCompacting,
     isPreparingWorktree,
     workingStepLabel,
-    activeAgents,
+    activeAgents: rowAgents,
     backgroundJobs,
     onOpenAgents,
     onOpenAgent,
@@ -314,6 +315,8 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
       </div>
     );
   }
+  // t3team: a finished task awaiting its wake is a `settled` chip; once the wake runs it is noise.
+  const activeAgents = isWorking ? liveActiveAgents(rowAgents) : rowAgents;
   const hasActiveAgents = activeAgents.length > 0;
   const waitingForAgents = !isWorking && hasActiveAgents;
   // A backgrounded bash job outlives its turn, so the row can be here for
@@ -381,7 +384,9 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               ellipsize (the .t3team-aci-lead clamp) instead of hard-clipping
               at the row wrapper's overflow-x-clip. The row stays one line,
               no wrap, no second line. */}
-          {waitingForAgents ? null : (
+          {waitingForAgents ? (
+            <span className="min-w-0 shrink truncate">{awaitingAgentsLead(activeAgents)}</span>
+          ) : (
             <span className="flex min-w-0 items-center">
               {/* GHE #236 follow-up: no leading dot pulses — the status
                   text alone leads the row; child chips on the right carry
