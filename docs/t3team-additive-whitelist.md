@@ -589,3 +589,9 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 - `apps/mobile/src/components/LoadingScreen.tsx` — a distribution may hide the app's brand mark on the loading screen (`showsLoadingBrandMark`).
 - `apps/mobile/src/lib/mobileThemeVariables.ts` — a distribution's `themeVariables` repaints the default theme (its palette); identity without one.
 - `packages/shared/package.json` — exports `t3team-packThemeColors`, the pack-theme overlay shared by the web app and the mobile distribution theme (the web files `t3team-packThemeDefinition.ts` and `t3team-packThemeRoles.ts` now use it; both are fork-owned).
+
+## Slow login shell keeps Homebrew on the backend PATH (2026-10-26)
+
+- `apps/desktop/src/shell/DesktopShellEnvironment.ts` — when neither the login-shell probe nor launchctl yields a PATH on macOS (a loaded machine times the 5 s probe out), appends the existing well-known user bin dirs after the current PATH entries, so Homebrew `gh`/`codex`/`claude` are found. darwin only; the timeout is unchanged.
+- `apps/desktop/src/app/DesktopCliCommand.ts` — exports `unixCandidates` (one word) so the fallback shares that list instead of duplicating it.
+- `apps/desktop/src/shell/DesktopShellEnvironment.test.ts` — covers the fallback on macOS and its absence on linux.
