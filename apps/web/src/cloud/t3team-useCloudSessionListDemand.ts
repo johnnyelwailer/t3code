@@ -21,6 +21,9 @@ import {
 /** How long a hover or focus on the Run-on trigger keeps the list asked for. */
 export const CLOUD_MENU_HINT_MS = 30_000;
 
+/** Right after the menu closes, focus returns to its trigger; that focus is not a hint. */
+export const MENU_CLOSE_QUIET_MS = 1_000;
+
 export function useCloudSessionListDemand(scopeKey: string | null) {
   const localSession = useSyncExternalStore(
     subscribeCloudSessionLocal,
@@ -40,11 +43,13 @@ export function useCloudSessionListDemand(scopeKey: string | null) {
   const [lingering, setLingering] = useState(false);
   const [triggerHinted, setTriggerHinted] = useState(false);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hintCloudMenu = () => {
-    setTriggerHinted(true);
-    if (hintTimer.current !== null) clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setTriggerHinted(false), CLOUD_MENU_HINT_MS);
-  };
+  const menuClosedAt = useRef(0);
+  useEffect(() => {
+    if (!cloudMenuOpen) return;
+    return () => {
+      menuClosedAt.current = Date.now();
+    };
+  }, [cloudMenuOpen]);
   useEffect(
     () => () => {
       if (hintTimer.current !== null) clearTimeout(hintTimer.current);
@@ -61,6 +66,16 @@ export function useCloudSessionListDemand(scopeKey: string | null) {
     localSession: localSession !== null,
     lingering,
   });
+  /** True when this hint is what turned the list on (it was not asked for already). */
+  const hintCloudMenu = (): boolean => {
+    // Focus returns to the trigger as the menu closes; that is not the user approaching it.
+    if (cloudMenuOpen || Date.now() - menuClosedAt.current < MENU_CLOSE_QUIET_MS) return false;
+    const startsLoad = !listWanted;
+    setTriggerHinted(true);
+    if (hintTimer.current !== null) clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setTriggerHinted(false), CLOUD_MENU_HINT_MS);
+    return startsLoad;
+  };
   return {
     listWanted,
     localSession,

@@ -25,6 +25,7 @@ import { useCanManageRelay } from "./t3team-useCanManageRelay";
 import { acquireCloudSessionListRefresh } from "./t3team-cloudSessionPolling";
 import { setCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
 import { useCloudSessionListDemand } from "./t3team-useCloudSessionListDemand";
+import { useStableCallback } from "~/hooks/useStableCallback";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 /**
@@ -96,6 +97,13 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
     sessions,
     rateLimitedUntilMs,
   );
+
+  // A hint that starts the load counts as the refresh, so the menu's own open-time refresh is
+  // not due for a gap; one that finds the list already asked for must not hold it off. One
+  // identity, so the memoized "Run on" trigger does not re-render with this controller.
+  const onCloudMenuHint = useStableCallback(() => {
+    if (hintCloudMenu() && environmentId !== null) acquireCloudSessionListRefresh(environmentId);
+  });
 
   const { connectPendingSessionId, connectFailure, requestConnect } = useCloudSessionConnect({
     sessions,
@@ -206,11 +214,7 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
       [sessions],
     ),
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
-    // The hint loads the list now, so the menu's own open-time refresh is not due for a gap.
-    onCloudMenuHint: () => {
-      if (environmentId !== null) acquireCloudSessionListRefresh(environmentId);
-      hintCloudMenu();
-    },
+    onCloudMenuHint,
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     // Starting a cloud session spends relay compute: without `relay:write` no entry offers it.
     // With `CLOUD_SESSIONS` off no entry offers one either; the server refuses a create then.

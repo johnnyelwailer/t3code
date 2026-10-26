@@ -68,7 +68,7 @@ import {
   selectCloudSessionTarget,
 } from "./t3team-cloudSessionTargetStore";
 import { acquireCloudSessionListRefresh } from "./t3team-cloudSessionPolling";
-import { CLOUD_MENU_HINT_MS } from "./t3team-useCloudSessionListDemand";
+import { CLOUD_MENU_HINT_MS, MENU_CLOSE_QUIET_MS } from "./t3team-useCloudSessionListDemand";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 
 const SCOPE = "draft-a";
@@ -167,12 +167,43 @@ describe("useCloudSessionController list demand", () => {
     expect(listAsked()).toBe(false);
   });
 
-  it("counts the hinted load as the refresh, so opening the menu right after does not refetch", async () => {
+  it("counts a hint that starts the load as the refresh, so opening the menu does not refetch", async () => {
     using _scenario = scenario();
+    // Far past any earlier refresh, so only this hint can be what holds the gate.
+    using _timers = fakeTimers({ now: Date.UTC(2030, 0, 1) });
     await using _screen = await mount();
     await act(() => handle.controller?.onCloudMenuHint());
-    // The menu's open-time refresh goes through this gate: a refresh a moment ago holds it off.
     expect(acquireCloudSessionListRefresh("env-primary")).toBe(false);
+  });
+
+  it("does not hold off the menu's refresh when the list was already asked for", async () => {
+    using _scenario = scenario();
+    using _timers = fakeTimers({ now: Date.UTC(2031, 0, 1) });
+    await using _screen = await mount();
+    await act(() => handle.controller?.onPanelVisibilityChange(true));
+    await act(() => handle.controller?.onCloudMenuHint());
+    expect(acquireCloudSessionListRefresh("env-primary")).toBe(true);
+  });
+
+  it("ignores the focus that returns to the trigger as the menu closes", async () => {
+    using _scenario = scenario();
+    using _timers = fakeTimers({ now: Date.UTC(2032, 0, 1) });
+    await using _screen = await mount();
+    await act(() => handle.controller?.onCloudMenuOpenChange(true));
+    await act(() => handle.controller?.onCloudMenuOpenChange(false));
+    await act(() => handle.controller?.onCloudMenuHint());
+    expect(listAsked()).toBe(false);
+    await act(() => vi.advanceTimersByTime(MENU_CLOSE_QUIET_MS));
+    await act(() => handle.controller?.onCloudMenuHint());
+    expect(listAsked()).toBe(true);
+  });
+
+  it("hands the trigger one stable hint handler across renders", async () => {
+    using _scenario = scenario();
+    await using screen = await mount();
+    const first = handle.controller?.onCloudMenuHint;
+    await screen.rerender(<Probe scopeKey={SCOPE} />);
+    expect(handle.controller?.onCloudMenuHint).toBe(first);
   });
 
   it("keeps a hinted list loaded when the menu opens, and still loads without a hint", async () => {
