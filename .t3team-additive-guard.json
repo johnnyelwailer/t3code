@@ -1,5 +1,8 @@
 {
   "allowedModifiedFiles": [
+    "apps/mobile/src/components/CompactBrandTitle.tsx",
+    "apps/mobile/src/components/LoadingScreen.tsx",
+    "apps/mobile/src/lib/mobileThemeVariables.ts",
     "apps/mobile/src/features/home/HomeScreen.tsx",
     "apps/mobile/src/features/browser/PreviewStreamWebView.tsx",
     "apps/mobile/src/features/devices/device-stream-document.ts",

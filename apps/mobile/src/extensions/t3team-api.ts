@@ -5,10 +5,25 @@
  * growing it is a deliberate, reviewed change, and a refactor inside the app only has to keep these
  * exports.
  */
-export type { MobileExtensions, UrlPolicy } from "./t3team-extensionTypes";
+export type {
+  BrandTitleProps,
+  HomeCatalogState,
+  HomeEmptyStateProps,
+  HomeEmptyStateSlot,
+  MobileExtensions,
+  UrlPolicy,
+} from "./t3team-extensionTypes";
+export type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
 
 // What the Nexi broker sign-in and hosts list use. Add to this list only what a migrated screen needs.
+export { AppActivityIndicator } from "../components/ui/AppActivityIndicator";
+export { SymbolView } from "../components/ui/AppSymbol";
 export { AppText } from "../components/ui/AppText";
+export { Button } from "../components/ui/Button";
+export { Notice } from "../components/ui/Notice";
+export { ConnectionStatusDot } from "../features/connection/ConnectionStatusDot";
+export { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
+export { createMobileThemeVariables } from "../lib/mobileTheme";
 export { ListRow } from "../components/ui/ListRow";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";

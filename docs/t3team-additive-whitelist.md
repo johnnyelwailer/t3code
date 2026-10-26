@@ -584,7 +584,11 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 - `packages/client-runtime/src/state/assets.ts` and `.../assets.test.ts` — `setAssetUrlObserver`: a platform sees each asset URL before it reaches a consumer (a platform whose native HTTP clients cannot send an environment's credentials authorizes the exact URL).
 - `apps/mobile/app.config.ts` — passes the config through `applyDistributionMobile`: identity for a stock build; with a selected overlay it turns Expo updates off (a stock OTA must not replace overlay JavaScript) and adds a Gradle plugin that makes the overlay an input of the bundle task.
 - `apps/mobile/fingerprint.config.js` — adds the overlay's entry and a hash of its files to the runtime version, so a distribution binary never shares a runtime version with a stock binary (empty for a stock build).
-- `apps/mobile/src/features/home/HomeScreen.tsx` — renders the distribution's `homeTop` slot (isolated, nothing without one) at the top of the Chats list and above the stock empty state, where a distribution offers its own sessions and sign-in.
+- `apps/mobile/src/features/home/HomeScreen.tsx` — renders the distribution's `homeTop` slot (isolated, nothing without one) at the top of the Chats list and above the stock empty state, and lets a `homeEmptyState` slot replace the empty home (isolated; a failure restores the stock empty home).
+- `apps/mobile/src/components/CompactBrandTitle.tsx` — a distribution's `brandTitle` replaces the wordmark title of the home header.
+- `apps/mobile/src/components/LoadingScreen.tsx` — a distribution may hide the app's brand mark on the loading screen (`showsLoadingBrandMark`).
+- `apps/mobile/src/lib/mobileThemeVariables.ts` — a distribution's `themeVariables` repaints the default theme (its palette); identity without one.
+- `packages/shared/package.json` — exports `t3team-packThemeColors`, the pack-theme overlay shared by the web app and the mobile distribution theme (the web files `t3team-packThemeDefinition.ts` and `t3team-packThemeRoles.ts` now use it; both are fork-owned).
 
 ## Slow login shell keeps Homebrew on the backend PATH (2026-10-26)
 

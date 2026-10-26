@@ -1,11 +1,41 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { mobileExtensions, runExtensionInstall } from "./t3team-extensions";
+import { homeEmptyStateFor, mobileExtensions, runExtensionInstall } from "./t3team-extensions";
 
 describe("mobileExtensions", () => {
   it("fills no slot in a build without an overlay, so every screen keeps its stock behavior", () => {
     expect(mobileExtensions).toEqual({});
     expect(mobileExtensions.connectionsNewTop).toBeUndefined();
+    expect(homeEmptyStateFor(mobileExtensions, catalog, "android")).toBeNull();
+  });
+});
+
+const catalog = { isLoadingConnections: false, hasConnections: false };
+
+describe("homeEmptyStateFor", () => {
+  const Component = () => null;
+
+  it("returns the registered component when its rule applies, and the stock home otherwise", () => {
+    const extensions = {
+      homeEmptyState: {
+        shouldRender: (_: unknown, platform: string) => platform === "android",
+        Component,
+      },
+    };
+    expect(homeEmptyStateFor(extensions, catalog, "android")).toBe(Component);
+    expect(homeEmptyStateFor(extensions, catalog, "ios")).toBeNull();
+  });
+
+  it("treats a rule that throws as no opinion, so the stock screen stays", () => {
+    const extensions = {
+      homeEmptyState: {
+        shouldRender: () => {
+          throw new Error("rule failed");
+        },
+        Component,
+      },
+    };
+    expect(homeEmptyStateFor(extensions, catalog, "android")).toBeNull();
   });
 });
 
