@@ -5,10 +5,14 @@
  * `vp pack` inlines the TypeScript compiler into the server bundle (see
  * packages/runbook-ts/src/typescript.ts), so the orchestration host works from
  * the packaged asar where no node_modules is reachable. The inlined compiler
- * locates its default lib files relative to the file it executes from —
- * `dirname(chunk)/lib/` — so a bundle that typechecks workflow source needs the
- * lib declarations beside the chunks in dist/. Without them the typecheck facet
- * degrades to "typecheck-unavailable" in every packaged context.
+ * locates each default lib file at `dirname(chunk)/<name>` (for example
+ * `dist/lib.esnext.d.ts`): the executing file is the SDK chunk itself, and the
+ * compiler joins the lib file name straight onto its directory, with no `lib/`
+ * subdirectory. So the lib declarations are written directly into the output
+ * directory, beside the chunks. Without them every global type (`Record`,
+ * `Promise`, ...) is unresolved in a packaged workflow type-check (`ts2304`,
+ * `ts2583`); the missing-lib diagnostic itself carries no file, so the
+ * type-check step drops it and only the symptoms surface.
  *
  * In unbundled contexts (dev, tests) the static import resolves to the
  * workspace typescript package, whose own lib/ directory is used — this plugin
@@ -38,11 +42,14 @@ export function t3teamTypescriptLibPackPlugin(): {
       // entry's own directory.
       const typescriptEntry = requireFromRunbookTs.resolve("typescript");
       const libDir = NodePath.dirname(typescriptEntry);
-      const destDir = NodePath.join(outDir, "lib");
-      NodeFS.mkdirSync(destDir, { recursive: true });
-      const files = NodeFS.readdirSync(libDir).filter((file) => file.endsWith(".d.ts"));
+      NodeFS.mkdirSync(outDir, { recursive: true });
+      // Only the default libraries (`lib.*.d.ts`): the compiler API typings
+      // (typescript.d.ts) are staged separately into the asar's node_modules.
+      const files = NodeFS.readdirSync(libDir).filter(
+        (file) => file.startsWith("lib.") && file.endsWith(".d.ts"),
+      );
       for (const file of files) {
-        NodeFS.copyFileSync(NodePath.join(libDir, file), NodePath.join(destDir, file));
+        NodeFS.copyFileSync(NodePath.join(libDir, file), NodePath.join(outDir, file));
       }
     },
   };

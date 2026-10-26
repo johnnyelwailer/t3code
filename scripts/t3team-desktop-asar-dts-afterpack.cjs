@@ -9,7 +9,7 @@
  *
  * 1. The main file matcher appends a trailing .d.ts exclusion AFTER any user
  *    `files` patterns (fileMatcher.js, `getMainFileMatchers`), so no `files`
- *    include can re-add `apps/server/dist/lib` .d.ts files — the TypeScript
+ *    include can re-add the `apps/server/dist/lib.*.d.ts` files — the TypeScript
  *    lib declarations the inlined compiler's `getDefaultLibFilePath` resolves to.
  * 2. The node-module collector walks each dependency with a hardcoded
  *    `nodeModuleExcludedExts` list that includes `.d.ts`
