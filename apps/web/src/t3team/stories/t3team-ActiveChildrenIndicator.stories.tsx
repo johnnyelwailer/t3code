@@ -2,9 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
 
 import type { RunId } from "@t3tools/contracts";
-import { TimelineRowActivityCtx } from "~/components/chat/timelineRowContext";
+import {
+  TimelineRowActivityCtx,
+  TimelineRowCtx,
+  type TimelineRowSharedState,
+} from "~/components/chat/timelineRowContext";
 import { WorkingTimelineRow } from "~/components/chat/TimelineWorkGroupRows";
 import { deriveDotState, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
+import { deriveAwaitingResultEntries } from "~/t3team/chat/t3team-awaitingResultAgents";
+import { delegatedTaskFixture } from "~/t3team/chat/t3team-delegatedTaskFixture";
 
 /**
  * DESIGN → INTEGRATION (GHE #201): the active-agents indicator in the
@@ -32,6 +38,8 @@ import { deriveDotState, type ActiveAgentEntry } from "~/t3team/chat/t3team-acti
  *   FLIP (old text fully out, then new text in).
  * - Group click → Agents panel (real app: addAgentsSurface; here: the demo
  *   panel under the row).
+ * - Awaiting-result stories: an agent that ended its turn on delegated tasks
+ *   (see the AwaitingResult* stories at the end of the file).
  */
 
 type SeedAgent = {
@@ -108,10 +116,18 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
+// WorkingTimelineRow reads only `threadRef` and `threadJobsController` from the shared row state
+// (it has had to since the 2026-10-22 upstream sync); the rest belongs to the other row kinds.
+const SHARED_ROW_STATE = {
+  threadRef: null,
+  threadJobsController: undefined,
+} as unknown as TimelineRowSharedState;
+
 const WORKING_ROW = {
   kind: "working" as const,
   id: "working-indicator-row",
-  createdAt: "2026-08-25T16:58:00.000Z",
+  // Recent, so the "Working for …" timer reads minutes rather than the age of the story.
+  createdAt: new Date(Date.now() - 95_000).toISOString(),
 };
 
 /**
@@ -131,24 +147,26 @@ function RealWorkingRow({
   mainThreadIdle?: boolean;
 }) {
   return (
-    <TimelineRowActivityCtx.Provider
-      value={{
-        isWorking: !mainThreadIdle,
-        activeTurnInProgress: !mainThreadIdle,
-        isPreparingWorktree: false,
-        isCompacting: false,
-        isRevertingCheckpoint: false,
-        awaitingUser: false,
-        latestRunId: "turn-design-pass" as RunId,
-        workingStepLabel,
-        activeAgents,
-        backgroundJobs: [],
-        onOpenAgents,
-        backgroundWorktreeSetup: null,
-      }}
-    >
-      <WorkingTimelineRow row={WORKING_ROW} />
-    </TimelineRowActivityCtx.Provider>
+    <TimelineRowCtx.Provider value={SHARED_ROW_STATE}>
+      <TimelineRowActivityCtx.Provider
+        value={{
+          isWorking: !mainThreadIdle,
+          activeTurnInProgress: !mainThreadIdle,
+          isPreparingWorktree: false,
+          isCompacting: false,
+          isRevertingCheckpoint: false,
+          awaitingUser: false,
+          latestRunId: "turn-design-pass" as RunId,
+          workingStepLabel,
+          activeAgents,
+          backgroundJobs: [],
+          onOpenAgents,
+          backgroundWorktreeSetup: null,
+        }}
+      >
+        <WorkingTimelineRow row={WORKING_ROW} />
+      </TimelineRowActivityCtx.Provider>
+    </TimelineRowCtx.Provider>
   );
 }
 
@@ -365,6 +383,88 @@ function ActiveAgentsIndicatorStory({
   );
 }
 
+/**
+ * An idle parent whose delegated tasks finished before their result reached it. The settled chips
+ * are what the app derives (`deriveAwaitingResultEntries`, merged by `useT3TeamActiveAgents`) from
+ * finished tasks whose completion wake is still undelivered; the live chips are running sub-runs.
+ */
+function awaitingEntries(live: number, settled: readonly string[]): readonly ActiveAgentEntry[] {
+  return [
+    ...buildEntries(live, 0, new Map()),
+    ...deriveAwaitingResultEntries(
+      settled.map((title, i) => delegatedTaskFixture(`awaiting-${i}`, { title })),
+    ),
+  ];
+}
+
+const AWAITING_STEPS = [
+  { label: "1 · Child still running", working: false, live: 1, settled: [] as string[] },
+  {
+    label: "2 · Child finished, wake in flight",
+    working: false,
+    live: 0,
+    settled: ["Triage the crash reports"],
+  },
+  {
+    label: "3 · Wake running, agent resumed",
+    working: true,
+    live: 0,
+    settled: ["Triage the crash reports"],
+  },
+] as const;
+
+/**
+ * The real working row for an ended turn that still owes the user a continuation. With `step`
+ * unset a button bar walks one mounted row through the thread's life, so the swap between states
+ * is the production one.
+ */
+function AwaitingResultStory({
+  live,
+  settled,
+  step,
+}: {
+  live: number;
+  settled: readonly string[];
+  step?: boolean;
+}) {
+  const [index, setIndex] = useState(0);
+  const current = step ? AWAITING_STEPS[index] : undefined;
+  const entries = awaitingEntries(current?.live ?? live, current?.settled ?? settled);
+  const working = current?.working ?? false;
+  return (
+    <StoryFrame>
+      <Card title={current?.label ?? "Idle parent · delegated tasks awaiting their result"}>
+        <div className="rounded-lg border border-border/50 bg-card p-3">
+          <div className="mb-3 rounded-md bg-accent/60 px-3 py-2 text-sm">
+            Triage the open crash reports and summarise them for me
+          </div>
+          <RealWorkingRow
+            activeAgents={entries}
+            workingStepLabel={working ? "Summarising the triage results" : null}
+            onOpenAgents={() => {}}
+            mainThreadIdle={!working}
+          />
+        </div>
+        {step ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {AWAITING_STEPS.map((candidate, i) => (
+              <button
+                key={candidate.label}
+                type="button"
+                onClick={() => setIndex(i)}
+                className="rounded-sm border border-border/70 bg-accent/40 px-1.5 py-0.5 text-3xs text-muted-foreground hover:text-foreground data-[active]:text-foreground"
+                data-active={i === index ? "" : undefined}
+              >
+                {candidate.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </Card>
+    </StoryFrame>
+  );
+}
+
 const meta = {
   title: "T3Team/Chat/Active Agents Indicator (GHE #201)",
   component: ActiveAgentsIndicatorStory,
@@ -417,4 +517,26 @@ export const IdleFullyStill: Story = {
 };
 export const ReducedMotionStatic: Story = {
   args: { activeChildren: 4, activeSubagents: 1, liveStream: true, reducedMotion: true },
+};
+
+/** Every delegated task finished, the result is not with the agent yet: "… finished · resuming". */
+export const AwaitingResultSettledOnly: Story = {
+  render: () => <AwaitingResultStory live={0} settled={["Triage the crash reports"]} />,
+};
+/** Two finished tasks collapse to a count. */
+export const AwaitingResultSeveralSettled: Story = {
+  render: () => (
+    <AwaitingResultStory
+      live={0}
+      settled={["Triage the crash reports", "Draft the release notes"]}
+    />
+  ),
+};
+/** One task finished while another still runs: the row waits for the live one, both chips show. */
+export const AwaitingResultMixedLiveAndSettled: Story = {
+  render: () => <AwaitingResultStory live={1} settled={["Triage the crash reports"]} />,
+};
+/** Running child, then finished and awaiting its wake, then the wake turn resumes the agent. */
+export const AwaitingResultResumesToWorking: Story = {
+  render: () => <AwaitingResultStory live={0} settled={[]} step />,
 };

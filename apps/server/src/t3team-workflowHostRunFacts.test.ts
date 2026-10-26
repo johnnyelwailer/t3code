@@ -59,4 +59,27 @@ layer("readWorkflowRunFacts — authoring runs", (it) => {
       assert.strictEqual(facts.workflowRunStatus?.title, "Publish the October release");
     }),
   );
+
+  // A recipe module's body is conventionally `workflow.ts`, so its basename names nothing: the
+  // session's machine-setup kickoff showed up as "workflow" on the thread's orchestration card.
+  it.effect("names a recipe run by its recipe when the body file is the generic workflow.ts", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`
+        INSERT INTO workflow_runs (
+          run_id, workflow_path, args_json, args_hash, launch_thread_id, project_id,
+          model_json, runtime_mode, interaction_mode, status, origin, recipe_path,
+          pending_thread_id, pending_correlation_id, pending_kind, wake_at, created_at, updated_at
+        ) VALUES (
+          'run-recipe', '/repo/.nexi/recipes/machine-setup/workflow.ts', '{}', 'args-hash',
+          'thread-recipe', 'project-recipe', '{}', 'full-access', 'default',
+          'completed', 'recipe', '/repo/.nexi/recipes/machine-setup',
+          NULL, NULL, NULL, NULL,
+          '2026-10-26T14:12:00.000Z', '2026-10-26T14:13:00.000Z'
+        )
+      `;
+      const facts = yield* readWorkflowRunFacts(sql, "thread-recipe");
+      assert.strictEqual(facts.workflowRunStatus?.title, "machine-setup");
+    }),
+  );
 });

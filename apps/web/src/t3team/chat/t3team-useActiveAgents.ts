@@ -9,6 +9,7 @@ import {
   EMPTY_ACTIVE_AGENTS,
   mergeActiveAgentsAndChildren,
 } from "~/t3team/chat/t3team-activeAgentsCore";
+import { deriveAwaitingResultEntries } from "~/t3team/chat/t3team-awaitingResultAgents";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
@@ -62,11 +63,19 @@ export function useT3TeamActiveAgents(input: {
     const ownSubagents = (subagents ?? []).filter(
       (subagent) => subagent.childThreadId === null || !childIds.has(subagent.childThreadId),
     );
-    const merged = mergeActiveAgentsAndChildren({
+    const live = mergeActiveAgentsAndChildren({
       childThreads,
       subagents: projectedSubagentsToRuntime(ownSubagents),
       activityLabelsEnabled,
     });
+    // Finished delegated tasks whose result the agent has not received yet keep the row up
+    // (t3team-awaitingResultAgents.ts); a child thread still shown as live wins over its task.
+    const liveIds = new Set(live.map((entry) => entry.id));
+    const awaiting = deriveAwaitingResultEntries(subagents).filter((entry) => {
+      const task = subagents?.find((subagent) => `agent:${subagent.id}` === entry.id);
+      return !liveIds.has(entry.id) && !liveIds.has(`child:${task?.childThreadId ?? ""}`);
+    });
+    const merged = awaiting.length === 0 ? live : [...live, ...awaiting];
     if (merged.length === 0) return merged;
     return merged.map((entry) => {
       if (entry.source === "child") {
@@ -75,7 +84,7 @@ export function useT3TeamActiveAgents(input: {
         const mark = providerMark(provider);
         return mark ? { ...entry, provider: mark } : entry;
       }
-      const agent = ownSubagents.find((subagent) => `agent:${subagent.id}` === entry.id);
+      const agent = subagents?.find((subagent) => `agent:${subagent.id}` === entry.id);
       const provider = findProvider(providersByEnvironment, agent?.providerInstanceId);
       const mark = providerMark(provider, agent?.driver);
       return mark ? { ...entry, provider: mark } : entry;
