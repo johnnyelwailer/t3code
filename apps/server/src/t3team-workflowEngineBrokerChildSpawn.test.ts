@@ -14,8 +14,6 @@
  * the broker's serialised queue, its step emitter and the placement module's registry write, so a
  * hand-built `BrokerCore` would reproduce none of it.
  */
-import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
 import {
   createMockBroker,
   createThreadPrimitives,
@@ -24,21 +22,15 @@ import {
 } from "@t3team/sdk";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
-import type { WorkflowEngineBrokerDeps } from "./t3team-workflowEngineBrokerTypes.ts";
-import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
-import type {
-  WorkflowHostCreateThreadInput,
-  WorkflowHostPort,
-  WorkflowHostStartTurnInput,
-} from "./t3team-workflowHostPort.ts";
-import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
+import {
+  CHILD_SPAWN_LAUNCH_THREAD_ID,
+  flushRejections,
+  makeChildSpawnHarness,
+  makeRefusingWorkflowHost,
+  MISSING_LAUNCH_CHECKOUT,
+} from "./t3team-workflowEngineChildSpawn.fixtures.ts";
 
 const ignore = { resolve: () => {}, reject: () => {} };
-
-/** The host's real refusal message for a launch checkout that cannot be inherited. */
-const MISSING_LAUNCH_CHECKOUT = "Cannot inherit the checkout of launch thread launch-1: not found.";
 
 const spawnChild = (correlationId: string, threadId: string) => ({
   correlationId,
@@ -51,62 +43,6 @@ const askChild = (correlationId: string, threadId: string) => ({
   kind: "thread.turn" as const,
   payload: { threadId, prompt: "Summarise the risk" },
 });
-
-/** A host that records creates and refuses the first `remainingFailures` with the given error. */
-function hostRefusingCreates(refusal: unknown, remainingFailures = 1) {
-  const fake = makeFakeWorkflowHost();
-  const attempts: WorkflowHostCreateThreadInput[] = [];
-  const created: WorkflowHostCreateThreadInput[] = [];
-  const turns: WorkflowHostStartTurnInput[] = [];
-  let left = remainingFailures;
-  const host: WorkflowHostPort = {
-    ...fake.host,
-    createThread: async (input) => {
-      attempts.push(input);
-      if (left > 0) {
-        left -= 1;
-        throw refusal;
-      }
-      created.push(input);
-    },
-    startTurn: async (input) => {
-      turns.push(input);
-    },
-  };
-  return { host, attempts, created, turns };
-}
-
-function harness(host: WorkflowHostPort, overrides: Partial<WorkflowEngineBrokerDeps> = {}) {
-  const steps: Array<Parameters<WorkflowStepActivityEmitter["emitSent"]>[0]> = [];
-  const stepActivities: WorkflowStepActivityEmitter = {
-    emitSent: async (step) => {
-      steps.push(step);
-    },
-    emitResolved: async () => {},
-    emitRun: async () => {},
-  };
-  let id = 0;
-  const deps: WorkflowEngineBrokerDeps = {
-    runId: "run-spawn",
-    launchThreadId: "launch-1",
-    projectId: ProjectId.make("project-1"),
-    modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    registry: makeWorkflowEngineRegistry(),
-    host,
-    newId: () => `id-${++id}`,
-    nowIso: () => "2026-01-01T00:00:00.000Z",
-    stepActivities,
-    ...overrides,
-  };
-  return {
-    broker: createWorkflowEngineBroker(deps),
-    registry: deps.registry,
-    spawnPips: () =>
-      steps.filter((step) => step.stepKind === "thread.create" && step.phase === "completed"),
-  };
-}
 
 /**
  * A `HandleDispatch` shaped like the real one (`@runbook/core`'s `createHandleDispatch`): the
@@ -148,23 +84,19 @@ function sdkPrimitives(broker: MessageBroker) {
       },
     },
     capabilities: new Set(),
-    launchThreadId: "launch-1",
+    launchThreadId: CHILD_SPAWN_LAUNCH_THREAD_ID,
     // No default model: the child rides the run's own selection, which keeps the SDK test free of
     // a provider registry (the failure under test is placement, not model choice).
     defaultModel: undefined,
   });
 }
 
-/** Let Node's unhandled-rejection bookkeeping run (it fires after the microtask queue drains). */
-const flushRejections = async (): Promise<void> => {
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
-};
-
 describe("thread.create when the host refuses the child", () => {
   it("settles the one-way send, registers nothing, and emits no completed spawn step", async () => {
-    const { host, attempts, created } = hostRefusingCreates(new Error(MISSING_LAUNCH_CHECKOUT));
-    const { broker, registry, spawnPips } = harness(host);
+    const { host, attempts, created } = makeRefusingWorkflowHost(
+      new Error(MISSING_LAUNCH_CHECKOUT),
+    );
+    const { broker, registry, spawnPips } = makeChildSpawnHarness(host);
 
     await expect(
       broker.send(spawnChild("run-spawn:1", "child-1"), ignore),
@@ -177,8 +109,8 @@ describe("thread.create when the host refuses the child", () => {
 
   it("re-throws the ORIGINAL refusal on that child's next awaited turn, starting no turn", async () => {
     const refusal = new Error(MISSING_LAUNCH_CHECKOUT);
-    const { host, turns } = hostRefusingCreates(refusal);
-    const { broker, registry } = harness(host);
+    const { host, turns } = makeRefusingWorkflowHost(refusal);
+    const { broker, registry } = makeChildSpawnHarness(host);
 
     await broker.send(spawnChild("run-spawn:1", "child-1"), ignore);
     // Same object, not a copy: the author's `catch` must see the host's own error.
@@ -189,8 +121,8 @@ describe("thread.create when the host refuses the child", () => {
   });
 
   it("leaves a thread the run owns alone: an unrelated thread still gets its turn", async () => {
-    const { host, turns } = hostRefusingCreates(new Error(MISSING_LAUNCH_CHECKOUT));
-    const { broker } = harness(host);
+    const { host, turns } = makeRefusingWorkflowHost(new Error(MISSING_LAUNCH_CHECKOUT));
+    const { broker } = makeChildSpawnHarness(host);
 
     await broker.send(spawnChild("run-spawn:1", "child-1"), ignore);
     await expect(broker.send(askChild("run-spawn:2", "child-2"), ignore)).resolves.toBeUndefined();
@@ -198,10 +130,10 @@ describe("thread.create when the host refuses the child", () => {
   });
 
   it("clears the refusal on a successful retry: the turn starts and the child registers once", async () => {
-    const { host, attempts, created, turns } = hostRefusingCreates(
+    const { host, attempts, created, turns } = makeRefusingWorkflowHost(
       new Error(MISSING_LAUNCH_CHECKOUT),
     );
-    const { broker, registry, spawnPips } = harness(host);
+    const { broker, registry, spawnPips } = makeChildSpawnHarness(host);
 
     await broker.send(spawnChild("run-spawn:1", "child-1"), ignore);
     await broker.send(spawnChild("run-spawn:2", "child-1"), ignore);
@@ -222,8 +154,8 @@ describe("thread.create when the host refuses the child", () => {
   });
 
   it("creates once when two creates for the same child are fired back to back", async () => {
-    const { host, attempts, created } = hostRefusingCreates(new Error("unused"), 0);
-    const { broker, registry, spawnPips } = harness(host);
+    const { host, attempts, created } = makeRefusingWorkflowHost(new Error("unused"), 0);
+    const { broker, registry, spawnPips } = makeChildSpawnHarness(host);
 
     await Promise.all([
       broker.send(spawnChild("run-spawn:1", "child-1"), ignore),
@@ -238,12 +170,12 @@ describe("thread.create when the host refuses the child", () => {
   });
 
   it("keeps the queue usable after a refusal and still honours the stop gate", async () => {
-    const { host, attempts, created, turns } = hostRefusingCreates(
+    const { host, attempts, created, turns } = makeRefusingWorkflowHost(
       new Error(MISSING_LAUNCH_CHECKOUT),
     );
     const permits: string[] = [];
     let stopped = false;
-    const { broker, registry, spawnPips } = harness(host, {
+    const { broker, registry, spawnPips } = makeChildSpawnHarness(host, {
       beforePrimitive: async () => {
         permits.push("acquire");
         return !stopped;
@@ -276,8 +208,8 @@ describe("thread.create when the host refuses the child", () => {
 describe("a refused spawn through the real SDK primitives", () => {
   it("resolves the create silently, observes the error on the awaited agent(), and leaks no unhandled rejection", async () => {
     const refusal = new Error(MISSING_LAUNCH_CHECKOUT);
-    const { host, attempts, created, turns } = hostRefusingCreates(refusal);
-    const { broker, registry } = harness(host);
+    const { host, attempts, created, turns } = makeRefusingWorkflowHost(refusal);
+    const { broker, registry } = makeChildSpawnHarness(host);
     const primitives = sdkPrimitives(broker);
 
     const unhandled: unknown[] = [];
@@ -301,8 +233,8 @@ describe("a refused spawn through the real SDK primitives", () => {
   });
 
   it("registers once and runs the turn when a spawned child is created after the refusal", async () => {
-    const { host, created, turns } = hostRefusingCreates(new Error(MISSING_LAUNCH_CHECKOUT));
-    const { broker, registry } = harness(host);
+    const { host, created, turns } = makeRefusingWorkflowHost(new Error(MISSING_LAUNCH_CHECKOUT));
+    const { broker, registry } = makeChildSpawnHarness(host);
     const primitives = sdkPrimitives(broker);
 
     await expect(primitives.agent("Review the risk", { capabilities: "inherit" })).rejects.toThrow(
