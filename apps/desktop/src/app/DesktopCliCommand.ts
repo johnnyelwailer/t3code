@@ -17,7 +17,7 @@ export class DesktopCliCommandError extends Schema.TaggedError<DesktopCliCommand
   { message: Schema.String },
 ) {}
 
-const unixCandidates = (home: string, platform: NodeJS.Platform) =>
+export const unixCandidates = (home: string, platform: NodeJS.Platform) =>
   platform === "darwin"
     ? ["/opt/homebrew/bin", "/usr/local/bin", `${home}/.local/bin`, `${home}/bin`]
     : [`${home}/.local/bin`, `${home}/bin`];

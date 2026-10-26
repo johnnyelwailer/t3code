@@ -710,7 +710,10 @@
     "apps/server/src/orchestration-v2/testkit/fixtures/subagent_v2/muse_transcript.ndjson",
     "apps/server/src/orchestration-v2/testkit/fixtures/turn_interrupt/muse_transcript.ndjson",
     "apps/web/src/components/settings/ScheduledTasksSettings.tsx",
-    "apps/web/src/components/settings/settingsLayout.tsx"
+    "apps/web/src/components/settings/settingsLayout.tsx",
+    "apps/desktop/src/app/DesktopCliCommand.ts",
+    "apps/desktop/src/shell/DesktopShellEnvironment.ts",
+    "apps/desktop/src/shell/DesktopShellEnvironment.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",
