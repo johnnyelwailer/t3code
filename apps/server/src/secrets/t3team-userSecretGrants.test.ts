@@ -66,6 +66,19 @@ describe("grant checks", () => {
     ).toBe("login_slot");
   });
 
+  it("refuses a name in the login-slot namespace even when listed as a secret", () => {
+    const mislabelled = grant({ name: "AUTH_SLOT_CLAUDE", kind: "secret", approval: "never" });
+    const modes: UserSecretGrant["deliveryModes"] = ["processInjection", "requestInjection"];
+    for (const mode of modes) {
+      expect(checkGrantUse("AUTH_SLOT_CLAUDE", mislabelled, mode, "api.example.com", NOW)).toBe(
+        "login_slot",
+      );
+    }
+    expect(checkGrantUse("AUTH_SLOT_CLAUDE", undefined, "processInjection", undefined, NOW)).toBe(
+      "login_slot",
+    );
+  });
+
   it("refuses a mode the entry does not allow", () => {
     expect(
       checkGrantUse(

@@ -30,6 +30,13 @@ const grants: ReadonlyArray<UserSecretGrant> = [
     approval: "never",
   },
   {
+    name: "AUTH_SLOT_CLAUDE",
+    kind: "secret",
+    deliveryModes: ["processInjection"],
+    destinations: [],
+    approval: "never",
+  },
+  {
     name: "LINKED",
     kind: "secret",
     deliveryModes: ["processInjection"],
@@ -50,6 +57,7 @@ const fixture = Effect.gen(function* () {
   NodeFS.writeFileSync(NodePath.join(directory, "API_TOKEN"), "dummy-api-token");
   NodeFS.writeFileSync(NodePath.join(directory, "UNLISTED"), "dummy-unlisted");
   NodeFS.writeFileSync(NodePath.join(directory, "CLAUDE_LOGIN"), "dummy-login-state");
+  NodeFS.writeFileSync(NodePath.join(directory, "AUTH_SLOT_CLAUDE"), "dummy-leased-login-state");
   NodeFS.writeFileSync(NodePath.join(root, "outside"), "dummy-outside");
   NodeFS.symlinkSync(NodePath.join(root, "outside"), NodePath.join(directory, "LINKED"), "file");
   return directory;
@@ -91,6 +99,11 @@ it.layer(NodeServices.layer)("directory resolver", (it) => {
       assert.strictEqual(
         yield* refusal(resolver.resolve({ name: "CLAUDE_LOGIN", mode: "processInjection" })),
         "login_slot",
+      );
+      assert.strictEqual(
+        yield* refusal(resolver.resolve({ name: "AUTH_SLOT_CLAUDE", mode: "processInjection" })),
+        "login_slot",
+        "a leased slot's file name is refused even when a grant mislabels it as a secret",
       );
     }).pipe(Effect.scoped),
   );

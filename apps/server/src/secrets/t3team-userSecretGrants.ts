@@ -45,6 +45,12 @@ export function hostMatches(pattern: string, host: string): boolean {
   return normalized.endsWith(pattern.slice(1)) && normalized.length > pattern.length - 1;
 }
 
+/**
+ * The broker delivers leased login slots as `AUTH_SLOT_<TOOL>` files; a name in that namespace is
+ * refused even if a grant list mislabels it as a secret.
+ */
+const LOGIN_SLOT_NAME_PREFIX = "AUTH_SLOT_";
+
 export function checkGrantUse(
   name: string,
   grant: UserSecretGrant | undefined,
@@ -52,6 +58,7 @@ export function checkGrantUse(
   destination: string | undefined,
   nowMillis: number,
 ): UserSecretRefusalReason | undefined {
+  if (name.startsWith(LOGIN_SLOT_NAME_PREFIX)) return "login_slot";
   if (grant === undefined) return "not_granted";
   if (grant.kind !== "secret") return "login_slot";
   if (grant.expiresAt !== undefined && !(Date.parse(grant.expiresAt) > nowMillis)) return "expired";
