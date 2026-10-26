@@ -100,7 +100,7 @@ return { approved: decision.approved };
 const waitForRunStatus = Effect.fn("waitForRunStatus")(function* (
   repo: typeof WorkflowRunRepository.Service,
   runId: string,
-  status: "completed" | "suspended" | "failed",
+  status: "completed" | "suspended" | "failed" | "paused",
 ) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const row = yield* repo.getById({ runId });
@@ -252,7 +252,7 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
   it.effect("returns an explicit workflow-UI handoff through the broker result", () =>
     Effect.gen(function* () {
       const result = yield* callT3TeamWorkflowRunTool({
-        scopeLabel: "for this thread.",
+        scopeLabel: "for this thread",
         toolArgs: { intent },
         workflowRunTools: {
           runWorkflow: () =>
@@ -279,7 +279,7 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         const { handlers } = yield* makeHarness();
         const call = (toolArgs: unknown) =>
           callT3TeamWorkflowRunTool({
-            scopeLabel: "for this thread.",
+            scopeLabel: "for this thread",
             toolArgs,
             workflowRunTools: handlers,
           });
@@ -378,7 +378,7 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
       ),
   );
 
-  it.effect("unfixable: the author declines → the run fails and the caller gets ONE notice", () =>
+  it.effect("unsubmitted author output is retained in a non-terminal authoring park", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const h = yield* makeHarness();
@@ -388,13 +388,12 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         yield* waitForAuthorTurn(h.registry, `${runId}:author`);
         yield* h.endAuthorTurn(runId, "This intent needs file writes the guardrails forbid.");
 
-        const row = yield* waitForRunStatus(h.repo, runId, "failed");
-        assert.strictEqual(row.status, "failed");
-        const notices = h.failureNotices(runId);
-        assert.strictEqual(notices.length, 1);
-        assert.strictEqual(notices[0]?.threadId, h.threadId);
-        assert.include(notices[0]?.text ?? "", "cannot continue");
-        assert.include(notices[0]?.text ?? "", "guardrails forbid");
+        const row = yield* waitForRunStatus(h.repo, runId, "paused");
+        assert.strictEqual(row.failureStep, "authoring.exhausted");
+        assert.deepStrictEqual(h.failureNotices(runId), []);
+        const draft = JSON.parse(NodeFS.readFileSync(`${row.workflowPath}.draft.json`, "utf8"));
+        assert.include(draft.reply, "guardrails forbid");
+        assert.isFalse(NodeFS.existsSync(row.workflowPath));
         // A late submission has nobody waiting for it.
         const late = yield* h.authorSubmits(runId, PURE_SUM_SOURCE).pipe(Effect.result);
         assert.strictEqual(late._tag, "Failure");
@@ -471,7 +470,7 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         assert.strictEqual(second._tag, "Failure");
         if (second._tag === "Failure") assert.include(second.failure, first.runId);
         yield* h.endAuthorTurn(first.runId, "declined");
-        yield* waitForRunStatus(h.repo, first.runId, "failed");
+        yield* waitForRunStatus(h.repo, first.runId, "paused");
       }),
     ),
   );

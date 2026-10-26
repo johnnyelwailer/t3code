@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { startVoiceBars } from "./t3team-audioLevel.ts";
+import { claimActiveRecording } from "../t3team-activeRecording.ts";
+import { openAudioContext, startVoiceBars } from "./t3team-audioLevel.ts";
 import { frameFromClock } from "./t3team-waveform.ts";
 import { VoiceRecognitionSession } from "./t3team-recognition.ts";
 import { SilenceAutoStop } from "./t3team-autoSend.ts";
@@ -23,6 +24,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     onStateChange,
     initialLanguage,
     onLevel,
+    sessionKey,
   } = options;
 
   const [state, setState] = useState<VoiceState>("idle");
@@ -39,6 +41,8 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   const barElsRef = useRef<Array<HTMLSpanElement | null>>([]);
   const autoResumeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
+  const stopRecordingRef = useRef<(cancelled: boolean) => void>(() => {});
+  const releaseClaimRef = useRef<(() => void) | null>(null);
   const silenceTimerRef = useRef(0);
   const levelNowRef = useRef(0);
 
@@ -61,6 +65,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       if (stateRef.current === "idle") return;
       window.clearInterval(silenceTimerRef.current);
       silenceTimerRef.current = 0;
+      releaseClaimRef.current?.();
       transition("idle");
 
       barsStopRef.current?.();
@@ -98,6 +103,8 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 
   // Start: permission state, then recognition + waveform.
   const startRecording = useCallback(() => {
+    // Single live recording app-wide: starting here commits any other composer's.
+    releaseClaimRef.current = claimActiveRecording(() => stopRecordingRef.current(false));
     transition("waiting");
     accumulatedRef.current = "";
 
@@ -123,20 +130,13 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     });
     sessionRef.current = session;
 
-    let audioCtx: AudioContext | null = null;
-    try {
-      audioCtx = new AudioContext();
-      // Browsers may create the context suspended (autoplay policy); the
-      // analyser stays flat and the bars never move unless it is resumed.
-      void audioCtx.resume().catch(() => {});
-    } catch {
-      /* CSS fallback */
-    }
+    const audioCtx = openAudioContext();
     audioCtxRef.current = audioCtx;
 
     if (!session.start()) {
       if (audioCtx) audioCtx.close().catch(() => {});
       audioCtxRef.current = null;
+      releaseClaimRef.current?.();
       transition("denied");
       return;
     }
@@ -178,26 +178,26 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     });
   }, [currentLang, onLevel, onPartialTranscript, stopMode, stopRecording, transition]);
   startRecordingRef.current = startRecording;
+  stopRecordingRef.current = stopRecording;
 
   // Support detection.
   useEffect(() => {
     setSupported(VoiceRecognitionSession.isSupported());
   }, []);
 
-  // switchLang / pickStopMode / toggle / stop + Esc handling + unmount
-  // teardown live in useVoiceInputControls (guard LOC ceiling).
+  // switchLang / pickStopMode / toggle / stop + Esc handling + unmount and
+  // session-key teardown live in useVoiceInputControls (guard LOC ceiling).
   const { switchLang, pickStopMode, toggle, stop } = useVoiceInputControls(
     {
       state,
       stateRef,
       sessionRef,
       autoStopRef,
-      barsStopRef,
-      audioCtxRef,
       accumulatedRef,
       autoResumeRef,
       startRecording,
       stopRecording,
+      sessionKey,
     },
     setStopMode,
     setCurrentLang,

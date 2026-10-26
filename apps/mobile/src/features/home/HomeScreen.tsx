@@ -91,6 +91,9 @@ import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-sw
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import { ExtensionBoundary } from "../../extensions/t3team-ExtensionBoundary";
+import { homeEmptyStateFor, mobileExtensions } from "../../extensions/t3team-extensions";
+import { HomeTopSlot } from "../../extensions/t3team-HomeTopSlot";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -258,6 +261,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
   const workspace = useWorkspaceTabs();
   const [initialScrollOffset] = useState(() => workspace?.getScrollOffset("threads") ?? 0);
+  const [emptyStateFailed, setEmptyStateFailed] = useState(false);
   const primaryColumn = use(NativePrimaryColumnContext);
   const contentBackground = primaryColumn ? "bg-drawer" : "bg-screen";
   const containerClassName = cn(
@@ -741,6 +745,20 @@ export function HomeScreen(props: HomeScreenProps) {
     projectCount: props.projects.length,
   });
 
+  const EmptyStateExtension =
+    hasAnyThreads || emptyStateFailed
+      ? null
+      : homeEmptyStateFor(mobileExtensions, props.catalogState, Platform.OS);
+  if (EmptyStateExtension) {
+    return (
+      <View className={containerClassName}>
+        <ExtensionBoundary onFailure={() => setEmptyStateFailed(true)}>
+          <EmptyStateExtension onAddConnection={props.onAddConnection} />
+        </ExtensionBoundary>
+      </View>
+    );
+  }
+
   if (!hasAnyThreads) {
     return (
       <View className={containerClassName}>
@@ -758,6 +776,7 @@ export function HomeScreen(props: HomeScreenProps) {
           }}
         >
           <View className="w-full max-w-[430px]">
+            <HomeTopSlot catalog={props.catalogState} />
             <EmptyState
               title={emptyState.title}
               detail={emptyState.detail}
@@ -792,6 +811,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const v2ListHeader = (
     <>
       {listHeader}
+      <HomeTopSlot catalog={props.catalogState} />
       {Platform.OS === "ios" && workspace ? (
         <ThreadListFilters
           environments={props.environments}

@@ -107,15 +107,23 @@ export function resetBars(bars: WaveformBars, barCount: number): void {
   }
 }
 
+/** A live microphone analyser: per-frame level plus the handle that frees the mic. */
+export interface AudioLevelSource {
+  frame: () => WaveformFrame;
+  /** Stop every microphone track so the browser's recording indicator turns off. */
+  release: () => void;
+}
+
 /**
  * Attach an analyser to a media stream and return a live frame provider.
- * Resolves to `null` when no microphone stream is available (the caller
- * falls back to CSS-driven frames).
+ * Rejects when no microphone stream is available (the caller falls back to
+ * CSS-driven frames). The caller owns `release()`; the stream is also freed
+ * here when the analyser cannot be wired up (e.g. the context already closed).
  */
 export function attachAudioLevel(
   audioCtx: AudioContext,
   barCount: number,
-): Promise<() => WaveformFrame> {
+): Promise<AudioLevelSource> {
   const getUserMedia = () =>
     navigator.mediaDevices.getUserMedia({ audio: true }).catch((error: unknown) => {
       const err = error as { name?: string };
@@ -124,15 +132,29 @@ export function attachAudioLevel(
       }
       throw error;
     });
-  return getUserMedia().then((stream): (() => WaveformFrame) => {
-    const source = audioCtx.createMediaStreamSource(stream);
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 128;
-    source.connect(analyser);
-    const buffer = new Uint8Array(analyser.fftSize);
-    return (): WaveformFrame => {
-      analyser.getByteTimeDomainData(buffer);
-      return frameFromAudioLevel(buffer, barCount);
+  return getUserMedia().then((stream): AudioLevelSource => {
+    const stopTracks = () => {
+      for (const track of stream.getTracks()) track.stop();
     };
+    try {
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      source.connect(analyser);
+      const buffer = new Uint8Array(analyser.fftSize);
+      return {
+        frame: (): WaveformFrame => {
+          analyser.getByteTimeDomainData(buffer);
+          return frameFromAudioLevel(buffer, barCount);
+        },
+        release: () => {
+          source.disconnect();
+          stopTracks();
+        },
+      };
+    } catch (error) {
+      stopTracks();
+      throw error;
+    }
   });
 }

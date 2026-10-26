@@ -15,6 +15,7 @@ import { createT3TeamThreadToolBinding } from "./t3team-toolBrokerBinding.ts";
 import { callT3TeamReadMessageTool } from "./t3team-toolBrokerBindingReadMessage.ts";
 import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSource.ts";
 import { callT3TeamSearchThreadTool } from "./t3team-toolBrokerBindingSearchThread.ts";
+import { withFlaggedOptInTools } from "./t3team-threadOptInTools.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 
@@ -22,7 +23,7 @@ export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
 export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["bindSession"] {
   const { contextStore, genericThreadToolIds, reads } = deps;
-  const scopeLabel = "for this thread.";
+  const scopeLabel = "for this thread";
 
   return ({ threadId, toolContext, allowedToolGroups, grantedToolIds }) =>
     Effect.gen(function* () {
@@ -37,7 +38,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           : {
               surface: "t3team",
               state: null,
-              tools: genericThreadToolIds.map((id) => ({
+              tools: withFlaggedOptInTools(genericThreadToolIds).map((id) => ({
                 id,
                 capabilities: ["write" as const],
               })),

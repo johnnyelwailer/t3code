@@ -23,7 +23,7 @@ export function createT3TeamThreadToolBinding<TReadError, TBacklogAssigneeFilter
     threadId: input.threadId,
     ...createToolSurface({
       ...input,
-      scopeLabel: "for this thread.",
+      scopeLabel: "for this thread",
     }),
   };
 }
@@ -43,7 +43,7 @@ export function createT3TeamPrelaunchToolBinding<TReadError, TBacklogAssigneeFil
       ...input,
       availableToolIds: Object.keys(PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID),
       prelaunchOnly: true,
-      scopeLabel: `during ${input.callerKind} evaluation.`,
+      scopeLabel: `during ${input.callerKind} evaluation`,
     }),
   };
 }

@@ -17,17 +17,21 @@ export interface DesktopVoiceInputHandle {
 export function DesktopComposerVoiceInput({
   onTranscript,
   disabled,
+  sessionKey,
   className,
   ref,
 }: {
   readonly onTranscript: (text: string) => void;
   readonly disabled: boolean;
+  /** The draft the transcript lands in; a change cancels any recording in progress. */
+  readonly sessionKey?: string;
   readonly className?: string;
   readonly ref?: Ref<DesktopVoiceInputHandle>;
 }) {
   const { available, state, downloadPercent, stream, toggle } = useDesktopVoiceInput(
     onTranscript,
     (message) => toastManager.add({ type: "error", title: "Voice input", description: message }),
+    sessionKey,
   );
   useImperativeHandle(ref, () => ({ toggle }), [toggle]);
   const { phase, error } = state;

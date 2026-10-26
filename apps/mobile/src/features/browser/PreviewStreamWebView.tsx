@@ -25,6 +25,7 @@ import { Platform, Pressable, TextInput, View } from "react-native";
 import { WebView } from "react-native-webview";
 import * as Clipboard from "expo-clipboard";
 
+import { previewDocumentBaseUrl } from "../../lib/t3team-urlPolicy";
 import { AppText } from "../../components/ui/AppText";
 import { PdfPreview } from "../../components/PdfPreview";
 import { downloadAndShareAttachment } from "../../lib/attachmentDownload";
@@ -300,7 +301,10 @@ function PreviewStreamDocumentView({
   const source = useMemo(
     () => ({
       html: previewStreamDocument(configuration, previewStreamScript),
-      baseUrl: Platform.OS === "android" ? "https://localhost/" : "file:///",
+      baseUrl:
+        Platform.OS === "android"
+          ? previewDocumentBaseUrl(configuration, "https://localhost/")
+          : "file:///",
     }),
     [configuration],
   );

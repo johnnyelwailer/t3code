@@ -17,6 +17,10 @@ import {
 } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
+import {
+  resolveAtlassianCallbackPorts,
+  resolvePinnedBackendPort,
+} from "../../scripts/lib/t3team-isolatedInstanceEnv";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
 import { t3teamDistributionWebPlugin } from "./scripts/t3team-distributionWebPlugin";
@@ -66,20 +70,21 @@ const configuredAtlassianOAuthRedirectUri =
 // OAuth callback from the live listener — the resolver prefers the live desktop
 // base URL, but the baked value is still the fallback while the bridge has no
 // live URL, so a stale one must never ship. Refuse the build instead.
-const pinnedDesktopBackendPort = process.env.VITE_DESKTOP_PIN_BACKEND_PORT?.trim() === "1";
-if (pinnedDesktopBackendPort && configuredAtlassianOAuthRedirectUri) {
+const pinnedDesktopBackendPort = resolvePinnedBackendPort(process.env);
+const pinnedDesktopBackendOrigin = `http://127.0.0.1:${pinnedDesktopBackendPort ?? 3773}`;
+if (pinnedDesktopBackendPort !== undefined && configuredAtlassianOAuthRedirectUri) {
   let redirectOrigin = "";
   try {
     redirectOrigin = new URL(configuredAtlassianOAuthRedirectUri).origin;
   } catch {
     redirectOrigin = "<unparseable>";
   }
-  if (redirectOrigin !== "http://127.0.0.1:3773") {
+  if (redirectOrigin !== pinnedDesktopBackendOrigin) {
     throw new Error(
       `VITE_ATLASSIAN_OAUTH_REDIRECT_URI (${configuredAtlassianOAuthRedirectUri}) does not match the ` +
-        "pinned desktop backend origin (http://127.0.0.1:3773). Unset VITE_ATLASSIAN_OAUTH_REDIRECT_URI " +
+        `pinned desktop backend origin (${pinnedDesktopBackendOrigin}). Unset VITE_ATLASSIAN_OAUTH_REDIRECT_URI ` +
         "(or T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI) so the desktop resolver uses the live backend origin, " +
-        "or point it at http://127.0.0.1:3773/oauth/callback.",
+        `or point it at ${pinnedDesktopBackendOrigin}/oauth/callback.`,
     );
   }
 }
@@ -303,6 +308,9 @@ export default defineConfig(() => {
       __ATLASSIAN_CLIENT_ID__: JSON.stringify(configuredAtlassianClientId),
       __ATLASSIAN_SITE_URL__: JSON.stringify(configuredAtlassianSiteUrl),
       __ATLASSIAN_OAUTH_REDIRECT_URI__: JSON.stringify(configuredAtlassianOAuthRedirectUri),
+      __T3TEAM_ATLASSIAN_CALLBACK_PORTS__: JSON.stringify(
+        resolveAtlassianCallbackPorts(process.env) ?? null,
+      ),
     },
     resolve: {
       tsconfigPaths: true,

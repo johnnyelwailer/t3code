@@ -3,6 +3,14 @@ import type { FeatureFlagDefinition } from "./t3team-featureFlagTypes.ts";
 /** Flags that existed before the registry carried metadata, plus the switches that used to be
  * read straight from env. Their code defaults are unchanged; release presets decide the rest. */
 export const CORE_FEATURE_FLAG_DEFINITIONS = {
+  NEXI_MOBILE_BROKER: {
+    group: "Cloud & machines",
+    label: "Nexi Work mobile broker",
+    description:
+      "Allow Nexi Work Android clients to sign in with Entra and attach enrolled desktop hosts. Enable from an existing paired environment before mobile broker onboarding.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   MAIN_REPOSITORY: {
     group: "Orchestration",
     subgroup: "Projects",
@@ -55,6 +63,15 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     label: "Transient auto-resume",
     description:
       "A run that failed on a transient gateway error keeps retrying on a durable backoff, with a composer banner. Off: the run stays failed after the retry budget.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
+  GHE_REPOSITORY_CATALOG: {
+    group: "Orchestration",
+    subgroup: "Projects",
+    label: "GitHub Enterprise repository catalog",
+    description:
+      "The repository picker lists every repository the account can reach on a GitHub Enterprise host, like github.com. Off: GHE hosts only search names matching the project title.",
     defaultEnabled: true,
     requiresRestart: false,
   },

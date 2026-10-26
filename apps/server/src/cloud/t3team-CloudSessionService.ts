@@ -27,6 +27,7 @@ import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import { offerPlainOnMachineFailure } from "./t3team-cloudSessionMachineOffer.ts";
 import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
 import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 import {
@@ -186,10 +187,13 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           message: "Set up a machine from a project.",
         });
       }
+      // A machine that cannot be used fails with a plain session offered (`plain: true` takes it).
       const machine =
-        wantsSetup || input.projectId === undefined
+        wantsSetup || input.plain === true || input.projectId === undefined
           ? null
-          : yield* machines.resolve(input.projectId);
+          : yield* machines
+              .resolve(input.projectId)
+              .pipe(offerPlainOnMachineFailure(machines, input.projectId, broker.enabled));
       const setup =
         wantsSetup && input.projectId !== undefined
           ? yield* machines.resolveSetup(input.projectId)
@@ -207,7 +211,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           machine?.repository.name ??
           setup?.repository.name ??
           plainCheckout?.repository.name ??
-          null,
+          (plain?.kind === "workspace" ? plain.title : null),
       );
       if ((machine !== null || setup !== null) && !broker.enabled) {
         return yield* new CloudSessionFailedError({

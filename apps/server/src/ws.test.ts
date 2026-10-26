@@ -4,19 +4,26 @@ import {
   AuthSessionId,
   EnvironmentId,
   ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  RpcScopeAuthorization,
+  ServerSettings as ServerSettingsSchema,
   ThreadId,
   WS_METHODS,
+  WsRpcGroup,
   WsSubscribeServerConfigRpc,
   type OrchestrationV2StoredEvent,
   type OrchestrationProjectShell,
   type ServerConfig,
-  type ServerConfigStreamEvent,
+  ServerConfigStreamEvent,
 } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Headers } from "effect/http";
 import { RpcGroup, RpcMessage, RpcServer } from "effect/rpc";
@@ -99,6 +106,7 @@ import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerConfigModule from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ServerSettings from "./serverSettings.ts";
+import { withPackProviderOverlay } from "./t3team-packProviderOverlayTestUtils.ts";
 
 import * as EventStore from "./orchestration-v2/EventStore.ts";
 import * as ProjectionMaintenance from "./orchestration-v2/ProjectionMaintenance.ts";
@@ -117,6 +125,9 @@ import {
   WS_RPC_SERVER_OPTIONS,
   withLateEditorConfig,
 } from "./ws.ts";
+
+type ServerRpcs = RpcGroup.Rpcs<typeof WsRpcGroup>;
+type ServerResponse = RpcMessage.FromServer<ServerRpcs>;
 
 const snapshotConfig = (fields: Partial<ServerConfig>) =>
   ({ availableEditors: [], settings: {}, ...fields }) as unknown as ServerConfig;
@@ -384,6 +395,41 @@ const layerConfigSources = Layer.mergeAll(
   Layer.provideMerge(NodeServices.layer),
 );
 
+const layerConfigRpcBaseServices = Layer.mergeAll(
+  layerUnusedConfigRpcServices,
+  Layer.mock(ProviderRegistry.ProviderRegistry)({
+    getProviders: Effect.succeed([]),
+    streamChanges: Stream.never,
+  }),
+  Layer.mock(UsageLimitSources.UsageLimitSources)({ streamChanges: Stream.make([]) }),
+  Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({
+    resolveTargets: () => Effect.succeed([]),
+  }),
+  Layer.mock(DirectEndpoints.DirectEndpoints)({ resolve: () => Effect.succeed([]) }),
+  Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+    scratchRoot: Effect.succeedNone,
+    namedProjectsRoot: process.cwd(),
+  }),
+  Layer.mock(ServerEnvironment.ServerEnvironment)({
+    getDescriptor: Effect.succeed({
+      environmentId: EnvironmentId.make("config-test"),
+      label: "Config test",
+      platform: { os: "linux", arch: "x64" },
+      serverVersion: "0.0.0",
+      capabilities: { repositoryIdentity: false },
+    }),
+  }),
+  Layer.mock(EnvironmentAuth.EnvironmentAuth)({
+    getDescriptor: () =>
+      Effect.succeed({
+        policy: "loopback-browser",
+        bootstrapMethods: [],
+        sessionMethods: ["browser-session-cookie"],
+        sessionCookieName: "config-test-session",
+      }),
+  }),
+);
+
 it.effect(
   "preserves settings during discovery and keybindings during snapshot ACK at the config RPC boundary",
   () =>
@@ -403,7 +449,7 @@ it.effect(
       const finishDiscovery = yield* Deferred.make<void>();
       const responses = yield* Queue.unbounded<ServerConfigStreamEvent>();
       const configRpcServices = Layer.mergeAll(
-        layerUnusedConfigRpcServices,
+        layerConfigRpcBaseServices,
         Layer.mock(ExternalLauncher.ExternalLauncher)({
           resolveAvailableEditors: () =>
             Deferred.succeed(discoveryStarted, undefined).pipe(
@@ -411,37 +457,6 @@ it.effect(
               Effect.as([]),
             ),
           resolveFileManagerRevealKind: () => Effect.succeed(undefined),
-        }),
-        Layer.mock(ProviderRegistry.ProviderRegistry)({
-          getProviders: Effect.succeed([]),
-          streamChanges: Stream.never,
-        }),
-        Layer.mock(UsageLimitSources.UsageLimitSources)({ streamChanges: Stream.make([]) }),
-        Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({
-          resolveTargets: () => Effect.succeed([]),
-        }),
-        Layer.mock(DirectEndpoints.DirectEndpoints)({ resolve: () => Effect.succeed([]) }),
-        Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
-          scratchRoot: Effect.succeedNone,
-          namedProjectsRoot: process.cwd(),
-        }),
-        Layer.mock(ServerEnvironment.ServerEnvironment)({
-          getDescriptor: Effect.succeed({
-            environmentId: EnvironmentId.make("config-test"),
-            label: "Config test",
-            platform: { os: "linux", arch: "x64" },
-            serverVersion: "0.0.0",
-            capabilities: { repositoryIdentity: false },
-          }),
-        }),
-        Layer.mock(EnvironmentAuth.EnvironmentAuth)({
-          getDescriptor: () =>
-            Effect.succeed({
-              policy: "loopback-browser",
-              bootstrapMethods: [],
-              sessionMethods: ["browser-session-cookie"],
-              sessionCookieName: "config-test-session",
-            }),
         }),
         // Signal subscription on either accessor so the test also fails, rather
         // than hangs, against a handler that subscribes after the snapshot.
@@ -515,8 +530,8 @@ it.effect(
         key: "mod+alt+z",
         command: "terminal.split",
       });
-      const expectedSettings = [duringDiscovery, latestSettings].map(
-        ServerSettings.redactServerSettingsForClient,
+      const expectedSettings = [duringDiscovery, latestSettings].map((current) =>
+        ServerSettings.projectServerSettingsForClient(current),
       );
       const expectedKeybindings = [duringAck, latestKeybindings];
       // The two sources can interleave, but each must retain its own publication order.
@@ -546,6 +561,115 @@ it.effect(
       ),
       Effect.scoped,
     ),
+);
+
+it.effect("projects pack provider instances on every client-facing settings path", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const nexploreId = ProviderInstanceId.make("nexplore");
+      const driver = ProviderDriverKind.make("nexplore");
+      yield* withPackProviderOverlay({
+        [nexploreId]: {
+          driver,
+          configurationSource: "pack",
+          config: { enabled: true, apiKey: "overlay-only-secret" },
+        },
+      });
+      const expectProjected = (settings: ServerSettingsSchema) => {
+        assert.deepEqual(settings.providerInstances[nexploreId], {
+          driver,
+          enabled: true,
+          configurationSource: "pack",
+        });
+        assert.notInclude(JSON.stringify(settings), "overlay-only-secret");
+      };
+      const isServerSettings = Schema.is(ServerSettingsSchema);
+      const isConfigEvent = Schema.is(ServerConfigStreamEvent);
+      const responses = yield* Queue.unbounded<ServerResponse>();
+      const server = yield* RpcServer.makeNoSerialization(WsRpcGroup, {
+        ...WS_RPC_SERVER_OPTIONS,
+        onFromServer: (response) => Queue.offer(responses, response),
+      }).pipe(
+        Effect.provide(
+          layerWsRpc(
+            {
+              sessionId: AuthSessionId.make("pack-projection-test"),
+              subject: "pack-projection-test",
+              method: "browser-session-cookie",
+              scopes: [],
+            },
+            {},
+            {},
+            yield* PreviewAutomationBroker.PreviewAutomationBroker,
+            yield* ServerBrowser.ServerBrowser,
+          ).pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                layerConfigRpcBaseServices,
+                Layer.mock(ExternalLauncher.ExternalLauncher)({
+                  resolveAvailableEditors: () => Effect.succeed([]),
+                  resolveFileManagerRevealKind: () => Effect.succeed(undefined),
+                }),
+              ),
+            ),
+            Layer.provideMerge(Layer.succeed(RpcScopeAuthorization)((effect) => effect)),
+          ),
+        ),
+      );
+      const request = (id: string, tag: ServerRpcs["_tag"], payload: object) =>
+        server.write(0, {
+          _tag: "Request",
+          id: RpcMessage.RequestId(id),
+          tag,
+          payload,
+          headers: Headers.empty,
+        });
+
+      yield* request("snapshot", WS_METHODS.subscribeServerConfig, {});
+      const snapshot = yield* Queue.take(responses);
+      assert.equal(snapshot._tag, "Chunk");
+      if (snapshot._tag !== "Chunk") return yield* Effect.die("Missing initial snapshot");
+      const snapshotValues: ReadonlyArray<unknown> = snapshot.values;
+      const [initial] = snapshotValues;
+      if (!isConfigEvent(initial) || initial.type !== "snapshot") {
+        return yield* Effect.die("Missing initial snapshot");
+      }
+      expectProjected(initial.config.settings);
+      yield* server.write(0, { _tag: "Ack", requestId: RpcMessage.RequestId("snapshot") });
+
+      yield* request("get", WS_METHODS.serverGetSettings, {});
+      yield* request("update", WS_METHODS.serverUpdateSettings, {
+        patch: { defaultAutoPull: true },
+      });
+      const seen = new Set<string>();
+      while (seen.size < 3) {
+        const response = yield* Queue.take(responses);
+        if (response._tag === "Chunk") {
+          const chunkValues: ReadonlyArray<unknown> = response.values;
+          const [event] = chunkValues;
+          if (isConfigEvent(event) && event.type === "settingsUpdated") {
+            expectProjected(event.payload.settings);
+            seen.add("stream");
+          }
+          yield* server.write(0, { _tag: "Ack", requestId: response.requestId });
+        } else if (response._tag === "Exit" && Exit.isSuccess(response.exit)) {
+          const value = response.exit.value;
+          if (!isServerSettings(value)) return yield* Effect.die("Unexpected response payload");
+          expectProjected(value);
+          seen.add(String(response.requestId));
+        }
+      }
+      assert.sameMembers([...seen], ["get", "update", "stream"]);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.fresh(layerConfigSources),
+          Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
+          Layer.mock(ServerBrowser.ServerBrowser)({}),
+        ),
+      ),
+    ),
+  ),
 );
 
 // Compaction keeps the oldest and newest event per message, so a cursor older

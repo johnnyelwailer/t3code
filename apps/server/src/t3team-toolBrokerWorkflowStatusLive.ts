@@ -7,6 +7,8 @@
  */
 import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import * as Option from "effect/Option";
 
 import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
@@ -23,8 +25,10 @@ export const makeWorkflowStatusToolsForThread = Effect.fn("makeWorkflowStatusToo
     if (!runRepository) {
       return undefined;
     }
-    return makeWorkflowStatusToolHandlers({ runRepository }) as (
-      threadId: ThreadId,
-    ) => T3TeamWorkflowStatusToolHandlers;
+    return makeWorkflowStatusToolHandlers({
+      runRepository,
+      journalStore: Option.getOrUndefined(yield* Effect.serviceOption(WorkflowJournalStore)),
+      fileSystem: Option.getOrUndefined(yield* Effect.serviceOption(FileSystem.FileSystem)),
+    }) as (threadId: ThreadId) => T3TeamWorkflowStatusToolHandlers;
   },
 );

@@ -23,6 +23,14 @@
       "types": "./src/t3team-manualContinuation.ts",
       "import": "./src/t3team-manualContinuation.ts"
     },
+    "./t3team-packThemeColors": {
+      "types": "./src/t3team-packThemeColors.ts",
+      "import": "./src/t3team-packThemeColors.ts"
+    },
+    "./t3team-cloudSessionFit": {
+      "types": "./src/t3team-cloudSessionFit.ts",
+      "import": "./src/t3team-cloudSessionFit.ts"
+    },
     "./t3team-widgetIconSprite": {
       "types": "./src/t3team-widgetIconSprite.ts",
       "import": "./src/t3team-widgetIconSprite.ts"
@@ -394,6 +402,10 @@
     "./voiceInput": {
       "types": "./src/t3team-voiceInput.ts",
       "import": "./src/t3team-voiceInput.ts"
+    },
+    "./activeRecording": {
+      "types": "./src/t3team-activeRecording.ts",
+      "import": "./src/t3team-activeRecording.ts"
     },
     "./voiceInputUi": {
       "types": "./src/t3team-voiceInputUi.tsx",

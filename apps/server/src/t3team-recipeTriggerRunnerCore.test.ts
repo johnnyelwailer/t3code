@@ -18,44 +18,67 @@ import {
 interface RecordedLaunch {
   readonly key: string;
   readonly args: Record<string, unknown>;
+  /** Settle the launched run (it leaves the in-flight count). */
   readonly resolve: () => void;
-  readonly reject: (error: Error) => void;
 }
 
+/** A fake launch ledger: limits are read back from the claims, exactly like the durable one. */
 function makeEngine() {
   const clock = { now: 0 };
   const claimedKeys: string[] = [];
   const launches: RecordedLaunch[] = [];
+  const claims: Array<{ key: string; recipeId: string; at: number; settled: boolean }> = [];
 
   let claimAlwaysFalse = false;
+  let nextId = 0;
   const ports: RecipeTriggerEnginePorts = {
     nowMs: () => clock.now,
     log: () => {},
-    claim: async (key) => {
-      claimedKeys.push(key);
-      return !claimAlwaysFalse;
+    newLaunchId: () => `launch-${(nextId += 1)}`,
+    history: async ({ recipeId, windowStartMs, intervalStartMs }) => {
+      const ofRecipe = claims.filter((c) => c.recipeId === recipeId);
+      const lastLaunchAtMsByKey = new Map<string, number>();
+      for (const c of ofRecipe) {
+        if (c.at >= intervalStartMs) {
+          lastLaunchAtMsByKey.set(c.key, Math.max(c.at, lastLaunchAtMsByKey.get(c.key) ?? 0));
+        }
+      }
+      return {
+        inFlight: ofRecipe.filter((c) => !c.settled).length,
+        launchesInWindow: ofRecipe.filter((c) => c.at >= windowStartMs).length,
+        lastLaunchAtMsByKey,
+      };
     },
-    launch: async (request) => {
-      let resolveRef: () => void = () => {};
-      let rejectRef: (error: Error) => void = () => {};
+    consume: async ({ key }) => {
+      claimedKeys.push(key);
+    },
+    claim: async ({ key, request }) => {
+      claimedKeys.push(key);
+      if (claimAlwaysFalse) return false;
+      claims.push({ key, recipeId: request.recipeId, at: clock.now, settled: false });
+      return true;
+    },
+    launch: (request) => {
+      const claim = claims.findLast((c) => c.key === request.key)!;
       launches.push({
         key: request.key,
         args: request.args,
-        resolve: () => resolveRef(),
-        reject: (error) => rejectRef(error),
-      });
-      await new Promise<void>((resolve, reject) => {
-        resolveRef = resolve;
-        rejectRef = reject;
+        resolve: () => {
+          claim.settled = true;
+        },
       });
     },
   };
   const engine = makeRecipeTriggerEngine(ports);
+  const inFlight = (recipeId: string) =>
+    claims.filter((c) => c.recipeId === recipeId && !c.settled).length;
   return {
     engine,
+    ports,
     clock,
     claimedKeys,
     launches,
+    inFlight,
     setClaimAlwaysFalse: () => {
       claimAlwaysFalse = true;
     },
@@ -88,15 +111,6 @@ const processEvents = (
   engine: ReturnType<typeof makeRecipeTriggerEngine>,
   overrides: Partial<typeof baseInput> = {},
 ) => engine.processEvents({ ...baseInput, ...overrides } as never);
-
-/**
- * Flush the microtask queue so launch-promise resolution (launch -> catch -> finally takes
- * several microtask hops, more than a single `await`) can drop the in-flight slot before the
- * next processEvents.
- */
-const settle = async () => {
-  for (let hop = 0; hop < 10; hop += 1) await Promise.resolve();
-};
 
 describe("recipe trigger launch policy", () => {
   it("collapses a burst of events for one key into ONE launch with the newest payload (trailing debounce)", async () => {
@@ -138,7 +152,6 @@ describe("recipe trigger launch policy", () => {
       events: [{ id: 1, payload: { cr: "repo#1" }, createdAtMs: 0 }],
     });
     launches[0]?.resolve(); // settle launch #1 so the in-flight cap is out of the picture
-    await settle();
 
     clock.now = 50_000; // inside the interval
     expect(
@@ -158,7 +171,7 @@ describe("recipe trigger launch policy", () => {
   });
 
   it("queues the next key while maxConcurrent is in flight, launches it when the first settles", async () => {
-    const { engine, clock, launches } = makeEngine();
+    const { engine, clock, launches, inFlight } = makeEngine();
     const settings = { ...RECIPE_TRIGGER_DEFAULT_SETTINGS, maxConcurrent: 1 };
 
     clock.now = 0;
@@ -171,11 +184,10 @@ describe("recipe trigger launch policy", () => {
     });
     expect(result.launched).toBe(1); // repo#1 (oldest event first)
     expect(result.deferred).toBe(1); // repo#2 waits on the in-flight cap
-    expect(engine.inFlight("recipe-a")).toBe(1);
+    expect(inFlight("recipe-a")).toBe(1);
 
     launches[0]?.resolve();
-    await settle();
-    expect(engine.inFlight("recipe-a")).toBe(0);
+    expect(inFlight("recipe-a")).toBe(0);
 
     clock.now = 10_000;
     expect(
@@ -244,7 +256,6 @@ describe("recipe trigger launch policy", () => {
     expect(launches.map((l) => l.key).sort()).toEqual(["repo#1", "repo#2"]);
 
     for (const launch of launches) launch.resolve();
-    await settle();
     clock.now = 60_000; // window still holds two launches
     expect(
       await processEvents(engine, {
@@ -308,32 +319,28 @@ describe("recipe trigger launch policy", () => {
     expect(seen).toEqual([{ enabled: true, overrides: { maxConcurrent: 2 } }]);
   });
 
-  it("launch() failures decrement the in-flight counter, so the cap frees up", async () => {
-    const { engine, clock, launches } = makeEngine();
-    const settings = { ...RECIPE_TRIGGER_DEFAULT_SETTINGS, maxConcurrent: 1 };
-    clock.now = 0;
-    await processEvents(engine, {
+  it("keeps no limit state of its own: a fresh engine on the same ledger still holds the caps", async () => {
+    const first = makeEngine();
+    const settings = { ...RECIPE_TRIGGER_DEFAULT_SETTINGS, maxConcurrent: 5, dailyCap: 1 };
+    first.clock.now = 0;
+    await processEvents(first.engine, {
       settings,
-      events: [
-        { id: 1, payload: { cr: "repo#1" }, createdAtMs: 0 },
-        { id: 2, payload: { cr: "repo#2" }, createdAtMs: 0 },
-      ],
+      events: [{ id: 1, payload: { cr: "repo#1" }, createdAtMs: 0 }],
     });
-    launches[0]?.reject(new Error("provider exploded"));
-    await settle();
-    expect(engine.inFlight("recipe-a")).toBe(0);
+    first.launches[0]?.resolve();
 
-    clock.now = 10_000;
+    const restarted = makeRecipeTriggerEngine(first.ports);
+    first.clock.now = 60_000;
     expect(
-      await processEvents(engine, {
+      await processEvents(restarted, {
         settings,
-        events: [{ id: 2, payload: { cr: "repo#2" }, createdAtMs: 0 }],
+        events: [{ id: 2, payload: { cr: "repo#2" }, createdAtMs: 60_000 }],
       }),
-    ).toMatchObject({ launched: 1 });
+    ).toMatchObject({ launched: 0, deferred: 1 });
   });
 
   it("never runs more than maxConcurrent launches of a recipe at once", async () => {
-    const { engine, clock } = makeEngine();
+    const { engine, clock, inFlight } = makeEngine();
     const settings = { ...RECIPE_TRIGGER_DEFAULT_SETTINGS, maxConcurrent: 1 };
     clock.now = 0;
     for (let n = 1; n <= 4; n++) {
@@ -342,6 +349,6 @@ describe("recipe trigger launch policy", () => {
         events: [{ id: n, payload: { cr: `repo#${n}` }, createdAtMs: 0 }],
       });
     }
-    expect(engine.inFlight("recipe-a")).toBe(1); // exactly one in flight, the rest parked
+    expect(inFlight("recipe-a")).toBe(1); // exactly one in flight, the rest parked
   });
 });

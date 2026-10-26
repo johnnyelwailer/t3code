@@ -1,4 +1,5 @@
 import type { AccountDefinition } from "./account.ts";
+import type { HostServiceRegistration } from "./t3team-hostService.ts";
 import type { ColdLocalCompactionRouteDefinition } from "./cold-local-compaction.ts";
 import type { CompletionWakeRendererDefinition } from "./completion-wake.ts";
 import type { PackProviderDriverDefinition } from "./provider-driver.ts";
@@ -9,6 +10,7 @@ export * from "./mcp-apps.ts";
 export * from "./cold-local-compaction.ts";
 export * from "./completion-wake.ts";
 export * from "./account.ts";
+export * from "./t3team-hostService.ts";
 export * from "./t3team-collections.ts";
 
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
@@ -186,7 +188,7 @@ export type PackFeatureFlagDefinition = {
   readonly envAliases?: readonly string[];
 };
 
-export type PackActivationContext = {
+export type PackActivationContext = HostServiceRegistration & {
   readonly pack: { readonly id: string; readonly directory: string };
   readonly defineAgentProvider: (definition: AgentProviderDefinition) => void;
   readonly defineProviderDriver: (definition: PackProviderDriverDefinition) => void;

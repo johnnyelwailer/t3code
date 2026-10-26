@@ -553,3 +553,46 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 - `packages/client-runtime/src/state/serverConfigProjection.ts` — one `featureFlagsUpdated` case that replaces `config.featureFlags`.
 - `packages/contracts/src/clientRpcPermissions.ts` — `serverSetFeatureFlag` requires the settings-write scope, like the other host settings writes.
 - `scripts/package.json` — `@t3tools/project-context` dependency for the release-flavor preset writer in `build-desktop-artifact.ts`.
+
+## Full-text affordances for truncated rows (2026-10-23)
+
+- `apps/web/src/components/settings/ScheduledTasksSettings.tsx` — tooltip exposes the full scheduled-task prompt while preserving its two-line clamp.
+- `apps/web/src/components/settings/settingsLayout.tsx` — settings row titles wrap long unbroken text within the existing content grid.
+
+## Mobile extension seams (2026-10-25)
+
+Reasons for the upstream files the mobile extension registry touches. Each edit is additive and a no-op without a distribution.
+
+- `apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx` — renders the `connectionsNewTop` slot (inside an error boundary) above the stock pairing options.
+- `apps/mobile/src/App.tsx` — one call that runs the distribution's startup hook before the first render, instead of relying on import order.
+- `apps/mobile/metro.config.js` — wraps the config with the distribution hook (`t3team-distributionMobileMetro.cjs`) and takes the CSS entry from it; both are identity for a build without a selected overlay.
+- `apps/mobile/tsconfig.json` — `paths` for `@t3code/distribution-mobile` (the stock stub) and `@t3code/mobile-api` (the overlay's explicit surface), as `apps/web/tsconfig.json` does for `@t3code/distribution-web`.
+- `apps/mobile/vite.config.ts` — `resolve.tsconfigPaths` so the mobile unit tests resolve those two specifiers like the app does.
+- `packages/client-runtime/src/connection/wakeups.ts` and `.../supervisor.test.ts` — the `broker-availability-changed` wake reason (it only unparks blocked waits, never ends a healthy relay lease) and its two supervisor tests.
+- `apps/mobile/src/connection/platform.ts` — merges the distribution's extra wakeup sources and lets a distribution replace the stock broker gateway stub; both additive.
+- `knip.jsonc` — lists `src/extensions/t3team-api.ts` (the overlay's `@t3code/mobile-api`) as a mobile entry: only the distribution Metro hook resolves it, so nothing imports it.
+
+## Mobile URL policy seam (2026-10-25)
+
+Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op without a distribution policy.
+
+- `apps/mobile/src/lib/openExternalUrl.ts` — refuses to hand an app-private URL to another app.
+- `apps/mobile/src/native/EnrichedMarkdownText.tsx` — the markdown "Share link" action skips app-private URLs.
+- `apps/mobile/src/features/threads/QuestionAnswerHistory.tsx` and `apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx` — "open attachment" and "open in browser" go through `openAssetLink`, which opens an app-private asset through the policy instead of another app.
+- `apps/mobile/src/lib/attachmentDownload.ts` — tells the policy before each native download.
+- `apps/mobile/src/features/browser/PreviewStreamWebView.tsx` and `apps/mobile/src/features/devices/device-stream-document.ts` — the stream WebView document base URL may be overridden by the policy.
+- `packages/client-runtime/src/state/assets.ts` and `.../assets.test.ts` — `setAssetUrlObserver`: a platform sees each asset URL before it reaches a consumer (a platform whose native HTTP clients cannot send an environment's credentials authorizes the exact URL).
+- `apps/mobile/app.config.ts` — passes the config through `applyDistributionMobile`: identity for a stock build; with a selected overlay it turns Expo updates off (a stock OTA must not replace overlay JavaScript) and adds a Gradle plugin that makes the overlay an input of the bundle task.
+- `apps/mobile/fingerprint.config.js` — adds the overlay's entry and a hash of its files to the runtime version, so a distribution binary never shares a runtime version with a stock binary (empty for a stock build).
+- `apps/mobile/src/features/home/HomeScreen.tsx` — renders the distribution's `homeTop` slot (isolated, nothing without one) at the top of the Chats list and above the stock empty state, and lets a `homeEmptyState` slot replace the empty home (isolated; a failure restores the stock empty home).
+- `apps/mobile/src/features/settings/SettingsRouteScreen.tsx` — renders the distribution's `settingsConnections` row (isolated, nothing without one) as the last row of the Connections group (two one-line additions).
+- `apps/mobile/src/components/CompactBrandTitle.tsx` — a distribution's `brandTitle` replaces the wordmark title of the home header.
+- `apps/mobile/src/components/LoadingScreen.tsx` — a distribution may hide the app's brand mark on the loading screen (`showsLoadingBrandMark`).
+- `apps/mobile/src/lib/mobileThemeVariables.ts` — a distribution's `themeVariables` repaints the default theme (its palette); identity without one.
+- `packages/shared/package.json` — exports `t3team-packThemeColors`, the pack-theme overlay shared by the web app and the mobile distribution theme (the web files `t3team-packThemeDefinition.ts` and `t3team-packThemeRoles.ts` now use it; both are fork-owned).
+
+## Slow login shell keeps Homebrew on the backend PATH (2026-10-26)
+
+- `apps/desktop/src/shell/DesktopShellEnvironment.ts` — when neither the login-shell probe nor launchctl yields a PATH on macOS (a loaded machine times the 5 s probe out), appends the existing well-known user bin dirs after the current PATH entries, so Homebrew `gh`/`codex`/`claude` are found. darwin only; the timeout is unchanged.
+- `apps/desktop/src/app/DesktopCliCommand.ts` — exports `unixCandidates` (one word) so the fallback shares that list instead of duplicating it.
+- `apps/desktop/src/shell/DesktopShellEnvironment.test.ts` — covers the fallback on macOS and its absence on linux.

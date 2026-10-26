@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
+import { scanDefinition } from "./t3team-machineDefinitionScan.ts";
 import { scanCheckout } from "./t3team-projectMachineScan.ts";
 
 const makeCheckout = Effect.fn("makeCheckout")(function* (files: Record<string, string>) {
@@ -165,9 +166,18 @@ it.layer(NodeServices.layer)("scanCheckout", (it) => {
 
     it.effect("skips a nested folder whose name the wire contract cannot carry", () =>
       Effect.gen(function* () {
-        const result = yield* scan({
-          ".devcontainer/a\nb/devcontainer.json": `{ "image": "node:22" }`,
-          ".devcontainer/ok/devcontainer.json": `{ "image": "node:22" }`,
+        const result = yield* scanDefinition({
+          repository: ".",
+          reader: {
+            read: (path) =>
+              Effect.succeed(
+                path === ".devcontainer/ok/devcontainer.json" ? '{"image":"node:22"}' : null,
+              ),
+            nestedPaths: Effect.succeed([
+              ".devcontainer/a\nb/devcontainer.json",
+              ".devcontainer/ok/devcontainer.json",
+            ]),
+          },
         });
         expect(result.candidates.map((c) => c.devcontainerPath)).toEqual([
           ".devcontainer/ok/devcontainer.json",

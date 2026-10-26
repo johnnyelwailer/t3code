@@ -18,6 +18,13 @@ import {
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
 import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
+import { logCloudProjectWaitCancelled } from "./t3team-cloudProjectWaitLog";
+import { cloudProjectNotResolvedActions } from "./t3team-cloudProjectNotResolvedActions";
+import {
+  queuedSendEnvironmentIds,
+  useCloudQueuedSendEnvironmentFacts,
+} from "./t3team-useCloudQueuedSendEnvironmentFacts";
+import { useCloudQueuedSendProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 import {
   useCloudSessionProjectFollow,
@@ -31,9 +38,11 @@ import { useComposerDraftStore } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
 import { selectProjectGroupingSettings } from "~/logicalProject";
 import { useProjects } from "~/state/entities";
-import type { CloudQueuedSendCardInput } from "./t3team-CloudQueuedSendCard";
 import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
+import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
+import type { CloudSetupSessionSource } from "./t3team-useCloudSessionSetupCard";
 import {
+  currentCloudProjectWait,
   presentCloudQueuedSendProgress,
   type CloudQueuedSendStepFacts,
 } from "./t3team-cloudQueuedSendSteps";
@@ -52,13 +61,13 @@ export function useCloudSessionComposerGate(input: {
   readonly hasQueuedBind: boolean;
   /** The thread card's input while the draft's first message waits; null otherwise. */
   readonly card: CloudQueuedSendCardInput | null;
+  /** The shared session list, so the setup card reads the same list and creates through it. */
+  readonly cloud: CloudSetupSessionSource;
 } {
   const cloud = useCloudSessionController();
   const { draftId } = input;
-  useCloudSessionProjectFollow({
-    scopeKey: input.scopeKey,
-    projectKey: useCloudSessionProjectKey(input.projectRef),
-  });
+  const projectKey = useCloudSessionProjectKey(input.projectRef);
+  useCloudSessionProjectFollow({ scopeKey: input.scopeKey, projectKey });
 
   const queued = useDraftCloudQueuedSend(draftId);
   const flushing = useCloudQueuedSendDispatching(queued?.messageId ?? null);
@@ -68,9 +77,6 @@ export function useCloudSessionComposerGate(input: {
       queueCloudSessionSendIfNeeded({ draftId, turn, sessions: cloud.sessions }),
     [cloud.sessions, draftId],
   );
-  const cancelQueuedSend = useCallback(() => {
-    if (draftId !== null) cancelDraftCloudQueuedSend(draftId);
-  }, [draftId]);
   const retryQueuedSend = useCallback(() => {
     if (draftId !== null) retryDraftCloudQueuedSend(draftId);
   }, [draftId]);
@@ -81,6 +87,9 @@ export function useCloudSessionComposerGate(input: {
   const { environments } = useEnvironments();
   const projects = useProjects();
   const settings = useClientSettings();
+  const machineFacts = useCloudQueuedSendEnvironmentFacts(
+    queuedSendEnvironmentIds(queued === null ? [] : [queued], cloud.sessions),
+  );
   // The same facts the app-level flusher acts on; the card and the banner both render them.
   const stepFacts = useMemo<CloudQueuedSendStepFacts | null>(() => {
     if (queued === null || draft === undefined) return null;
@@ -92,14 +101,39 @@ export function useCloudSessionComposerGate(input: {
       projects,
       threadShells: [],
       groupingSettings: selectProjectGroupingSettings(settings),
+      bootstrapProjectIdOf: machineFacts.bootstrapProjectIdOf,
     });
     return { ...facts, queued, projectReady: facts.project !== null, flushing };
-  }, [cloud.sessions, draft, environments, flushing, projects, queued, settings]);
+  }, [cloud.sessions, draft, environments, flushing, machineFacts, projects, queued, settings]);
+  const cancelQueuedSend = useCallback(() => {
+    if (draftId === null) return;
+    const waitingOnProject = stepFacts !== null && currentCloudProjectWait(stepFacts) !== null;
+    logCloudProjectWaitCancelled({
+      cancelled: cancelDraftCloudQueuedSend(draftId),
+      waitingOnProject,
+      environmentId: stepFacts?.session?.environmentId ?? null,
+      reason: stepFacts?.projectWait?.reason ?? null,
+      nowMs: Date.now(),
+    });
+  }, [draftId, stepFacts]);
+  const recoveryActions = cloudProjectNotResolvedActions({
+    draftId,
+    queued,
+    scopeKey: input.scopeKey,
+    projectKey,
+    projectId:
+      input.projectRef !== null && input.projectRef.environmentId === cloud.primaryEnvironmentId
+        ? input.projectRef.projectId
+        : undefined,
+    createPending: cloud.createPending,
+    onCreate: cloud.onCreate,
+  });
+  const projectWaitNow = useCloudQueuedSendProjectWaitNow(stepFacts);
   const canRetry = queued?.failureMessage !== undefined && queued.retryable !== false;
 
   const bannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (stepFacts === null) return null;
-    const view = presentCloudQueuedSendProgress(stepFacts, Date.now());
+    const view = presentCloudQueuedSendProgress(stepFacts, projectWaitNow);
     const action = (label: string, onClick: () => void) =>
       createElement(Button, { key: label, size: "xs", variant: "ghost", onClick }, label);
     return {
@@ -111,11 +145,13 @@ export function useCloudSessionComposerGate(input: {
         "aria-hidden": true,
       }),
       title: view.title,
-      description: stepFacts.queued.failureMessage ?? stepFacts.queued.sessionLabel,
+      description:
+        stepFacts.queued.failureMessage ?? view.projectWait?.text ?? stepFacts.queued.sessionLabel,
       actions: createElement(
         Fragment,
         null,
         canRetry ? action("Retry", retryQueuedSend) : null,
+        ...recoveryActions.map((item) => action(item.label, item.onClick)),
         // In flight the turn is already starting: it is delivered, not cancellable.
         stepFacts.flushing
           ? createElement(
@@ -126,13 +162,20 @@ export function useCloudSessionComposerGate(input: {
           : action("Cancel", cancelQueuedSend),
       ),
     };
-  }, [canRetry, cancelQueuedSend, retryQueuedSend, stepFacts]);
+  }, [canRetry, cancelQueuedSend, projectWaitNow, recoveryActions, retryQueuedSend, stepFacts]);
 
   return {
     tryQueueSend,
     cancelQueuedSend,
     bannerItem,
     hasQueuedBind: queued !== null,
+    cloud: {
+      sessions: cloud.sessions,
+      loading: cloud.loading,
+      onCreate: cloud.onCreate,
+      createPending: cloud.createPending,
+      primaryEnvironmentId: cloud.primaryEnvironmentId,
+    },
     card:
       stepFacts === null
         ? null
@@ -140,6 +183,7 @@ export function useCloudSessionComposerGate(input: {
             facts: stepFacts,
             onCancel: cancelQueuedSend,
             onRetry: canRetry ? retryQueuedSend : null,
+            recoveryActions,
           },
   };
 }

@@ -106,6 +106,7 @@ import {
   resolveSelectableProviderInstanceEntry,
   type ProviderInstanceEntry,
 } from "../providerInstances";
+import { resolveReadyProviderOverride } from "../t3team-readyProviderPreference";
 
 type ThreadProjection = EnvironmentThread["projection"];
 type ThreadStructureRow = ThreadStructure["visibleTurnItems"][number];
@@ -573,6 +574,8 @@ export function resolveComposerProviderSelection(input: {
   candidateInstanceIds: ReadonlyArray<ProviderInstanceId | null | undefined>;
   lockedProvider: ProviderDriverKind | null;
   lockedInstanceId: ProviderInstanceId | null | undefined;
+  /** `AGENTS_PREFER_READY_PROVIDER`: see t3team-readyProviderPreference. */
+  preferReadyProvider?: boolean;
 }) {
   const requestedInstanceId = input.candidateInstanceIds.find(
     (candidate) => candidate != null && candidate !== NO_PROVIDER_MODEL_SELECTION.instanceId,
@@ -598,6 +601,12 @@ export function resolveComposerProviderSelection(input: {
       (!requiresExactInstance || entry.instanceId === input.lockedInstanceId),
   );
   const selectedProviderEntry =
+    (input.preferReadyProvider
+      ? resolveReadyProviderOverride({
+          entries: compatibleEntries,
+          candidateInstanceIds: input.candidateInstanceIds,
+        })
+      : undefined) ??
     input.candidateInstanceIds
       .map((candidate) =>
         compatibleEntries.find(

@@ -22,6 +22,24 @@ export const isBareSpecifier = (source: string): boolean =>
   !source.startsWith("node:") &&
   !source.includes("?");
 
+/**
+ * Whether `importer` is distribution code compiled into the bundle. That is the pack directory
+ * itself AND every other file of the distribution checkout the pack reaches into (the pack imports
+ * e.g. `../../broker/agent/*.ts`, whose `ws` / `jose` imports sit beside a package.json that is not
+ * part of this workspace). Anything outside this t3code workspace and outside node_modules counts;
+ * the server's own sources already resolve here.
+ */
+export const isDistributionImporter = (input: {
+  readonly importerPath: string;
+  readonly distributionDir: string;
+  readonly workspaceRoot: string;
+}): boolean => {
+  const { importerPath, distributionDir, workspaceRoot } = input;
+  if (importerPath.startsWith(distributionDir + NodePath.sep)) return true;
+  if (importerPath.includes(`${NodePath.sep}node_modules${NodePath.sep}`)) return false;
+  return !importerPath.startsWith(workspaceRoot + NodePath.sep);
+};
+
 export const createDistributionImportResolver = (): ((
   source: string,
   importer: string,

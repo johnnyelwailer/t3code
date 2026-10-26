@@ -70,6 +70,7 @@ import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubA
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
+import { T3TeamRemoteEnvironmentLive } from "./t3team-remoteEnvironmentServices.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
@@ -202,6 +203,7 @@ import * as OrchestrationHttp from "./orchestration-v2/http.ts";
 import * as ProjectHttp from "./project/http.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStoreLive } from "./persistence/WorkflowSignalStore.ts";
+import { WorkflowTriggerLaunchStoreLive } from "./persistence/t3team-WorkflowTriggerLaunchStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import {
@@ -235,6 +237,8 @@ import {
 import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
+import { startHostServices, withHostServices } from "./t3team-hostServices.ts";
+import { hostServiceRoutes } from "./t3team-hostServiceRoutes.ts";
 import { t3teamAccountRouteLayer } from "./t3team-account-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
@@ -248,6 +252,7 @@ import {
   t3teamThreadWorkflowResolveInputRouteLayer,
 } from "./t3team-thread-recipe-workflow-routes.ts";
 import { t3teamRecipeHeadlessLaunchRouteLayer } from "./t3team-recipeHeadlessLaunchRoutes.ts";
+import { t3teamRecipeTriggerStatusRouteLayer } from "./t3team-recipeTriggerStatusRoute.ts";
 import {
   T3TeamRecipeTriggerRunner,
   T3TeamRecipeTriggerRunnerLive,
@@ -276,6 +281,7 @@ import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStor
 import { turnInactivityPolicyLive } from "./orchestration-v2/t3team-turnInactivityPolicy.ts";
 import { coldLocalCompactionLive } from "./orchestration-v2/t3team-coldLocalCompactionLive.ts";
 import { packCompletionWakeRendererLive } from "./t3team-pack-completionWakeRenderer.ts";
+import { providerUsageWakeRendererLive } from "./t3team-providerUsageWakeRenderer.ts";
 import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
@@ -318,6 +324,7 @@ import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
 import { T3TeamAskUserWriterLive } from "./mcp/toolkits/t3team/t3team-askUserWriter.ts";
 import { T3TeamDelegatedTaskPreparationLive } from "./t3team-delegateTaskPreparationLive.ts";
+import { T3TeamDelegateCloudSessionsLayer } from "./t3team-delegateTaskCloudSessionLayer.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -699,6 +706,7 @@ const T3TeamWorkflowHostLive = T3TeamWorkflowHost.layer.pipe(Layer.provide(T3Tea
 // thread-bound launch use (layer references memoize). Defined after T3TeamWorkflowHostLive so
 // it can share that const instead of rebuilding the host layer.
 const T3TeamRecipeTriggerRunnerLayer = T3TeamRecipeTriggerRunnerLive.pipe(
+  Layer.provideMerge(WorkflowTriggerLaunchStoreLive),
   Layer.provideMerge(WorkflowSignalSourcesLive),
   Layer.provide(T3TeamWorkflowHostLive),
   Layer.provide(T3TeamScriptHost.layer.pipe(Layer.provide(layerPullRequestService))),
@@ -782,8 +790,14 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   // t3team: the ONE settle-guard override (workflow run, live child, parent wait, settled
   // parent); other fork guards compose into it (t3team-childSettleGuards.ts).
   Layer.provide(T3TeamSettleGuardsLive),
-  // t3team: pack-registered delegated-completion wake text (default text without a pack).
-  Layer.provide(packCompletionWakeRendererLive.pipe(Layer.provide(ProjectionStoreV2.layer))),
+  // t3team: pack-registered delegated-completion wake text (default text without a pack), then
+  // the children's provider-usage lines appended over whichever renderer that is.
+  Layer.provide(
+    providerUsageWakeRendererLive.pipe(
+      Layer.provide(packCompletionWakeRendererLive.pipe(Layer.provide(ProjectionStoreV2.layer))),
+      Layer.provide(ProjectionStoreV2.layer),
+    ),
+  ),
   // t3team: pack-registered cold-cache local compaction (native `/compact` without a route).
   Layer.provide(coldLocalCompactionLive),
   Layer.provide(layerScheduledTaskWebhookOrigin),
@@ -948,6 +962,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ),
   Layer.provideMerge(ProviderRegistry.layer),
   Layer.provideMerge(ProviderInstanceRegistryHydration.layer),
+  Layer.provideMerge(T3TeamRemoteEnvironmentLive),
   Layer.provideMerge(
     Layer.mergeAll(
       AntigravityInstallation.AntigravityInstallation.layer,
@@ -1015,7 +1030,7 @@ const layerRuntimeCoreDependencies = layerRuntimeCoreDependenciesBase.pipe(
   ),
 );
 
-const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
+const layerRuntimeDependencies = withHostServices(layerRuntimeCoreDependencies).pipe(
   Layer.provideMerge(layerUsage),
   Layer.provideMerge(layerBackground),
   Layer.provideMerge(layerResourceDiagnostics),
@@ -1068,6 +1083,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamAtlassianAssetContentRouteLayer,
     t3teamAtlassianOAuthCallbackRouteLayer,
     t3teamCloudBrokerRouteLayer,
+    hostServiceRoutes,
     t3teamAccountRouteLayer,
   ),
   // Every other t3team route requires a session, like upstream's raw routes (t3team-routeAuth.ts).
@@ -1102,6 +1118,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,
     t3teamThreadRecipeWorkflowLaunchRouteLayer,
     t3teamRecipeHeadlessLaunchRouteLayer,
+    t3teamRecipeTriggerStatusRouteLayer,
     t3teamThreadWorkflowControlRouteLayer,
     t3teamThreadJobsRouteLayer,
     t3teamThreadDraftMutationStatusRouteLayer,
@@ -1115,7 +1132,9 @@ const layerMakeRoutes = Layer.mergeAll(
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     // t3team: delegate_task workspace isolation + extensions (DelegatedTaskPreparation hook).
-    Layer.provide(T3TeamDelegatedTaskPreparationLive),
+    Layer.provide(
+      T3TeamDelegatedTaskPreparationLive.pipe(Layer.provide(T3TeamDelegateCloudSessionsLayer)),
+    ),
     // t3team: t3_thread_send mode "mailbox" (shared inter-agent mailbox instance).
     Layer.provide(T3TeamThreadMailboxDeliveryLive),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
@@ -1186,6 +1205,7 @@ const layerMakeServer = Layer.unwrap(
         yield* HttpServer.HttpServer;
         const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
         yield* startup.markHttpListening;
+        yield* startHostServices;
       }),
     );
     const layerRuntimeState = Layer.effectDiscard(

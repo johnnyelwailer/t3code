@@ -43,6 +43,7 @@ import {
   tryDispatchThreadScopedToolCall,
   tryDispatchWorkflowToolCall,
 } from "./t3team-toolBrokerBindingDispatchBranches.ts";
+import { optInToolEnableHint } from "./t3team-threadOptInTools.ts";
 
 export function dispatchT3TeamToolCall(input: {
   state: BindingState;
@@ -82,7 +83,12 @@ export function dispatchT3TeamToolCall(input: {
     return Effect.succeed(errorResult(`Unknown MCP server '${server}'.`));
   }
   if (!state.availableToolIdSet.has(tool)) {
-    return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    const hint = optInToolEnableHint(tool);
+    return Effect.succeed(
+      errorResult(
+        `Tool '${tool}' is not enabled ${input.scopeLabel}.${hint === undefined ? "" : ` ${hint}`}`,
+      ),
+    );
   }
   if (state.effectiveGroups && !state.allowedToolIdSet.has(tool)) {
     return Effect.succeed(errorResult(permissionMessage(tool, state.effectiveGroups)));

@@ -1,6 +1,7 @@
-import type { CloudSession } from "@t3tools/contracts";
+import { EnvironmentId, type CloudSession } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import { classifyCloudProjectWait } from "./t3team-cloudProjectWait";
 import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   presentCloudQueuedSendProgress,
@@ -85,6 +86,50 @@ describe("cloud queued send steps", () => {
     expect(view.steps[1]?.detail).toBe("Installing Nexi");
     expect(view.progress).toBeGreaterThan(0);
     expect(view.progress).toBeLessThan(1);
+  });
+
+  it("names what the project step waits on in its detail and title, and escalates with time", () => {
+    const projectWait = classifyCloudProjectWait({
+      environmentId: EnvironmentId.make("env-cloud"),
+      scratch: false,
+      machineSettingsLoaded: true,
+      expectedCwd: "/workspace/app",
+      scratchRoot: null,
+      composer: null,
+      projects: [],
+    });
+    const stamped = {
+      ...queued,
+      stepStartedAt: { queued: at(0), machine: at(12), connect: at(100), project: at(110) },
+    };
+    const onProject = (nowSeconds: number) =>
+      presentCloudQueuedSendProgress(
+        facts({
+          queued: stamped,
+          session: session("ready"),
+          machineConnected: true,
+          projectWait,
+        }),
+        T0 + nowSeconds * 1000,
+      );
+    const early = onProject(115);
+    expect(early.currentStepId).toBe("project");
+    expect(early.title).toBe("Waiting for the cloud machine to send its project list…");
+    expect(early.steps.find((step) => step.id === "project")?.detail).toBe(
+      "Waiting for the cloud machine to send its project list",
+    );
+    expect(early.projectWait?.level).toBe("waiting");
+    expect(onProject(140).projectWait?.level).toBe("expected");
+    expect(onProject(110 + 600).projectWait).toMatchObject({
+      level: "slow",
+      diagnostic: expect.stringContaining("projects=0"),
+    });
+    const quiet = presentCloudQueuedSendProgress(
+      facts({ queued: stamped, session: session("ready"), machineConnected: true }),
+      T0 + 115_000,
+    );
+    expect(quiet.title).toBe("Syncing project on cloud session…");
+    expect(quiet.projectWait).toBeNull();
   });
 
   it("parks a failure on the step it failed at", () => {
