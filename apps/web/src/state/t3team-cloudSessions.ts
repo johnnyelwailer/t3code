@@ -31,8 +31,9 @@ export interface CloudSessionListState {
    */
   readonly rateLimitedUntilMs: number | null;
   /**
-   * True when the latest refresh failed but an earlier answer is still shown (an effect atom keeps
-   * the last success under a failure), so `sessions` may be stale. `loadError` stays null then.
+   * True when the latest refresh failed (an interrupted one counts) but an earlier answer is still
+   * shown (an effect atom keeps the last success under a failure), so `sessions` may be stale.
+   * `loadError` stays null then; the next answered poll clears it.
    */
   readonly refreshFailed: boolean;
 }
