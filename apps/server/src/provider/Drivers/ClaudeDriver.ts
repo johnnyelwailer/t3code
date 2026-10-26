@@ -170,7 +170,11 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       accentColor,
       continuationGroupKey,
     });
-    const signInSetup = claudeSignInSetup(processEnv);
+    const signInSetup = claudeSignInSetup({
+      config: effectiveConfig,
+      processEnv,
+      isAbsolute: (candidate) => path.isAbsolute(candidate),
+    });
     const stampSnapshot = (draft: ServerProviderDraft) =>
       stampIdentity({ ...draft, setup: signInSetup });
 

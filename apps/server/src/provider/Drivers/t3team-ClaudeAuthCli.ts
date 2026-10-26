@@ -28,11 +28,37 @@ const EXTERNAL_CREDENTIAL_VARIABLES = [
   "CLAUDE_CODE_OAUTH_TOKEN",
 ] as const;
 
-export const claudeUsesExternalCredentials = (environment: NodeJS.ProcessEnv): boolean =>
+const usesExternalCredentials = (environment: NodeJS.ProcessEnv): boolean =>
   EXTERNAL_CREDENTIAL_VARIABLES.some((name) => (environment[name]?.trim() ?? "") !== "");
 
-export const claudeSignInSetup = (environment: NodeJS.ProcessEnv) =>
-  ({ canAuthenticate: !claudeUsesExternalCredentials(environment), canInstall: false }) as const;
+/**
+ * The probe resolves a relative CLAUDE_CONFIG_DIR against the server state dir,
+ * and this login would resolve it against the config dir, so they could
+ * disagree about where the account lives.
+ */
+const usesRelativeConfigDir = (input: SignInInput): boolean => {
+  const inherited = input.processEnv.CLAUDE_CONFIG_DIR?.trim() ?? "";
+  return input.config.homePath.trim() === "" && inherited !== "" && !input.isAbsolute(inherited);
+};
+
+interface SignInInput {
+  readonly config: Pick<ClaudeSettings, "homePath">;
+  readonly processEnv: NodeJS.ProcessEnv;
+  readonly isAbsolute: (path: string) => boolean;
+}
+
+export const claudeSignInUnavailableReason = (input: SignInInput): string | undefined =>
+  usesExternalCredentials(input.processEnv)
+    ? "This Claude instance uses an API key, token or custom endpoint, so there is no account to sign in to."
+    : usesRelativeConfigDir(input)
+      ? "Set an absolute CLAUDE_CONFIG_DIR path for this Claude instance to sign in."
+      : undefined;
+
+export const claudeSignInSetup = (input: SignInInput) =>
+  ({
+    canAuthenticate: claudeSignInUnavailableReason(input) === undefined,
+    canInstall: false,
+  }) as const;
 
 export const makeClaudeCli = Effect.fn("makeClaudeCli")(function* (options: {
   readonly instanceId: ProviderInstanceId;
@@ -47,18 +73,12 @@ export const makeClaudeCli = Effect.fn("makeClaudeCli")(function* (options: {
     new ProviderSetupError({ instanceId: options.instanceId, operation, detail, cause });
 
   // The environment must match the one the probe and adapter build, or the
-  // login lands in a different config directory than the one they read. These
-  // commands run inside the config directory, so a relative inherited
-  // CLAUDE_CONFIG_DIR is pinned to the resolved path the driver already uses.
-  const baseEnvironment: NodeJS.ProcessEnv =
-    (options.processEnv.CLAUDE_CONFIG_DIR?.trim() ?? "") === ""
-      ? options.processEnv
-      : { ...options.processEnv, CLAUDE_CONFIG_DIR: options.configDir };
-  const environment = yield* makeClaudeEnvironment(options.config, baseEnvironment).pipe(
+  // login lands in a different config directory than the one they read.
+  const environment = yield* makeClaudeEnvironment(options.config, options.processEnv).pipe(
     Effect.provideService(Path.Path, path),
   );
   const run = (operation: string, args: ReadonlyArray<string>) =>
-    runClaudeCommand(options.config, args, baseEnvironment, options.configDir).pipe(
+    runClaudeCommand(options.config, args, options.processEnv, options.configDir).pipe(
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),

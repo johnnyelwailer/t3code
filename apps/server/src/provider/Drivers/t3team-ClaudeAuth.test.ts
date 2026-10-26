@@ -291,18 +291,31 @@ it.effect("signs out with the instance environment and reports a change", () =>
   }).pipe(inHost),
 );
 
-it("offers sign-in only to instances that do not bring their own credentials", () => {
-  assert.deepEqual(claudeSignInSetup({ PATH: "/tools" }), {
-    canAuthenticate: true,
-    canInstall: false,
+const setupFor = (processEnv: NodeJS.ProcessEnv, homePath = "") =>
+  claudeSignInSetup({
+    config: { homePath },
+    processEnv,
+    isAbsolute: (candidate) => candidate.startsWith("/"),
   });
-  assert.isTrue(claudeSignInSetup({ ANTHROPIC_API_KEY: "" }).canAuthenticate);
+
+it("offers sign-in only to instances that do not bring their own credentials", () => {
+  assert.deepEqual(setupFor({ PATH: "/tools" }), { canAuthenticate: true, canInstall: false });
+  assert.isTrue(setupFor({ ANTHROPIC_API_KEY: "" }).canAuthenticate);
   for (const env of [
     { ANTHROPIC_API_KEY: "sk-ant-test" },
     { ANTHROPIC_AUTH_TOKEN: "router-token", ANTHROPIC_API_KEY: "" },
     { ANTHROPIC_BASE_URL: "https://openrouter.ai/api" },
     { CLAUDE_CODE_OAUTH_TOKEN: "oauth-token" },
   ]) {
-    assert.isFalse(claudeSignInSetup(env).canAuthenticate);
+    assert.isFalse(setupFor(env).canAuthenticate);
   }
+});
+
+it("offers sign-in for a config directory only when the probe and login resolve it identically", () => {
+  assert.isFalse(setupFor({ CLAUDE_CONFIG_DIR: "work/claude-3" }).canAuthenticate);
+  assert.isTrue(setupFor({ CLAUDE_CONFIG_DIR: "/home/me/.claude-3" }).canAuthenticate);
+  assert.isTrue(setupFor({ CLAUDE_CONFIG_DIR: "" }).canAuthenticate);
+  assert.isTrue(
+    setupFor({ CLAUDE_CONFIG_DIR: "work/claude-3" }, "/home/me/.claude-3").canAuthenticate,
+  );
 });
