@@ -132,3 +132,30 @@ it.layer(SqlitePersistenceMemory)("readDigestSprints", (it) => {
     }),
   );
 });
+
+// 2026-10-15 on Phil's real data: Jira still says 8.6 "active" (ended 10-14 23:30 CEST),
+// 9.1 is "future" but running since 10-15 00:00 CEST. Most of the viewer's items are
+// still in 8.6 — the old count-based pick wore 8.6; the shared resolver wears 9.1.
+it("the calendar-running successor beats an ended sprint nobody completed", () => {
+  const now = Date.parse("2026-10-15T08:00:00.000Z");
+  const active86 = { ...unstarted86, state: "active", startDate: "2026-10-01T10:22:39.451Z" };
+  const real91 = { ...next91, id: "7228" };
+  const { tickets, sprints } = alignDigestSprints(
+    [ticket("A", active86), ticket("B", active86), ticket("C", active86), ticket("D", real91)],
+    [active86, real91],
+    now,
+  );
+  assert.deepStrictEqual(states(tickets), ["closed", "closed", "closed", "active"]);
+  assert.strictEqual(sprints[0]?.name, "PW Sprint 9.1");
+  assert.strictEqual(sprints[0]?.state, "active");
+});
+
+it("an explicit choice leads the digest across views", () => {
+  const now = Date.parse("2026-10-15T08:00:00.000Z");
+  const real91 = { ...next91, id: "7228" };
+  const real92 = { ...next91, id: "7229", name: "PW Sprint 9.2", startDate: "2026-11-04T23:00:00.000Z", endDate: "2026-11-25T22:30:00.000Z" };
+  const { sprints } = alignDigestSprints([ticket("A", real91)], [real91, real92], now, {
+    sprintId: "7229",
+  });
+  assert.strictEqual(sprints[0]?.id, "7229");
+});

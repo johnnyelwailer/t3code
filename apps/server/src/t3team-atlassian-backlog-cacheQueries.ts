@@ -1,3 +1,4 @@
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
@@ -10,6 +11,8 @@ import {
   type T3TeamBacklogCacheIdentity,
   type T3TeamBacklogSelectionInput,
 } from "./t3team-atlassian-backlog-cacheShared.ts";
+import type { AtlassianBacklogSprint } from "@t3tools/integrations-atlassian";
+import { resolveCurrentSprint } from "@t3tools/integrations-atlassian/sprintResolver";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
 
 const hasExplicitSelection = (selection?: T3TeamBacklogSelectionInput): boolean =>
@@ -22,6 +25,39 @@ const hasExplicitSelection = (selection?: T3TeamBacklogSelectionInput): boolean 
 
 export const serializeBacklogCacheJson = (value: unknown): string => JSON.stringify(value);
 
+/**
+ * Selection key of the current sprint's view across every cached board sprint
+ * list of this project (board: requested, else the newest view's board).
+ */
+const resolveCurrentSprintSelectionKey = (
+  input: T3TeamBacklogCacheIdentity & { readonly selection?: T3TeamBacklogSelectionInput },
+) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const rows = yield* sql<{ readonly boardId: string | null; readonly sprintsJson: string }>`
+      SELECT selected_board_id AS "boardId", sprints_json AS "sprintsJson"
+      FROM t3team_atlassian_backlog_views
+      WHERE provider = ${input.provider}
+        AND account_id = ${input.accountId}
+        AND external_project_id = ${input.externalProjectId}
+      ORDER BY updated_at DESC
+    `;
+    if (rows.length === 0) return undefined;
+    const sprints = rows.flatMap((row) => parseJson<AtlassianBacklogSprint[]>(row.sprintsJson) ?? []);
+    const boardId = input.selection?.boardId ?? rows[0]?.boardId ?? undefined;
+    const nowMs = yield* Clock.currentTimeMillis;
+    const resolution = resolveCurrentSprint({
+      sprints,
+      nowMs,
+      ...(boardId ? { explicit: { boardId } } : {}),
+    });
+    if (resolution.sprint === undefined) return undefined;
+    return buildBacklogSelectionKey({
+      ...(resolution.boardId ? { boardId: resolution.boardId } : {}),
+      sprintId: resolution.sprint.id,
+    });
+  }).pipe(Effect.orElseSucceed(() => undefined));
+
 export const readCachedBacklogViewRow = Effect.fn("t3team.atlassianBacklogCache.readViewRow")(
   function* (
     input: T3TeamBacklogCacheIdentity & {
@@ -29,6 +65,40 @@ export const readCachedBacklogViewRow = Effect.fn("t3team.atlassianBacklogCache.
     },
   ) {
     const sql = yield* SqlClient.SqlClient;
+    // No sprint asked for: serve the view of the CURRENT sprint (shared
+    // resolver), not whatever selection happened to be stored last — a stale
+    // "default" row kept showing a sprint closed weeks ago.
+    if (
+      !input.selection?.sprintId &&
+      !input.selection?.filterId &&
+      !(input.selection?.quickFilterIds && input.selection.quickFilterIds.length > 0)
+    ) {
+      const resolvedKey = yield* resolveCurrentSprintSelectionKey(input);
+      if (resolvedKey !== undefined) {
+        const resolvedRows = yield* sql<BacklogViewRow>`
+          SELECT
+            selected_board_id AS "selectedBoardId",
+            selected_sprint_id AS "selectedSprintId",
+            selected_filter_id AS "selectedFilterId",
+            issue_ids_json AS "issueIdsJson",
+            boards_json AS "boardsJson",
+            sprints_json AS "sprintsJson",
+            saved_filters_json AS "savedFiltersJson",
+            quick_filters_json AS "quickFiltersJson",
+            capabilities_json AS "capabilitiesJson",
+            page_next_cursor AS "pageNextCursor",
+            page_total_count AS "pageTotalCount",
+            updated_at AS "updatedAt"
+          FROM t3team_atlassian_backlog_views
+          WHERE provider = ${input.provider}
+            AND account_id = ${input.accountId}
+            AND external_project_id = ${input.externalProjectId}
+            AND selection_key = ${resolvedKey}
+          LIMIT 1
+        `;
+        if (resolvedRows[0]) return resolvedRows[0];
+      }
+    }
     const selectionKey = buildBacklogSelectionKey(input.selection);
 
     const rows = yield* sql<BacklogViewRow>`

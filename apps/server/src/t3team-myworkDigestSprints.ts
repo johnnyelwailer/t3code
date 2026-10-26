@@ -16,6 +16,12 @@
  */
 
 import type { AtlassianBacklogSprint } from "@t3tools/integrations-atlassian";
+import {
+  effectiveSprintState,
+  isSprintCalendarCurrent,
+  resolveCurrentSprint,
+  type SprintChoice,
+} from "@t3tools/integrations-atlassian/sprintResolver";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
@@ -61,36 +67,25 @@ export function readDigestSprints(identity: T3TeamBacklogCacheIdentity) {
   }).pipe(Effect.orElseSucceed((): AtlassianBacklogSprint[] => []));
 }
 
-const SPRINT_CLOSE_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
-
-function effectiveState(
-  sprint: Pick<AtlassianBacklogSprint, "state" | "startDate" | "endDate">,
-  nowMs: number,
-): string | undefined {
-  const state = sprint.state?.toLowerCase();
-  if (state !== "future" && state !== "active") return sprint.state;
-  const start = Date.parse(sprint.startDate ?? "");
-  const end = Date.parse(sprint.endDate ?? "");
-  // Long past its end, an open sprint is a stale record (a stamp nobody refreshed, a board list
-  // that stopped carrying it), not where the work is; a few days late is a team closing late.
-  if (end + SPRINT_CLOSE_GRACE_MS < nowMs) return "closed";
-  return state === "future" && start <= nowMs && nowMs < end ? "active" : sprint.state;
-}
-
-/** Board truth over ticket stamps, calendar over an unpressed Start button. */
+/** Board truth over ticket stamps; the shared resolver's verdict over raw Jira state. */
 function alignTicket(
   ticket: SprintStampedTicket,
   boardById: ReadonlyMap<string, AtlassianBacklogSprint>,
+  current: AtlassianBacklogSprint | undefined,
   nowMs: number,
 ): SprintStampedTicket {
   if (ticket.sprintId === undefined) return ticket;
   const board = boardById.get(ticket.sprintId);
-  const sprintState = effectiveState(
+  const sprintState = effectiveSprintState(
     board ?? {
+      id: ticket.sprintId,
+      name: ticket.sprintName ?? ticket.sprintId,
       ...(ticket.sprintState !== undefined ? { state: ticket.sprintState } : {}),
+      ...(ticket.sprintBoardId !== undefined ? { boardId: ticket.sprintBoardId } : {}),
       ...(ticket.sprintStartDate !== undefined ? { startDate: ticket.sprintStartDate } : {}),
       ...(ticket.sprintEndDate !== undefined ? { endDate: ticket.sprintEndDate } : {}),
     },
+    current,
     nowMs,
   );
   return {
@@ -103,47 +98,81 @@ function alignTicket(
   };
 }
 
+/** A ticket stamp as a sprint record (for sprints no cached board list carries). */
+function stampSprint(ticket: SprintStampedTicket): AtlassianBacklogSprint | undefined {
+  if (ticket.sprintId === undefined) return undefined;
+  return {
+    id: ticket.sprintId,
+    name: ticket.sprintName ?? ticket.sprintId,
+    ...(ticket.sprintState !== undefined ? { state: ticket.sprintState } : {}),
+    ...(ticket.sprintBoardId !== undefined ? { boardId: ticket.sprintBoardId } : {}),
+    ...(ticket.sprintGoal !== undefined ? { goal: ticket.sprintGoal } : {}),
+    ...(ticket.sprintStartDate !== undefined ? { startDate: ticket.sprintStartDate } : {}),
+    ...(ticket.sprintEndDate !== undefined ? { endDate: ticket.sprintEndDate } : {}),
+  };
+}
+
 /**
  * Tickets restamped with their sprint's effective state, and the sprint list
- * with the viewer's current sprint first — the one most of their items sit in.
+ * with the viewer's current sprint first. "Current" comes from the shared
+ * resolver (@t3tools/integrations-atlassian/sprintResolver) — the same one the
+ * backlog, planning space and live provider use — so every view agrees.
  * Every consumer takes "the first active sprint", so ordering is the fix.
  */
 export function alignDigestSprints(
   tickets: ReadonlyArray<BacklogResourceRef>,
   boardSprints: ReadonlyArray<AtlassianBacklogSprint>,
   nowMs: number,
+  explicit?: SprintChoice,
 ): {
   readonly tickets: ReadonlyArray<BacklogResourceRef>;
   readonly sprints: ReadonlyArray<AtlassianBacklogSprint>;
 } {
+  const stamped = tickets as ReadonlyArray<SprintStampedTicket>;
+  const boardById = new Map(boardSprints.map((sprint) => [sprint.id, sprint]));
+  const counts = new Map<string, number>();
+  const known = [...boardSprints];
+  for (const ticket of stamped) {
+    if (ticket.sprintId === undefined) continue;
+    counts.set(ticket.sprintId, (counts.get(ticket.sprintId) ?? 0) + 1);
+    if (!boardById.has(ticket.sprintId)) {
+      const fromStamp = stampSprint(ticket);
+      if (fromStamp) {
+        boardById.set(fromStamp.id, fromStamp);
+        known.push(fromStamp);
+      }
+    }
+  }
+  const resolution = resolveCurrentSprint({
+    sprints: known,
+    nowMs,
+    explicit,
+    viewerIssueCounts: counts,
+  });
+  const chosen = resolution.sprint;
+  // Only a running sprint is restamped "active"; an explicitly chosen or
+  // upcoming one leads the list but keeps its own state.
+  const running =
+    chosen !== undefined &&
+    (resolution.reason === "calendar" ||
+      resolution.reason === "jira-active" ||
+      isSprintCalendarCurrent(chosen, nowMs) ||
+      chosen.state?.toLowerCase() === "active")
+      ? chosen
+      : undefined;
+  const current = running;
   const sprints = boardSprints.map((sprint) => {
-    const state = effectiveState(sprint, nowMs);
+    const state = effectiveSprintState(sprint, current, nowMs);
     return state === sprint.state ? sprint : { ...sprint, ...(state ? { state } : {}) };
   });
-  const boardById = new Map(sprints.map((sprint) => [sprint.id, sprint]));
-  const aligned = (tickets as ReadonlyArray<SprintStampedTicket>).map((ticket) =>
-    alignTicket(ticket, boardById, nowMs),
-  );
-  const counts = new Map<string, { count: number; ticket: SprintStampedTicket }>();
-  for (const ticket of aligned) {
-    if (ticket.sprintId === undefined || ticket.sprintState?.toLowerCase() !== "active") continue;
-    const entry = counts.get(ticket.sprintId);
-    counts.set(ticket.sprintId, { count: (entry?.count ?? 0) + 1, ticket });
-  }
-  const top = [...counts.entries()].toSorted((a, b) => b[1].count - a[1].count)[0];
-  if (top === undefined) return { tickets: aligned, sprints };
-  const [sprintId, { ticket }] = top;
-  const viewerSprint: AtlassianBacklogSprint = boardById.get(sprintId) ?? {
-    id: sprintId,
-    name: ticket.sprintName ?? sprintId,
-    state: "active",
-    ...(ticket.sprintBoardId !== undefined ? { boardId: ticket.sprintBoardId } : {}),
-    ...(ticket.sprintGoal !== undefined ? { goal: ticket.sprintGoal } : {}),
-    ...(ticket.sprintStartDate !== undefined ? { startDate: ticket.sprintStartDate } : {}),
-    ...(ticket.sprintEndDate !== undefined ? { endDate: ticket.sprintEndDate } : {}),
-  };
+  const aligned = stamped.map((ticket) => alignTicket(ticket, boardById, current, nowMs));
+  if (chosen === undefined) return { tickets: aligned, sprints };
+  const viewerSprint: AtlassianBacklogSprint =
+    running !== undefined
+      ? { ...chosen, state: "active" }
+      : (sprints.find((sprint) => sprint.id === chosen.id) ?? chosen);
   return {
     tickets: aligned,
-    sprints: [viewerSprint, ...sprints.filter((sprint) => sprint.id !== sprintId)],
+    sprints: [viewerSprint, ...sprints.filter((sprint) => sprint.id !== chosen.id)],
   };
 }

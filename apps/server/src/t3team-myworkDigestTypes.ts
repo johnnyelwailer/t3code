@@ -47,6 +47,8 @@ export type T3TeamMyWorkDigestProjectInput = {
   readonly externalProjectId: string;
   readonly appProjectId?: string;
   readonly name?: string;
+  /** The user's explicit board/sprint pick for this project (shared across views). */
+  readonly sprintChoice?: { readonly boardId?: string; readonly sprintId?: string };
 };
 
 export type T3TeamMyWorkDigestScope = "project" | "all";

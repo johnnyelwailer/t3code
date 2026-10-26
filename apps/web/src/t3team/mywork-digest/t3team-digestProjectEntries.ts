@@ -6,6 +6,7 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { MyWorkDigestProjectInput } from "~/t3team/backend/t3team-myworkDigestBackendApi";
+import { readProjectSprintChoice } from "~/t3team/t3team-projectSprintChoice";
 
 export function toDigestProjectEntries(
   projects: ReadonlyArray<ProjectShellProject>,
@@ -18,7 +19,9 @@ export function toDigestProjectEntries(
         project.source.externalProjectId !== "" &&
         typeof project.source.accountId === "string",
     )
-    .map((project) => ({
+    .map((project) => {
+      const sprintChoice = readProjectSprintChoice(project.id);
+      return {
       account: {
         id: project.source?.accountId as string,
         provider: project.source?.provider as string,
@@ -26,5 +29,7 @@ export function toDigestProjectEntries(
       externalProjectId: project.source?.externalProjectId as string,
       appProjectId: project.id,
       name: project.title,
-    }));
+      ...(sprintChoice ? { sprintChoice } : {}),
+      };
+    });
 }

@@ -15,6 +15,7 @@ import { ProjectDashboardBacklogContent } from "~/t3team/t3team-ProjectDashboard
 import { ProjectDashboardBacklogViewLayout } from "~/t3team/t3team-ProjectDashboardBacklogViewLayout";
 import { ProjectDashboardBacklogOverviewSection } from "~/t3team/t3team-ProjectDashboardBacklogOverviewSection";
 import { buildProjectDashboardBacklogVisibleSyncState } from "~/t3team/t3team-projectDashboardBacklogVisibleSync";
+import { readProjectSprintChoice } from "~/t3team/t3team-projectSprintChoice";
 import { buildRequestedBacklogSelection } from "~/t3team/t3team-projectDashboardBacklogStateShared";
 import { isProjectBacklogImmersiveViewMode } from "~/t3team/t3team-projectBacklogPresentationMeta";
 
@@ -30,9 +31,21 @@ export function ProjectDashboardBacklogView({
   );
   const currentUserDisplayName = useAtlassianCurrentUserDisplayName(project.source.accountId);
   const deferredQuery = useDeferredValue(backlogState.query);
+  // Board/sprint come ONLY from the user's explicit per-project choice; with
+  // none, the server's shared resolver decides (same answer as the digest).
+  // The backlog state's boardId/sprintId mirror the server's pick for display
+  // but are no longer echoed back as if the user had chosen them.
   const requestedSelection = useMemo(
-    () => buildRequestedBacklogSelection(backlogState),
+    () => {
+      const choice = readProjectSprintChoice(project.id);
+      return buildRequestedBacklogSelection({
+        ...backlogState,
+        boardId: choice?.boardId,
+        sprintId: choice?.sprintId,
+      });
+    },
     [
+      project.id,
       backlogState.boardId,
       backlogState.filterId,
       backlogState.selectedQuickFilterIds,
@@ -136,6 +149,7 @@ export function ProjectDashboardBacklogView({
 
   const overview = (
     <ProjectDashboardBacklogOverviewSection
+      projectId={project.id}
       backlogState={backlogState}
       setBacklogState={setBacklogState}
       loading={loading}
