@@ -35,7 +35,7 @@ export interface CloudSetupFacts {
   readonly projectWait?: CloudProjectWait | null | undefined;
   readonly queued?: CloudQueuedSend | undefined;
   readonly delivery?: CloudSetupDelivery;
-  /** The session has stayed out of the session list for longer than a fresh create can explain. */
+  /** The session has stayed out of a session list that did answer for longer than a create explains. */
   readonly lost?: boolean;
 }
 export type CloudSetupStage = "working" | "ready" | "failed";
@@ -48,6 +48,8 @@ export interface CloudSetupModel {
   readonly delivery: CloudSetupDelivery;
   readonly machineConnected: boolean;
   readonly longWait: boolean;
+  /** The session is still not in the list. Not a failure: only "no news", worded calmly. */
+  readonly notSeen: boolean;
   /** What the "Project ready" step waits on while it is the current step; the card words it. */
   readonly projectWait: CloudProjectWait | null;
   readonly failureReason: string | null;
@@ -55,14 +57,14 @@ export interface CloudSetupModel {
   readonly title: string;
 }
 
-export const CLOUD_SETUP_LOST_MESSAGE =
-  "No status has arrived for this cloud session. It may not have started.";
+export const CLOUD_SETUP_NOT_SEEN_NOTE =
+  "Still waiting for the session to appear. A new cloud session can take a few minutes to register.";
 const CLOUD_SETUP_ENDED_MESSAGE = "Cloud session ended before it could connect.";
 
 export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel {
   const { session } = facts;
   const delivery = facts.delivery ?? "none";
-  const lost = session === null && facts.lost === true;
+  const notSeen = session === null && facts.lost === true;
   const view = presentCloudQueuedSendProgress(
     {
       ...facts,
@@ -71,7 +73,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
     },
     0,
   );
-  const failed = view.failed || facts.sendFailure != null || lost;
+  const failed = view.failed || facts.sendFailure != null;
   const stage = failed
     ? "failed"
     : session?.phase === "ready" && delivery === "none"
@@ -98,16 +100,17 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
     session,
     steps,
     currentStep,
-    activity: view.title,
+    activity: notSeen && !failed ? CLOUD_SETUP_NOT_SEEN_NOTE : view.title,
     delivery,
     machineConnected: facts.machineConnected,
     projectWait: view.projectWait === null ? null : (facts.projectWait ?? null),
+    notSeen: notSeen && !failed,
     longWait: session?.projectMachine === true || session?.machineSetup === true,
     failureReason: failed
       ? (facts.sendFailure ??
         facts.queued?.failureMessage ??
         session?.failureReason ??
-        (terminal ? CLOUD_SETUP_ENDED_MESSAGE : lost ? CLOUD_SETUP_LOST_MESSAGE : null))
+        (terminal ? CLOUD_SETUP_ENDED_MESSAGE : null))
       : null,
     detailsUrl: failed ? (session?.detailsUrl ?? null) : null,
     title: failed
@@ -119,8 +122,23 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
 }
 
 /**
+ * True when the session list has positively answered and the session is not in it. A list that is
+ * still loading, or that failed (a rate limit, a network error), says nothing about the session.
+ */
+export function cloudSessionNotSeenYet(input: {
+  readonly loading: boolean;
+  readonly loadError: string | null;
+  readonly sessionId: string | null;
+  readonly session: CloudSession | null;
+}): boolean {
+  return (
+    !input.loading && input.loadError === null && input.sessionId !== null && input.session === null
+  );
+}
+
+/**
  * Which ways out the card offers. A dead session (ended, or never seen in the list) cannot take a
- * retry. A fresh session only helps a card with no waiting message: that message stays bound to
+ * retry; a never-seen one is not declared failed, it only offers the way out. A fresh session only helps a card with no waiting message: that message stays bound to
  * the session it was queued for, so the card offers to cancel it instead.
  */
 export function cloudSetupRecovery(input: {

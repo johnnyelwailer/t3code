@@ -77,6 +77,7 @@ export function CloudSessionSetupCard({
       data-cloud-setup-card=""
       data-state={model.stage}
       data-slow={slow ? "true" : "false"}
+      data-not-seen={model.notSeen ? "true" : "false"}
       data-motion={motionMode}
       data-cloud-setup-step-current={model.currentStep.id}
       className="t3team-setup-card mt-1 mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-4 text-card-foreground shadow-xs/5"
@@ -100,7 +101,13 @@ export function CloudSessionSetupCard({
         </div>
         <div className="min-w-0 flex-1 space-y-0.5">
           <h3 className="text-sm font-semibold leading-6 tracking-tight">{model.title}</h3>
-          <p className="text-sm leading-5 text-muted-foreground">
+          <p
+            className={
+              model.notSeen
+                ? "text-sm leading-5 text-warning-foreground"
+                : "text-sm leading-5 text-muted-foreground"
+            }
+          >
             {failed
               ? (model.failureReason ?? "Something went wrong while the machine was starting.")
               : model.stage === "ready"
@@ -150,6 +157,7 @@ export function CloudSessionSetupCard({
 
       <SetupActions
         failed={failed}
+        stalled={model.notSeen}
         detailsUrl={model.detailsUrl}
         onCancel={onCancel}
         onRetry={onRetry}

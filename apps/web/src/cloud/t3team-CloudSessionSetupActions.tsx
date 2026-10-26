@@ -4,6 +4,7 @@ import type { CloudSessionSetupCardProps } from "./t3team-CloudSessionSetupCard"
 
 export function SetupActions({
   failed,
+  stalled = false,
   detailsUrl,
   onCancel,
   onRetry,
@@ -15,13 +16,15 @@ export function SetupActions({
   "onCancel" | "onRetry" | "recoveryActions" | "onTryAgain" | "sending"
 > & {
   readonly failed: boolean;
+  /** The session has not shown up yet: no failure, but a fresh session is on offer. */
+  readonly stalled?: boolean;
   readonly detailsUrl: string | null;
 }) {
   return (
     <>
-      {failed || onCancel || onRetry ? (
+      {failed || (stalled && onTryAgain) || onCancel || onRetry ? (
         <div className="mt-3 flex flex-wrap items-center gap-1">
-          {failed && onTryAgain ? (
+          {(failed || stalled) && onTryAgain ? (
             <Button type="button" size="xs" variant="outline" onClick={onTryAgain}>
               <RotateCcwIcon aria-hidden />
               Try again
