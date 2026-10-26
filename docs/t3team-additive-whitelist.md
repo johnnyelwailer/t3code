@@ -568,6 +568,9 @@ Reasons for the upstream files the mobile extension registry touches. Each edit 
 - `apps/mobile/metro.config.js` — wraps the config with the distribution hook (`t3team-distributionMobileMetro.cjs`) and takes the CSS entry from it; both are identity for a build without a selected overlay.
 - `apps/mobile/tsconfig.json` — `paths` for `@t3code/distribution-mobile` (the stock stub) and `@t3code/mobile-api` (the overlay's explicit surface), as `apps/web/tsconfig.json` does for `@t3code/distribution-web`.
 - `apps/mobile/vite.config.ts` — `resolve.tsconfigPaths` so the mobile unit tests resolve those two specifiers like the app does.
+- `packages/client-runtime/src/connection/wakeups.ts` and `.../supervisor.test.ts` — the `broker-availability-changed` wake reason (it only unparks blocked waits, never ends a healthy relay lease) and its two supervisor tests.
+- `apps/mobile/src/connection/platform.ts` — merges the distribution's extra wakeup sources and lets a distribution replace the stock broker gateway stub; both additive.
+- `knip.jsonc` — lists `src/extensions/t3team-api.ts` (the overlay's `@t3code/mobile-api`) as a mobile entry: only the distribution Metro hook resolves it, so nothing imports it.
 - `apps/mobile/app.config.ts` — passes the config through `applyDistributionMobile`: identity for a stock build; with a selected overlay it turns Expo updates off (a stock OTA must not replace overlay JavaScript) and adds a Gradle plugin that makes the overlay an input of the bundle task.
 - `apps/mobile/fingerprint.config.js` — adds the overlay's entry and a hash of its files to the runtime version, so a distribution binary never shares a runtime version with a stock binary (empty for a stock build).
 

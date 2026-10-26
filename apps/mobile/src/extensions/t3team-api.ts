@@ -6,3 +6,18 @@
  * exports.
  */
 export type { MobileExtensions } from "./t3team-extensionTypes";
+
+// What the Nexi broker sign-in and hosts list use. Add to this list only what a migrated screen needs.
+export { AppText } from "../components/ui/AppText";
+export { ListRow } from "../components/ui/ListRow";
+export { environmentCatalog } from "../connection/catalog";
+export { appAtomRegistry } from "../state/atom-registry";
+export { useServerConfigs } from "../state/entities";
+export { useAtomCommand } from "../state/use-atom-command";
+
+/**
+ * The environments' server configs. Loaded on demand because the connection runtime imports the
+ * registry: a static import here would put the runtime inside the overlay's import cycle.
+ */
+export const loadEnvironmentServerConfigsAtom = () =>
+  import("../state/server").then((module) => module.environmentServerConfigsAtom);

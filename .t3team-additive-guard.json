@@ -1,5 +1,7 @@
 {
   "allowedModifiedFiles": [
+    "packages/client-runtime/src/connection/wakeups.ts",
+    "packages/client-runtime/src/connection/supervisor.test.ts",
     "apps/mobile/app.config.ts",
     "apps/mobile/fingerprint.config.js",
     "apps/mobile/metro.config.js",
