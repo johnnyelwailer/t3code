@@ -158,12 +158,20 @@ describe("buildCloudSessionSetup steps", () => {
 });
 
 describe("cloudSessionNotSeenYet", () => {
-  const input = { loading: false, loadError: null, sessionId: "s1", session: null };
+  const input = {
+    loading: false,
+    loadError: null,
+    refreshFailed: false,
+    sessionId: "s1",
+    session: null,
+  };
   it("counts a session as missing only from a list that answered", () => {
     expect(cloudSessionNotSeenYet(input)).toBe(true);
     expect(cloudSessionNotSeenYet({ ...input, loading: true })).toBe(false);
     // A list that failed or was rate limited says nothing about the session.
     expect(cloudSessionNotSeenYet({ ...input, loadError: "rate limited" })).toBe(false);
+    // A refresh that failed after an earlier answer leaves stale rows: still no evidence.
+    expect(cloudSessionNotSeenYet({ ...input, refreshFailed: true })).toBe(false);
     expect(cloudSessionNotSeenYet({ ...input, sessionId: null })).toBe(false);
     expect(cloudSessionNotSeenYet({ ...input, session: session("queued") })).toBe(false);
   });

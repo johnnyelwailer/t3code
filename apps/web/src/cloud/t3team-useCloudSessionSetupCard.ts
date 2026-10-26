@@ -23,7 +23,13 @@ import { useCloudSessionProjectKey } from "./t3team-useCloudSessionProjectFollow
 /** What the setup card reads from the composer gate's session controller, and nothing more. */
 export type CloudSetupSessionSource = Pick<
   ReturnType<typeof useCloudSessionController>,
-  "sessions" | "loading" | "loadError" | "onCreate" | "createPending" | "primaryEnvironmentId"
+  | "sessions"
+  | "loading"
+  | "loadError"
+  | "refreshFailed"
+  | "onCreate"
+  | "createPending"
+  | "primaryEnvironmentId"
 >;
 
 /**
@@ -78,6 +84,7 @@ export function useCloudSessionSetupCard(input: {
     cloudSessionNotSeenYet({
       loading: cloud.loading,
       loadError: cloud.loadError,
+      refreshFailed: cloud.refreshFailed,
       sessionId,
       session,
     }),

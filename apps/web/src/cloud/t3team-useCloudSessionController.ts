@@ -52,6 +52,7 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
     configured,
     historyUrl,
     loadError,
+    refreshFailed,
     rateLimitedUntilMs,
   } = useCloudSessions(demand.listWanted);
   const [actionPending, setActionPending] = useState<{
@@ -185,6 +186,7 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
     sessions,
     loading,
     loadError,
+    refreshFailed,
     configured,
     historyUrl,
     createPending,
