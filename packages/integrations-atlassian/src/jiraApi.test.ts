@@ -58,7 +58,7 @@ describe("JiraApiClient", () => {
     expect(asset.mimeType).toBe("image/svg+xml");
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(JSON.stringify(init.headers)).not.toContain("access-token");
-    // The asset route is unauthenticated: a redirect must not steer the server elsewhere.
+    // The asset URL comes from a client: a redirect must not steer the server elsewhere.
     expect(init.redirect).toBe("error");
   });
 
@@ -90,6 +90,60 @@ describe("JiraApiClient", () => {
       /outside the authenticated origin/,
     );
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "https://api.atlassian.com/ex/jira/other-cloud/rest/api/3/attachment/content/1",
+    "https://api.atlassian.com/ex/confluence/cloud-123/wiki/rest/api/content",
+    "https://api.atlassian.com/me",
+    "https://api.atlassian.com/ex/jira/cloud-123/../../../me",
+  ])("refuses an OAuth asset on the gateway outside the account's own site: %s", async (url) => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      accessToken: "access-token",
+    });
+
+    await expect(client.downloadAsset(url)).rejects.toThrow(/outside the account's site/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses a basic-auth asset outside the site's context path", async () => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "basic",
+      siteUrl: "https://jira.example.com/jira",
+      email: "a@example.com",
+      apiToken: "token",
+    });
+
+    await expect(client.downloadAsset("https://jira.example.com/other/x.png")).rejects.toThrow(
+      /outside the account's site/,
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("downloads an asset under the account's own site with its credentials", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response("png", { headers: { "content-type": "image/png" } }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      accessToken: "access-token",
+    });
+
+    const asset = await client.downloadAsset(
+      "https://api.atlassian.com/ex/jira/cloud-123/rest/api/3/attachment/content/1",
+    );
+
+    expect(asset.mimeType).toBe("image/png");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.atlassian.com/ex/jira/cloud-123/rest/api/3/attachment/content/1",
+      expect.any(Object),
+    );
   });
 
   it("lists a board's quick filters", async () => {

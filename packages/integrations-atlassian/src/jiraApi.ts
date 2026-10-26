@@ -154,7 +154,7 @@ export class JiraApiClient {
    * site itself — the built-in issue-type icons (`<site>/images/icons/issuetypes/epic.svg`). The
    * bearer token is not valid there, and those files are public, so they are fetched without it.
    * Only the connection's own site and its static `/images/` tree qualify, and redirects are
-   * refused (the asset route is unauthenticated, so a redirect must not steer the fetch elsewhere).
+   * refused (the asset URL comes from a client, so a redirect must not steer the fetch elsewhere).
    * The token never leaves the gateway.
    */
   private isOAuthSiteUrl(url: string): boolean {
@@ -168,6 +168,23 @@ export class JiraApiClient {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * An asset URL comes from a client and is fetched with the account's credentials, so it must sit
+   * under the account's own site. For OAuth the origin check alone would admit every other cloud
+   * and product on `api.atlassian.com`.
+   */
+  private assetUrlWithinSite(url: string): string {
+    const { url: resolved, path } = this.resolveUrl(url);
+    if (!resolved.startsWith(new URL(`${this.baseUrl}/`).href)) {
+      throw new AtlassianApiError({
+        status: 400,
+        message: "Refusing to fetch Atlassian asset outside the account's site.",
+        path,
+      });
+    }
+    return resolved;
   }
 
   private async fetchPublicSiteAsset(url: string): Promise<Response> {
@@ -331,7 +348,8 @@ export class JiraApiClient {
   async downloadAsset(url: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {
     const response = this.isOAuthSiteUrl(url)
       ? await this.fetchPublicSiteAsset(url)
-      : (await this.fetchResponse(url, undefined, { accept: "*/*" })).response;
+      : (await this.fetchResponse(this.assetUrlWithinSite(url), undefined, { accept: "*/*" }))
+          .response;
     const bytes = new Uint8Array(await response.arrayBuffer());
     const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
     return {

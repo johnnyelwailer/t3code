@@ -7,6 +7,7 @@ import { HttpRouter } from "effect/http";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
 import { tryAtlassianPromise } from "./t3team-atlassian-http.ts";
+import { KnownWorkspaces } from "./workspace/KnownWorkspaces.ts";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 
 type AssetContentInput = {
@@ -67,8 +68,18 @@ export const t3teamAtlassianAssetContentRouteLayer = HttpRouter.add(
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const workspacePaths = yield* WorkspacePaths;
+    const knownWorkspaces = yield* KnownWorkspaces;
 
     if (input.workspaceRoot && input.relativePath) {
+      // The local attachment cache lives in a project's workspace; any other root is a request to
+      // read an arbitrary file, so it is refused rather than tried.
+      const known = yield* knownWorkspaces.assertContains(input.workspaceRoot).pipe(
+        Effect.as(true),
+        Effect.orElseSucceed(() => false),
+      );
+      if (!known) {
+        return HttpServerResponse.text("Unknown workspace", { status: 403 });
+      }
       const localAsset = yield* workspacePaths.normalizeWorkspaceRoot(input.workspaceRoot).pipe(
         Effect.flatMap((workspaceRoot) =>
           workspacePaths.resolveRelativePathWithinRoot({
