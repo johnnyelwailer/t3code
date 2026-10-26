@@ -80,29 +80,28 @@ export const t3teamAtlassianAssetContentRouteLayer = HttpRouter.add(
       if (!known) {
         return HttpServerResponse.text("Unknown workspace", { status: 403 });
       }
-      const localAsset = yield* workspacePaths.normalizeWorkspaceRoot(input.workspaceRoot).pipe(
+      const resolved = yield* workspacePaths.normalizeWorkspaceRoot(input.workspaceRoot).pipe(
         Effect.flatMap((workspaceRoot) =>
           workspacePaths.resolveRelativePathWithinRoot({
             workspaceRoot,
             relativePath: input.relativePath!,
           }),
         ),
-        Effect.flatMap((resolved) =>
-          fileSystem.readFile(resolved.absolutePath).pipe(
-            Effect.map((bytes) => ({
-              bytes,
-              contentType: mimeTypeOrOctetStream(resolved.absolutePath),
-            })),
-          ),
-        ),
+        Effect.flatMap((resolved) => fileSystem.realPath(resolved.absolutePath)),
         Effect.option,
       );
-
-      if (Option.isSome(localAsset)) {
-        return HttpServerResponse.uint8Array(localAsset.value.bytes, {
-          status: 200,
-          contentType: localAsset.value.contentType,
-        });
+      if (Option.isSome(resolved)) {
+        // The check above is lexical; a symlink in the workspace must not lead back out of it.
+        if (!(yield* knownWorkspaces.contains(resolved.value))) {
+          return HttpServerResponse.text("Unknown workspace", { status: 403 });
+        }
+        const bytes = yield* fileSystem.readFile(resolved.value).pipe(Effect.option);
+        if (Option.isSome(bytes)) {
+          return HttpServerResponse.uint8Array(bytes.value, {
+            status: 200,
+            contentType: mimeTypeOrOctetStream(resolved.value),
+          });
+        }
       }
     }
 

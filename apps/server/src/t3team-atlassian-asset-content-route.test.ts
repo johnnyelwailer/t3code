@@ -27,6 +27,8 @@ function makeFixture() {
     NodeFS.mkdirSync(NodePath.join(root, ".t3team"), { recursive: true });
     NodeFS.writeFileSync(NodePath.join(root, ".t3team", "a.png"), ASSET_BYTES);
   }
+  NodeFS.writeFileSync(NodePath.join(outside, "secret"), "outside-secret");
+  NodeFS.symlinkSync(NodePath.join(outside, "secret"), NodePath.join(registered, "link.png"));
   return {
     base,
     registered,
@@ -69,13 +71,18 @@ function makeHandler(registeredRoot: string) {
   return HttpRouter.toWebHandler(routes, { disableLogger: true });
 }
 
-async function get(registeredRoot: string, workspaceRoot: string, cookie?: string) {
+async function get(
+  registeredRoot: string,
+  workspaceRoot: string,
+  cookie?: string,
+  relativePath = ".t3team/a.png",
+) {
   const { handler, dispose } = makeHandler(registeredRoot);
   const params = new URLSearchParams({
     accountId: "acct-1",
     url: "https://example.atlassian.net/secure/attachment/1/a.png",
     workspaceRoot,
-    relativePath: ".t3team/a.png",
+    relativePath,
   });
   try {
     const response = await handler(
@@ -110,5 +117,17 @@ describe("t3team Atlassian asset content route", () => {
     const response = await get(fixture.registered, fixture.outside, "t3_session=reader");
     expect(response.status).toBe(403);
     expect(response.body).not.toContain(ASSET_BYTES);
+  });
+
+  it("refuses a symlink in a registered workspace that leads out of it", async () => {
+    using fixture = makeFixture();
+    const response = await get(
+      fixture.registered,
+      fixture.registered,
+      "t3_session=reader",
+      "link.png",
+    );
+    expect(response.status).toBe(403);
+    expect(response.body).not.toContain("outside-secret");
   });
 });
