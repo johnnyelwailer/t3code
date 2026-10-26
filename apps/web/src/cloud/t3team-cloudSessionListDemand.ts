@@ -1,5 +1,3 @@
-import type { EnvironmentId } from "@t3tools/contracts";
-
 /**
  * When the cloud session list is worth loading. Every list is a GitHub Actions read, so a plain
  * local thread must not ask: the list loads only for a cloud surface, a thread bound to a session,
@@ -38,17 +36,10 @@ export function cloudSessionListWanted(demand: CloudSessionListDemand): boolean 
 }
 
 /**
- * Whether `environmentId` can be a cloud session's machine, so a thread there needs the list to
- * tell. A cloud machine is provisioned from the primary environment and joins as another one: the
- * primary environment itself never is. Unknown while the primary environment is not resolved.
+ * Whether an environment with this connection target can be a cloud session's machine, so a thread
+ * there needs the list to tell. A machine joins as a relay environment or is reached through the
+ * broker; the primary environment, SSH hosts and saved backends never are.
  */
-export function environmentMayBeCloudSessionMachine(
-  environmentId: EnvironmentId | null,
-  primaryEnvironmentId: EnvironmentId | null,
-): boolean {
-  return (
-    environmentId !== null &&
-    primaryEnvironmentId !== null &&
-    environmentId !== primaryEnvironmentId
-  );
+export function environmentMayBeCloudSessionMachine(targetTag: string | null): boolean {
+  return targetTag === "RelayConnectionTarget" || targetTag === "BrokerConnectionTarget";
 }

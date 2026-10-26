@@ -1,4 +1,3 @@
-import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -31,19 +30,14 @@ describe("cloudSessionListWanted", () => {
 });
 
 describe("environmentMayBeCloudSessionMachine", () => {
-  const primary = EnvironmentId.make("env-primary");
-  const machine = EnvironmentId.make("env-machine");
-
-  it("is never the primary environment", () => {
-    expect(environmentMayBeCloudSessionMachine(primary, primary)).toBe(false);
+  it.each(["RelayConnectionTarget", "BrokerConnectionTarget"])("is possible for a %s", (tag) => {
+    expect(environmentMayBeCloudSessionMachine(tag)).toBe(true);
   });
 
-  it("is possible for another environment", () => {
-    expect(environmentMayBeCloudSessionMachine(machine, primary)).toBe(true);
-  });
-
-  it("is unknown without an environment or before the primary one resolves", () => {
-    expect(environmentMayBeCloudSessionMachine(null, primary)).toBe(false);
-    expect(environmentMayBeCloudSessionMachine(machine, null)).toBe(false);
-  });
+  it.each(["PrimaryConnectionTarget", "SshConnectionTarget", "BearerConnectionTarget", null])(
+    "is not possible for %s",
+    (tag) => {
+      expect(environmentMayBeCloudSessionMachine(tag)).toBe(false);
+    },
+  );
 });

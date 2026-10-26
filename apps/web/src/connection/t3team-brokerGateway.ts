@@ -11,6 +11,7 @@ import { CredentialRequestError } from "~/account/t3team-credentialRequest";
 import { cloudBrokerApi } from "~/cloud/t3team-cloudBrokerApi";
 import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary/target";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { readSessionsForBrokerAttach } from "./t3team-brokerSessionRead";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -111,5 +112,5 @@ export const makeWebBrokerEnvironmentGateway = (
 
 export const webBrokerEnvironmentGateway = makeWebBrokerEnvironmentGateway(async () => {
   const { cloudSessionListAtom } = await import("~/state/t3team-cloudSessions");
-  return appAtomRegistry.get(cloudSessionListAtom).sessions;
+  return readSessionsForBrokerAttach({ registry: appAtomRegistry, list: cloudSessionListAtom });
 });
