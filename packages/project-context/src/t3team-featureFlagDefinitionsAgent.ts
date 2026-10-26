@@ -9,7 +9,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     label: "Inter-agent mailbox",
     description:
       "Threads message each other through a mailbox (burst folding, steering). Off: thread messages start a normal turn.",
-    defaultEnabled: false,
+    defaultEnabled: true,
     requiresRestart: false,
   },
   AGENTS_CHANGE_REQUEST_PUBLISH: {
@@ -34,7 +34,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     label: "Thread and usage tools",
     description:
       "Agent tools to search threads and sources, read messages, ask the user and read provider usage.",
-    defaultEnabled: false,
+    defaultEnabled: true,
     requiresRestart: false,
   },
   AGENTS_TURN_WATCHDOG: {
@@ -75,14 +75,14 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     group: "UI & rendering",
     label: "Activity labels",
     description: "A short live label on active threads saying what the agent is doing.",
-    defaultEnabled: false,
+    defaultEnabled: true,
     requiresRestart: false,
   },
   UI_OUTBOX: {
     group: "UI & rendering",
     label: "Outbox",
     description: "Queue sends and workflow replies while the host is unreachable.",
-    defaultEnabled: false,
+    defaultEnabled: true,
     requiresRestart: false,
   },
   UI_VOICE_INPUT: {
@@ -130,7 +130,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     group: "Ops",
     label: "Stall profiler",
     description: "Profile the server when its event loop stalls, for diagnostics.",
-    defaultEnabled: false,
+    defaultEnabled: true,
     requiresRestart: true,
   },
 } as const satisfies Record<string, FeatureFlagDefinition>;
