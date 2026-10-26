@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import * as ProviderAuthFlow from "@t3tools/provider-core/server/providerAuthFlow";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 import { makeClaudeCli } from "./t3team-ClaudeAuthCli.ts";
 import { CLAUDE_LOGIN_TERMINAL_SIZE, runClaudeLoginTerminal } from "./t3team-ClaudeAuthLogin.ts";
@@ -25,6 +26,10 @@ const METHODS: ReadonlyArray<ProviderAuthMethod> = LOGIN_METHODS.map(({ id, name
   type: "terminal",
 }));
 
+/** Only Windows and macOS volumes are case-insensitive by default. */
+const bindingPath = (configDir: string, platform: NodeJS.Platform): string =>
+  platform === "win32" || platform === "darwin" ? configDir.toLowerCase() : configDir;
+
 export const makeClaudeAuth = Effect.fn("makeClaudeAuth")(function* (options: {
   readonly instanceId: ProviderInstanceId;
   readonly config: ClaudeSettings;
@@ -33,6 +38,7 @@ export const makeClaudeAuth = Effect.fn("makeClaudeAuth")(function* (options: {
   readonly onChanged: Effect.Effect<void>;
 }) {
   const pty = yield* Effect.serviceOption(PtyAdapter.PtyAdapter);
+  const platform = yield* HostProcess.Platform;
   const cli = yield* makeClaudeCli(options);
 
   const methods = Option.isSome(pty)
@@ -70,7 +76,10 @@ export const makeClaudeAuth = Effect.fn("makeClaudeAuth")(function* (options: {
 
   return yield* ProviderAuthFlow.make({
     instanceId: options.instanceId,
-    credentialBinding: { owner: "provider", key: `claude:${options.configDir.toLowerCase()}` },
+    credentialBinding: {
+      owner: "provider",
+      key: `claude:${bindingPath(options.configDir, platform)}`,
+    },
     methods,
     defaultMethodId: "claudeai",
     authenticate,

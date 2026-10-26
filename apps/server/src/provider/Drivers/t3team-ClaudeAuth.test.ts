@@ -169,15 +169,26 @@ it.effect("logs in to the config directory an instance receives through its envi
   }).pipe(inHost),
 );
 
-it.effect("serialises instances that share a config directory, whatever its casing", () =>
+it.effect(
+  "serialises instances that share a config directory, whatever its casing on Windows",
+  () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      const upper = yield* makeHarness({ homePath: path.resolve("Work", "Claude") });
+      const lower = yield* makeHarness({ homePath: path.resolve("work", "claude") });
+      const other = yield* makeHarness({ homePath: path.resolve("work", "claude-2") });
+      assert.deepEqual(upper.controller.credentialBinding, lower.controller.credentialBinding);
+      assert.notDeepEqual(upper.controller.credentialBinding, other.controller.credentialBinding);
+      assert.strictEqual(upper.controller.credentialBinding?.owner, "provider");
+    }).pipe(Effect.provideService(HostProcess.Platform, "win32"), inHost),
+);
+
+it.effect("keeps config directories that differ only by case separate on Linux", () =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const upper = yield* makeHarness({ homePath: path.resolve("Work", "Claude") });
     const lower = yield* makeHarness({ homePath: path.resolve("work", "claude") });
-    const other = yield* makeHarness({ homePath: path.resolve("work", "claude-2") });
-    assert.deepEqual(upper.controller.credentialBinding, lower.controller.credentialBinding);
-    assert.notDeepEqual(upper.controller.credentialBinding, other.controller.credentialBinding);
-    assert.strictEqual(upper.controller.credentialBinding?.owner, "provider");
+    assert.notDeepEqual(upper.controller.credentialBinding, lower.controller.credentialBinding);
   }).pipe(inHost),
 );
 
