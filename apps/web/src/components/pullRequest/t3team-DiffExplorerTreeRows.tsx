@@ -3,16 +3,11 @@
  * and the flat path list. Kept apart from the pane's chrome so the tree stays a small, focused
  * unit.
  */
-import { ChevronDownIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
-
 import { cn } from "~/lib/utils";
 
+import { DiffExplorerDirectoryRow } from "./t3team-DiffExplorerDirectoryRow";
 import { DiffExplorerFileRow } from "./t3team-DiffExplorerFileRow";
-import {
-  diffExplorerFileCount,
-  type DiffExplorerFile,
-  type DiffExplorerNode,
-} from "./t3team-prDiffExplorer.logic";
+import type { DiffExplorerFile, DiffExplorerNode } from "./t3team-prDiffExplorer.logic";
 
 const TREE_ARIA_LABEL = "Pull request files";
 
@@ -21,10 +16,12 @@ export interface DiffExplorerTreeLevelProps {
   readonly depth: number;
   readonly selectedKey: string | null;
   readonly viewed: ReadonlySet<string>;
+  readonly changed: ReadonlySet<string>;
   readonly openDirectories: ReadonlySet<string>;
   readonly onSelectFile: (key: string) => void;
   readonly onToggleViewed: (key: string) => void;
   readonly onToggleDirectory: (path: string) => void;
+  readonly onToggleDirectoryViewed: (path: string) => void;
 }
 
 /**
@@ -36,10 +33,12 @@ export function TreeLevel({
   depth,
   selectedKey,
   viewed,
+  changed,
   openDirectories,
   onSelectFile,
   onToggleViewed,
   onToggleDirectory,
+  onToggleDirectoryViewed,
 }: DiffExplorerTreeLevelProps) {
   return (
     <ul
@@ -52,41 +51,25 @@ export function TreeLevel({
           const open = openDirectories.has(node.path);
           return (
             <li key={node.path}>
-              <button
-                type="button"
-                onClick={() => onToggleDirectory(node.path)}
-                aria-expanded={open}
-                className="flex h-7 w-full items-center gap-1.5 rounded px-1.5 text-left text-xs text-foreground/90 hover:bg-foreground/[0.06]"
-              >
-                <span className="shrink-0 text-muted-foreground">
-                  {open ? (
-                    <ChevronDownIcon className="size-3.5" />
-                  ) : (
-                    <ChevronRightIcon className="size-3.5" />
-                  )}
-                </span>
-                <span className="shrink-0 text-muted-foreground">
-                  {open ? (
-                    <FolderOpenIcon className="size-3.5" />
-                  ) : (
-                    <FolderIcon className="size-3.5" />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{node.name}</span>
-                <span className="shrink-0 text-3xs tabular-nums text-muted-foreground/70">
-                  {diffExplorerFileCount(node.children)}
-                </span>
-              </button>
+              <DiffExplorerDirectoryRow
+                node={node}
+                open={open}
+                viewed={viewed}
+                onToggleOpen={() => onToggleDirectory(node.path)}
+                onToggleViewed={() => onToggleDirectoryViewed(node.path)}
+              />
               {open ? (
                 <TreeLevel
                   nodes={node.children}
                   depth={depth + 1}
                   selectedKey={selectedKey}
                   viewed={viewed}
+                  changed={changed}
                   openDirectories={openDirectories}
                   onSelectFile={onSelectFile}
                   onToggleViewed={onToggleViewed}
                   onToggleDirectory={onToggleDirectory}
+                  onToggleDirectoryViewed={onToggleDirectoryViewed}
                 />
               ) : null}
             </li>
@@ -99,6 +82,7 @@ export function TreeLevel({
               file={file}
               selected={file.key === selectedKey}
               viewed={viewed.has(file.key)}
+              changed={changed.has(file.key)}
               showFullPath={false}
               onSelect={onSelectFile}
               onToggleViewed={onToggleViewed}
@@ -114,6 +98,7 @@ export interface DiffExplorerPathListProps {
   readonly files: readonly DiffExplorerFile[];
   readonly selectedKey: string | null;
   readonly viewed: ReadonlySet<string>;
+  readonly changed: ReadonlySet<string>;
   readonly onSelectFile: (key: string) => void;
   readonly onToggleViewed: (key: string) => void;
 }
@@ -123,6 +108,7 @@ export function PathList({
   files,
   selectedKey,
   viewed,
+  changed,
   onSelectFile,
   onToggleViewed,
 }: DiffExplorerPathListProps) {
@@ -134,6 +120,7 @@ export function PathList({
             file={file}
             selected={file.key === selectedKey}
             viewed={viewed.has(file.key)}
+            changed={changed.has(file.key)}
             showFullPath
             onSelect={onSelectFile}
             onToggleViewed={onToggleViewed}

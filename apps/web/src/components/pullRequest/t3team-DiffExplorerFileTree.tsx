@@ -27,9 +27,13 @@ export interface DiffExplorerFileTreeProps {
   readonly files: readonly DiffExplorerFile[];
   readonly selectedKey: string | null;
   readonly viewed: ReadonlySet<string>;
+  /** Ticked files that changed since they were viewed: flagged in the tree, not counted as viewed. */
+  readonly changed: ReadonlySet<string>;
   readonly onSelectFile: (key: string) => void;
   readonly onToggleViewed: (key: string) => void;
   readonly onMarkAllViewed: () => void;
+  /** Marks every file under the directory viewed, or clears them when all already are. */
+  readonly onToggleDirectoryViewed: (directoryPath: string) => void;
   readonly ariaLabel: string;
   /** The side the pane is docked on, which decides which edge carries its divider. */
   readonly side: PrTreeDockSide;
@@ -47,9 +51,11 @@ export function DiffExplorerFileTree({
   files,
   selectedKey,
   viewed,
+  changed,
   onSelectFile,
   onToggleViewed,
   onMarkAllViewed,
+  onToggleDirectoryViewed,
   ariaLabel,
   side,
   onSwapSide,
@@ -57,7 +63,7 @@ export function DiffExplorerFileTree({
 }: DiffExplorerFileTreeProps) {
   const tree = useMemo(() => compactDiffExplorerTree(buildDiffExplorerTree(files)), [files]);
   const directoryPaths = useMemo(() => diffExplorerDirectoryPaths(tree), [tree]);
-  const counts = useMemo(() => countViewedFiles(files, viewed), [files, viewed]);
+  const counts = useMemo(() => countViewedFiles(files, viewed, changed), [files, viewed, changed]);
   const [showFullPaths, setShowFullPaths] = useLocalStorage(
     FULL_PATHS_STORAGE_KEY,
     false,
@@ -117,6 +123,7 @@ export function DiffExplorerFileTree({
             files={files}
             selectedKey={selectedKey}
             viewed={viewed}
+            changed={changed}
             onSelectFile={onSelectFile}
             onToggleViewed={onToggleViewed}
           />
@@ -126,10 +133,12 @@ export function DiffExplorerFileTree({
             depth={0}
             selectedKey={selectedKey}
             viewed={viewed}
+            changed={changed}
             openDirectories={openDirectories}
             onSelectFile={onSelectFile}
             onToggleViewed={onToggleViewed}
             onToggleDirectory={toggleDirectory}
+            onToggleDirectoryViewed={onToggleDirectoryViewed}
           />
         )}
       </div>

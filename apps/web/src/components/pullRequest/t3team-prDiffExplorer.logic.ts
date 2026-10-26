@@ -181,12 +181,14 @@ export function markAllFilesViewed(files: readonly DiffExplorerFile[]): Readonly
   return new Set(files.map((file) => file.key));
 }
 
+/** `changed` files keep their tick but were pushed to since, so they are not yet fully viewed. */
 export function countViewedFiles(
   files: readonly DiffExplorerFile[],
   viewed: ReadonlySet<string>,
+  changed: ReadonlySet<string> = new Set(),
 ): { readonly viewed: number; readonly total: number } {
   let counted = 0;
-  for (const file of files) if (viewed.has(file.key)) counted++;
+  for (const file of files) if (viewed.has(file.key) && !changed.has(file.key)) counted++;
   return { viewed: counted, total: files.length };
 }
 
