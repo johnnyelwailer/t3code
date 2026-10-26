@@ -559,6 +559,18 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 - `apps/web/src/components/settings/ScheduledTasksSettings.tsx` — tooltip exposes the full scheduled-task prompt while preserving its two-line clamp.
 - `apps/web/src/components/settings/settingsLayout.tsx` — settings row titles wrap long unbroken text within the existing content grid.
 
+## Mobile extension seams (2026-10-25)
+
+Reasons for the upstream files the mobile extension registry touches. Each edit is additive and a no-op without a distribution.
+
+- `apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx` — renders the `connectionsNewTop` slot (inside an error boundary) above the stock pairing options.
+- `apps/mobile/src/App.tsx` — one call that runs the distribution's startup hook before the first render, instead of relying on import order.
+- `apps/mobile/metro.config.js` — wraps the config with the distribution hook (`t3team-distributionMobileMetro.cjs`) and takes the CSS entry from it; both are identity for a build without a selected overlay.
+- `apps/mobile/tsconfig.json` — `paths` for `@t3code/distribution-mobile` (the stock stub) and `@t3code/mobile-api` (the overlay's explicit surface), as `apps/web/tsconfig.json` does for `@t3code/distribution-web`.
+- `apps/mobile/vite.config.ts` — `resolve.tsconfigPaths` so the mobile unit tests resolve those two specifiers like the app does.
+- `apps/mobile/app.config.ts` — passes the config through `applyDistributionMobile`: identity for a stock build; with a selected overlay it turns Expo updates off (a stock OTA must not replace overlay JavaScript) and adds a Gradle plugin that makes the overlay an input of the bundle task.
+- `apps/mobile/fingerprint.config.js` — adds the overlay's entry and a hash of its files to the runtime version, so a distribution binary never shares a runtime version with a stock binary (empty for a stock build).
+
 ## Slow login shell keeps Homebrew on the backend PATH (2026-10-26)
 
 - `apps/desktop/src/shell/DesktopShellEnvironment.ts` — when neither the login-shell probe nor launchctl yields a PATH on macOS (a loaded machine times the 5 s probe out), appends the existing well-known user bin dirs after the current PATH entries, so Homebrew `gh`/`codex`/`claude` are found. darwin only; the timeout is unchanged.

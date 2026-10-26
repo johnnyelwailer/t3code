@@ -11,6 +11,7 @@ const reactTests = [
 ];
 
 export default defineConfig({
+  resolve: { tsconfigPaths: true },
   test: {
     hookTimeout: 60_000,
     testTimeout: 60_000,

@@ -4,6 +4,10 @@
     "allowImportingTsExtensions": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "paths": {
+      "@t3code/distribution-mobile": ["./src/t3team-distributionMobile.ts"],
+      "@t3code/mobile-api": ["./src/extensions/t3team-api.ts"]
+    }
   }
 }
