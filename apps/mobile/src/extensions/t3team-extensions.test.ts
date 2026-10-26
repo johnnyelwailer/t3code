@@ -68,3 +68,9 @@ describe("the startup hook", () => {
     warn.mockRestore();
   });
 });
+
+describe("settingsConnections", () => {
+  it("is empty without an overlay, so Settings keeps its stock rows", () => {
+    expect(mobileExtensions.settingsConnections).toBeUndefined();
+  });
+});

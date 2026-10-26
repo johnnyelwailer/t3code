@@ -10,6 +10,7 @@ import { hasCloudPublicConfig } from "../cloud/publicConfig";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
+import { SettingsConnectionsSlot } from "../../extensions/t3team-SettingsConnectionsSlot";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -93,6 +94,7 @@ function ConfiguredSettingsRouteScreen() {
             target="SettingsEnvironments"
           />
           <SettingsRow icon="bell.badge" label="Notifications" target="SettingsNotifications" />
+          <SettingsConnectionsSlot />
         </SettingsSection>
 
         <SettingsIndexSections />
@@ -125,6 +127,7 @@ function LocalSettingsRouteScreen() {
             valuePosition="trailing"
             target="SettingsEnvironments"
           />
+          <SettingsConnectionsSlot />
         </SettingsSection>
 
         <SettingsIndexSections />
