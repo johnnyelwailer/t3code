@@ -4,6 +4,7 @@ import { ClaudeSettings, ProviderInstanceId, type ProviderAuthState } from "@t3t
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as PlatformError from "effect/PlatformError";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Sink from "effect/Sink";
@@ -26,6 +27,7 @@ const makeHarness = Effect.fn("t3team-ClaudeAuth.test.makeHarness")(function* (
     readonly homePath?: string;
     readonly env?: NodeJS.ProcessEnv;
     readonly status?: { readonly stdout: string; readonly code: number };
+    readonly statusSpawnFails?: boolean;
   } = {},
 ) {
   const config = decodeSettings({ binaryPath: "claude", homePath: input.homePath ?? "" });
@@ -44,6 +46,15 @@ const makeHarness = Effect.fn("t3team-ClaudeAuth.test.makeHarness")(function* (
   const spawner = ChildProcessSpawner.make((command) => {
     if (!ChildProcess.isStandardCommand(command)) return Effect.die("unexpected piped command");
     commands.push({ args: command.args, env: command.options.env ?? {} });
+    if (input.statusSpawnFails && command.args[1] === "status")
+      return Effect.fail(
+        PlatformError.systemError({
+          _tag: "NotFound",
+          module: "ChildProcess",
+          method: "spawn",
+          pathOrDescriptor: command.command,
+        }),
+      );
     const result =
       command.args[1] === "status" ? (input.status ?? LOGGED_IN) : { stdout: "", code: 0 };
     return Effect.succeed(
@@ -264,6 +275,7 @@ it.effect("fails without reporting a change when the login command exits non-zer
     const failed = yield* h.phase("failed");
     assert.strictEqual(failed.message, "The Claude login did not finish successfully.");
     assert.deepEqual(h.changed, []);
+    assert.isTrue(h.killed());
     assert.isFalse(h.commands.some((command) => command.args[1] === "status"));
   }).pipe(inHost),
 );
@@ -275,6 +287,18 @@ it.effect("fails when the login exits cleanly but Claude still reports signed ou
     yield* h.phase("waiting");
     h.exit(0);
     yield* h.phase("failed");
+    assert.deepEqual(h.changed, []);
+  }).pipe(inHost),
+);
+
+it.effect("fails cleanly when the status check cannot be spawned after the login", () =>
+  Effect.gen(function* () {
+    const h = yield* makeHarness({ homePath: "work/claude", statusSpawnFails: true });
+    yield* h.controller.start("owner");
+    yield* h.phase("waiting");
+    h.exit(0);
+    const failed = yield* h.phase("failed");
+    assert.strictEqual(failed.message, "Could not run the Claude CLI.");
     assert.deepEqual(h.changed, []);
   }).pipe(inHost),
 );
