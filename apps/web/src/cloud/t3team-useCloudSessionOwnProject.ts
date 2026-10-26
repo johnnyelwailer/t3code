@@ -23,7 +23,7 @@ export function useCloudSessionOwnProject(
 ): CloudSessionOwnProject | null {
   const target = useCloudSessionTarget(scopeKey);
   const projectKey = useCloudSessionProjectKey(projectRef);
-  const { sessions } = useCloudSessions();
+  const { sessions } = useCloudSessions(target !== null);
   const { environments } = useEnvironments();
   const projects = useProjects();
   const project = useProject(projectRef);

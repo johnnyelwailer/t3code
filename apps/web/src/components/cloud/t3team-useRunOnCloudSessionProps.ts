@@ -57,7 +57,7 @@ export function useT3TeamRunOnCloudSessionProps(
   readonly available: boolean;
   readonly selectorProps: CloudSelectorProps;
 } {
-  const cloudSessions = useCloudSessionController();
+  const cloudSessions = useCloudSessionController({ scopeKey });
   const navigate = useNavigate();
   const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
     cloudSessions;

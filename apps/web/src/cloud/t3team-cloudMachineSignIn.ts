@@ -1,8 +1,7 @@
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 
-import { useCloudSessions } from "~/state/t3team-cloudSessions";
-
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
+import { useCloudSessionsOfMachine } from "./t3team-useCloudSessionsOfMachine";
 
 /**
  * A cloud session's machine is new each time, so a sign-in it asks for is one the user already
@@ -22,7 +21,7 @@ export function signInDescriptionForEnvironment(
 export function useSignInDescriptionForEnvironment(
   environmentId: EnvironmentId | null,
 ): string | undefined {
-  const { sessions } = useCloudSessions();
+  const { sessions } = useCloudSessionsOfMachine(environmentId);
   return environmentId === null
     ? undefined
     : signInDescriptionForEnvironment(sessions, environmentId);

@@ -106,8 +106,17 @@ export const cloudSessionListAtom = Atom.make<CloudSessionListState>((get) => {
   return cloudSessionListState(get(cloudSessionEnvironment.list({ environmentId, input: {} })));
 }).pipe(Atom.withLabel("web-cloud-sessions"));
 
-export function useCloudSessions(): CloudSessionListState {
-  return useAtomValue(cloudSessionListAtom);
+// Not asked yet reads as loading, never as an empty answer: nothing has been listed.
+const IDLE_CLOUD_SESSIONS_ATOM = Atom.make<CloudSessionListState>(LOADING).pipe(
+  Atom.withLabel("web-cloud-sessions:idle"),
+);
+
+/**
+ * Every list is a GitHub Actions read, so the caller says whether it needs the list at all
+ * (`cloudSessionListWanted`); with `enabled` false nothing subscribes and nothing is fetched.
+ */
+export function useCloudSessions(enabled: boolean): CloudSessionListState {
+  return useAtomValue(enabled ? cloudSessionListAtom : IDLE_CLOUD_SESSIONS_ATOM);
 }
 
 export function usePrimaryEnvironmentId() {

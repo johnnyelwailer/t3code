@@ -64,7 +64,7 @@ export function useCloudSessionComposerGate(input: {
   /** The shared session list, so the setup card reads the same list and creates through it. */
   readonly cloud: CloudSetupSessionSource;
 } {
-  const cloud = useCloudSessionController();
+  const cloud = useCloudSessionController({ scopeKey: input.scopeKey });
   const { draftId } = input;
   const projectKey = useCloudSessionProjectKey(input.projectRef);
   useCloudSessionProjectFollow({ scopeKey: input.scopeKey, projectKey });
