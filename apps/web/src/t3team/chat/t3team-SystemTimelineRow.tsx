@@ -102,13 +102,14 @@ export function T3TeamSystemTimelineRow(props: T3TeamSystemTimelineRowProps) {
     );
   }
 
-  const workflowNotification =
-    message.t3teamExt?.author?.kind === "system" &&
-    message.t3teamExt.author.workflowRunId !== undefined &&
+  // A bare-text note (no card, no widget, no attachment) is a line of prose, not a card: a
+  // workflow's `notifyUser`, a retry note, or a note whose ext has not reached this client yet.
+  // None of them earns the labelled "System" card, so they all read as the same quiet text.
+  const bareTextNote =
     findMessageView(message, "card-body") === null &&
     genericAttachments.length === 0 &&
     widgetAttachments.length === 0;
-  if (workflowNotification) {
+  if (bareTextNote) {
     return showMessageText ? (
       <T3TeamSystemTimelineNotificationBody
         text={message.text}

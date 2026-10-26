@@ -5,9 +5,9 @@
  * thresholds, same fade mask, same expand-button copy, reused via `t3team-collapsibleMessage.ts`
  * rather than re-derived.
  *
- * Scoped narrowly: this only backs the bare-text `workflowNotification` branch of
- * `T3TeamSystemTimelineRow` (a workflow-authored system message with no workflow card, no widget,
- * no generic attachment). Decision cards, shape cards, widget attachments, and the generic
+ * Scoped narrowly: this only backs the bare-text branch of `T3TeamSystemTimelineRow` (a system
+ * message with no workflow card, no widget, no generic attachment — a workflow's `notifyUser`, a
+ * retry note, or a note whose ext has not reached the client). Decision cards, shape cards, widget attachments, and the generic
  * system-notice card (`T3TeamSystemTimelineGenericRow`) render elsewhere and are untouched.
  *
  * The whole message is always rendered — collapsing is a CSS max-height + mask clip over the full
