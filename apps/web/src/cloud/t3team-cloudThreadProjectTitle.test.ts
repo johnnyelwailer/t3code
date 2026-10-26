@@ -1,4 +1,9 @@
-import { EnvironmentId, ProjectId, type RepositoryIdentity } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  plainProjectFolderName,
+  ProjectId,
+  type RepositoryIdentity,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveCloudThreadProjectTitle } from "./t3team-cloudThreadProjectTitle";
@@ -57,6 +62,33 @@ describe("resolveCloudThreadProjectTitle", () => {
     const other = project(LOCAL, "other", "Other", repository("nexplore.ghe.com/hive/other"));
     expect(resolve(checkout, [other, checkout])).toBeNull();
     expect(resolve(project(VM, "bare", "repository", null), [other])).toBeNull();
+  });
+
+  it("finds a project without a remote by the folder the session's server runs in", () => {
+    // `plainProjectFolderName("IES NG", "ies")`: the title plus the project id's hash.
+    const local = {
+      ...project(LOCAL, "ies", "IES NG", null),
+      workspaceRoot: "/Users/pj/.t3code/IES NG",
+    };
+    const folder = plainProjectFolderName("IES NG", local.id);
+    const own = {
+      ...project(VM, "own", "IES NG-1", null),
+      workspaceRoot: `/home/runner/projects/${folder}`,
+    };
+    expect(resolve(own, [local, own])).toBe("IES NG");
+    expect(resolve(checkout, [local, checkout])).toBeNull();
+  });
+
+  it("keeps the own title without a primary environment", () => {
+    const local = project(LOCAL, "nexi-ai", "Nexi AI", NEXI);
+    expect(
+      resolveCloudThreadProjectTitle({
+        project: checkout,
+        isCloudSession: true,
+        primaryEnvironmentId: null,
+        projects: [local, checkout],
+      }),
+    ).toBeNull();
   });
 
   it("ignores scratch projects and other machines' copies", () => {

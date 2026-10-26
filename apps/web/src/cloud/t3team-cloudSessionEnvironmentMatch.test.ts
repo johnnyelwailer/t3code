@@ -86,8 +86,19 @@ describe("isCloudSessionEnvironment", () => {
     ).toBe(true);
   });
 
-  it("is false for the user's own machines and for a relay machine whose session ended", () => {
+  it("stays true after the session ended: its server is still not the user's to relaunch", () => {
     const ended = [session("s1", "stopped", String(ENV))];
+    expect(
+      isCloudSessionEnvironment({
+        target: { _tag: "RelayConnectionTarget" },
+        environmentId: ENV,
+        sessions: ended,
+      }),
+    ).toBe(true);
+  });
+
+  it("is false for the user's own machines and for relay machines no session is pinned to", () => {
+    const other = [session("s1", "ready", "env-other")];
     expect(
       isCloudSessionEnvironment({
         target: { _tag: "PrimaryConnectionTarget" },
@@ -99,7 +110,7 @@ describe("isCloudSessionEnvironment", () => {
       isCloudSessionEnvironment({
         target: { _tag: "RelayConnectionTarget" },
         environmentId: ENV,
-        sessions: ended,
+        sessions: other,
       }),
     ).toBe(false);
     expect(isCloudSessionEnvironment({ target: null, environmentId: ENV, sessions: [] })).toBe(

@@ -59,6 +59,6 @@ export function isCloudSessionEnvironment(input: {
 }): boolean {
   return (
     input.target?._tag === "BrokerConnectionTarget" ||
-    liveCloudSessionForEnvironment(input.sessions, input.environmentId) !== null
+    input.sessions.some((session) => session.environmentId === String(input.environmentId))
   );
 }

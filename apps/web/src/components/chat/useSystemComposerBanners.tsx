@@ -29,7 +29,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ServerUpdateAction, serverUpdateStageLabel } from "../ServerUpdateAction";
-import { useIsCloudSessionEnvironment } from "~/cloud/t3team-useCloudThreadProjectTitle";
+import { useIsCloudSessionEnvironment } from "~/cloud/t3team-useIsCloudSessionEnvironment";
 import { useAutoBalanceUpdateBanner } from "./useAutoBalanceUpdateBanner";
 import { ComposerServerUpdateIcon } from "./ComposerServerUpdateStatus";
 import {
