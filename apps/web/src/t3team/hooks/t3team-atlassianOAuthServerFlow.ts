@@ -1,5 +1,6 @@
 import { getJson, postJson, resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
+import { isHttpOrigin } from "~/t3team/hooks/t3team-atlassianOAuthRedirect";
 import { isElectron } from "~/env";
 
 /**
@@ -23,10 +24,17 @@ export const ATLASSIAN_OAUTH_STATUS_PATH = "/api/t3team/atlassian/oauth/status";
 /**
  * The desktop renderer's origin is a custom protocol, so it asks the resolver every other t3team
  * backend call uses (the bridge's primary local backend). Never a fixed port: a flavored build runs
- * next to the installed app on its own port, and the default one belongs to the other app.
+ * next to the installed app on its own port, and the default one belongs to the other app. Before
+ * the bridge reports its backend the resolver can only name the renderer's own custom-protocol
+ * origin, which serves files and no API, so that case fails here instead of sending the request.
  */
 function defaultApiBaseUrl(): string {
-  return isElectron ? resolveHttpBaseUrl(resolveWsBaseUrl()) : window.location.origin;
+  if (!isElectron) return window.location.origin;
+  const baseUrl = resolveHttpBaseUrl(resolveWsBaseUrl());
+  if (!isHttpOrigin(baseUrl)) {
+    throw new Error("The local backend has not started yet. Try again in a moment.");
+  }
+  return baseUrl;
 }
 
 export type AtlassianOAuthServerFlowStart = {

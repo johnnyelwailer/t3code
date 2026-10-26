@@ -17,7 +17,7 @@ import {
  */
 const OWN_BACKEND = "http://127.0.0.1:3776/";
 
-function stubDesktopRenderer() {
+function stubDesktopRenderer(bootstraps: ReadonlyArray<object>) {
   vi.stubGlobal("window", {
     location: {
       origin: "t3code-dev://app",
@@ -26,15 +26,7 @@ function stubDesktopRenderer() {
       href: "t3code-dev://app/settings/connections",
     },
     desktopBridge: {
-      getLocalEnvironmentBootstraps: () => [
-        {
-          id: PRIMARY_LOCAL_ENVIRONMENT_ID,
-          label: "Local",
-          runningDistro: null,
-          httpBaseUrl: OWN_BACKEND,
-          wsBaseUrl: "ws://127.0.0.1:3776/",
-        },
-      ],
+      getLocalEnvironmentBootstraps: () => bootstraps,
       getLocalEnvironmentBearerToken: async () => "desktop-bearer",
     },
   });
@@ -54,9 +46,23 @@ function requestedUrl(fetchMock: ReturnType<typeof stubFetch>): string {
   return String(url);
 }
 
-beforeEach(stubDesktopRenderer);
+const PRIMARY_BOOTSTRAP = {
+  id: PRIMARY_LOCAL_ENVIRONMENT_ID,
+  label: "Local",
+  runningDistro: null,
+  httpBaseUrl: OWN_BACKEND,
+  wsBaseUrl: "ws://127.0.0.1:3776/",
+};
+
+beforeEach(() => {
+  // A developer's .env may name a backend; this is about what the desktop bridge reports.
+  vi.stubEnv("VITE_WS_URL", "");
+  vi.stubEnv("VITE_HTTP_URL", "");
+  stubDesktopRenderer([PRIMARY_BOOTSTRAP]);
+});
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -90,5 +96,15 @@ describe("Atlassian sign-in in a desktop app whose backend is not on the default
 
   it("asks Atlassian to redirect back to its own backend's callback", () => {
     expect(readAtlassianOAuthRedirectUri()).toBe(`${OWN_BACKEND}oauth/callback`);
+  });
+
+  it("sends nothing while the bridge has not reported its backend, not even to the default port", async () => {
+    stubDesktopRenderer([]);
+    const fetchMock = stubFetch({});
+
+    await expect(
+      beginAtlassianOAuthServerFlow({ redirectUri: `${OWN_BACKEND}oauth/callback` }),
+    ).rejects.toThrow("The local backend has not started yet");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
