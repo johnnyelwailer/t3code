@@ -1,7 +1,8 @@
 /** Setup card adapter for the canonical queued-send steps and provisioning estimate. */
 export {
   buildCloudSessionSetup,
-  CLOUD_SETUP_LOST_MESSAGE,
+  CLOUD_SETUP_NOT_SEEN_NOTE,
+  cloudSessionNotSeenYet,
   cloudSetupRecovery,
   type CloudSetupDelivery,
   type CloudSetupFacts,

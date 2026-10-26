@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 
 import { useEnvironments } from "~/state/environments";
 import type { CloudSessionSetupCardProps } from "./t3team-CloudSessionSetupCard";
-import { cloudSetupRecovery } from "./t3team-cloudSessionSetupProgress";
+import { cloudSessionNotSeenYet, cloudSetupRecovery } from "./t3team-cloudSessionSetupProgress";
 import { beginCloudSessionCreate, useCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
 import type { useCloudSessionController } from "./t3team-useCloudSessionController";
@@ -23,11 +23,15 @@ import { useCloudSessionProjectKey } from "./t3team-useCloudSessionProjectFollow
 /** What the setup card reads from the composer gate's session controller, and nothing more. */
 export type CloudSetupSessionSource = Pick<
   ReturnType<typeof useCloudSessionController>,
-  "sessions" | "loading" | "onCreate" | "createPending" | "primaryEnvironmentId"
+  "sessions" | "loading" | "loadError" | "onCreate" | "createPending" | "primaryEnvironmentId"
 >;
 
-/** How long a session may stay out of the list before the card says it has no status for it. */
-export const CLOUD_SETUP_LOST_AFTER_MS = 90_000;
+/**
+ * How long a session may stay out of the list before the card says it is still waiting for it (calm
+ * wording, never a failure). A fresh session takes about two minutes to register and a project
+ * machine several more, so anything shorter would flag a normal setup.
+ */
+export const CLOUD_SETUP_LOST_AFTER_MS = 300_000;
 
 /** True once `sessionId` has been missing for `CLOUD_SETUP_LOST_AFTER_MS`; one timer, no ticking. */
 export function useCloudSessionLost(sessionId: string | null, missing: boolean): boolean {
@@ -71,7 +75,12 @@ export function useCloudSessionSetupCard(input: {
       : (cloud.sessions.find((item) => item.sessionId === sessionId) ?? null);
   const lost = useCloudSessionLost(
     sessionId,
-    !cloud.loading && sessionId !== null && session === null,
+    cloudSessionNotSeenYet({
+      loading: cloud.loading,
+      loadError: cloud.loadError,
+      sessionId,
+      session,
+    }),
   );
 
   if (sessionId === null) return null;

@@ -3,7 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildCloudSessionSetup,
-  CLOUD_SETUP_LOST_MESSAGE,
+  CLOUD_SETUP_NOT_SEEN_NOTE,
+  cloudSessionNotSeenYet,
   cloudSetupLongWaitNote,
   cloudSetupMeanwhileNote,
   cloudSetupReadyNote,
@@ -139,11 +140,32 @@ describe("buildCloudSessionSetup steps", () => {
     expect(m.detailsUrl).toBe("https://x/y");
   });
 
-  it("names the problem once a session has stayed out of the list too long", () => {
+  it("does not call a session that has not shown up yet a failure", () => {
     const m = model({ session: null, lost: true });
-    expect(m.stage).toBe("failed");
-    expect(m.failureReason).toBe(CLOUD_SETUP_LOST_MESSAGE);
-    expect(model({ session: session("preparing"), lost: true }).stage).toBe("working");
+    expect(m.stage).toBe("working");
+    expect(m.notSeen).toBe(true);
+    expect(m.failureReason).toBeNull();
+    expect(m.title).toBe("Setting up your cloud session");
+    expect(m.activity).toBe(CLOUD_SETUP_NOT_SEEN_NOTE);
+    expect(model({ session: null, lost: false }).notSeen).toBe(false);
+    expect(model({ session: session("preparing"), lost: true }).notSeen).toBe(false);
+  });
+
+  it("still fails on positive evidence: a terminal phase or a parked send", () => {
+    expect(model({ session: session("stopped") }).stage).toBe("failed");
+    expect(model({ session: session("preparing"), sendFailure: "gave up" }).stage).toBe("failed");
+  });
+});
+
+describe("cloudSessionNotSeenYet", () => {
+  const input = { loading: false, loadError: null, sessionId: "s1", session: null };
+  it("counts a session as missing only from a list that answered", () => {
+    expect(cloudSessionNotSeenYet(input)).toBe(true);
+    expect(cloudSessionNotSeenYet({ ...input, loading: true })).toBe(false);
+    // A list that failed or was rate limited says nothing about the session.
+    expect(cloudSessionNotSeenYet({ ...input, loadError: "rate limited" })).toBe(false);
+    expect(cloudSessionNotSeenYet({ ...input, sessionId: null })).toBe(false);
+    expect(cloudSessionNotSeenYet({ ...input, session: session("queued") })).toBe(false);
   });
 });
 

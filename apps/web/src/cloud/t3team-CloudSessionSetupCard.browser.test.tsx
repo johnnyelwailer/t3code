@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { act, fakeTimers, render } from "../../test/render";
 import { CloudSessionSetupCard } from "./t3team-CloudSessionSetupCard";
 import { CLOUD_SETUP_READY_LINGER_MS, CloudSessionSetupHost } from "./t3team-CloudSessionSetupHost";
-import { CLOUD_SETUP_LOST_MESSAGE } from "./t3team-cloudSessionSetupProgress";
+import { CLOUD_SETUP_NOT_SEEN_NOTE } from "./t3team-cloudSessionSetupProgress";
 import { CLOUD_SETUP_LOST_AFTER_MS, useCloudSessionLost } from "./t3team-useCloudSessionSetupCard";
 
 /** The setup card renders no router links and reads no route, so it mounts without a router. */
@@ -116,7 +116,7 @@ describe("CloudSessionSetupCard", () => {
     expect(screen.container.textContent).toContain("Everything is in place");
   });
 
-  it("names the problem when the session never showed up, and offers a fresh one", async () => {
+  it("says it is still waiting, not that it failed, when the session has not shown up", async () => {
     const onTryAgain = vi.fn();
     await using screen = await render(
       <CloudSessionSetupCard
@@ -126,9 +126,10 @@ describe("CloudSessionSetupCard", () => {
       noRouter,
     );
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
-    expect(card.getAttribute("data-state")).toBe("failed");
-    expect(card.textContent).toContain(CLOUD_SETUP_LOST_MESSAGE);
-    expect(card.textContent).not.toContain("Waiting for");
+    expect(card.getAttribute("data-state")).toBe("working");
+    expect(card.getAttribute("data-not-seen")).toBe("true");
+    expect(card.textContent).toContain(CLOUD_SETUP_NOT_SEEN_NOTE);
+    expect(card.textContent).not.toContain("didn't finish");
     const button = [...card.querySelectorAll("button")].find((b) =>
       b.textContent?.includes("Try again"),
     )!;

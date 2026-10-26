@@ -3641,47 +3641,52 @@ export default function ChatView(props: ChatViewProps) {
               inert={isRevertingCheckpoint}
               data-chat-composer-overlay="true"
               data-chat-composer-minimal={minimalComposer ? "true" : undefined}
-              className={
+              // A hero grid keeps the composer centered while the headline (and a tall setup
+              // card) above it fits; once they outgrow the pane the composer moves down and the
+              // hero scrolls, instead of the block growing up under the header. The gutter is
+              // inert while the overlay does not scroll.
+              className={cn(
+                "scrollbar-gutter-both pointer-events-none absolute z-20",
                 isDraftHeroState
-                  ? "pointer-events-none absolute inset-0 z-20 flex items-center"
-                  : cn(
-                      "pointer-events-none absolute inset-x-0 bottom-0 z-20",
-                      minimalComposer ? "pt-1" : "pt-1.5 sm:pt-2",
-                    )
-              }
+                  ? "group/hero-overlay inset-0 grid grid-rows-[minmax(min-content,1fr)_auto_minmax(0,1fr)] overflow-y-auto overscroll-contain"
+                  : cn("inset-x-0 bottom-0", minimalComposer ? "pt-1" : "pt-1.5 sm:pt-2"),
+              )}
               {...composerContainerProps}
             >
               {composerContainerOverlay}
-              <div ref={draftHeroTransitionGroupRef} className="chat-composer-lane w-full">
+              {isDraftHeroState ? (
+                <div className="chat-composer-lane pointer-events-auto row-start-1 w-full self-end">
+                  <div
+                    className="mx-auto w-full max-w-(--chat-content-max-width) pt-4 pb-4 group-has-data-[composer-shoulder-tab]/hero-overlay:pb-0"
+                    style={
+                      forceExpandedMobileComposer
+                        ? { viewTransitionName: MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME }
+                        : undefined
+                    }
+                  >
+                    <T3TeamCompanionSlot
+                      placement="thread.new"
+                      mood="newThread"
+                      size="md"
+                      className="mb-2 flex justify-center"
+                    />
+                    <DraftHeroHeadline
+                      draftId={draftId}
+                      activeProjectRef={activeProjectRef}
+                      activeProjectTitle={activeProject?.title ?? null}
+                    />
+                    {cloudSetupElement}
+                  </div>
+                </div>
+              ) : null}
+              <div
+                ref={draftHeroTransitionGroupRef}
+                className={cn("chat-composer-lane w-full", isDraftHeroState && "row-start-2")}
+              >
                 <div
                   data-chat-composer-stack="true"
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
-                  {isDraftHeroState ? (
-                    <div className="absolute inset-x-0 bottom-full">
-                      <div
-                        className="pb-4 group-has-data-[composer-shoulder-tab]/composer-stack:pb-0"
-                        style={
-                          forceExpandedMobileComposer
-                            ? { viewTransitionName: MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME }
-                            : undefined
-                        }
-                      >
-                        <T3TeamCompanionSlot
-                          placement="thread.new"
-                          mood="newThread"
-                          size="md"
-                          className="mb-2 flex justify-center"
-                        />
-                        <DraftHeroHeadline
-                          draftId={draftId}
-                          activeProjectRef={activeProjectRef}
-                          activeProjectTitle={activeProject?.title ?? null}
-                        />
-                        {cloudSetupElement}
-                      </div>
-                    </div>
-                  ) : null}
                   {composerContextAttachmentSlot}
                   <div
                     ref={draftHeroComposerAnchorRef}
