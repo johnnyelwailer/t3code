@@ -12,7 +12,7 @@ import { CLAUDE, CODEX } from "./t3team-adapters.ts";
 import { holdsClaudeRefreshToken, probeToolStatus } from "./t3team-claudeAuthSlot.ts";
 import type { ToolAuthAdapter } from "./t3team-types.ts";
 
-const SLOT_ON = { NEXI_FF_CLOUD_CLAUDE_AUTH_SLOT: "on" };
+const SLOT_ON = { T3CODE_CLAUDE_AUTH_SLOT: "1" };
 const DUMMY_LOGIN = { claudeAiOauth: { accessToken: "a", refreshToken: "r", expiresAt: 1 } };
 
 /** Every test gets its own scratch home — never the real `~/.claude`. */
@@ -108,13 +108,15 @@ it.layer(NodeServices.layer)("Claude status on an auth-slot session", (it) => {
     }),
   );
 
-  it.effect("with the flag off, and for other tools, the CLI probe still decides", () =>
+  it.effect("without the session marker, and for other tools, the CLI probe still decides", () =>
     Effect.gen(function* () {
       const homeDir = makeTempHome();
       const spawned: Array<string> = [];
       expect((yield* status(CLAUDE, homeDir, {}, spawned)).phase).toBe("connected");
+      const hostFlagOn = { NEXI_FF_CLOUD_CLAUDE_AUTH_SLOT: "on", T3CODE_CLAUDE_AUTH_SLOT: "on" };
+      expect((yield* status(CLAUDE, homeDir, hostFlagOn, spawned)).phase).toBe("connected");
       expect((yield* status(CODEX, homeDir, SLOT_ON, spawned)).tool).toBe("codex");
-      expect(spawned).toEqual(["claude", "codex"]);
+      expect(spawned).toEqual(["claude", "claude", "codex"]);
     }),
   );
 });

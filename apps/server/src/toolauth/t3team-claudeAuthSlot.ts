@@ -1,7 +1,10 @@
 /**
- * Claude's sign-in status on a cloud session that carries the login in an auth slot (flag
- * `CLOUD_CLAUDE_AUTH_SLOT`, nexplore.ghe.com/hive/nx-nexi/issues/656): the session workflow
- * restores `.credentials.json` into `CLAUDE_CONFIG_DIR` and saves it back with the snapshot.
+ * Claude's sign-in status on a cloud session that carries the login in an auth slot
+ * (nexplore.ghe.com/hive/nx-nexi/issues/656): the session workflow restores `.credentials.json`
+ * into `CLAUDE_CONFIG_DIR`, saves it back with the snapshot, and marks the server with
+ * `T3CODE_CLAUDE_AUTH_SLOT=1`. The workflow's repository variable is the feature switch; this is
+ * a fact about the session, not a host flag, because a release preset that turns every host flag
+ * on would otherwise apply it to desktops, whose Claude login may live in the macOS Keychain.
  *
  * There the status is read from the credential file alone and `claude auth status` is never run.
  * Claude rotates the refresh token on every refresh and retires the old one everywhere, and a
@@ -14,7 +17,6 @@
  *
  * @module toolauth/claudeAuthSlot
  */
-import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -25,8 +27,10 @@ import { CLAUDE } from "./t3team-adapters.ts";
 import { probeStatus, type ToolAuthStatusOptions } from "./t3team-status.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
-function isClaudeAuthSlotEnabled(env: NodeJS.ProcessEnv): boolean {
-  return readFeatureFlag("CLOUD_CLAUDE_AUTH_SLOT", (key) => env[key]);
+const CLAUDE_AUTH_SLOT_ENV = "T3CODE_CLAUDE_AUTH_SLOT";
+
+function hasClaudeAuthSlot(env: NodeJS.ProcessEnv): boolean {
+  return env[CLAUDE_AUTH_SLOT_ENV] === "1";
 }
 
 /** The file Claude Code keeps its login in: `CLAUDE_CONFIG_DIR`, else `~/.claude` (`ClaudeHome.ts`). */
@@ -83,6 +87,6 @@ export const probeToolStatus = (
   never,
   ProcessRunner.ProcessRunner | FileSystem.FileSystem | Path.Path
 > =>
-  adapter.tool === CLAUDE.tool && isClaudeAuthSlotEnabled(options.env)
+  adapter.tool === CLAUDE.tool && hasClaudeAuthSlot(options.env)
     ? readClaudeAuthSlotStatus(options)
     : probeStatus(adapter, options);

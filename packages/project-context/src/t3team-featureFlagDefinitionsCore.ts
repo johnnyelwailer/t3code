@@ -108,17 +108,6 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: true,
     requiresRestart: false,
   },
-  CLOUD_CLAUDE_AUTH_SLOT: {
-    group: "Cloud & machines",
-    subgroup: "Cloud sessions",
-    label: "Claude sign-in carried across cloud sessions",
-    description:
-      "A cloud session keeps Claude's sign-in in the workspace snapshot, so the next session starts signed in. The snapshot is not encrypted. Off: every session signs in again.",
-    defaultEnabled: false,
-    requiresRestart: true,
-    // Set per session by the session workflow (repository variable), not by this host.
-    userToggleable: false,
-  },
   SESSION_CRED_ISSUE: {
     group: "Cloud & machines",
     subgroup: "Cloud sessions",
