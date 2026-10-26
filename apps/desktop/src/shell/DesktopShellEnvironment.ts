@@ -14,6 +14,7 @@ import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
+import { unixCandidates } from "../app/DesktopCliCommand.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 
 type EnvironmentPatch = Record<string, string>;
@@ -21,6 +22,7 @@ type EnvironmentPatch = Record<string, string>;
 interface ShellEnvironmentConfig {
   readonly env: NodeJS.ProcessEnv;
   readonly platform: NodeJS.Platform;
+  readonly homeDirectory: string;
 }
 
 interface WindowsProbeOptions {
@@ -415,9 +417,20 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       config.platform === "darwin" && !shellEnvironment.PATH
         ? yield* readLaunchctlPath
         : Option.none<string>();
+    const probedPath = trimNonEmpty(shellEnvironment.PATH).pipe(Option.orElse(() => launchctlPath));
+    // A slow login shell (loaded machine) can time out and launchctl may return nothing,
+    // leaving the bare launchd PATH. Append the well-known user bin dirs that exist so
+    // Homebrew's gh, codex and claude are still found.
+    const fallbackDirs =
+      config.platform === "darwin" && Option.isNone(probedPath)
+        ? yield* Effect.filter(unixCandidates(config.homeDirectory, config.platform), (dir) =>
+            fileSystem.exists(dir).pipe(Effect.orElseSucceed(() => false)),
+          )
+        : [];
     const mergedPath = mergePaths(config.platform, [
-      trimNonEmpty(shellEnvironment.PATH).pipe(Option.orElse(() => launchctlPath)),
+      probedPath,
       readEnvPath(config.env),
+      trimNonEmpty(fallbackDirs.join(pathDelimiter(config.platform))),
     ]);
 
     if (Option.isSome(mergedPath)) {
@@ -532,6 +545,7 @@ export const make = Effect.gen(function* () {
       installShellEnvironment({
         env: process.env,
         platform: environment.platform,
+        homeDirectory: environment.homeDirectory,
       }).pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
