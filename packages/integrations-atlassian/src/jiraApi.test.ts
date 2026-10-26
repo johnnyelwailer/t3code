@@ -100,6 +100,7 @@ describe("JiraApiClient", () => {
     "https://api.atlassian.com/ex/jira/cloud-123/..%2f..%2f..%2fme",
     "https://api.atlassian.com/ex/jira/cloud-123/..%5C..%5C..%5Cme",
     "https://api.atlassian.com/ex/jira/cloud-123/%2e%2e%2f%2e%2e%2f%2e%2e%2fme",
+    "https://api.atlassian.com/ex/jira/cloud-123/%252f..%252f..%252fme",
   ])("refuses an OAuth asset on the gateway outside the account's own site: %s", async (url) => {
     globalThis.fetch = vi.fn() as unknown as typeof fetch;
     const client = new JiraApiClient({

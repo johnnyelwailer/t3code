@@ -14,17 +14,14 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { ServerConfig } from "./config.ts";
 import { t3teamAtlassianAssetContentRouteLayer } from "./t3team-atlassian-asset-content-route.ts";
 import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
-import {
-  isWithinRoot,
-  KnownWorkspaces,
-  UnknownWorkspaceError,
-} from "./workspace/KnownWorkspaces.ts";
+import { KnownWorkspaces, UnknownWorkspaceError } from "./workspace/KnownWorkspaces.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
 const ASSET_BYTES = "cached-attachment-bytes";
 // The shape `buildJiraTicketAttachmentAssetPath` writes.
 const CACHED = ".nexi/context/jira/p1/items/k-1/attachments/files/1-a.png";
 const LINKED = ".nexi/context/jira/p1/items/k-1/attachments/files/2-b.png";
+const LINKED_IN_PLACE = ".nexi/context/jira/p1/items/k-1/attachments/files/3-c.png";
 
 function makeFixture() {
   const base = NodeFS.realpathSync(NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "asset-")));
@@ -38,6 +35,7 @@ function makeFixture() {
     NodeFS.writeFileSync(NodePath.join(root, ".env"), "workspace-secret");
   }
   NodeFS.symlinkSync(NodePath.join(other, ".env"), NodePath.join(project, LINKED));
+  NodeFS.symlinkSync(NodePath.join(project, ".env"), NodePath.join(project, LINKED_IN_PLACE));
   return {
     project,
     other,
@@ -150,6 +148,18 @@ describe("t3team Atlassian asset content route", () => {
       registered: [fixture.project],
       workspaceRoot: fixture.project,
       relativePath: ".env",
+      cookie: SIGNED_IN,
+    });
+    expect(response.status).toBe(403);
+    expect(response.body).not.toContain("workspace-secret");
+  });
+
+  it("refuses a cached-attachment symlink to another file in the same workspace", async () => {
+    using fixture = makeFixture();
+    const response = await get({
+      registered: [fixture.project],
+      workspaceRoot: fixture.project,
+      relativePath: LINKED_IN_PLACE,
       cookie: SIGNED_IN,
     });
     expect(response.status).toBe(403);

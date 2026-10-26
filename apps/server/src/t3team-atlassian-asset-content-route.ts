@@ -96,8 +96,12 @@ const readCachedAttachment = Effect.fn("t3team.atlassianAssetContent.readCachedA
     // Not cached yet: the caller fetches it from Atlassian instead.
     if (Option.isNone(real)) return miss;
     const [realRoot, realFile] = real.value;
-    // The checks above are lexical; a symlink must not lead out of the named workspace.
-    if (!isWithinRoot(path, realFile, realRoot)) return refused;
+    // The checks above are lexical; a symlink must not lead out of the named workspace, nor out of
+    // its attachment cache to another file in it.
+    const realRelative = path.relative(realRoot, realFile).replaceAll("\\", "/");
+    if (!isWithinRoot(path, realFile, realRoot) || !ATTACHMENT_CACHE_PATH.test(realRelative)) {
+      return refused;
+    }
     const bytes = yield* fileSystem.readFile(realFile).pipe(Effect.option);
     return Option.isSome(bytes)
       ? ({

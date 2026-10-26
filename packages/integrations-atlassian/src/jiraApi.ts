@@ -112,13 +112,16 @@ function isFollowableRedirect(response: Response, redirect: RequestInit["redirec
 /**
  * Whether `url` stays under `prefix` (an absolute URL ending in `/`), also once its path is
  * decoded: an encoded `%2f`/`%5c` hides a `..` from the URL parser but not from a server that
- * decodes it.
+ * decodes it. A path still encoded after one decode is refused outright.
  */
 function isUnderPrefix(url: string, prefix: string): boolean {
   try {
     const parsed = new URL(url);
     const base = new URL(prefix);
-    const decoded = new URL(decodeURIComponent(parsed.pathname), base.origin).pathname;
+    const once = decodeURIComponent(parsed.pathname);
+    // Still encoded after one decode: only a server that decodes twice could read it as a separator.
+    if (/%(?:2f|5c|2e)/i.test(once)) return false;
+    const decoded = new URL(once, base.origin).pathname;
     return (
       parsed.origin === base.origin &&
       parsed.pathname.startsWith(base.pathname) &&
