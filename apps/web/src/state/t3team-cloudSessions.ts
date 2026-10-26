@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { createCloudSessionAtoms } from "@t3tools/client-runtime/state/cloud-sessions";
-import type { CloudSession } from "@t3tools/contracts";
+import type { CloudSession, CloudSessionListResult } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 
@@ -30,6 +30,11 @@ export interface CloudSessionListState {
    * wall-clock ms a retry can succeed. Polling backs off until then.
    */
   readonly rateLimitedUntilMs: number | null;
+  /**
+   * True when the latest refresh failed but an earlier answer is still shown (an effect atom keeps
+   * the last success under a failure), so `sessions` may be stale. `loadError` stays null then.
+   */
+  readonly refreshFailed: boolean;
 }
 
 const NO_ENVIRONMENT: CloudSessionListState = {
@@ -39,6 +44,7 @@ const NO_ENVIRONMENT: CloudSessionListState = {
   historyUrl: null,
   loadError: null,
   rateLimitedUntilMs: null,
+  refreshFailed: false,
 };
 
 const LOADING: CloudSessionListState = {
@@ -48,23 +54,17 @@ const LOADING: CloudSessionListState = {
   historyUrl: null,
   loadError: null,
   rateLimitedUntilMs: null,
+  refreshFailed: false,
 };
 
 /**
- * Cloud sessions on the primary environment.
- *
- * Scoped to the primary environment on purpose: a cloud session is provisioned
- * *by* the machine the user drives from, so listing every connected
- * environment's sessions would make "whose machine started this?" ambiguous.
- *
- * Composed as an atom rather than resolved in the hook so the family is only
- * subscribed to when there is actually an environment to ask.
+ * The list state for one answer of the list query. A failed refresh keeps the last success
+ * (`AsyncResult.value` reads it from the failure's `previousSuccess`), so the old rows are shown
+ * with `loadError` null and `refreshFailed` set: they may be stale.
  */
-export const cloudSessionListAtom = Atom.make<CloudSessionListState>((get) => {
-  const environmentId = get(primaryEnvironmentIdAtom);
-  if (environmentId === null) return NO_ENVIRONMENT;
-
-  const result = get(cloudSessionEnvironment.list({ environmentId, input: {} }));
+export function cloudSessionListState(
+  result: AsyncResult.AsyncResult<CloudSessionListResult, unknown>,
+): CloudSessionListState {
   const value = AsyncResult.value(result);
   if (Option.isNone(value)) {
     // A list that failed before it ever loaded must say so; skeletons would wait forever.
@@ -84,7 +84,25 @@ export const cloudSessionListAtom = Atom.make<CloudSessionListState>((get) => {
     historyUrl: value.value.historyUrl ?? null,
     loadError: null,
     rateLimitedUntilMs: null,
+    refreshFailed: AsyncResult.isFailure(result),
   };
+}
+
+/**
+ * Cloud sessions on the primary environment.
+ *
+ * Scoped to the primary environment on purpose: a cloud session is provisioned
+ * *by* the machine the user drives from, so listing every connected
+ * environment's sessions would make "whose machine started this?" ambiguous.
+ *
+ * Composed as an atom rather than resolved in the hook so the family is only
+ * subscribed to when there is actually an environment to ask.
+ */
+export const cloudSessionListAtom = Atom.make<CloudSessionListState>((get) => {
+  const environmentId = get(primaryEnvironmentIdAtom);
+  if (environmentId === null) return NO_ENVIRONMENT;
+
+  return cloudSessionListState(get(cloudSessionEnvironment.list({ environmentId, input: {} })));
 }).pipe(Atom.withLabel("web-cloud-sessions"));
 
 export function useCloudSessions(): CloudSessionListState {

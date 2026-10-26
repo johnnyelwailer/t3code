@@ -123,16 +123,22 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
 
 /**
  * True when the session list has positively answered and the session is not in it. A list that is
- * still loading, or that failed (a rate limit, a network error), says nothing about the session.
+ * loading, never loaded (`loadError`), or whose latest refresh failed (`refreshFailed`: stale rows)
+ * says nothing about the session.
  */
 export function cloudSessionNotSeenYet(input: {
   readonly loading: boolean;
   readonly loadError: string | null;
+  readonly refreshFailed: boolean;
   readonly sessionId: string | null;
   readonly session: CloudSession | null;
 }): boolean {
   return (
-    !input.loading && input.loadError === null && input.sessionId !== null && input.session === null
+    !input.loading &&
+    input.loadError === null &&
+    !input.refreshFailed &&
+    input.sessionId !== null &&
+    input.session === null
   );
 }
 

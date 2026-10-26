@@ -173,6 +173,7 @@ export function useCloudSessionComposerGate(input: {
       sessions: cloud.sessions,
       loading: cloud.loading,
       loadError: cloud.loadError,
+      refreshFailed: cloud.refreshFailed,
       onCreate: cloud.onCreate,
       createPending: cloud.createPending,
       primaryEnvironmentId: cloud.primaryEnvironmentId,
