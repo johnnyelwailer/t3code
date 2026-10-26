@@ -32,7 +32,7 @@ import { isTerminalPhase } from "./t3team-installFlow.ts";
 import { makeToolAuthInstallFlow } from "./t3team-installService.ts";
 import { makeToolAuthLoginFlow, type ToolAuthStartOptions } from "./t3team-loginService.ts";
 import { makeToolSingleFlight } from "./t3team-singleFlight.ts";
-import { probeStatus } from "./t3team-status.ts";
+import { probeToolStatus } from "./t3team-claudeAuthSlot.ts";
 import type { ActiveSession, AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 export type { ActiveSession };
@@ -123,7 +123,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
   const listeners = new Set<(event: ToolAuthServiceStreamEvent) => Effect.Effect<void>>();
 
   const runProbe = (adapter: ToolAuthAdapter, requireProbeAnswer = false) =>
-    probeStatus(adapter, { homeDir, env, requireProbeAnswer }).pipe(
+    probeToolStatus(adapter, { homeDir, env, requireProbeAnswer }).pipe(
       Effect.provideService(ProcessRunner.ProcessRunner, processRunner),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),

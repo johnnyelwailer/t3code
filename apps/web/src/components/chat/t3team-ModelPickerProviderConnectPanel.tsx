@@ -2,6 +2,7 @@
 
 import type { EnvironmentId, ToolAuthToolId } from "@t3tools/contracts";
 
+import { useSignInDescriptionForEnvironment } from "../../cloud/t3team-cloudMachineSignIn";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
@@ -44,6 +45,7 @@ export function ModelPickerProviderConnectPanel({
   const environmentId = threadEnvironmentId ?? primaryEnvironmentId;
   const states = useToolAuthStates(environmentId);
   const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
+  const signInDescription = useSignInDescriptionForEnvironment(environmentId);
 
   // Top-aligned, not centred: the card is short and the picker's list area is
   // tall, so centring left a big dead gap above it that read as a broken panel.
@@ -61,6 +63,7 @@ export function ModelPickerProviderConnectPanel({
         <ToolAuthCard
           meta={meta}
           state={states.get(meta.tool)}
+          signInDescription={signInDescription}
           onConnect={onConnect}
           onInstall={readiness === "needsInstall" ? onInstall : undefined}
           onSubmitCode={onSubmitCode}
