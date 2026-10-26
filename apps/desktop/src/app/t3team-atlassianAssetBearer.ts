@@ -25,8 +25,8 @@ function siteOf(url: string | undefined): string | null {
 }
 
 /**
- * The bearer goes only to the local backend's media proxy, and only for the app's own renderer:
- * a page in another window of the default session gets nothing.
+ * The bearer goes only to the local backend's media proxy, and only for the app's own top frame:
+ * a page in another window of the default session, or a frame inside the app, gets nothing.
  */
 export function shouldAttachAssetBearer(input: {
   readonly requestUrl: string;
@@ -42,6 +42,21 @@ export function shouldAttachAssetBearer(input: {
     return siteOf(input.requestUrl) === backend && request.pathname === ASSET_CONTENT_PATH;
   } catch {
     return false;
+  }
+}
+
+/**
+ * The requesting frame's URL when it is a top-level frame. A sandboxed iframe in the app window
+ * (file preview, MCP app) shares the window's WebContents, so the window's URL says nothing about
+ * who asked. A missing or destroyed frame (its getters throw) yields nothing: fail closed.
+ */
+export function topFrameUrl(
+  frame: Pick<Electron.WebFrameMain, "parent" | "url"> | null | undefined,
+): string | undefined {
+  try {
+    return frame && frame.parent === null ? frame.url : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -77,7 +92,7 @@ export const registerAtlassianAssetBearer = Effect.fn("desktop.t3team.atlassianA
     Electron.session.defaultSession.webRequest.onBeforeSendHeaders(
       { urls: ASSET_CONTENT_URLS },
       (details, callback) => {
-        void Effect.runPromiseWith(context)(bearerFor(details.url, details.webContents?.getURL()))
+        void Effect.runPromiseWith(context)(bearerFor(details.url, topFrameUrl(details.frame)))
           // A request whose callback never runs hangs, so a defect still sends it unchanged.
           .catch(() => null)
           .then((token) =>

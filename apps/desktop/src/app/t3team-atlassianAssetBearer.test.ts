@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { shouldAttachAssetBearer } from "./t3team-atlassianAssetBearer.ts";
+import { shouldAttachAssetBearer, topFrameUrl } from "./t3team-atlassianAssetBearer.ts";
 
 vi.mock("electron", () => ({ session: {} }));
 
@@ -34,5 +34,27 @@ describe("shouldAttachAssetBearer", () => {
       shouldAttachAssetBearer({ ...BASE, requestUrl: "http://127.0.0.1:3773/api/t3team/other" }),
     ).toBe(false);
     expect(shouldAttachAssetBearer({ ...BASE, backendUrl: null })).toBe(false);
+  });
+});
+
+describe("topFrameUrl", () => {
+  it("reads only a top-level frame, so an iframe inside the app window gets no bearer", () => {
+    expect(topFrameUrl({ parent: null, url: "t3code://app/project/1" })).toBe(
+      "t3code://app/project/1",
+    );
+    const app = { parent: null, url: "t3code://app/" } as never;
+    expect(topFrameUrl({ parent: app, url: "t3code://app/preview" })).toBeUndefined();
+    expect(topFrameUrl(null)).toBeUndefined();
+    expect(topFrameUrl(undefined)).toBeUndefined();
+  });
+
+  it("fails closed when the frame was destroyed", () => {
+    const destroyed = {
+      get parent(): null {
+        throw new Error("Object has been destroyed");
+      },
+      url: "t3code://app/",
+    };
+    expect(topFrameUrl(destroyed)).toBeUndefined();
   });
 });

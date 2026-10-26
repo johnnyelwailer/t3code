@@ -14,36 +14,48 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { ServerConfig } from "./config.ts";
 import { t3teamAtlassianAssetContentRouteLayer } from "./t3team-atlassian-asset-content-route.ts";
 import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
-import { KnownWorkspaces, UnknownWorkspaceError } from "./workspace/KnownWorkspaces.ts";
+import {
+  isWithinRoot,
+  KnownWorkspaces,
+  UnknownWorkspaceError,
+} from "./workspace/KnownWorkspaces.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
 const ASSET_BYTES = "cached-attachment-bytes";
+// The shape `buildJiraTicketAttachmentAssetPath` writes.
+const CACHED = ".nexi/context/jira/p1/items/k-1/attachments/files/1-a.png";
+const LINKED = ".nexi/context/jira/p1/items/k-1/attachments/files/2-b.png";
 
 function makeFixture() {
   const base = NodeFS.realpathSync(NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "asset-")));
-  const registered = NodePath.join(base, "project");
+  const project = NodePath.join(base, "project");
+  // Registered too, so a symlink into it is still not inside the workspace the request named.
+  const other = NodePath.join(base, "other");
   const outside = NodePath.join(base, "outside");
-  for (const root of [registered, outside]) {
-    NodeFS.mkdirSync(NodePath.join(root, ".t3team"), { recursive: true });
-    NodeFS.writeFileSync(NodePath.join(root, ".t3team", "a.png"), ASSET_BYTES);
+  for (const root of [project, other, outside]) {
+    NodeFS.mkdirSync(NodePath.dirname(NodePath.join(root, CACHED)), { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(root, CACHED), ASSET_BYTES);
+    NodeFS.writeFileSync(NodePath.join(root, ".env"), "workspace-secret");
   }
-  NodeFS.writeFileSync(NodePath.join(outside, "secret"), "outside-secret");
-  NodeFS.symlinkSync(NodePath.join(outside, "secret"), NodePath.join(registered, "link.png"));
+  NodeFS.symlinkSync(NodePath.join(other, ".env"), NodePath.join(project, LINKED));
   return {
-    base,
-    registered,
+    project,
+    other,
     outside,
     [Symbol.dispose]: () => NodeFS.rmSync(base, { recursive: true, force: true }),
   };
 }
 
-function makeHandler(registeredRoot: string) {
+function makeHandler(registered: ReadonlyArray<string>) {
+  const inRegistered = (candidate: string) =>
+    registered.some((root) => {
+      const relative = NodePath.relative(root, NodePath.resolve(candidate));
+      return relative === "" || (!relative.startsWith("..") && !NodePath.isAbsolute(relative));
+    });
   const knownWorkspaces = Layer.mock(KnownWorkspaces)({
-    contains: (realPath) => Effect.succeed(realPath.startsWith(registeredRoot)),
+    contains: (realPath) => Effect.succeed(inRegistered(realPath)),
     assertContains: (cwd) =>
-      cwd.startsWith(registeredRoot)
-        ? Effect.void
-        : Effect.fail(new UnknownWorkspaceError({ cwd })),
+      inRegistered(cwd) ? Effect.void : Effect.fail(new UnknownWorkspaceError({ cwd })),
   });
   const environmentAuth = Layer.mock(EnvironmentAuth.EnvironmentAuth)({
     authenticateHttpRequest: (request) =>
@@ -71,23 +83,23 @@ function makeHandler(registeredRoot: string) {
   return HttpRouter.toWebHandler(routes, { disableLogger: true });
 }
 
-async function get(
-  registeredRoot: string,
-  workspaceRoot: string,
-  cookie?: string,
-  relativePath = ".t3team/a.png",
-) {
-  const { handler, dispose } = makeHandler(registeredRoot);
+async function get(input: {
+  readonly registered: ReadonlyArray<string>;
+  readonly workspaceRoot: string;
+  readonly relativePath?: string;
+  readonly cookie?: string;
+}) {
+  const { handler, dispose } = makeHandler(input.registered);
   const params = new URLSearchParams({
     accountId: "acct-1",
     url: "https://example.atlassian.net/secure/attachment/1/a.png",
-    workspaceRoot,
-    relativePath,
+    workspaceRoot: input.workspaceRoot,
+    relativePath: input.relativePath ?? CACHED,
   });
   try {
     const response = await handler(
       new Request(`http://localhost/api/t3team/atlassian/asset/content?${params}`, {
-        headers: cookie === undefined ? {} : { cookie },
+        headers: input.cookie === undefined ? {} : { cookie: input.cookie },
       }),
     );
     return { status: response.status, body: await response.text() };
@@ -96,38 +108,63 @@ async function get(
   }
 }
 
+const SIGNED_IN = "t3_session=reader";
+
 describe("t3team Atlassian asset content route", () => {
   it("refuses a request without a session before reading anything", async () => {
     using fixture = makeFixture();
-    const response = await get(fixture.registered, fixture.registered);
+    const response = await get({ registered: [fixture.project], workspaceRoot: fixture.project });
     expect(response.status).toBe(401);
     expect(response.body).not.toContain(ASSET_BYTES);
   });
 
   it("serves a cached attachment from a registered workspace to a signed-in client", async () => {
     using fixture = makeFixture();
-    expect(await get(fixture.registered, fixture.registered, "t3_session=reader")).toEqual({
-      status: 200,
-      body: ASSET_BYTES,
+    const response = await get({
+      registered: [fixture.project],
+      workspaceRoot: fixture.project,
+      cookie: SIGNED_IN,
     });
+    expect(response).toEqual({ status: 200, body: ASSET_BYTES });
   });
 
-  it("refuses to read from a workspace root that is not a registered workspace", async () => {
+  it.each([
+    ["an unregistered sibling", (f: ReturnType<typeof makeFixture>) => f.outside],
+    ["a lexical escape", (f: ReturnType<typeof makeFixture>) => `${f.project}/../outside`],
+    ["a name that only shares a prefix", (f: ReturnType<typeof makeFixture>) => `${f.project}-x`],
+  ])("refuses a workspace root that is %s", async (_label, root) => {
     using fixture = makeFixture();
-    const response = await get(fixture.registered, fixture.outside, "t3_session=reader");
+    NodeFS.mkdirSync(`${fixture.project}-x`);
+    const response = await get({
+      registered: [fixture.project],
+      workspaceRoot: root(fixture),
+      cookie: SIGNED_IN,
+    });
     expect(response.status).toBe(403);
     expect(response.body).not.toContain(ASSET_BYTES);
   });
 
-  it("refuses a symlink in a registered workspace that leads out of it", async () => {
+  it("refuses a file in a registered workspace that is not a cached attachment", async () => {
     using fixture = makeFixture();
-    const response = await get(
-      fixture.registered,
-      fixture.registered,
-      "t3_session=reader",
-      "link.png",
-    );
+    const response = await get({
+      registered: [fixture.project],
+      workspaceRoot: fixture.project,
+      relativePath: ".env",
+      cookie: SIGNED_IN,
+    });
     expect(response.status).toBe(403);
-    expect(response.body).not.toContain("outside-secret");
+    expect(response.body).not.toContain("workspace-secret");
+  });
+
+  it("refuses a cached-attachment symlink that leads into another workspace", async () => {
+    using fixture = makeFixture();
+    const response = await get({
+      registered: [fixture.project, fixture.other],
+      workspaceRoot: fixture.project,
+      relativePath: LINKED,
+      cookie: SIGNED_IN,
+    });
+    expect(response.status).toBe(403);
+    expect(response.body).not.toContain("workspace-secret");
   });
 });
