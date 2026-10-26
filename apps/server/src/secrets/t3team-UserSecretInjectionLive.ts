@@ -17,7 +17,7 @@ const UserSecretFoundationLive = Layer.mergeAll(
   UserSecretAuditLogLive,
 );
 
-export const UserSecretInjectionLive = Layer.mergeAll(
-  UserSecretProcessInjectionLive,
-  UserSecretRequestInjectionLive,
-).pipe(Layer.provideMerge(UserSecretFoundationLive));
+export const UserSecretInjectionLive = UserSecretProcessInjectionLive.pipe(
+  Layer.provideMerge(UserSecretRequestInjectionLive),
+  Layer.provideMerge(UserSecretFoundationLive),
+);

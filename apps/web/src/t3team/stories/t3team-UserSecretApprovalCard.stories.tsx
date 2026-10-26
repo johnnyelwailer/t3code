@@ -62,6 +62,15 @@ export const SeveralSecrets: Story = {
     }),
 };
 
+export const RequestInjection: Story = {
+  render: () =>
+    frame({
+      ...base,
+      mode: "requestInjection",
+      command: 'curl -sS "$JIRA_API_TOKEN_BASE_URL/rest/api/2/myself"',
+    }),
+};
+
 export const AnswerFailed: Story = {
   render: () => frame(base, "Could not send your answer. Try again."),
 };

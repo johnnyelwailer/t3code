@@ -51,6 +51,28 @@ export function maskText(
   return { text: masked, count };
 }
 
+/** `maskText` over raw bytes, so a binary response body is masked without being re-encoded. */
+export function maskBytes(
+  bytes: Uint8Array,
+  patterns: ReadonlyArray<string>,
+): { readonly bytes: Buffer; readonly count: number } {
+  let masked = Buffer.from(bytes);
+  let count = 0;
+  const mask = Buffer.from(SECRET_MASK);
+  for (const pattern of patterns) {
+    const needle = Buffer.from(pattern);
+    const parts: Array<Buffer> = [];
+    let start = 0;
+    for (let at = masked.indexOf(needle); at !== -1; at = masked.indexOf(needle, start)) {
+      parts.push(masked.subarray(start, at), mask);
+      start = at + needle.length;
+      count += 1;
+    }
+    if (parts.length > 0) masked = Buffer.concat([...parts, masked.subarray(start)]);
+  }
+  return { bytes: masked, count };
+}
+
 /**
  * Output cut at a size limit can end inside a value, where no whole pattern matches. Dropping the
  * last `longest pattern` characters before masking removes any such partial occurrence.

@@ -27,8 +27,11 @@ import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 export const T3TeamUserSecretRunTool = Tool.make(USER_SECRET_RUN_TOOL, {
   description:
     "Run one shell command with some of the user's secrets injected by the host, so you never see " +
-    "the values. Name granted secrets; each arrives as a private file whose path is in <NAME>_FILE " +
-    "(preferred), or as an environment variable with as:'env'. Let the command read them through " +
+    "the values. Name granted secrets. Strongest: as:'request' with a destination host gives the " +
+    "command <NAME>_BASE_URL, a local address that adds the credential to requests for that host; " +
+    "point the tool's API base URL at it and the command never holds the value. Otherwise each " +
+    "secret arrives as a private file whose path is in <NAME>_FILE, or as an environment variable " +
+    "with as:'env'. Let the command read them through " +
     'that variable (e.g. mytool --password-file "$DB_PASSWORD_FILE"); never put a value in the command and ' +
     "never print one: every injected value is masked in the output. " +
     "Only secrets granted to this session work; others are refused. The user may have to approve " +

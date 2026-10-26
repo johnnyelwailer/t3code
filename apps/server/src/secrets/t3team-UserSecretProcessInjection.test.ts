@@ -20,6 +20,11 @@ import {
   UserSecretProcessInjection,
   UserSecretProcessInjectionLive,
 } from "./t3team-UserSecretProcessInjection.ts";
+import type { UpstreamFetch } from "./t3team-userSecretRequestForward.ts";
+import {
+  makeRequestInjection,
+  UserSecretRequestInjection,
+} from "./t3team-UserSecretRequestInjection.ts";
 import { UserSecretResolver } from "./t3team-UserSecretResolver.ts";
 
 const ENV_VALUE = "dummy-env-value-7f3a9c";
@@ -28,7 +33,15 @@ const FILE_VALUE = "dummy-file-value-2b8d1e";
 const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "user-secret-run-"));
 const secrets = NodePath.join(root, "secrets");
 NodeFS.mkdirSync(secrets);
+const API_VALUE = "dummy-api-value-9e4b70";
 const grants: ReadonlyArray<UserSecretGrant> = [
+  {
+    name: "API_TOKEN",
+    kind: "secret",
+    deliveryModes: ["requestInjection"],
+    destinations: ["*.example.com"],
+    approval: "standingGrant",
+  },
   {
     name: "ENV_TOKEN",
     kind: "secret",
@@ -64,6 +77,7 @@ NodeFS.writeFileSync(
 );
 NodeFS.writeFileSync(NodePath.join(secrets, "ENV_TOKEN"), ENV_VALUE);
 NodeFS.writeFileSync(NodePath.join(secrets, "NEVER_BOUND"), "dummy-never-bound-value");
+NodeFS.writeFileSync(NodePath.join(secrets, "API_TOKEN"), API_VALUE);
 NodeFS.writeFileSync(NodePath.join(secrets, "FILE_TOKEN"), FILE_VALUE);
 NodeFS.writeFileSync(NodePath.join(secrets, "ASK_TOKEN"), "dummy-ask-value");
 NodeFS.writeFileSync(NodePath.join(secrets, "NOT_GRANTED"), "dummy-not-granted");
@@ -80,6 +94,23 @@ NodeFS.writeFileSync(
   ].join("\n"),
 );
 const command = `node "${probe}"`;
+const requestProbe = NodePath.join(root, "request-probe.mjs");
+NodeFS.writeFileSync(
+  requestProbe,
+  [
+    "const leaked = Object.values(process.env).some((v) => v.includes('" + API_VALUE + "'));",
+    "const response = await fetch(process.env.API_TOKEN_BASE_URL + '/echo');",
+    "console.log('env-holds-value', leaked);",
+    "console.log('status', response.status, await response.text());",
+  ].join("\n"),
+);
+const requestCommand = `node "${requestProbe}"`;
+
+const upstreamHosts: Array<string> = [];
+const echoUpstream: UpstreamFetch = async (url, init) => {
+  upstreamHosts.push(new URL(url).host);
+  return new Response(`got ${new Headers(init.headers).get("authorization")}`, { status: 200 });
+};
 
 const audits: Array<UserSecretUseAudit> = [];
 const AuditMemory = Layer.succeed(
@@ -87,10 +118,12 @@ const AuditMemory = Layer.succeed(
   UserSecretAudit.of({ record: (entry) => Effect.sync(() => void audits.push(entry)) }),
 );
 const Resolver = Layer.effect(UserSecretResolver, makeDirectoryResolver(secrets));
+const Requests = Layer.effect(UserSecretRequestInjection, makeRequestInjection(echoUpstream));
 const layer = UserSecretProcessInjectionLive.pipe(
   Layer.provide(
-    Layer.mergeAll(Resolver, UserSecretApprovalsLive, AuditMemory, ProcessRunner.layer),
+    Layer.mergeAll(Requests, UserSecretApprovalsLive, AuditMemory, ProcessRunner.layer),
   ),
+  Layer.provide(Resolver),
   Layer.provideMerge(NodeServices.layer),
 );
 
@@ -255,5 +288,67 @@ describe("process injection", () => {
           ],
         );
       }),
+  );
+
+  live(
+    "request injection: the command gets a base URL, never the value, and each request is audited",
+    () =>
+      Effect.gen(function* () {
+        audits.length = 0;
+        upstreamHosts.length = 0;
+        const result = yield* run({
+          command: requestCommand,
+          secrets: [{ name: "API_TOKEN", as: "request", destination: "api.example.com" }],
+          purpose: "probe",
+        });
+        assert.strictEqual(result.exitCode, 0, result.stderr);
+        assert.include(result.stdout, "env-holds-value false");
+        assert.include(result.stdout, "status 200 got Bearer ****");
+        assert.notInclude(result.stdout, API_VALUE);
+        assert.deepStrictEqual(upstreamHosts, ["api.example.com"]);
+        assert.deepStrictEqual(
+          audits.map((entry) => [
+            entry.name,
+            entry.mode,
+            entry.destination,
+            entry.method,
+            entry.status,
+          ]),
+          [["API_TOKEN", "requestInjection", "api.example.com", "GET", 200]],
+        );
+        assert.notInclude(JSON.stringify(audits), API_VALUE);
+      }),
+  );
+
+  live("request injection refuses another host and a wildcard instead of a concrete host", () =>
+    Effect.gen(function* () {
+      for (const [destination, message] of [
+        ["attacker.net", "may not be sent to that host"],
+        ["*.example.com", "name the host"],
+      ] as const) {
+        const error = yield* Effect.flip(
+          run({
+            command: "exit 0",
+            secrets: [{ name: "API_TOKEN", as: "request", destination }],
+            purpose: "probe",
+          }),
+        );
+        assert.include(error.message, message);
+      }
+    }),
+  );
+
+  live("a request-only entry cannot be handed over as a file or env value", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        run({
+          command: "exit 0",
+          secrets: [{ name: "API_TOKEN", as: "env" }],
+          destination: "api.example.com",
+          purpose: "probe",
+        }),
+      );
+      assert.include(error.message, "does not allow this kind of use");
+    }),
   );
 });

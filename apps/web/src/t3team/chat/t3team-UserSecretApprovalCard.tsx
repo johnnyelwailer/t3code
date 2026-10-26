@@ -45,7 +45,9 @@ export function T3TeamUserSecretApprovalCard(props: {
         </pre>
       ) : null}
       <p className="text-xs text-muted-foreground">
-        The command gets the value; the agent sees only masked output.
+        {request.mode === "requestInjection"
+          ? "The command never gets the value; it is added only to requests for this host."
+          : "The command gets the value; the agent sees only masked output."}
       </p>
       {props.error !== null ? (
         <p role="alert" className="text-xs text-destructive">

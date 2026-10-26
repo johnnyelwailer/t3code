@@ -113,12 +113,16 @@ const EnvironmentVariableName = Schema.String.check(Schema.isPattern(/^[A-Z_][A-
 
 export const UserSecretProcessBinding = Schema.Struct({
   name: UserSecretName.annotate({ description: "A granted user secret, by name." }),
-  as: Schema.optional(Schema.Literals(["file", "env"])).annotate({
+  as: Schema.optional(Schema.Literals(["file", "env", "request"])).annotate({
     description:
-      "file (default): the value is written to a private temporary file and the variable holds its path. env: the variable holds the value.",
+      "file (default): the value is written to a private temporary file and the variable holds its path. env: the variable holds the value. request (strongest): the command never gets the value; the variable holds a local base URL, and requests sent there reach destination over HTTPS with the credential added.",
   }),
   variable: Schema.optional(EnvironmentVariableName).annotate({
-    description: "Environment variable to set. Default: <name>_FILE for file, <name> for env.",
+    description:
+      "Environment variable to set. Default: <name>_FILE for file, <name> for env, <name>_BASE_URL for request.",
+  }),
+  destination: Schema.optional(UserSecretDestinationHost).annotate({
+    description: "For request: the one host the base URL forwards to; one of the entry's hosts.",
   }),
 });
 export type UserSecretProcessBinding = typeof UserSecretProcessBinding.Type;
@@ -167,5 +171,8 @@ export const UserSecretUseAudit = Schema.Struct({
   outcome: Schema.Literals(["used", "refused", "declined"]),
   approval: Schema.optional(UserSecretApproval),
   reason: Schema.optional(Schema.String),
+  /** For a forwarded request: its method and the status the destination answered with. */
+  method: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.Number),
 });
 export type UserSecretUseAudit = typeof UserSecretUseAudit.Type;

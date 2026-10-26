@@ -4,6 +4,7 @@ import {
   SECRET_MASK,
   dropPossiblyPartialTail,
   maskPatternsFor,
+  maskBytes,
   maskProcessOutput,
   maskText,
 } from "./t3team-secretMasking.ts";
@@ -52,6 +53,23 @@ describe("masking", () => {
     const cut = `ok ${VALUE.slice(0, 9)}`;
     expect(maskText(dropPossiblyPartialTail(cut, patterns), patterns).text).not.toContain(
       VALUE.slice(0, 9),
+    );
+  });
+
+  it("masks raw bytes around binary content without re-encoding it", () => {
+    const binary = Buffer.concat([
+      Buffer.from([0xff, 0x00, 0xfe]),
+      Buffer.from(VALUE),
+      Buffer.from([0x80]),
+    ]);
+    const result = maskBytes(binary, maskPatternsFor(VALUE));
+    expect(result.count).toBe(1);
+    expect(result.bytes).toEqual(
+      Buffer.concat([
+        Buffer.from([0xff, 0x00, 0xfe]),
+        Buffer.from(SECRET_MASK),
+        Buffer.from([0x80]),
+      ]),
     );
   });
 
