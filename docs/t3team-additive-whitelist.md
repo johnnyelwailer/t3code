@@ -596,3 +596,8 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 - `apps/desktop/src/shell/DesktopShellEnvironment.ts` — when neither the login-shell probe nor launchctl yields a PATH on macOS (a loaded machine times the 5 s probe out), appends the existing well-known user bin dirs after the current PATH entries, so Homebrew `gh`/`codex`/`claude` are found. darwin only; the timeout is unchanged.
 - `apps/desktop/src/app/DesktopCliCommand.ts` — exports `unixCandidates` (one word) so the fallback shares that list instead of duplicating it.
 - `apps/desktop/src/shell/DesktopShellEnvironment.test.ts` — covers the fallback on macOS and its absence on linux.
+
+## Plan and decision cards render from the streamed timeline (2026-10-26)
+
+- `apps/web/src/components/chat/ThreadTimeline.tsx` — derives the streamed entries itself (upstream #23117), bypassing ChatView's fork-artifact join, so a plan card showed as bare "Plan: <name>" text. It now joins the thread's fork artifacts onto its own entries with `useT3TeamTimelineArtifacts`.
+- `apps/web/src/components/ChatView.tsx` — passes the join's inputs (`t3teamArtifacts`) to `ThreadTimeline`.

@@ -3491,6 +3491,11 @@ export default function ChatView(props: ChatViewProps) {
                 threadDetailRef={routeThreadDetailRef}
                 entriesInput={timelineEntriesInput}
                 draftEntries={isServerThread ? null : draftTimelineEntries}
+                t3teamArtifacts={{
+                  environmentId,
+                  threadId: isServerThread ? threadId : null,
+                  messages: serverProjection?.messages,
+                }}
                 activeThreadKey={activeThreadKey}
                 syncing={threadSyncPhase !== null}
                 detailLoading={threadDetailLoading}
