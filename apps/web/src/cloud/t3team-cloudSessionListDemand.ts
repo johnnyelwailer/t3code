@@ -6,6 +6,11 @@
 export interface CloudSessionListDemand {
   /** The "Run on" menu is open. */
   readonly menuOpen: boolean;
+  /**
+   * The pointer or keyboard focus reached the Run-on trigger recently, so the menu is likely
+   * next. Held for a short window by `useCloudSessionListDemand`, then released.
+   */
+  readonly triggerHinted: boolean;
   /** A page that shows the cloud session panel is mounted. */
   readonly panelVisible: boolean;
   /** This composer has a Run-on cloud target, or a first message queued for a session. */
@@ -26,6 +31,7 @@ export interface CloudSessionListDemand {
 export function cloudSessionListWanted(demand: CloudSessionListDemand): boolean {
   return (
     demand.menuOpen ||
+    demand.triggerHinted ||
     demand.panelVisible ||
     demand.bound ||
     demand.creating ||

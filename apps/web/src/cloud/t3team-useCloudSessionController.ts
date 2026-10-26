@@ -22,6 +22,7 @@ import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
 import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
 import { useCanManageRelay } from "./t3team-useCanManageRelay";
+import { acquireCloudSessionListRefresh } from "./t3team-cloudSessionPolling";
 import { setCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
 import { useCloudSessionListDemand } from "./t3team-useCloudSessionListDemand";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
@@ -40,6 +41,7 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
     queuedSendsPending,
     cloudMenuOpen,
     setCloudMenuOpen,
+    hintCloudMenu,
     panelVisible,
     setPanelVisible,
   } = demand;
@@ -204,6 +206,11 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
       [sessions],
     ),
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
+    // The hint loads the list now, so the menu's own open-time refresh is not due for a gap.
+    onCloudMenuHint: () => {
+      if (environmentId !== null) acquireCloudSessionListRefresh(environmentId);
+      hintCloudMenu();
+    },
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     // Starting a cloud session spends relay compute: without `relay:write` no entry offers it.
     // With `CLOUD_SESSIONS` off no entry offers one either; the server refuses a create then.

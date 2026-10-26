@@ -3,7 +3,7 @@ import { type CloudSession, EnvironmentId, ProjectId, ThreadId } from "@t3tools/
 import { useEffect } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { act, render } from "../../test/render";
+import { act, fakeTimers, render } from "../../test/render";
 
 const mocks = vi.hoisted(() => ({
   /** What each `useCloudSessions(enabled)` call was told, newest last. */
@@ -67,6 +67,8 @@ import {
   selectCloudSessionCreating,
   selectCloudSessionTarget,
 } from "./t3team-cloudSessionTargetStore";
+import { acquireCloudSessionListRefresh } from "./t3team-cloudSessionPolling";
+import { CLOUD_MENU_HINT_MS } from "./t3team-useCloudSessionListDemand";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 
 const SCOPE = "draft-a";
@@ -147,6 +149,39 @@ describe("useCloudSessionController list demand", () => {
     using _scenario = scenario();
     await using _screen = await mount();
     await act(() => handle.controller?.onCloudMenuOpenChange(true));
+    expect(listAsked()).toBe(true);
+    await act(() => handle.controller?.onCloudMenuOpenChange(false));
+    expect(listAsked()).toBe(false);
+  });
+
+  it("loads it once the Run on trigger is hinted, and lets go after the hint window", async () => {
+    using _scenario = scenario();
+    using _timers = fakeTimers();
+    await using _screen = await mount();
+    expect(listAsked()).toBe(false);
+    await act(() => handle.controller?.onCloudMenuHint());
+    expect(listAsked()).toBe(true);
+    await act(() => vi.advanceTimersByTime(CLOUD_MENU_HINT_MS - 1));
+    expect(listAsked()).toBe(true);
+    await act(() => vi.advanceTimersByTime(1));
+    expect(listAsked()).toBe(false);
+  });
+
+  it("counts the hinted load as the refresh, so opening the menu right after does not refetch", async () => {
+    using _scenario = scenario();
+    await using _screen = await mount();
+    await act(() => handle.controller?.onCloudMenuHint());
+    // The menu's open-time refresh goes through this gate: a refresh a moment ago holds it off.
+    expect(acquireCloudSessionListRefresh("env-primary")).toBe(false);
+  });
+
+  it("keeps a hinted list loaded when the menu opens, and still loads without a hint", async () => {
+    using _scenario = scenario();
+    using _timers = fakeTimers();
+    await using _screen = await mount();
+    await act(() => handle.controller?.onCloudMenuHint());
+    await act(() => handle.controller?.onCloudMenuOpenChange(true));
+    await act(() => vi.advanceTimersByTime(CLOUD_MENU_HINT_MS));
     expect(listAsked()).toBe(true);
     await act(() => handle.controller?.onCloudMenuOpenChange(false));
     expect(listAsked()).toBe(false);
