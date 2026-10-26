@@ -1,3 +1,5 @@
+import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
+
 export function resolveWsBaseUrl(): string {
   const wsUrl = import.meta.env.VITE_WS_URL?.trim();
   if (wsUrl) return wsUrl;
@@ -13,7 +15,7 @@ export function resolveWsBaseUrl(): string {
   // carry WebSocket traffic. Use the real backend URL from the bridge (sync IPC).
   if (typeof window !== "undefined" && window.desktopBridge) {
     const bootstraps = window.desktopBridge.getLocalEnvironmentBootstraps();
-    const primary = bootstraps.find((b) => b.id === "primary");
+    const primary = bootstraps.find((b) => b.id === PRIMARY_LOCAL_ENVIRONMENT_ID);
     if (primary?.wsBaseUrl) return primary.wsBaseUrl;
     if (primary?.httpBaseUrl) {
       const url = new URL(primary.httpBaseUrl);

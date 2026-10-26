@@ -1,4 +1,5 @@
-import { getJson, postJson } from "~/t3team/backend/t3team-t3BackendHttp";
+import { getJson, postJson, resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
+import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import { isElectron } from "~/env";
 
 /**
@@ -19,16 +20,13 @@ export const ATLASSIAN_OAUTH_BEGIN_PATH = "/api/t3team/atlassian/oauth/begin";
 export const ATLASSIAN_OAUTH_COMPLETE_PATH = "/api/t3team/atlassian/oauth/complete";
 export const ATLASSIAN_OAUTH_STATUS_PATH = "/api/t3team/atlassian/oauth/status";
 
+/**
+ * The desktop renderer's origin is a custom protocol, so it asks the resolver every other t3team
+ * backend call uses (the bridge's primary local backend). Never a fixed port: a flavored build runs
+ * next to the installed app on its own port, and the default one belongs to the other app.
+ */
 function defaultApiBaseUrl(): string {
-  if (isElectron) {
-    const bootstraps = window.desktopBridge?.getLocalEnvironmentBootstraps?.() ?? [];
-    const primary = bootstraps.find((entry) => entry.id === "desktopLocal");
-    if (typeof primary?.httpBaseUrl === "string" && primary.httpBaseUrl.length > 0) {
-      return primary.httpBaseUrl;
-    }
-    return "http://127.0.0.1:3773";
-  }
-  return window.location.origin;
+  return isElectron ? resolveHttpBaseUrl(resolveWsBaseUrl()) : window.location.origin;
 }
 
 export type AtlassianOAuthServerFlowStart = {
