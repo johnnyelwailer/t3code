@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import "~/index.css";
 
 import type { ChatMessage } from "../../types";
+import { render } from "../../../test/render";
+import { deriveAwaitingResultEntries } from "~/t3team/chat/t3team-awaitingResultAgents";
+import { delegatedTaskFixture as delegatedTask } from "~/t3team/chat/t3team-delegatedTaskFixture";
 import { MessagesTimeline } from "./MessagesTimeline";
 
 type TimelineProps = ComponentProps<typeof MessagesTimeline>;
@@ -80,6 +83,12 @@ afterEach(async () => {
   document.body.replaceChildren();
   vi.unstubAllGlobals();
 });
+
+function timelineContainer() {
+  const container = document.createElement("div");
+  container.style.cssText = "height: 1200px; width: 900px; display: flex; flex-direction: column;";
+  return container;
+}
 
 async function renderMarkup(element: ReactElement) {
   const container = document.body.appendChild(document.createElement("div"));
@@ -459,28 +468,54 @@ describe("MessagesTimeline t3team working row (GHE #201/#208/#236)", () => {
   // thread read as finished — chips alone, then nothing — until the completion wake resumed it.
   it("says what an ended turn still waits for, and that the agent resumes once it finished", async () => {
     const idle = { ...baseProps(), timelineEntries: [] };
-    const settled = {
-      ...agent("agent:triage", "Triage open issues"),
-      dotState: "settled" as const,
-    };
+    // One mounted timeline, rerendered through the thread's life, as the app does.
+    const working = { ...workingProps(), routeThreadKey: idle.routeThreadKey };
+    // The finished task exactly as the app derives it from the orchestration read model.
+    const [settled] = deriveAwaitingResultEntries([
+      delegatedTask("triage", { title: "Triage open issues" }),
+    ]);
+    if (!settled) throw new Error("expected the finished task to be awaiting delivery");
+    const reviewer = agent("child:reviewer", "Review the diff");
 
-    const waiting = await renderMarkup(
-      <MessagesTimeline {...idle} t3team={{ activeAgents: [agent("child:t", "Triage")] }} />,
+    await using screen = await render(
+      <MessagesTimeline {...idle} t3team={{ activeAgents: [reviewer] }} />,
+      { container: timelineContainer() },
     );
-    expect(waiting).toContain(">Waiting for Triage</span>");
+    await expect.element(screen.getByText("Waiting for Review the diff")).toBeVisible();
+    await expect
+      .element(screen.getByRole("button", { name: "Review the diff — Working" }))
+      .toBeVisible();
 
-    const resuming = await renderMarkup(
-      <MessagesTimeline {...idle} t3team={{ activeAgents: [settled] }} />,
+    // Everything delegated has finished, the result is not delivered yet: the thread is not done.
+    await screen.rerender(<MessagesTimeline {...idle} t3team={{ activeAgents: [settled] }} />);
+    await expect.element(screen.getByText("Triage open issues finished · resuming")).toBeVisible();
+    await expect
+      .element(
+        screen.getByRole("button", { name: "Triage open issues — Finished · resuming the agent" }),
+      )
+      .toBeVisible();
+    await expect.element(screen.getByText("Waiting for Review the diff")).not.toBeInTheDocument();
+
+    // One task finished while another still runs: the row waits for the one that still runs.
+    await screen.rerender(
+      <MessagesTimeline {...idle} t3team={{ activeAgents: [reviewer, settled] }} />,
     );
-    expect(resuming).toContain(">Triage open issues finished · resuming</span>");
-    expect(resuming).toContain('data-t3team-state="settled"');
+    await expect.element(screen.getByText("Waiting for Review the diff")).toBeVisible();
+    await expect
+      .element(
+        screen.getByRole("button", { name: "Triage open issues — Finished · resuming the agent" }),
+      )
+      .toBeVisible();
 
     // The wake turn is running: the delivered task is no longer an agent of this row.
-    const resumed = await renderMarkup(
-      <MessagesTimeline {...workingProps()} t3team={{ activeAgents: [settled] }} />,
-    );
-    expect(resumed).not.toContain('data-t3team-state="settled"');
-    expect(resumed).not.toContain("finished · resuming");
+    await screen.rerender(<MessagesTimeline {...working} t3team={{ activeAgents: [settled] }} />);
+    await expect.element(screen.getByText("Thinking")).toBeVisible();
+    await expect.element(screen.getByText("finished · resuming")).not.toBeInTheDocument();
+    await expect
+      .element(
+        screen.getByRole("button", { name: "Triage open issues — Finished · resuming the agent" }),
+      )
+      .not.toBeInTheDocument();
   });
 
   it("gives the state timer a last-resort ellipsis on narrow panels instead of a hard clip (GHE #208 follow-up)", async () => {
