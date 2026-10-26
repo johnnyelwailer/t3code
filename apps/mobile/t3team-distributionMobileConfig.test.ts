@@ -97,6 +97,51 @@ describe("the runtime version of a build with a selected overlay", () => {
     expect(source()?.contents).not.toBe(before);
   });
 
+  it("includes the source of a declared package, and not its tests", () => {
+    const dir = NodePath.join(root, "shared", "dispatch");
+    write(
+      NodePath.join(dir, "package.json"),
+      JSON.stringify({ name: "@nexi/dispatch", main: "src/index.ts" }),
+    );
+    write(NodePath.join(dir, "src", "index.ts"), "v1");
+    write(NodePath.join(dir, "test", "a.test.ts"), "t1");
+    write(
+      NodePath.join(packDir, "mobile.json"),
+      JSON.stringify({
+        overlay: {
+          entry: "mobile/index.tsx",
+          packages: { "@nexi/dispatch": "../shared/dispatch" },
+        },
+      }),
+    );
+    const before = source()?.contents;
+    write(NodePath.join(dir, "test", "a.test.ts"), "t2");
+    expect(source()?.contents).toBe(before);
+    write(NodePath.join(dir, "src", "index.ts"), "v2");
+    expect(source()?.contents).not.toBe(before);
+  });
+
+  it("follows a change of a declared package's main, though no source file changes", () => {
+    const dir = NodePath.join(root, "shared", "dispatch");
+    write(NodePath.join(dir, "src", "a.ts"), "same");
+    write(NodePath.join(dir, "src", "b.ts"), "same");
+    const manifest = (main: string) =>
+      write(NodePath.join(dir, "package.json"), JSON.stringify({ name: "@nexi/dispatch", main }));
+    manifest("src/a.ts");
+    write(
+      NodePath.join(packDir, "mobile.json"),
+      JSON.stringify({
+        overlay: {
+          entry: "mobile/index.tsx",
+          packages: { "@nexi/dispatch": "../shared/dispatch" },
+        },
+      }),
+    );
+    const before = source()?.contents;
+    manifest("src/b.ts");
+    expect(source()?.contents).not.toBe(before);
+  });
+
   it("includes the native modules the overlay declares", () => {
     write(
       NodePath.join(packDir, "mobile.json"),

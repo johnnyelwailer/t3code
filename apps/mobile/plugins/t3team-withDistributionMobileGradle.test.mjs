@@ -32,6 +32,17 @@ describe("the bundle task inputs", () => {
     expect(regenerated).toContain("dependencies {}");
   });
 
+  it("makes single files inputs too (a declared package's manifest)", () => {
+    const snippet = plugin.bundleInputsSnippet({
+      ...options,
+      files: ["/d/shared/pkg/package.json"],
+    });
+    expect(snippet).toContain(
+      "task.inputs.file(\"/d/shared/pkg/package.json\").withPropertyName('t3codeOverlayFile0')",
+    );
+    expect(plugin.bundleInputsSnippet(options)).not.toContain("inputs.file(");
+  });
+
   it("is appended to app/build.gradle once", async () => {
     const { withAppBuildGradle } = require("expo/config-plugins");
     expect(typeof withAppBuildGradle).toBe("function");

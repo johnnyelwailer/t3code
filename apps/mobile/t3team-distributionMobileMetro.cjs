@@ -33,6 +33,7 @@ const {
   importProblem,
   isBare,
   isInside,
+  overlayPackageFor,
   overlayRoots,
   readDistributionMobile,
   trackedRoots,
@@ -109,15 +110,27 @@ function withDistributionMobile(config, { appRoot, env = process.env }) {
 
   return {
     ...config,
-    watchFolders: [...new Set([...(config.watchFolders ?? []), selection.packDir])],
+    watchFolders: [
+      ...new Set([
+        ...(config.watchFolders ?? []),
+        selection.packDir,
+        ...selection.packages.map((pkg) => pkg.dir),
+      ]),
+    ],
     resolver: {
       ...config.resolver,
       resolveRequest(context, moduleName, platform) {
         const next = previous ?? context.resolveRequest;
         if (moduleName === SPECIFIER) return { type: "sourceFile", filePath: selection.entryPath };
         if (moduleName === API_SPECIFIER) return { type: "sourceFile", filePath: apiFile };
+        const declaredPackage = overlayPackageFor(selection, moduleName);
+        if (declaredPackage !== undefined)
+          return { type: "sourceFile", filePath: declaredPackage.entry };
         const origin = canon(context.originModulePath);
-        const fromOverlay = isInside(selection.packDir, origin);
+        // Files of the declared packages are held to the same rules as the overlay's own.
+        const fromOverlay =
+          isInside(selection.packDir, origin) ||
+          selection.packages.some((pkg) => isInside(pkg.dir, origin));
         // As in the pack plugin of the server build (t3team-distributionImportResolver.ts): any
         // file of the distribution checkout, outside this workspace and outside node_modules,
         // has its bare imports anchored to this app.
@@ -156,7 +169,7 @@ function withDistributionMobile(config, { appRoot, env = process.env }) {
           if (outside !== undefined) {
             fail(
               `${origin}: "${moduleName}" resolves outside the overlay's directories (${outside}); ` +
-                `an overlay may import only from its code, its native modules and its assets`,
+                `an overlay may import only from its code, its native modules, its assets and its declared packages`,
             );
           }
         }
