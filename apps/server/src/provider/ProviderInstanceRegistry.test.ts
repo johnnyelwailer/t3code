@@ -212,6 +212,38 @@ describe("ProviderInstanceRegistry — multi-instance codex slice", () => {
     }).pipe(Effect.provide(layerTest)),
   );
 
+  it.live("offers Claude sign-in only to instances without their own credentials", () =>
+    Effect.gen(function* () {
+      const subscriptionId = ProviderInstanceId.make("claude_subscription");
+      const apiKeyId = ProviderInstanceId.make("claude_api_key");
+      const driver = ProviderDriverKind.make("claudeAgent");
+      const { registry } = yield* makeProviderInstanceRegistry<ClaudeDriverEnv>({
+        drivers: [ClaudeDriver],
+        configMap: {
+          [subscriptionId]: { driver, enabled: false, config: makeClaudeConfig({}) },
+          [apiKeyId]: {
+            driver,
+            enabled: false,
+            environment: [{ name: "ANTHROPIC_API_KEY", value: "sk-ant-test", sensitive: false }],
+            config: makeClaudeConfig({}),
+          },
+        },
+      });
+      const subscription = yield* registry.getInstance(subscriptionId);
+      const apiKey = yield* registry.getInstance(apiKeyId);
+
+      expect(subscription!.auth).toBeDefined();
+      expect((yield* subscription!.snapshot.getSnapshot).setup).toEqual({
+        canAuthenticate: true,
+        canInstall: false,
+      });
+      expect((yield* apiKey!.snapshot.getSnapshot).setup).toEqual({
+        canAuthenticate: false,
+        canInstall: false,
+      });
+    }).pipe(Effect.provide(layerTest)),
+  );
+
   it.live("runs Codex and Claude readiness probes from configured tilde paths", () =>
     Effect.gen(function* () {
       if (yield* HostProcess.isWindows) return;
