@@ -9,7 +9,9 @@ import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { vi } from "vite-plus/test";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -68,6 +70,7 @@ function runShellEnvironment(input: {
   readonly env: NodeJS.ProcessEnv;
   readonly platform: NodeJS.Platform;
   readonly userShell?: string;
+  readonly homeDirectory?: string;
   readonly handler: (
     command: ChildProcess.Command,
   ) => string | { output: string; exitCode: number };
@@ -77,6 +80,7 @@ function runShellEnvironment(input: {
     DesktopEnvironment.DesktopEnvironment,
     DesktopEnvironment.DesktopEnvironment.of({
       platform: input.platform,
+      homeDirectory: input.homeDirectory ?? "/nonexistent-home",
     } as DesktopEnvironment.DesktopEnvironment["Service"]),
   );
   const layerSpawner = Layer.succeed(
@@ -279,6 +283,45 @@ describe("DesktopShellEnvironment", () => {
 
       assert.deepEqual(commands, ["/opt/homebrew/bin/nu", "/bin/zsh", "/bin/launchctl"]);
       assert.equal(env.PATH, "/opt/homebrew/bin:/usr/bin");
+    }),
+  );
+
+  it.effect(
+    "appends existing well-known bin dirs on macOS when neither the shell nor launchctl yields a PATH",
+    () =>
+      Effect.gen(function* () {
+        const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-shell-env-home-"));
+        NodeFS.mkdirSync(NodePath.join(home, ".local", "bin"), { recursive: true });
+        // ~/bin is deliberately absent: only dirs that exist are appended.
+        const env: NodeJS.ProcessEnv = { SHELL: "/bin/zsh", PATH: "/usr/bin:/bin" };
+
+        yield* runShellEnvironment({
+          env,
+          platform: "darwin",
+          homeDirectory: home,
+          // A timed-out login shell and an empty launchctl both surface as no output.
+          handler: () => "",
+        }).pipe(
+          Effect.ensuring(Effect.sync(() => NodeFS.rmSync(home, { recursive: true, force: true }))),
+        );
+
+        const systemDirs = ["/opt/homebrew/bin", "/usr/local/bin"].filter((dir) =>
+          NodeFS.existsSync(dir),
+        );
+        assert.equal(
+          env.PATH,
+          ["/usr/bin:/bin", ...systemDirs, NodePath.join(home, ".local", "bin")].join(":"),
+        );
+      }),
+  );
+
+  it.effect("does not append fallback bin dirs on linux when probing yields no PATH", () =>
+    Effect.gen(function* () {
+      const env: NodeJS.ProcessEnv = { SHELL: "/bin/zsh", PATH: "/usr/bin:/bin" };
+
+      yield* runShellEnvironment({ env, platform: "linux", handler: () => "" });
+
+      assert.equal(env.PATH, "/usr/bin:/bin");
     }),
   );
 
