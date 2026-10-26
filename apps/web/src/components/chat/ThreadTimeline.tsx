@@ -1,4 +1,9 @@
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  OrchestrationV2ConversationMessage,
+  ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
 import { type ComponentProps, useLayoutEffect } from "react";
 import { useIncrementalTimelineEntries } from "../../hooks/useIncrementalTimelineEntries";
 import type { TimelineEntriesInput, TimelineEntry } from "../../session-logic";
@@ -9,6 +14,7 @@ import {
   resolveThreadSwitchTimeline,
   timelineHasEphemeralPreviewUrls,
 } from "../ChatView.logic";
+import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
 import { MessagesTimeline } from "./MessagesTimeline";
 
 /**
@@ -20,6 +26,7 @@ export function ThreadTimeline({
   threadDetailRef,
   entriesInput,
   draftEntries,
+  t3teamArtifacts,
   activeThreadKey,
   syncing,
   detailLoading,
@@ -32,6 +39,12 @@ export function ThreadTimeline({
   entriesInput: Omit<TimelineEntriesInput, "visibleTurnItems">;
   /** A local draft's optimistic rows; null for a server thread. */
   draftEntries: ReadonlyArray<TimelineEntry> | null;
+  /** t3team: what joins the thread's fork artifacts onto the streamed entries (`threadId` null for a draft). */
+  t3teamArtifacts: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: ThreadId | null;
+    readonly messages: ReadonlyArray<OrchestrationV2ConversationMessage> | undefined;
+  };
   activeThreadKey: string | null;
   syncing: boolean;
   detailLoading: boolean;
@@ -43,7 +56,10 @@ export function ThreadTimeline({
     ...entriesInput,
     visibleTurnItems,
   });
-  const entries = draftEntries ?? serverEntries;
+  // t3team: this derivation replaces ChatView's, so the fork artifacts (plan / decision cards,
+  // widgets, recorder-note ext) must be joined here or the rich rows fall back to bare text.
+  const t3teamTimeline = useT3TeamTimelineArtifacts({ ...t3teamArtifacts, entries: serverEntries });
+  const entries = draftEntries ?? t3teamTimeline.entries;
   const displayed = resolveThreadSwitchTimeline({
     loading: entries.length === 0 && syncing,
     activeThreadKey,
