@@ -38,7 +38,7 @@ export type RunPlan =
 
 const DEFAULT_SUFFIX = { file: "_FILE", env: "", request: "_BASE_URL" } as const;
 
-export const variableFor = (binding: UserSecretProcessBinding): string =>
+const variableFor = (binding: UserSecretProcessBinding): string =>
   binding.variable ?? `${binding.name}${DEFAULT_SUFFIX[binding.as ?? "file"]}`;
 
 const modeOf = (binding: UserSecretProcessBinding): UserSecretDeliveryMode =>

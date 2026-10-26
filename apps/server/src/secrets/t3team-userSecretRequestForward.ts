@@ -105,7 +105,7 @@ export function upstreamHeaders(
   return headers;
 }
 
-export function returnedHeaders(response: Response, context: ForwardContext) {
+function returnedHeaders(response: Response, context: ForwardContext) {
   const headers: Record<string, string | Array<string>> = {};
   const mask = (value: string) => maskText(value, context.patterns).text;
   response.headers.forEach((value, name) => {
