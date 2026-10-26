@@ -1,5 +1,5 @@
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -22,17 +22,8 @@ import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
 import { useCloudSessionCreate } from "./t3team-useCloudSessionCreate";
 import { useCanManageRelay } from "./t3team-useCanManageRelay";
-import {
-  getCloudSessionLocal,
-  setCloudSessionLocal,
-  subscribeCloudSessionLocal,
-} from "./t3team-cloudSessionLocalStore";
-import {
-  cloudSessionTargetsNeedListRefresh,
-  getCloudSessionTargets,
-  subscribeCloudSessionTargets,
-} from "./t3team-cloudSessionTargetStore";
-import { useHasPendingCloudQueuedSends } from "./t3team-cloudQueuedSendStore";
+import { setCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
+import { useCloudSessionListDemand } from "./t3team-useCloudSessionListDemand";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 /**
@@ -40,8 +31,18 @@ import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
  * cancel/stop and connect. The panel owns a session's whole lifecycle; its
  * saved-backend row is a read-only connect target (`hasLiveCloudSession`).
  */
-export function useCloudSessionController() {
+export function useCloudSessionController(options?: { readonly scopeKey?: string | null }) {
   const environmentId = usePrimaryEnvironmentId();
+  const demand = useCloudSessionListDemand(options?.scopeKey ?? null);
+  const {
+    localSession,
+    targetsNeedRefresh,
+    queuedSendsPending,
+    cloudMenuOpen,
+    setCloudMenuOpen,
+    panelVisible,
+    setPanelVisible,
+  } = demand;
   const canManageRelay = useCanManageRelay();
   const cloudSessionsEnabled = useFeatureFlag("CLOUD_SESSIONS");
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
@@ -52,25 +53,12 @@ export function useCloudSessionController() {
     historyUrl,
     loadError,
     rateLimitedUntilMs,
-  } = useCloudSessions();
+  } = useCloudSessions(demand.listWanted);
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
     readonly kind: "cancel" | "stop";
   } | null>(null);
-  const localSession = useSyncExternalStore(
-    subscribeCloudSessionLocal,
-    getCloudSessionLocal,
-    getCloudSessionLocal,
-  );
-  const targetsNeedRefresh = useSyncExternalStore(
-    subscribeCloudSessionTargets,
-    () => cloudSessionTargetsNeedListRefresh(getCloudSessionTargets()),
-    () => false,
-  );
-  const queuedSendsPending = useHasPendingCloudQueuedSends();
   const [relayIdsBefore, setRelayIdsBefore] = useState<ReadonlySet<string> | null>(null);
-  const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
-  const [panelVisible, setPanelVisible] = useState(false);
 
   const sessions = useMemo(
     () => mergeLocalCloudSession(serverSessions, localSession),
@@ -113,6 +101,10 @@ export function useCloudSessionController() {
     environmentIdsBefore: relayIdsBefore,
     register: registerRelayEnvironment,
   });
+  // Stay loaded while the list still has work in flight after its surface closes. Set while
+  // rendering, so the list never unsubscribes between the close and the latch.
+  const listBusy = provisioningVisible || connectPendingSessionId !== null;
+  if (listBusy !== demand.lingering) demand.setLingering(listBusy);
 
   const { onCreate, createPending, createPendingSetup } = useCloudSessionCreate({
     environmentId,
