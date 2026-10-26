@@ -51,6 +51,7 @@ export function useCloudSessionController() {
     configured,
     historyUrl,
     loadError,
+    refreshFailed,
     rateLimitedUntilMs,
   } = useCloudSessions();
   const [actionPending, setActionPending] = useState<{
@@ -193,6 +194,7 @@ export function useCloudSessionController() {
     sessions,
     loading,
     loadError,
+    refreshFailed,
     configured,
     historyUrl,
     createPending,
