@@ -3,8 +3,10 @@
  * pending approval is answered only through the client RPC (`userSecrets.answerApproval`), which
  * no agent tool reaches; `t3_pending_request_respond` answers thread questions, not these.
  *
- * Approvals live only while the asking tool call waits, so they are kept in memory. "Allow for this
- * session" is remembered per consumer for the names it covered, until the server stops.
+ * Approvals live only while the asking tool call waits, so they are kept in memory, and so is what
+ * "allow and remember" covers: for `perThread` entries that thread, for `perMachine` entries every
+ * thread on this server. Nothing remembered outlives the server process, and it is keyed by the
+ * entry's whole policy, so a restart, another machine or a changed entry always asks again.
  *
  * Nothing here assumes a user at the keyboard. `automatic` and `standingGrant` uses never prompt; a
  * consumer without a thread to ask in (an unattended run) is declined at once for any use that
@@ -32,7 +34,8 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 
-import { needsPrompt, strictestApproval } from "./t3team-userSecretGrants.ts";
+import { makeApprovalMemory } from "./t3team-userSecretApprovalMemory.ts";
+import { strictestApproval } from "./t3team-userSecretGrants.ts";
 
 export const USER_SECRET_APPROVAL_TIMEOUT = Duration.minutes(5);
 
@@ -72,20 +75,7 @@ export class UserSecretApprovals extends Context.Service<
 const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const pending = yield* SubscriptionRef.make<ReadonlyMap<string, Pending>>(new Map());
-  const sessionApproved = new Map<string, Set<string>>();
-
-  const coveredBySession = (consumerId: string, grants: ReadonlyArray<UserSecretGrant>) =>
-    grants.every(
-      (grant) =>
-        !needsPrompt(grant.approval) ||
-        (grant.approval === "oncePerSession" && sessionApproved.get(consumerId)?.has(grant.name)),
-    );
-
-  const rememberForSession = (consumerId: string, grants: ReadonlyArray<UserSecretGrant>) => {
-    const names = sessionApproved.get(consumerId) ?? new Set<string>();
-    for (const grant of grants) names.add(grant.name);
-    sessionApproved.set(consumerId, names);
-  };
+  const memory = makeApprovalMemory();
 
   const withoutId = (id: string) =>
     SubscriptionRef.update(pending, (current) => {
@@ -100,11 +90,12 @@ const make = Effect.gen(function* () {
     const approval = strictestApproval(input.grants);
     const decided = (outcome: UserSecretAuthorization["outcome"]) => ({ outcome, approval });
     yield* Effect.annotateCurrentSpan({ "user_secret.approval": approval });
-    if (coveredBySession(input.consumerId, input.grants)) return decided("allowed");
+    if (input.grants.every((grant) => memory.covered(input, grant))) return decided("allowed");
     const threadId = input.threadId;
     if (threadId === undefined) return decided("nobody_to_ask");
     const id = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
     const decision = yield* Deferred.make<UserSecretApprovalDecision>();
+    const scope = memory.offeredScope(input.grants);
     const request: UserSecretApprovalRequest = {
       id,
       threadId,
@@ -113,7 +104,7 @@ const make = Effect.gen(function* () {
       ...(input.command === undefined ? {} : { command: input.command }),
       ...(input.destination === undefined ? {} : { destination: input.destination }),
       purpose: input.purpose,
-      sessionApprovalAllowed: approval !== "everyUse",
+      ...(scope === undefined ? {} : { rememberScope: scope }),
       requestedAt: DateTime.formatIso(yield* DateTime.now),
     };
     yield* SubscriptionRef.update(pending, (current) =>
@@ -125,7 +116,7 @@ const make = Effect.gen(function* () {
     );
     if (Option.isNone(answered)) return decided("timed_out");
     if (answered.value === "deny") return decided("declined");
-    if (answered.value === "allowForSession") rememberForSession(input.consumerId, input.grants);
+    if (answered.value === "allowAndRemember" && scope !== undefined) memory.remember(input, scope);
     return decided("allowed");
   });
 
@@ -144,8 +135,8 @@ const make = Effect.gen(function* () {
       if (entry === undefined || entry.request.threadId !== input.threadId) {
         return yield* new UserSecretApprovalAnswerError({ reason: "not_found" });
       }
-      if (input.decision === "allowForSession" && !entry.request.sessionApprovalAllowed) {
-        return yield* new UserSecretApprovalAnswerError({ reason: "session_not_allowed" });
+      if (input.decision === "allowAndRemember" && entry.request.rememberScope === undefined) {
+        return yield* new UserSecretApprovalAnswerError({ reason: "remember_not_allowed" });
       }
       yield* Deferred.succeed(entry.decision, input.decision);
     },

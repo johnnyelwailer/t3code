@@ -11,7 +11,16 @@ import {
   UserSecretName,
 } from "./t3team-userSecretInjection.ts";
 
-export const UserSecretApprovalDecision = Schema.Literals(["allowOnce", "allowForSession", "deny"]);
+/** `allowAndRemember` covers later uses within the request's `rememberScope`. */
+export const UserSecretApprovalDecision = Schema.Literals([
+  "allowOnce",
+  "allowAndRemember",
+  "deny",
+]);
+
+/** How far a remembered approval reaches: this thread, or every thread on this machine. */
+export const UserSecretRememberScope = Schema.Literals(["thread", "machine"]);
+export type UserSecretRememberScope = typeof UserSecretRememberScope.Type;
 export type UserSecretApprovalDecision = typeof UserSecretApprovalDecision.Type;
 
 /** What the user is asked to approve. Agent-written text is shown as such, never as a value. */
@@ -23,8 +32,8 @@ export const UserSecretApprovalRequest = Schema.Struct({
   command: Schema.optional(Schema.String),
   destination: Schema.optional(UserSecretDestinationHost),
   purpose: Schema.String,
-  /** False when an entry asks for approval on every use. */
-  sessionApprovalAllowed: Schema.Boolean,
+  /** Absent when an entry asks on every use; otherwise the narrowest scope of the entries asked. */
+  rememberScope: Schema.optional(UserSecretRememberScope),
   requestedAt: Schema.String,
 });
 export type UserSecretApprovalRequest = typeof UserSecretApprovalRequest.Type;
@@ -46,7 +55,7 @@ export type UserSecretApprovalAnswerInput = typeof UserSecretApprovalAnswerInput
 
 export class UserSecretApprovalAnswerError extends Schema.TaggedError<UserSecretApprovalAnswerError>()(
   "UserSecretApprovalAnswerError",
-  { reason: Schema.Literals(["not_found", "session_not_allowed"]) },
+  { reason: Schema.Literals(["not_found", "remember_not_allowed"]) },
 ) {
   override get message(): string {
     return this.reason === "not_found"

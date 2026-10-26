@@ -37,18 +37,25 @@ const grants: ReadonlyArray<UserSecretGrant> = [
     approval: "standingGrant",
   },
   {
+    name: "NEVER_BOUND",
+    kind: "secret",
+    deliveryModes: ["processInjection"],
+    destinations: ["api.example.com"],
+    approval: "never",
+  },
+  {
     name: "FILE_TOKEN",
     kind: "secret",
     deliveryModes: ["processInjection"],
     destinations: [],
-    approval: "automatic",
+    approval: "never",
   },
   {
     name: "ASK_TOKEN",
     kind: "secret",
     deliveryModes: ["processInjection"],
     destinations: [],
-    approval: "oncePerSession",
+    approval: "perThread",
   },
 ];
 NodeFS.writeFileSync(
@@ -56,6 +63,7 @@ NodeFS.writeFileSync(
   JSON.stringify({ version: 1, grants }),
 );
 NodeFS.writeFileSync(NodePath.join(secrets, "ENV_TOKEN"), ENV_VALUE);
+NodeFS.writeFileSync(NodePath.join(secrets, "NEVER_BOUND"), "dummy-never-bound-value");
 NodeFS.writeFileSync(NodePath.join(secrets, "FILE_TOKEN"), FILE_VALUE);
 NodeFS.writeFileSync(NodePath.join(secrets, "ASK_TOKEN"), "dummy-ask-value");
 NodeFS.writeFileSync(NodePath.join(secrets, "NOT_GRANTED"), "dummy-not-granted");
@@ -178,7 +186,7 @@ describe("process injection", () => {
       assert.include(error.message, "standing grant");
       assert.deepStrictEqual(
         audits.map((entry) => [entry.outcome, entry.reason, entry.approval]),
-        [["declined", "nobody_to_ask", "oncePerSession"]],
+        [["declined", "nobody_to_ask", "perThread"]],
       );
     }),
   );
@@ -197,5 +205,55 @@ describe("process injection", () => {
       );
       assert.include(error.message, "Two secrets would set X");
     }),
+  );
+
+  live(
+    "approval never skips only the prompt: grant, destination, masking and audit still apply",
+    () =>
+      Effect.gen(function* () {
+        audits.length = 0;
+        const attended = ThreadId.make("thread-with-a-user");
+        const result = yield* run(
+          {
+            command:
+              "node -e \"console.log(require('fs').readFileSync(process.env.FILE_TOKEN_FILE,'utf8'))\"",
+            secrets: [{ name: "FILE_TOKEN" }],
+            purpose: "probe",
+          },
+          attended,
+        );
+        assert.strictEqual(result.stdout.trim(), "****");
+        assert.deepStrictEqual(
+          audits.map((entry) => [entry.name, entry.outcome, entry.approval, entry.consumer]),
+          [["FILE_TOKEN", "used", "never", attended]],
+        );
+        audits.length = 0;
+        const ungranted = yield* Effect.flip(
+          run(
+            { command: "exit 0", secrets: [{ name: "NOT_GRANTED" }], purpose: "probe" },
+            attended,
+          ),
+        );
+        assert.include(ungranted.message, "not granted");
+        const elsewhere = yield* Effect.flip(
+          run(
+            {
+              command: "exit 0",
+              secrets: [{ name: "NEVER_BOUND" }],
+              destination: "attacker.net",
+              purpose: "probe",
+            },
+            attended,
+          ),
+        );
+        assert.include(elsewhere.message, "may not be sent to that host");
+        assert.deepStrictEqual(
+          audits.map((entry) => [entry.name, entry.outcome, entry.reason]),
+          [
+            ["NOT_GRANTED", "refused", "not_granted"],
+            ["NEVER_BOUND", "refused", "destination_not_allowed"],
+          ],
+        );
+      }),
   );
 });

@@ -5,10 +5,13 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   checkGrantUse,
   hostMatches,
+  grantPolicyKey,
   needsPrompt,
   renderRequestHeader,
   strictestApproval,
 } from "./t3team-userSecretGrants.ts";
+
+const decodeGrantSync = Schema.decodeUnknownSync(UserSecretGrant);
 
 const NOW = Date.parse("2026-10-26T10:00:00.000Z");
 
@@ -17,7 +20,7 @@ const grant = (overrides: Partial<UserSecretGrant> = {}): UserSecretGrant => ({
   kind: "secret",
   deliveryModes: ["processInjection", "requestInjection"],
   destinations: ["api.example.com", "*.uploads.example.com"],
-  approval: "oncePerSession",
+  approval: "perThread",
   ...overrides,
 });
 
@@ -119,18 +122,44 @@ describe("grant checks", () => {
 describe("approval", () => {
   it("takes the strictest policy across the entries one use names", () => {
     expect(
-      strictestApproval([grant({ approval: "automatic" }), grant({ approval: "standingGrant" })]),
+      strictestApproval([grant({ approval: "never" }), grant({ approval: "standingGrant" })]),
     ).toBe("standingGrant");
     expect(
       strictestApproval([grant({ approval: "standingGrant" }), grant({ approval: "everyUse" })]),
     ).toBe("everyUse");
   });
 
-  it("never prompts for automatic or standing grants", () => {
-    expect(needsPrompt("automatic")).toBe(false);
+  it("prompts only for perMachine, perThread and everyUse", () => {
+    expect(needsPrompt("never")).toBe(false);
     expect(needsPrompt("standingGrant")).toBe(false);
-    expect(needsPrompt("oncePerSession")).toBe(true);
+    expect(needsPrompt("perMachine")).toBe(true);
+    expect(needsPrompt("perThread")).toBe(true);
     expect(needsPrompt("everyUse")).toBe(true);
+  });
+
+  it("orders perMachine below perThread, so one use's prompt takes the narrower scope", () => {
+    expect(
+      strictestApproval([grant({ approval: "perMachine" }), grant({ approval: "perThread" })]),
+    ).toBe("perThread");
+  });
+
+  it("defaults an entry without an approval to perThread", () => {
+    const { approval: _omitted, ...withoutApproval } = grant();
+    const decoded = decodeGrantSync(withoutApproval);
+    expect(decoded.approval).toBe("perThread");
+  });
+
+  it("keys a policy by everything that bounds it, not just the name", () => {
+    expect(grantPolicyKey(grant())).toBe(grantPolicyKey(grant()));
+    const changes: ReadonlyArray<Partial<UserSecretGrant>> = [
+      { destinations: ["api.example.com"] },
+      { approval: "perMachine" },
+      { deliveryModes: ["processInjection"] },
+      { expiresAt: "2026-12-31T00:00:00.000Z" },
+    ];
+    for (const change of changes) {
+      expect(grantPolicyKey(grant(change))).not.toBe(grantPolicyKey(grant()));
+    }
   });
 });
 

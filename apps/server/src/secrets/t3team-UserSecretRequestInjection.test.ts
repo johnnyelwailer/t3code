@@ -19,7 +19,7 @@ const grants = new Map<string, UserSecretGrant>([
       kind: "secret",
       deliveryModes: ["requestInjection"],
       destinations: ["api.example.com", "*.uploads.example.com"],
-      approval: "oncePerSession",
+      approval: "perThread",
     },
   ],
   [
@@ -29,7 +29,7 @@ const grants = new Map<string, UserSecretGrant>([
       kind: "secret",
       deliveryModes: ["requestInjection"],
       destinations: ["search.example.com"],
-      approval: "automatic",
+      approval: "never",
       requestHeader: { name: "X-Api-Key", template: "{value}" },
     },
   ],
@@ -40,7 +40,7 @@ const grants = new Map<string, UserSecretGrant>([
       kind: "authSlot",
       deliveryModes: ["requestInjection"],
       destinations: ["api.example.com"],
-      approval: "automatic",
+      approval: "never",
     },
   ],
 ]);

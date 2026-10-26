@@ -20,21 +20,21 @@ const grants: ReadonlyArray<UserSecretGrant> = [
     kind: "secret",
     deliveryModes: ["processInjection"],
     destinations: [],
-    approval: "automatic",
+    approval: "never",
   },
   {
     name: "CLAUDE_LOGIN",
     kind: "authSlot",
     deliveryModes: ["processInjection"],
     destinations: [],
-    approval: "automatic",
+    approval: "never",
   },
   {
     name: "LINKED",
     kind: "secret",
     deliveryModes: ["processInjection"],
     destinations: [],
-    approval: "automatic",
+    approval: "never",
   },
 ];
 

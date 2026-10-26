@@ -23,7 +23,7 @@ const base: UserSecretApprovalRequest = {
     'curl -sS -H "Authorization: Bearer $(cat "$JIRA_API_TOKEN_FILE")" https://jira.example.com/rest/api/2/myself',
   destination: "jira.example.com",
   purpose: "Check which Jira account the token belongs to before creating the sub-tasks.",
-  sessionApprovalAllowed: true,
+  rememberScope: "thread",
   requestedAt: "2026-10-26T09:14:00.000Z",
 };
 
@@ -33,17 +33,21 @@ const frame = (request: UserSecretApprovalRequest, error: string | null = null, 
   </div>
 );
 
-export const OncePerSession: Story = { render: () => frame(base) };
+export const PerThread: Story = { render: () => frame(base) };
+
+export const PerMachine: Story = {
+  render: () => frame({ ...base, rememberScope: "machine" }),
+};
 
 export const EveryUse: Story = {
   render: () =>
     frame({
       ...base,
+      rememberScope: undefined,
       secretNames: ["DB_PASSWORD"],
       command: 'psql "host=db.internal.example.com user=app" -c "select count(*) from orders"',
       destination: "db.internal.example.com",
       purpose: "Count today's orders to confirm the import finished.",
-      sessionApprovalAllowed: false,
     }),
 };
 

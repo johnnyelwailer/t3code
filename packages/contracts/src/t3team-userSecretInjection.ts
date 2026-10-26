@@ -3,6 +3,7 @@
  * its value into one command or one outgoing request. No schema here carries a value; the agent,
  * the transcript and the clients only ever see names, policies and outcomes.
  */
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -21,17 +22,27 @@ export const UserSecretDeliveryMode = Schema.Literals(["requestInjection", "proc
 export type UserSecretDeliveryMode = typeof UserSecretDeliveryMode.Type;
 
 /**
- * When a use is approved. `standingGrant`: a user approved it in advance when the grant was made
- * (an unattended automation's grant), so nobody is asked at use time. `oncePerSession` and
- * `everyUse` need someone to ask; with nobody there, the use is declined.
+ * When a use is approved, set per entry. Only the prompt depends on it: the grant, destinations,
+ * masking and audit apply to every value.
+ * - `never`: no prompt.
+ * - `standingGrant`: a user approved it in advance when the grant was made (an unattended
+ *   automation's grant), so nobody is asked at use time.
+ * - `perThread` (default): one approval covers later uses of the entry in the same thread.
+ * - `perMachine`: one approval covers later uses by any thread on the same machine, the widest a
+ *   prompted approval reaches. A restart, another machine or a changed entry asks again.
+ * - `everyUse`: every use asks.
+ * A use that needs a prompt with nobody there to ask is declined.
  */
 export const UserSecretApproval = Schema.Literals([
-  "automatic",
+  "never",
   "standingGrant",
-  "oncePerSession",
+  "perMachine",
+  "perThread",
   "everyUse",
 ]);
 export type UserSecretApproval = typeof UserSecretApproval.Type;
+
+export const DEFAULT_USER_SECRET_APPROVAL: UserSecretApproval = "perThread";
 
 const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 
@@ -73,7 +84,9 @@ export const UserSecretGrant = Schema.Struct({
   deliveryModes: Schema.Array(UserSecretDeliveryMode).check(Schema.isMinLength(1)),
   /** Hosts the value may be sent to. Required for request injection. */
   destinations: Schema.Array(UserSecretDestinationHost),
-  approval: UserSecretApproval,
+  approval: UserSecretApproval.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(DEFAULT_USER_SECRET_APPROVAL)),
+  ),
   requestHeader: Schema.optional(UserSecretRequestHeader),
   /** ISO time after which the grant is refused; standing grants carry one. */
   expiresAt: Schema.optional(Schema.String),

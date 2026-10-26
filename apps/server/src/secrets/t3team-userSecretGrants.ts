@@ -8,6 +8,7 @@ import {
   type UserSecretApproval,
   type UserSecretDeliveryMode,
   type UserSecretGrant,
+  type UserSecretRememberScope,
 } from "@t3tools/contracts";
 
 export type UserSecretRefusalReason =
@@ -63,10 +64,11 @@ export function checkGrantUse(
 }
 
 const APPROVAL_STRICTNESS: Record<UserSecretApproval, number> = {
-  automatic: 0,
+  never: 0,
   standingGrant: 1,
-  oncePerSession: 2,
-  everyUse: 3,
+  perMachine: 2,
+  perThread: 3,
+  everyUse: 4,
 };
 
 /** The approval one use needs when it names several entries: the strictest of them. */
@@ -76,12 +78,33 @@ export const strictestApproval = (grants: ReadonlyArray<UserSecretGrant>): UserS
       APPROVAL_STRICTNESS[grant.approval] > APPROVAL_STRICTNESS[strictest]
         ? grant.approval
         : strictest,
-    "automatic",
+    "never",
   );
 
 /** Whether a use needs someone to answer now; standing grants were approved when they were made. */
 export const needsPrompt = (approval: UserSecretApproval): boolean =>
-  approval === "oncePerSession" || approval === "everyUse";
+  approval === "perMachine" || approval === "perThread" || approval === "everyUse";
+
+/** How far "remember" may reach for this approval; undefined when every use asks. */
+export const rememberScopeOf = (
+  approval: UserSecretApproval,
+): UserSecretRememberScope | undefined =>
+  approval === "perMachine" ? "machine" : approval === "perThread" ? "thread" : undefined;
+
+/**
+ * Identifies an entry's policy, not just its name: an approval remembered for one policy does not
+ * cover the entry once its kind, modes, destinations, approval, header or expiry change.
+ */
+export const grantPolicyKey = (grant: UserSecretGrant): string =>
+  JSON.stringify([
+    grant.name,
+    grant.kind,
+    [...grant.deliveryModes].toSorted(),
+    [...grant.destinations].toSorted(),
+    grant.approval,
+    grant.requestHeader ?? null,
+    grant.expiresAt ?? null,
+  ]);
 
 export function renderRequestHeader(
   grant: UserSecretGrant,

@@ -2,10 +2,19 @@
  * Asks the user whether an agent's command may use some of their secrets. The command and purpose
  * are the agent's words, shown as such; no value is ever part of this card.
  */
-import type { UserSecretApprovalDecision, UserSecretApprovalRequest } from "@t3tools/contracts";
+import type {
+  UserSecretApprovalDecision,
+  UserSecretApprovalRequest,
+  UserSecretRememberScope,
+} from "@t3tools/contracts";
 import { KeyRoundIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+
+const REMEMBER_LABELS: Record<UserSecretRememberScope, string> = {
+  thread: "Allow in this thread",
+  machine: "Allow on this machine",
+};
 
 export function T3TeamUserSecretApprovalCard(props: {
   readonly request: UserSecretApprovalRequest;
@@ -52,14 +61,14 @@ export function T3TeamUserSecretApprovalCard(props: {
         >
           Deny
         </Button>
-        {request.sessionApprovalAllowed ? (
+        {request.rememberScope ? (
           <Button
             size="sm"
             variant="outline"
             disabled={props.busy}
-            onClick={() => props.onDecide("allowForSession")}
+            onClick={() => props.onDecide("allowAndRemember")}
           >
-            Allow for this session
+            {REMEMBER_LABELS[request.rememberScope]}
           </Button>
         ) : null}
         <Button size="sm" disabled={props.busy} onClick={() => props.onDecide("allowOnce")}>
