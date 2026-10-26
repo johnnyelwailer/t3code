@@ -2,6 +2,7 @@ import { EnvironmentId, type CloudSession } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  isCloudSessionEnvironment,
   liveCloudSessionForEnvironment,
   savedEnvironmentForCloudSession,
 } from "./t3team-cloudSessionEnvironmentMatch";
@@ -60,5 +61,49 @@ describe("liveCloudSessionForEnvironment", () => {
 
   it("does not match a session that has already ended", () => {
     expect(liveCloudSessionForEnvironment([session("s1", "stopped", String(ENV))], ENV)).toBeNull();
+  });
+});
+
+describe("isCloudSessionEnvironment", () => {
+  it("is true for a broker-transported machine, even before the session list has loaded", () => {
+    expect(
+      isCloudSessionEnvironment({
+        target: { _tag: "BrokerConnectionTarget" },
+        environmentId: ENV,
+        sessions: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("is true for a relay machine a live cloud session is pinned to", () => {
+    const sessions = [session("s1", "ready", String(ENV))];
+    expect(
+      isCloudSessionEnvironment({
+        target: { _tag: "RelayConnectionTarget" },
+        environmentId: ENV,
+        sessions,
+      }),
+    ).toBe(true);
+  });
+
+  it("is false for the user's own machines and for a relay machine whose session ended", () => {
+    const ended = [session("s1", "stopped", String(ENV))];
+    expect(
+      isCloudSessionEnvironment({
+        target: { _tag: "PrimaryConnectionTarget" },
+        environmentId: ENV,
+        sessions: [],
+      }),
+    ).toBe(false);
+    expect(
+      isCloudSessionEnvironment({
+        target: { _tag: "RelayConnectionTarget" },
+        environmentId: ENV,
+        sessions: ended,
+      }),
+    ).toBe(false);
+    expect(isCloudSessionEnvironment({ target: null, environmentId: ENV, sessions: [] })).toBe(
+      false,
+    );
   });
 });

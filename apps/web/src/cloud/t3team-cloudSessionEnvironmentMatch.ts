@@ -46,3 +46,19 @@ export function savedEnvironmentForCloudSession<
     ) ?? null
   );
 }
+
+/**
+ * Whether an environment is a cloud session's machine: reached through the Nexi broker, or a relay
+ * machine a live session is pinned to (the session list only matches once it has loaded). The user
+ * cannot restart or relaunch such a machine's server; it is an ephemeral runner on its own bundle.
+ */
+export function isCloudSessionEnvironment(input: {
+  readonly target: { readonly _tag: string } | null;
+  readonly environmentId: EnvironmentId;
+  readonly sessions: readonly CloudSession[];
+}): boolean {
+  return (
+    input.target?._tag === "BrokerConnectionTarget" ||
+    liveCloudSessionForEnvironment(input.sessions, input.environmentId) !== null
+  );
+}
