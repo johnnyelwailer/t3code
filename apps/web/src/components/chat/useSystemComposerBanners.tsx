@@ -29,6 +29,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ServerUpdateAction, serverUpdateStageLabel } from "../ServerUpdateAction";
+import { useIsCloudSessionEnvironment } from "~/cloud/t3team-useIsCloudSessionEnvironment";
 import { useAutoBalanceUpdateBanner } from "./useAutoBalanceUpdateBanner";
 import { ComposerServerUpdateIcon } from "./ComposerServerUpdateStatus";
 import {
@@ -181,6 +182,9 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
       ? `${activeEnvironment?.label ?? serverConfig?.environment.label ?? activeThreadEnvironmentId} server`
       : "server";
   const serverUpdateEnvironmentId = activeThreadEnvironmentId;
+  // t3team: a cloud session's server is an ephemeral runner on a prebuilt bundle; the user cannot
+  // relaunch it, so "update available" is noise there.
+  const activeIsCloudSession = useIsCloudSessionEnvironment(activeThreadEnvironmentId);
   const versionMismatchSelfUpdate = resolveServerSelfUpdateCapability(serverConfig);
   const versionMismatchInstallation = serverConfig?.environment.capabilities.serverInstallation;
   const versionMismatchDesktopAppUpdate = supportsDesktopAppUpdate(serverConfig);
@@ -261,6 +265,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
     }
     if (
       !automaticEnvironment &&
+      !activeIsCloudSession &&
       serverUpdateEnvironmentId &&
       (serverUpdateState.status === "idle"
         ? showVersionMismatchBanner
