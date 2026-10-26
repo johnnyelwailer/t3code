@@ -3641,17 +3641,16 @@ export default function ChatView(props: ChatViewProps) {
               inert={isRevertingCheckpoint}
               data-chat-composer-overlay="true"
               data-chat-composer-minimal={minimalComposer ? "true" : undefined}
-              className={
+              // A hero grid keeps the composer centered while the headline (and a tall setup
+              // card) above it fits; once they outgrow the pane the composer moves down and the
+              // hero scrolls, instead of the block growing up under the header. The gutter is
+              // inert while the overlay does not scroll.
+              className={cn(
+                "scrollbar-gutter-both pointer-events-none absolute z-20",
                 isDraftHeroState
-                  ? // A grid keeps the composer centered while the headline (and a tall setup card)
-                    // above it fits; once they outgrow the pane the composer moves down and the hero
-                    // scrolls, instead of the block growing up under the header.
-                    "group/hero-overlay pointer-events-none absolute inset-0 z-20 grid grid-rows-[minmax(min-content,1fr)_auto_minmax(0,1fr)] overflow-y-auto overscroll-contain"
-                  : cn(
-                      "pointer-events-none absolute inset-x-0 bottom-0 z-20",
-                      minimalComposer ? "pt-1" : "pt-1.5 sm:pt-2",
-                    )
-              }
+                  ? "group/hero-overlay inset-0 grid grid-rows-[minmax(min-content,1fr)_auto_minmax(0,1fr)] overflow-y-auto overscroll-contain"
+                  : cn("inset-x-0 bottom-0", minimalComposer ? "pt-1" : "pt-1.5 sm:pt-2"),
+              )}
               {...composerContainerProps}
             >
               {composerContainerOverlay}
