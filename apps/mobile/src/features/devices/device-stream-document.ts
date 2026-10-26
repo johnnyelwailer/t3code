@@ -1,6 +1,7 @@
 import type { DeviceHubAccess } from "@t3tools/client-runtime/device/hub-access";
 import type { DevicePlatform } from "@t3tools/contracts";
 import type { PlatformOSType } from "react-native";
+import { documentBaseUrlOverride } from "../../lib/t3team-urlPolicy";
 
 export interface DeviceStreamConfiguration {
   readonly access: DeviceHubAccess;
@@ -22,6 +23,9 @@ export function deviceStreamBaseUrl(
   httpBase: string,
 ) {
   if (viewerPlatform !== "android") return "file:///";
+  // A distribution may host the document on the environment's own origin.
+  const hosted = documentBaseUrlOverride(httpBase);
+  if (hosted !== undefined) return hosted;
   // Android targets stream through WebCodecs, which needs a secure context. iOS targets
   // stream an MJPEG image from the environment, which a synthetic https document blocks as
   // mixed content on plain-http environments even with mixedContentMode="always".

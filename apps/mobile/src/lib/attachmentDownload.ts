@@ -3,6 +3,7 @@ import type { Directory } from "expo-file-system";
 import type { SharingOptions } from "expo-sharing";
 
 import { beginForegroundHandoff } from "./foreground-handoff";
+import { beforeNativeFetch } from "./t3team-urlPolicy";
 import { uuidv4 } from "./uuid";
 
 const ATTACHMENT_DOWNLOAD_DIRECTORY = "t3-attachment-downloads";
@@ -180,6 +181,8 @@ export async function openAttachmentInViewer(input: {
     if (/^(file|content):/.test(input.uri)) {
       await new File(input.uri).copy(cached.file);
     } else {
+      // Expo's downloader has its own HTTP client; a distribution may need to authorize the URL.
+      beforeNativeFetch(input.uri);
       await File.downloadFileAsync(input.uri, cached.file, { signal: input.signal });
     }
     if (input.signal.aborted) return;
@@ -214,6 +217,7 @@ export async function downloadAttachmentForPreview(input: {
       cached.preview.dispose();
       return null;
     }
+    beforeNativeFetch(input.url);
     await File.downloadFileAsync(input.url, cached.file, { signal: input.signal });
     if (input.signal.aborted) {
       cached.preview.dispose();

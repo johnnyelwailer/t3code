@@ -5,7 +5,7 @@
  * growing it is a deliberate, reviewed change, and a refactor inside the app only has to keep these
  * exports.
  */
-export type { MobileExtensions } from "./t3team-extensionTypes";
+export type { MobileExtensions, UrlPolicy } from "./t3team-extensionTypes";
 
 // What the Nexi broker sign-in and hosts list use. Add to this list only what a migrated screen needs.
 export { AppText } from "../components/ui/AppText";
@@ -21,3 +21,9 @@ export { useAtomCommand } from "../state/use-atom-command";
  */
 export const loadEnvironmentServerConfigsAtom = () =>
   import("../state/server").then((module) => module.environmentServerConfigsAtom);
+
+/**
+ * The native attachment viewer (download, then open the local copy). Loaded on demand: the attachment
+ * code consults the url policy, which is the overlay, so a static import would be a cycle.
+ */
+export const loadAttachmentViewer = () => import("../lib/attachmentDownload");

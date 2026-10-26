@@ -571,6 +571,17 @@ Reasons for the upstream files the mobile extension registry touches. Each edit 
 - `packages/client-runtime/src/connection/wakeups.ts` and `.../supervisor.test.ts` — the `broker-availability-changed` wake reason (it only unparks blocked waits, never ends a healthy relay lease) and its two supervisor tests.
 - `apps/mobile/src/connection/platform.ts` — merges the distribution's extra wakeup sources and lets a distribution replace the stock broker gateway stub; both additive.
 - `knip.jsonc` — lists `src/extensions/t3team-api.ts` (the overlay's `@t3code/mobile-api`) as a mobile entry: only the distribution Metro hook resolves it, so nothing imports it.
+
+## Mobile URL policy seam (2026-10-25)
+
+Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op without a distribution policy.
+
+- `apps/mobile/src/lib/openExternalUrl.ts` — refuses to hand an app-private URL to another app.
+- `apps/mobile/src/native/EnrichedMarkdownText.tsx` — the markdown "Share link" action skips app-private URLs.
+- `apps/mobile/src/features/threads/QuestionAnswerHistory.tsx` and `apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx` — "open attachment" and "open in browser" go through `openAssetLink`, which opens an app-private asset through the policy instead of another app.
+- `apps/mobile/src/lib/attachmentDownload.ts` — tells the policy before each native download.
+- `apps/mobile/src/features/browser/PreviewStreamWebView.tsx` and `apps/mobile/src/features/devices/device-stream-document.ts` — the stream WebView document base URL may be overridden by the policy.
+- `packages/client-runtime/src/state/assets.ts` and `.../assets.test.ts` — `setAssetUrlObserver`: a platform sees each asset URL before it reaches a consumer (a platform whose native HTTP clients cannot send an environment's credentials authorizes the exact URL).
 - `apps/mobile/app.config.ts` — passes the config through `applyDistributionMobile`: identity for a stock build; with a selected overlay it turns Expo updates off (a stock OTA must not replace overlay JavaScript) and adds a Gradle plugin that makes the overlay an input of the bundle task.
 - `apps/mobile/fingerprint.config.js` — adds the overlay's entry and a hash of its files to the runtime version, so a distribution binary never shares a runtime version with a stock binary (empty for a stock build).
 
