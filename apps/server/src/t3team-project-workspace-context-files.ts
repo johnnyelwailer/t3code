@@ -9,6 +9,7 @@ import * as Schema from "effect/Schema";
 import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 import { writeT3TeamContextCasFiles } from "./t3team-context-blob-store.ts";
+import { scheduleOrphanT3TeamContextBlobSweep } from "./t3team-context-blob-sweep.ts";
 import { withLinkedRepositoryCheckouts } from "./t3team-linkedRepositoryContextFile.ts";
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
@@ -119,5 +120,5 @@ export function writeT3TeamWorkspaceContextFiles(input: {
       yield* acquireWorkspaceWriteLock(input.workspaceRoot);
       return yield* writeT3TeamWorkspaceContextFilesUnlocked(input);
     }),
-  );
+  ).pipe(Effect.tap(() => scheduleOrphanT3TeamContextBlobSweep(input.workspaceRoot)));
 }

@@ -5,7 +5,9 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/sql/SqlClient";
 import { afterEach } from "vite-plus/test";
 
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
@@ -62,6 +64,31 @@ layer("t3team context blob store", (it) => {
         new TextEncoder().encode(contents).byteLength,
       );
       assert.equal(yield* countT3TeamContextBlobReferences(sha256), 2);
+    }),
+  );
+
+  it.effect("rolls back the artifact row when the blob touch fails", () =>
+    Effect.gen(function* () {
+      const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-blob-store-"));
+      tempRoots.push(root);
+      yield* ensureT3TeamContextCacheTables();
+      const sql = yield* SqlClient.SqlClient;
+      // Fresh content is inserted (not updated) by the blob upsert, so only the touch UPDATE aborts.
+      yield* sql`
+        CREATE TRIGGER fail_blob_touch BEFORE UPDATE ON t3team_context_blobs
+        BEGIN SELECT RAISE(ABORT, 'touch failed'); END
+      `;
+      const contents = '{"rollback":true}';
+      const sha256 = hashT3TeamContextBytes(new TextEncoder().encode(contents));
+      const exit = yield* Effect.exit(
+        writeT3TeamContextCasFile({
+          workspaceRoot: root,
+          relativePath: ".t3team/context/jira/p1/items/a/summary.json",
+          contents,
+        }),
+      );
+      assert.isTrue(Exit.isFailure(exit));
+      assert.equal(yield* countT3TeamContextBlobReferences(sha256), 0);
     }),
   );
 });
