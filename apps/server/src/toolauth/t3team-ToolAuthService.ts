@@ -32,7 +32,7 @@ import { isTerminalPhase } from "./t3team-installFlow.ts";
 import { makeToolAuthInstallFlow } from "./t3team-installService.ts";
 import { makeToolAuthLoginFlow, type ToolAuthStartOptions } from "./t3team-loginService.ts";
 import { makeToolSingleFlight } from "./t3team-singleFlight.ts";
-import { probeToolStatus } from "./t3team-claudeAuthSlot.ts";
+import { probeToolStatus } from "./t3team-authSlot.ts";
 import type { ActiveSession, AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 export type { ActiveSession };
