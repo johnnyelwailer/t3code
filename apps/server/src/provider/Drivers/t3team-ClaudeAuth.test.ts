@@ -291,6 +291,23 @@ it.effect("kills the login process when the sign-in is cancelled", () =>
   }).pipe(inHost),
 );
 
+it.effect("refuses to sign in or out of an instance that uses its own credentials", () =>
+  Effect.gen(function* () {
+    const h = yield* makeHarness({
+      homePath: "work/claude",
+      env: { PATH: "/tools", ANTHROPIC_API_KEY: "sk-ant-test" },
+    });
+    yield* h.controller.start("owner");
+    const failed = yield* h.phase("failed");
+    assert.include(failed.message, "no account to sign in to");
+    const logout = yield* h.controller.logout(Effect.void).pipe(Effect.result);
+    assert.strictEqual(logout._tag, "Failure");
+    assert.deepEqual(h.ptySpawns, []);
+    assert.deepEqual(h.commands, []);
+    assert.deepEqual(h.changed, []);
+  }).pipe(inHost),
+);
+
 it.effect("signs out with the instance environment and reports a change", () =>
   Effect.gen(function* () {
     const h = yield* makeHarness({ homePath: "work/claude" });

@@ -1,11 +1,12 @@
 import type { ClaudeSettings, ProviderAuthMethod, ProviderInstanceId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 
 import * as ProviderAuthFlow from "@t3tools/provider-core/server/providerAuthFlow";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
-import { makeClaudeCli } from "./t3team-ClaudeAuthCli.ts";
+import { claudeSignInUnavailableReason, makeClaudeCli } from "./t3team-ClaudeAuthCli.ts";
 import { CLAUDE_LOGIN_TERMINAL_SIZE, runClaudeLoginTerminal } from "./t3team-ClaudeAuthLogin.ts";
 
 export { claudeSignInSetup } from "./t3team-ClaudeAuthCli.ts";
@@ -40,6 +41,12 @@ export const makeClaudeAuth = Effect.fn("makeClaudeAuth")(function* (options: {
   const pty = yield* Effect.serviceOption(PtyAdapter.PtyAdapter);
   const platform = yield* HostProcess.Platform;
   const cli = yield* makeClaudeCli(options);
+  const path = yield* Path.Path;
+  const unavailable = claudeSignInUnavailableReason({
+    config: options.config,
+    processEnv: options.processEnv,
+    isAbsolute: (candidate) => path.isAbsolute(candidate),
+  });
 
   const methods = Option.isSome(pty)
     ? Effect.succeed(METHODS)
@@ -51,6 +58,7 @@ export const makeClaudeAuth = Effect.fn("makeClaudeAuth")(function* (options: {
     methodId: string,
     context: ProviderAuthFlow.ProviderAuthFlowContext,
   ) {
+    if (unavailable !== undefined) return yield* cli.failure("start", unavailable);
     const method = LOGIN_METHODS.find((candidate) => candidate.id === methodId);
     if (!method || Option.isNone(pty))
       return yield* cli.failure("start", "This sign-in method is not available.");
@@ -69,7 +77,10 @@ export const makeClaudeAuth = Effect.fn("makeClaudeAuth")(function* (options: {
     yield* options.onChanged;
   });
 
-  const logout = cli.ensureConfigDir.pipe(
+  const logout = (
+    unavailable === undefined ? Effect.void : Effect.fail(cli.failure("logout", unavailable))
+  ).pipe(
+    Effect.andThen(cli.ensureConfigDir),
     Effect.andThen(cli.signOut),
     Effect.andThen(options.onChanged),
   );
