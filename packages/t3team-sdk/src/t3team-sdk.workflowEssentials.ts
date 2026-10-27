@@ -93,6 +93,7 @@ const RULES = `## Rules the validator enforces
 - Never catch and swallow errors from agent/askUser/wait: they park the run, they are not failures.
 - Types: a schema is a value, so its type is \`typeof Report.Type\`, never \`Report\`. Decoded
   arrays are readonly: type parameters as \`ReadonlyArray<T>\`. Await agent() before reading fields.
+  Schema helpers are lowercase where they wrap a field: Schema.optional(Schema.String).
 
 ## Reporting
 Return the verdict as a small object ({ ok, summary, items }). Show tables or evidence with

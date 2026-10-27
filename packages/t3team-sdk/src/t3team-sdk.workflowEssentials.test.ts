@@ -25,5 +25,5 @@ describe("workflow author essentials", () => {
       { typecheck: true },
     );
     expect(findings.map(formatFinding)).toEqual([]);
-  }, 60_000);
+  });
 });

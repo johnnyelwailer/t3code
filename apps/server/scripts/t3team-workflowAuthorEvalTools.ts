@@ -21,8 +21,10 @@ import {
   checkWorkflowSourceForValidate,
 } from "../src/t3team-workflowSourceCheck.ts";
 
+const decodeProvider = Schema.decodeUnknownSync(ServerProvider);
+
 const provider = (instanceId: string, driver: string, slugs: ReadonlyArray<string>) =>
-  Schema.decodeUnknownSync(ServerProvider)({
+  decodeProvider({
     instanceId,
     driver,
     enabled: true,
@@ -47,7 +49,7 @@ export const EVAL_PROVIDERS = [
   provider("codex", "codex", ["gpt-5.5", "gpt-5.5-mini"]),
 ];
 
-export const EVAL_BASE_SELECTION: ModelSelection = {
+const EVAL_BASE_SELECTION: ModelSelection = {
   instanceId: ProviderInstanceId.make("nexplore"),
   model: "conductor",
 };
@@ -89,6 +91,19 @@ export interface ToolOutcome {
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+const DECODERS = {
+  t3_recipe_validate: Schema.decodeUnknownResult(
+    T3TeamToolkit.tools.t3_recipe_validate.parametersSchema,
+  ),
+  t3_orchestration_run: Schema.decodeUnknownResult(
+    T3TeamToolkit.tools.t3_orchestration_run.parametersSchema,
+  ),
+  t3_orchestration_status: Schema.decodeUnknownResult(
+    T3TeamToolkit.tools.t3_orchestration_status.parametersSchema,
+  ),
+  t3_recipe_list: Schema.decodeUnknownResult(T3TeamToolkit.tools.t3_recipe_list.parametersSchema),
+};
+
 function decodeArgs(
   name: ToolName,
   raw: string,
@@ -99,7 +114,7 @@ function decodeArgs(
   } catch (error) {
     return { ok: false, text: `Invalid JSON arguments: ${message(error)}` };
   }
-  const decoded = Schema.decodeUnknownResult(T3TeamToolkit.tools[name].parametersSchema)(parsed);
+  const decoded = DECODERS[name](parsed);
   return decoded._tag === "Success"
     ? { ok: true, value: decoded.success }
     : { ok: false, text: `Invalid arguments for ${name}: ${message(decoded.failure)}` };

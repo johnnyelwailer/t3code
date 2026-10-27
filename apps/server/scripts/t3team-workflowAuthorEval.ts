@@ -49,10 +49,11 @@ const jobs = selected.flatMap((item) =>
   Array.from({ length: Number(values.repeat) }, (_, attempt) => ({ item, attempt })),
 );
 
-/** A launching agent that calls the run "running" while it is only being authored (issue #405). */
+/** GHE #405: while the run is only being authored, a reply may be empty or say exactly that; any
+ * other reply ("started", "underway", "watching now") reads to the user as a running run. */
 const claimsRunning = (text: string) =>
-  /\b(is (now )?running|läuft|gestartet|started|kicked off|underway|in progress)\b/i.test(text) &&
-  !/\bnot (yet )?(running|started)|being (written|prepared|authored)|authoring\b/i.test(text);
+  text.trim().length > 0 &&
+  !/prepar|author|being (written|set up)|not (yet )?(running|started)|vorbereit/i.test(text);
 
 interface Row extends TurnMetrics {
   readonly caseId: string;

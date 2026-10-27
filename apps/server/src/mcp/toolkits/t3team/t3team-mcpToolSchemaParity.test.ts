@@ -45,6 +45,11 @@ const mapped = Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP).flatMap(([mcpName, 
   return catalog === undefined || mcp === undefined ? [] : [{ mcpName, catalog, mcp }];
 });
 
+const decodeMcpRunArgs = Schema.decodeUnknownResult(
+  T3TeamToolkit.tools.t3_orchestration_run.parametersSchema,
+);
+const decodeSdkRunArgs = Schema.decodeUnknownResult(RunWorkflowToolArgs);
+
 /** Wording that tells an agent it may leave the argument out. */
 const SAYS_OPTIONAL = /^\s*optional\b|\bomit\b|\bmay omit\b/i;
 
@@ -86,8 +91,7 @@ describe("t3team MCP tool argument contracts", () => {
     { workflowPath: "flows/a.workflow.ts" },
     { recipe: "daily-sweep", action: "run" },
   ])("t3_orchestration_run accepts %j at every layer", (args) => {
-    const mcpSchema = T3TeamToolkit.tools.t3_orchestration_run.parametersSchema;
-    expect(Schema.decodeUnknownResult(mcpSchema)(args)._tag).toBe("Success");
-    expect(Schema.decodeUnknownResult(RunWorkflowToolArgs)(args)._tag).toBe("Success");
+    expect(decodeMcpRunArgs(args)._tag).toBe("Success");
+    expect(decodeSdkRunArgs(args)._tag).toBe("Success");
   });
 });

@@ -59,6 +59,7 @@ const Completion = Schema.Struct({
     }),
   ),
 });
+const decodeCompletion = Schema.decodeUnknownSync(Completion);
 
 interface ChatMessage {
   readonly role: string;
@@ -103,7 +104,7 @@ async function complete(input: {
   });
   if (!response.ok)
     throw new Error(`gateway ${response.status}: ${(await response.text()).slice(0, 300)}`);
-  const body = Schema.decodeUnknownSync(Completion)(await response.json());
+  const body = decodeCompletion(await response.json());
   const choice = body.choices?.[0];
   if (choice === undefined) throw new Error("gateway returned no choice");
   return { choice, usage: body.usage ?? {} };
