@@ -9,15 +9,15 @@ import * as Effect from "effect/Effect";
 
 import * as ProcessRunner from "../processRunner.ts";
 import { CLAUDE, CODEX } from "./t3team-adapters.ts";
-import { holdsClaudeRefreshToken, probeToolStatus } from "./t3team-claudeAuthSlot.ts";
+import { holdsClaudeRefreshToken, holdsCodexLogin, probeToolStatus } from "./t3team-authSlot.ts";
 import type { ToolAuthAdapter } from "./t3team-types.ts";
 
 const SLOT_ON = { T3CODE_CLAUDE_AUTH_SLOT: "1" };
 const DUMMY_LOGIN = { claudeAiOauth: { accessToken: "a", refreshToken: "r", expiresAt: 1 } };
 
-/** Every test gets its own scratch home — never the real `~/.claude`. */
+/** Every test gets its own scratch home — never the real `~/.claude` or `~/.codex`. */
 function makeTempHome(): string {
-  return NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-claude-auth-slot-"));
+  return NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-auth-slot-"));
 }
 
 function writeFile(path: string, text: string): void {
@@ -117,6 +117,60 @@ it.layer(NodeServices.layer)("Claude status on an auth-slot session", (it) => {
       expect((yield* status(CLAUDE, homeDir, hostFlagOn, spawned)).phase).toBe("connected");
       expect((yield* status(CODEX, homeDir, SLOT_ON, spawned)).tool).toBe("codex");
       expect(spawned).toEqual(["claude", "claude", "codex"]);
+    }),
+  );
+});
+
+const CODEX_SLOT_ON = { T3CODE_CODEX_AUTH_SLOT: "1" };
+const DUMMY_CODEX_LOGIN = {
+  OPENAI_API_KEY: null,
+  tokens: { id_token: "i", access_token: "a", refresh_token: "r", account_id: "x" },
+  last_refresh: "2026-10-26T00:00:00Z",
+};
+
+describe("holdsCodexLogin", () => {
+  it("is true for a ChatGPT sign-in or a stored API key, false for anything emptied", () => {
+    expect(holdsCodexLogin(JSON.stringify(DUMMY_CODEX_LOGIN))).toBe(true);
+    expect(holdsCodexLogin('{"OPENAI_API_KEY":"k","tokens":null}')).toBe(true);
+    expect(holdsCodexLogin('{"OPENAI_API_KEY":null,"tokens":null}')).toBe(false);
+    expect(holdsCodexLogin('{"tokens":{"refresh_token":""}}')).toBe(false);
+    expect(holdsCodexLogin("")).toBe(false);
+    expect(holdsCodexLogin("{not json")).toBe(false);
+  });
+});
+
+it.layer(NodeServices.layer)("Codex status on an auth-slot session", (it) => {
+  it.effect("reads auth.json in CODEX_HOME and never spawns the CLI", () =>
+    Effect.gen(function* () {
+      const homeDir = makeTempHome();
+      const codexHome = NodePath.join(homeDir, "codex-home");
+      const env = { ...CODEX_SLOT_ON, CODEX_HOME: codexHome };
+      const spawned: Array<string> = [];
+      expect((yield* status(CODEX, homeDir, env, spawned)).phase).toBe("idle");
+      writeFile(NodePath.join(codexHome, "auth.json"), JSON.stringify(DUMMY_CODEX_LOGIN));
+      expect(yield* status(CODEX, homeDir, env, spawned)).toEqual({
+        tool: "codex",
+        phase: "connected",
+      });
+      expect(spawned).toEqual([]);
+    }),
+  );
+
+  it.effect("without CODEX_HOME the slot is ~/.codex", () =>
+    Effect.gen(function* () {
+      const homeDir = makeTempHome();
+      writeFile(NodePath.join(homeDir, ".codex", "auth.json"), JSON.stringify(DUMMY_CODEX_LOGIN));
+      expect((yield* status(CODEX, homeDir, CODEX_SLOT_ON, [])).phase).toBe("connected");
+    }),
+  );
+
+  it.effect("each marker covers its own tool only", () =>
+    Effect.gen(function* () {
+      const homeDir = makeTempHome();
+      const spawned: Array<string> = [];
+      yield* status(CODEX, homeDir, { T3CODE_CODEX_AUTH_SLOT: "true" }, spawned);
+      yield* status(CLAUDE, homeDir, CODEX_SLOT_ON, spawned);
+      expect(spawned).toEqual(["codex", "claude"]);
     }),
   );
 });
