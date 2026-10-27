@@ -19,7 +19,7 @@ export function submitAuthoredWorkflowSource(
   const source = args.source?.trim() ?? "";
   if (source.length === 0) {
     return Effect.fail(
-      "As this run's author, pass the orchestration `source` you validated; the run id and intent are already bound.",
+      "As this run's author, call t3_orchestration_run({ source }) with the source you validated; the run id and intent are already bound.",
     );
   }
   const submit = session.submit;
@@ -36,6 +36,7 @@ export function submitAuthoredWorkflowSource(
             runId: result.runId,
             status: "accepted" as const,
             handoff: "workflow-ui" as const,
+            hint: "Launched as this run. End your turn now with one short line.",
           } satisfies RunWorkflowToolResult)
         : Effect.fail(
             `The source was not accepted. Fix every finding, then submit again:\n${formatWorkflowSourceFindings(result.findings)}`,

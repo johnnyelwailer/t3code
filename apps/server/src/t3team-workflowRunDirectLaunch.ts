@@ -26,6 +26,7 @@ export const prepareDirectWorkflowLaunch = Effect.fn("prepareDirectWorkflowLaunc
     readonly fileSystem: FileSystem.FileSystem;
     readonly path: Path.Path;
     readonly workspaceRoot: string;
+    readonly checkoutRoot?: string | undefined;
     readonly runId: string;
     readonly workflowPath: string;
     readonly providers: ReadonlyArray<ServerProvider> | undefined;
@@ -35,6 +36,7 @@ export const prepareDirectWorkflowLaunch = Effect.fn("prepareDirectWorkflowLaunc
       fileSystem: input.fileSystem,
       path: input.path,
       workspaceRoot: input.workspaceRoot,
+      checkoutRoot: input.checkoutRoot,
       runId: input.runId,
       args: { workflowPath: input.workflowPath },
     });

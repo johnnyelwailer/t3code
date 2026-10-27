@@ -1,35 +1,33 @@
 /**
- * The author agent's turn texts. Static knowledge (the generated reference) and the live provider
- * catalog snapshot (`t3team-workflowAuthorCatalog.ts`) ride the FIRST turn; the task comes from the
- * parent's `intent`/`args`. Nothing here is built into a system prompt — a thread turn is the only
- * instruction seam a child has, and that is the one used.
+ * The author agent's turn texts. The compact reference (`WORKFLOW_AUTHOR_ESSENTIALS`) and the live
+ * provider catalog snapshot (`t3team-workflowAuthorCatalog.ts`) ride the FIRST turn; the task comes
+ * from the parent's `intent`/`args`. Nothing here is built into a system prompt — a thread turn is
+ * the only instruction seam a child has, and that is the one used.
+ *
+ * The kickoff stays small on purpose (`t3team-workflowAuthorPrompt.test.ts` caps it): a small model
+ * that gets a long manual reasons until its output budget is gone and never calls a tool.
  */
-import { WORKFLOW_AUTHOR_REFERENCE, type WorkflowRunIntent } from "@t3team/sdk";
-import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "@t3tools/project-context/t3teamWidgetGuidance";
+import { WORKFLOW_AUTHOR_ESSENTIALS, type WorkflowRunIntent } from "@t3team/sdk";
 
 import type { ServerProvider } from "@t3tools/contracts";
 
 import { formatWorkflowAuthorCatalog } from "./t3team-workflowAuthorCatalog.ts";
-import { WORKFLOW_REPORTING_CONTRACT } from "./t3team-workflowReportContract.ts";
 
 /** Keep a pathological draft from blowing the author's context. */
 const MAX_EMBEDDED_SOURCE_CHARS = 16_000;
 
 const PROTOCOL = [
-  "You are the orchestration author for a t3team run. Write the orchestration source that fulfils",
-  "the intent below, then launch it. Work only through your tools:",
-  "- The live provider catalog below lists every instance and model slug; never name a `model`",
-  "  that is not in it.",
-  "- t3_recipe_validate({ source }): the full static check (format, determinism, runtime",
-  "  bindings, capabilities, types, model slugs). Iterate until it reports no errors.",
-  "- t3_orchestration_run({ source, intent }): launches the validated source as THIS run. It",
-  "  runs the same check and refuses with the findings if anything is still wrong; fix and call it",
-  "  again. Call it successfully exactly once, then end your turn with one line.",
-  "This thread runs in plan mode only to withhold edit and shell tools; both tools above work in",
-  "it. A successful t3_orchestration_run IS the approval: never call ExitPlanMode or wait for a",
-  "plan to be approved — no one reads this thread, so stopping there fails the run.",
-  "If the intent genuinely cannot be fulfilled as an orchestration, do not launch; end your turn",
-  "with one line that says why — that line is reported to the caller.",
+  "You write and launch ONE orchestration: a TypeScript workflow for the intent below. Nobody",
+  "reads this thread; only your tool calls count. Do this, in order:",
+  "1. Write the complete source right away, starting from the template. Do not plan it out in",
+  "   prose first — the validator is faster than reasoning about edge cases.",
+  "2. Call t3_recipe_validate({ source }). Fix every listed error and validate again until it",
+  "   returns ok: true.",
+  "3. Call t3_orchestration_run({ source }) once. The run and its intent are already bound, so",
+  "   pass only `source`. Then end your turn with one short line.",
+  "If the intent cannot be done as an orchestration, do not launch: end your turn with one line",
+  "saying why. This thread runs in plan mode only to withhold edit and shell tools; both tools",
+  "above work. Never call ExitPlanMode or wait for approval — a successful run IS the approval.",
 ].join("\n");
 
 const clip = (source: string): string =>
@@ -69,9 +67,7 @@ export function buildWorkflowAuthorKickoff(input: {
           clip(input.draftSource),
           "```",
         ]),
-    WORKFLOW_AUTHOR_REFERENCE,
-    WORKFLOW_REPORTING_CONTRACT,
-    `## Widget authoring (thread.showWidget)\n${T3TEAM_WIDGET_AUTHORING_GUIDANCE}`,
+    WORKFLOW_AUTHOR_ESSENTIALS,
   ].join("\n\n");
 }
 
@@ -87,7 +83,7 @@ export function buildWorkflowAuthorRepairTurn(input: {
     ...(input.priorReasons.length === 0
       ? []
       : [`Earlier repair attempts failed: ${input.priorReasons.join(" | ")}`]),
-    "Fix the source and submit it with t3_orchestration_run({ source, intent }) — the same run",
+    "Fix the source and submit it with t3_orchestration_run({ source }) — the same run",
     "resumes from its checkpoint with your corrected source (already-executed steps replay from the",
     "journal, so do not change them). Validate first. If it cannot be fixed, do not submit; end",
     "your turn with one line that says why.",
