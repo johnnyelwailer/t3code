@@ -147,6 +147,9 @@
         "src/provider/testFixtures/*.mjs",
         // One-off operator script, run by path (it imports its -run/-mapping/-layers siblings).
         "scripts/t3team-replay-task-records-to-plans.ts",
+        // Live authoring eval (manual): the CLI, and the MCP server it spawns by path.
+        "scripts/t3team-workflowAuthorEval.ts",
+        "scripts/t3team-workflowAuthorEvalMcp.ts",
         // Workflow fixtures loaded at runtime by URL (new URL("../__fixtures__/" + name)) from
         // the t3team-workflowEngine{DecisionCard,Reactor} integration tests, not imported.
         "__fixtures__/t3team-decisionChoice.workflow.ts",
