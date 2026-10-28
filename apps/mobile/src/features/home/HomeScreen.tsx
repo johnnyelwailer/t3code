@@ -861,6 +861,8 @@ export function HomeScreen(props: HomeScreenProps) {
           className="flex-1 overflow-hidden rounded-t-[28px] bg-screen"
           style={{ paddingBottom: insets.bottom }}
         >
+          <HomeTopContentSpacer />
+          <HomeTopSlot catalog={props.catalogState} />
           <HomeFiltersSlot home={props} scopes={projectScopes} />
           <View className="flex-1 items-center justify-center px-4">{v2ListEmpty}</View>
         </View>
