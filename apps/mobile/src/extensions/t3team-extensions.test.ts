@@ -6,6 +6,7 @@ describe("mobileExtensions", () => {
   it("fills no slot in a build without an overlay, so every screen keeps its stock behavior", () => {
     expect(mobileExtensions).toEqual({});
     expect(mobileExtensions.connectionsNewTop).toBeUndefined();
+    expect(mobileExtensions.homeFilters).toBeUndefined();
     expect(homeEmptyStateFor(mobileExtensions, catalog, "android")).toBeNull();
   });
 });

@@ -29,6 +29,22 @@ export interface BrandTitleProps {
 }
 
 /**
+ * What the Android Chats list offers a distribution's quick filter row: the same project and
+ * environment selection the header menu edits, so both stay in sync (persisted by the stock list).
+ */
+export interface HomeFiltersProps {
+  /** The projects of the selected environment, most recently active first. */
+  readonly projects: ReadonlyArray<{ readonly key: string; readonly label: string }>;
+  /** The selected project's key, or null for all projects. */
+  readonly selectedProjectKey: string | null;
+  readonly onSelectProject: (key: string | null) => void;
+  readonly environments: ReadonlyArray<{ readonly id: string; readonly label: string }>;
+  /** The selected environment's id, or null for all environments. */
+  readonly selectedEnvironmentId: string | null;
+  readonly onSelectEnvironment: (id: string | null) => void;
+}
+
+/**
  * Extension seams for the mobile app. A distribution fills the slots it wants to change; every
  * slot is optional and absent means stock behavior, so a build without an overlay is unchanged.
  * A slot is added together with the screen that reads it and the distribution code that fills it.
@@ -75,6 +91,11 @@ export interface MobileExtensions {
    * yet, so a distribution can offer its own sessions and sign-in where the user starts.
    */
   readonly homeTop?: ComponentType<{ readonly catalog: HomeCatalogState }>;
+  /**
+   * Rendered directly under `homeTop` in the Android Chats list: quick project pills and an
+   * environment row over the list's own filter state. Nothing without one; iOS keeps its chips.
+   */
+  readonly homeFilters?: ComponentType<HomeFiltersProps>;
   /** Replaces the empty home screen shown before any thread exists. */
   readonly homeEmptyState?: HomeEmptyStateSlot;
   /** Replaces the wordmark title of the home header. */

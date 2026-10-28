@@ -10,6 +10,7 @@ export type {
   HomeCatalogState,
   HomeEmptyStateProps,
   HomeEmptyStateSlot,
+  HomeFiltersProps,
   MobileExtensions,
   UrlPolicy,
 } from "./t3team-extensionTypes";

@@ -601,3 +601,7 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 
 - `apps/web/src/components/chat/ThreadTimeline.tsx` — derives the streamed entries itself (upstream #23117), bypassing ChatView's fork-artifact join, so a plan card showed as bare "Plan: <name>" text. It now joins the thread's fork artifacts onto its own entries with `useT3TeamTimelineArtifacts`.
 - `apps/web/src/components/ChatView.tsx` — passes the join's inputs (`t3teamArtifacts`) to `ThreadTimeline`.
+
+## Mobile `homeFilters` and `workspaceTab` seams (2026-10-28)
+
+- `apps/mobile/src/features/home/HomeScreen.tsx` (already listed for `homeTop`) — renders the distribution's `homeFilters` slot (isolated, nothing without one, Android only) directly under `homeTop` in the Chats list header: one added line. The Android "no threads match" early return gets the same line plus a wrapper `View`, so a selected project with no threads still shows the pills and can be cleared (same layout as before, `px-4` moves to the inner view).

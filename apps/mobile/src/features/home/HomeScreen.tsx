@@ -94,6 +94,7 @@ import { ThreadListFilters } from "./ThreadListFilters";
 import { ExtensionBoundary } from "../../extensions/t3team-ExtensionBoundary";
 import { homeEmptyStateFor, mobileExtensions } from "../../extensions/t3team-extensions";
 import { HomeTopSlot } from "../../extensions/t3team-HomeTopSlot";
+import { HomeFiltersSlot } from "../../extensions/t3team-HomeFiltersSlot";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -812,6 +813,7 @@ export function HomeScreen(props: HomeScreenProps) {
     <>
       {listHeader}
       <HomeTopSlot catalog={props.catalogState} />
+      <HomeFiltersSlot home={props} scopes={projectScopes} />
       {Platform.OS === "ios" && workspace ? (
         <ThreadListFilters
           environments={props.environments}
@@ -856,10 +858,11 @@ export function HomeScreen(props: HomeScreenProps) {
     return (
       <View className="flex-1 bg-header">
         <View
-          className="flex-1 items-center justify-center overflow-hidden rounded-t-[28px] bg-screen px-4"
+          className="flex-1 overflow-hidden rounded-t-[28px] bg-screen"
           style={{ paddingBottom: insets.bottom }}
         >
-          {v2ListEmpty}
+          <HomeFiltersSlot home={props} scopes={projectScopes} />
+          <View className="flex-1 items-center justify-center px-4">{v2ListEmpty}</View>
         </View>
       </View>
     );
