@@ -10,6 +10,12 @@ import {
 } from "./t3team-additive-guard-lib.mjs";
 import { maybeCheckWhitelistedAutoMerge } from "./t3team-additive-guard-merge.mjs";
 import {
+  gitQuiet,
+  runPlacementCheck,
+  writePlacementBaseline,
+} from "./t3team-placement-guard.mjs";
+import { placementReport } from "./t3team-placement-report.mjs";
+import {
   assertCanonicalUpstreamRemote,
   collectCandidatePaths,
   listFilesInRef,
@@ -32,9 +38,26 @@ function resolveUpstreamCounterpartPath(baseFiles, filePath, requiredPrefixes) {
   return null;
 }
 
+// Placement ratchet commands (see t3team-placement-guard.mjs); return true when one was handled.
+function handlePlacementCommand(cwd) {
+  const args = process.argv.slice(2);
+  if (args.includes("--placement-report")) {
+    console.log(placementReport({ cwd, git: gitQuiet }));
+    return true;
+  }
+  if (args.includes("--write-placement-baseline")) {
+    const { ok, message } = writePlacementBaseline({ cwd, git: gitQuiet, init: args.includes("--init") });
+    (ok ? console.log : console.error)(message);
+    if (!ok) process.exitCode = 1;
+    return true;
+  }
+  return false;
+}
+
 function main() {
   const cwd = process.cwd();
   assertCanonicalUpstreamRemote();
+  if (handlePlacementCommand(cwd)) return;
   const config = loadAdditiveGuardConfig(cwd);
   const baseRef = resolveBlockingBaseRef(config);
   const baseCommit = runGit(["rev-parse", baseRef]);
@@ -138,6 +161,11 @@ function main() {
   }
 
   saveAdditiveGuardCache(cachePath, nextCacheEntries);
+
+  const placement = runPlacementCheck({ cwd, git: gitQuiet });
+  violations.push(...placement.violations);
+  warnings.push(...placement.warnings);
+  for (const note of placement.notes) console.warn(`[placement] ${note}`);
 
   if (violations.length > 0) {
     console.error("t3team additive guard failed\n");

@@ -746,6 +746,8 @@
     "packages/contracts/src/orchestratorMcp.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
+    ".t3team-extension-seams.json",
+    ".t3team-placement-baseline.jsonl",
     ".agents/skills/merge-upstream/SKILL.md",
     ".claude/**",
     ".cursor/**",
