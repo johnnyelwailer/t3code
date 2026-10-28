@@ -13,6 +13,7 @@ export type {
   HomeFiltersProps,
   MobileExtensions,
   UrlPolicy,
+  WorkspaceExtraTab,
 } from "./t3team-extensionTypes";
 export type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
 

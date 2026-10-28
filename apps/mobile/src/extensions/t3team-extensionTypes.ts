@@ -28,6 +28,20 @@ export interface BrandTitleProps {
   readonly allowFontScaling?: boolean | undefined;
 }
 
+/** One extra top-level tab of the Android workspace navigation. */
+export interface WorkspaceExtraTab {
+  /** Stable identity of the tab, for example "nexi". */
+  readonly id: string;
+  /** The tab's label in the bottom navigation. */
+  readonly title: string;
+  /** "start" puts it before Chats, "center" between Chats and Pull requests. */
+  readonly placement: "start" | "center";
+  /** Selects this tab when the workspace first appears, instead of Chats. */
+  readonly selectOnLaunch?: boolean;
+  /** The tab's content, rendered inside an `ExtensionBoundary` and kept mounted once visited. */
+  readonly Component: ComponentType;
+}
+
 /**
  * What the Android Chats list offers a distribution's quick filter row: the same project and
  * environment selection the header menu edits, so both stay in sync (persisted by the stock list).
@@ -96,6 +110,12 @@ export interface MobileExtensions {
    * environment row over the list's own filter state. Nothing without one; iOS keeps its chips.
    */
   readonly homeFilters?: ComponentType<HomeFiltersProps>;
+  /**
+   * One extra tab in the Android bottom navigation. `useTab` is a React hook called from the
+   * workspace, so it may subscribe to the distribution's own store and switch the tab on or off
+   * (null: no tab) or move it at runtime. It must not throw. Android only; iOS has no extra tab.
+   */
+  readonly workspaceTab?: { readonly useTab: () => WorkspaceExtraTab | null };
   /** Replaces the empty home screen shown before any thread exists. */
   readonly homeEmptyState?: HomeEmptyStateSlot;
   /** Replaces the wordmark title of the home header. */

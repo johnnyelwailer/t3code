@@ -1,4 +1,5 @@
-export type WorkspaceTab = "threads" | "pullRequests";
+/** "extra" is the distribution's extra Android tab (`workspaceTab` extension slot). */
+export type WorkspaceTab = "threads" | "pullRequests" | "extra";
 export type WorkspaceSearchMode = "resting" | "active" | "expanded";
 
 export interface WorkspaceTabState {
@@ -18,11 +19,13 @@ function emptyTab(): WorkspaceTabState {
   return { query: "", searchMode: "resting", scrollOffset: 0, searchEntryOffset: 0 };
 }
 
-export function initialWorkspaceTabsState(): WorkspaceTabsState {
+export function initialWorkspaceTabsState(
+  selectedTab: WorkspaceTab = "threads",
+): WorkspaceTabsState {
   return {
-    selectedTab: "threads",
+    selectedTab,
     selectionRevision: 0,
-    tabs: { threads: emptyTab(), pullRequests: emptyTab() },
+    tabs: { threads: emptyTab(), pullRequests: emptyTab(), extra: emptyTab() },
   };
 }
 

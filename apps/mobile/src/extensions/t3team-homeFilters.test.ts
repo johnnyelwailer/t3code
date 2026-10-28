@@ -50,7 +50,10 @@ function thread(projectId: string, updatedAt: string): EnvironmentThreadShell {
 function setup(overrides: Partial<HomeFiltersSource> = {}) {
   const projects = [project("alpha", "Alpha"), project("beta", "Beta"), project("gamma", "Gamma")];
   const source: HomeFiltersSource = {
-    threads: [thread("beta", "2026-06-03T00:00:00.000Z"), thread("alpha", "2026-06-02T00:00:00.000Z")],
+    threads: [
+      thread("beta", "2026-06-03T00:00:00.000Z"),
+      thread("alpha", "2026-06-02T00:00:00.000Z"),
+    ],
     pendingTasks: [],
     projectSortOrder: "updated_at",
     environments: [
