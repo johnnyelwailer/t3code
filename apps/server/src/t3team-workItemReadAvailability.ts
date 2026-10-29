@@ -39,7 +39,7 @@ export const JIRA_NOT_CONNECTED_MESSAGE =
   "Jira is not connected in this environment. Continue without it.";
 
 /** The project's Jira binding as the shell carries it (same data as `t3team_project_source_bindings`). */
-export function jiraBindingOfProject(
+function jiraBindingOfProject(
   project: Pick<OrchestrationProjectShell, "source">,
 ): JiraMirrorBinding | null {
   const source = project.source;
@@ -54,7 +54,7 @@ export function jiraBindingOfProject(
 }
 
 /** A signed-in account on this host whose session still works. */
-export const isAtlassianAccountUsable = (accountId: string): boolean =>
+const isAtlassianAccountUsable = (accountId: string): boolean =>
   findAuthForAccountId(atlassianAuths, accountId) !== undefined &&
   !accountNeedsReconnect(accountId);
 
