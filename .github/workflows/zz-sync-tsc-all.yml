@@ -1,0 +1,44 @@
+# TEMPORARY (upstream sync 2026-10-29): typecheck every package independently so one push shows all errors
+# instead of one dependency layer at a time. Deleted before the sync PR leaves draft.
+name: zz-sync-tsc-all
+on:
+  push:
+    branches: ["nexi/sync-upstream-*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tsc-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+      - name: Setup Vite+
+        uses: ./.github/actions/setup-ci-deps
+      - name: Typecheck every package on its own
+        shell: bash
+        run: |
+          set -u
+          mkdir -p /tmp/tsc-logs
+          dirs=$(for d in apps/* packages/*; do [ -f "$d/package.json" ] && grep -q '"typecheck"' "$d/package.json" && echo "$d"; done)
+          export NODE_OPTIONS=--max-old-space-size=6144
+          echo "$dirs" | xargs -P 3 -I{} bash -c 'n=$(echo {} | tr / _); pnpm -C {} run typecheck > /tmp/tsc-logs/$n.log 2>&1; echo $? > /tmp/tsc-logs/$n.rc'
+          fail=0
+          for d in $dirs; do
+            n=$(echo $d | tr / _)
+            if [ "$(cat /tmp/tsc-logs/$n.rc)" != "0" ]; then
+              fail=1
+              echo "::group::FAILED $d ($(grep -c 'error TS' /tmp/tsc-logs/$n.log) errors)"
+              grep -E 'error TS|Error:' /tmp/tsc-logs/$n.log | sed -E 's/\x1b\[[0-9;]*m//g' | cut -c1-400 | head -150
+              echo "::endgroup::"
+            else
+              echo "ok $d"
+            fi
+          done
+          exit $fail

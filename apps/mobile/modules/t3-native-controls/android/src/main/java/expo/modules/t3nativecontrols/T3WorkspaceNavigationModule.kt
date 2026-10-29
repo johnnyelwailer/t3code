@@ -131,6 +131,7 @@ class T3WorkspaceNavigationView(
   private val onOverlayChange by EventDispatcher()
   var tabs by mutableStateOf(listOf("threads", "pullRequests", "usage", "settings"))
   var selectedTab by mutableStateOf("threads")
+
   // Titles for ids the built-in `tabTitle` does not know (the distribution's extra tab).
   var tabTitles by mutableStateOf(emptyMap<String, String>())
   var rail by mutableStateOf(false)

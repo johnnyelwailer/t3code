@@ -48,7 +48,7 @@ describe("CloudSessionSchema", () => {
   });
 
   it("decodes a full list result", () => {
-    const decoded = Schema.decodeUnknownSync(CloudSessionListResultSchema)({
+    const decoded = Schema.decodeSync(CloudSessionListResultSchema)({
       sessions: [{ ...LEGACY_SESSION, phase: "cancelled" as const }],
       configured: true,
     });
