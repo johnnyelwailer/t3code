@@ -24,7 +24,7 @@ jobs:
       - name: Typecheck every package on its own
         shell: bash
         run: |
-          set -u
+          set +e +o pipefail
           mkdir -p /tmp/tsc-logs
           dirs=$(for d in apps/* packages/*; do [ -f "$d/package.json" ] && grep -q '"typecheck"' "$d/package.json" && echo "$d"; done)
           export NODE_OPTIONS=--max-old-space-size=6144
@@ -32,10 +32,15 @@ jobs:
           fail=0
           for d in $dirs; do
             n=$(echo $d | tr / _)
+            sed -E 's/\x1b\[[0-9;]*m//g' /tmp/tsc-logs/$n.log > /tmp/tsc-logs/$n.clean
             if [ "$(cat /tmp/tsc-logs/$n.rc)" != "0" ]; then
               fail=1
-              echo "::group::FAILED $d ($(grep -c 'error TS' /tmp/tsc-logs/$n.log) errors)"
-              grep -E 'error TS|Error:' /tmp/tsc-logs/$n.log | sed -E 's/\x1b\[[0-9;]*m//g' | cut -c1-400 | head -150
+              echo "::group::FAILED $d ($(grep -c 'error TS' /tmp/tsc-logs/$n.clean) errors)"
+              echo "codes:"; grep -oE 'error TS[0-9]+' /tmp/tsc-logs/$n.clean | sort | uniq -c | sort -rn | head -20
+              echo "--- non-noise errors"
+              grep 'error TS' /tmp/tsc-logs/$n.clean | grep -vE 'TS377030|TS377047|TS377004' | cut -c1-330 | head -250
+              echo "--- noise (any-in-requirements / effectFn / missing context) files"
+              grep -E 'TS377030|TS377047|TS377004' /tmp/tsc-logs/$n.clean | sed -E 's/\(.*//' | sort | uniq -c | sort -rn | head -25
               echo "::endgroup::"
             else
               echo "ok $d"
