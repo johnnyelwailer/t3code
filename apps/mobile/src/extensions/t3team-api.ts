@@ -29,7 +29,8 @@ export { createMobileThemeVariables } from "../lib/mobileTheme";
 export { ListRow } from "../components/ui/ListRow";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";
-export { useServerConfigs } from "../state/entities";
+export { useProjects, useServerConfigs } from "../state/entities";
+export { useRemoteConnectionStatus } from "../state/use-remote-environment-registry";
 export { useAtomCommand } from "../state/use-atom-command";
 
 /**
