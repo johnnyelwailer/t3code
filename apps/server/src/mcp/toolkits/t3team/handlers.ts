@@ -8,6 +8,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
 import { makeLinkedRepositorySyncHandler } from "./t3team-linkedRepositoryTools.ts";
+import { makeMachineFindDefinitionsHandler } from "./t3team-machineDefinitionTools.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 import { whenMcpToolEnabled } from "./t3team-mcpToolFeatureGate.ts";
 
@@ -100,6 +101,12 @@ const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(fu
   return { skills: [...(rows[0]?.skills ?? [])] };
 });
 
+/** The handlers that need a server service, each resolved once when the toolkit layer is built. */
+const makeServiceHandlers = Effect.all({
+  syncLinkedRepository: makeLinkedRepositorySyncHandler,
+  findMachineDefinitions: makeMachineFindDefinitionsHandler,
+});
+
 /**
  * Every t3team tool declares `readsAsCaller`: the t3_ surface is closed to MCP
  * clients that signed in from outside a thread, which is exactly what that
@@ -117,7 +124,7 @@ const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(fu
  */
 export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
   T3TeamToolkit,
-  Effect.map(makeLinkedRepositorySyncHandler, (syncLinkedRepository) => ({
+  Effect.map(makeServiceHandlers, ({ syncLinkedRepository, findMachineDefinitions }) => ({
     t3_provider_usage: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3_provider_usage", (input) =>
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
@@ -214,6 +221,10 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
           Effect.flatMap((invocation) => syncLinkedRepository(invocation.thread.threadId, input)),
         ),
       ),
+    ),
+    // Not a broker tool either: read-only, so it needs a thread and orchestration scope but no live run.
+    t3_machine_find_definitions: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_machine_find_definitions", findMachineDefinitions),
     ),
     t3team_thread_skill_metadata: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3team_thread_skill_metadata", (input) => threadSkillMetadata(input)),
