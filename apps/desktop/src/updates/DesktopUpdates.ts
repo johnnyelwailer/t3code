@@ -36,7 +36,7 @@ import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { NexiUpdateFeed } from "./t3team-nexiUpdateFeed.ts";
-import { withUpdateIssue } from "./t3team-updateIssue.ts";
+import { updatePollDelay, withUpdateIssue } from "./t3team-updateIssue.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
   createInitialDesktopUpdateState,
@@ -53,7 +53,6 @@ import {
 } from "./updateMachine.ts";
 
 const AUTO_UPDATE_STARTUP_DELAY = "15 seconds";
-const AUTO_UPDATE_POLL_INTERVAL = "4 minutes";
 const PREPARED_INSTALL_CHECK_WAIT = Duration.seconds(90);
 
 type UpdateAction = "check" | "download" | "install" | "install-recovery" | "channel";
@@ -369,6 +368,7 @@ export const make = Effect.gen(function* () {
 
   // The named reason behind the current error, shown only while the state is in error.
   const updateIssueRef = yield* Ref.make<DesktopUpdateIssue | null>(null);
+  let nexiFeedActive = false;
   const stateChanges = yield* PubSub.sliding<DesktopUpdateState>(16);
   // Makes ref writes + publishes atomic against subscribe, so a snapshot
   // never overlaps with the first change a subscriber receives.
@@ -381,7 +381,7 @@ export const make = Effect.gen(function* () {
   const setState = (state: DesktopUpdateState): Effect.Effect<void> =>
     Ref.get(updateIssueRef).pipe(
       Effect.flatMap((issue) => {
-        const next = withUpdateIssue(state, issue);
+        const next = withUpdateIssue(state, issue, nexiFeedActive);
         return stateMutex.withPermits(1)(
           Ref.set(updateStateRef, next).pipe(Effect.andThen(PubSub.publish(stateChanges, next))),
         );
@@ -866,7 +866,10 @@ export const make = Effect.gen(function* () {
       }),
       Effect.forkScoped,
     );
-    yield* Effect.sleep(AUTO_UPDATE_POLL_INTERVAL).pipe(
+    yield* Ref.get(updateIssueRef).pipe(
+      Effect.flatMap((issue) =>
+        Effect.sleep(updatePollDelay(nexiFeedActive, issue) as Duration.Input),
+      ),
       Effect.andThen(checkForUpdates("poll")),
       Effect.forever,
       Effect.catchCause((cause) => {
@@ -1086,6 +1089,7 @@ export const make = Effect.gen(function* () {
         } as ElectronUpdater.ElectronUpdaterFeedUrl);
       } else if (Option.isNone(appUpdateYmlConfig) && (yield* nexiFeed.enabled)) {
         yield* electronUpdater.setFeedURL(yield* nexiFeed.feedOptions);
+        nexiFeedActive = true;
       }
 
       const settings = yield* desktopSettings.get;

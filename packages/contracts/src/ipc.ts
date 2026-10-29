@@ -311,6 +311,8 @@ export interface DesktopUpdateState {
   canRetry: boolean;
   notAppliedVersion?: string;
   issue?: DesktopUpdateIssue;
+  /** Set when updates come from the interim Nexi Work GHE releases feed. */
+  feed?: "nexi-ghe";
 }
 
 export interface DesktopUpdateReleaseNote {
@@ -346,6 +348,7 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   issue: Schema.optionalKey(
     Schema.Literals(["signed-out", "unreachable", "unsupported", "verification-failed"]),
   ),
+  feed: Schema.optionalKey(Schema.Literal("nexi-ghe")),
 });
 
 export const DesktopCliCommandStateSchema = Schema.Struct({

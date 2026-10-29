@@ -4,6 +4,7 @@ import type { NexiUpdateCheck } from "@t3tools/shared/t3team-nexiUpdateWire";
 import {
   NexiUpdateIssue,
   makeNexiUpdateProviderClass,
+  releaseNotesForNotice,
   type NexiUpdateProviderDeps,
 } from "./t3team-nexiUpdateProvider.ts";
 
@@ -31,6 +32,29 @@ const make = (check: NexiUpdateCheck, over: Partial<NexiUpdateProviderDeps> = {}
   return new Provider({}, {}, {});
 };
 
+describe("releaseNotesForNotice", () => {
+  it("keeps the generated what's-changed list and drops the install blurb and asset table", () => {
+    const body = [
+      "### Nexi Work 0.1.2-rc.5",
+      "Installers for the live flavor.",
+      "| File | What |",
+      "|------|------|",
+      "| `a.dmg` | macOS |",
+      "",
+      "## What's Changed",
+      "* feat: a thing by @x in #1",
+      "* fix: another by @y in #2",
+    ].join("\n");
+    expect(releaseNotesForNotice(body)).toBe(
+      "## What's Changed\n* feat: a thing by @x in #1\n* fix: another by @y in #2",
+    );
+  });
+  it("falls back to bullet lines, and to nothing when there are none", () => {
+    expect(releaseNotesForNotice("intro\n- one\n- two\n| t |")).toBe("- one\n- two");
+    expect(releaseNotesForNotice("just prose")).toBe("");
+  });
+});
+
 describe("NexiUpdateProvider", () => {
   it("turns an available release into update info with the manifest's sha512 and the release notes", async () => {
     const provider = make(available);
@@ -39,7 +63,7 @@ describe("NexiUpdateProvider", () => {
       version: "0.1.2-rc.5",
       path: "Nexi-Work-0.1.2-rc.5-arm64-mac.zip",
       sha512: SHA,
-      releaseNotes: "### Nexi Work 0.1.2-rc.5\n- a fix",
+      releaseNotes: "- a fix",
       files: [{ url: "Nexi-Work-0.1.2-rc.5-arm64-mac.zip", sha512: SHA, size: 42 }],
     });
   });

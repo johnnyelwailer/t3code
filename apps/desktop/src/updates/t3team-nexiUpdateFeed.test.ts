@@ -4,7 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { describeNexiUpdateFailure } from "./t3team-nexiUpdateFeed.ts";
 import { isLiveFlavorPreset } from "./t3team-nexiUpdateFlavor.ts";
 import { NexiUpdateIssue } from "./t3team-nexiUpdateProvider.ts";
-import { withUpdateIssue } from "./t3team-updateIssue.ts";
+import { updatePollDelay, withUpdateIssue } from "./t3team-updateIssue.ts";
 import { createInitialDesktopUpdateState } from "./updateMachine.ts";
 
 const runtime = {
@@ -49,14 +49,18 @@ describe("describeNexiUpdateFailure", () => {
 describe("withUpdateIssue", () => {
   it("shows the issue only while the state is an error, and never lets it outlive one", () => {
     const failed = { ...base, status: "error", errorContext: "check" } as const;
-    expect(withUpdateIssue(failed, "signed-out").issue).toBe("signed-out");
-    expect(withUpdateIssue({ ...base, status: "checking" }, "signed-out")).not.toHaveProperty(
+    expect(withUpdateIssue(failed, "signed-out", false).issue).toBe("signed-out");
+    expect(
+      withUpdateIssue({ ...base, status: "checking" }, "signed-out", false),
+    ).not.toHaveProperty("issue");
+    expect(withUpdateIssue({ ...failed, issue: "signed-out" }, null, false)).not.toHaveProperty(
       "issue",
     );
-    expect(withUpdateIssue({ ...failed, issue: "signed-out" }, null)).not.toHaveProperty("issue");
     expect(
-      withUpdateIssue({ ...base, status: "up-to-date", issue: "signed-out" }, "signed-out"),
+      withUpdateIssue({ ...base, status: "up-to-date", issue: "signed-out" }, "signed-out", false),
     ).not.toHaveProperty("issue");
+    expect(withUpdateIssue(base, null, true).feed).toBe("nexi-ghe");
+    expect(withUpdateIssue(base, null, false)).not.toHaveProperty("feed");
   });
 });
 
@@ -66,5 +70,14 @@ describe("isLiveFlavorPreset", () => {
     expect(isLiveFlavorPreset('{"flavor":"nightly","flags":{}}')).toBe(false);
     expect(isLiveFlavorPreset("nonsense")).toBe(false);
     expect(isLiveFlavorPreset(undefined)).toBe(false);
+  });
+});
+
+describe("updatePollDelay", () => {
+  it("keeps upstream's cadence off the feed, polls GHE every few hours, and retries an unreachable GHE sooner", () => {
+    expect(updatePollDelay(false, "unreachable")).toBe("4 minutes");
+    expect(updatePollDelay(true, null)).toBe("3 hours");
+    expect(updatePollDelay(true, "signed-out")).toBe("3 hours");
+    expect(updatePollDelay(true, "unreachable")).toBe("15 minutes");
   });
 });

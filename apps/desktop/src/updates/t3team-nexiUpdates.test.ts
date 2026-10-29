@@ -184,6 +184,7 @@ describe("DesktopUpdates with the interim Nexi feed", () => {
             return yield* updates.getState;
           }).pipe(Effect.provide(off.layer));
           assert.equal(disabledState.status, "disabled");
+          assert.notProperty(disabledState, "feed");
           assert.deepEqual(off.feedUrls(), []);
         }),
       ).pipe(Effect.provide(TestClock.layer()));

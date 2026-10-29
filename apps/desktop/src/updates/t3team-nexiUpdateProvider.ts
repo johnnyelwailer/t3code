@@ -21,6 +21,20 @@ export class NexiUpdateIssue extends Error {
   }
 }
 
+/**
+ * What the update notice lists from a release body: the generated "What's changed" list when there
+ * is one, else the body's bullet lines. The install blurb and the asset table around it are for people
+ * reading the release page, not for a notice.
+ */
+export function releaseNotesForNotice(body: string): string {
+  const heading = /^#{1,3}\s*what'?s changed\s*$/imu.exec(body);
+  if (heading !== null) return body.slice(heading.index);
+  return body
+    .split("\n")
+    .filter((line) => /^\s*[-*]\s+\S/u.test(line))
+    .join("\n");
+}
+
 export interface NexiUpdateProviderDeps {
   readonly currentVersion: string;
   readonly check: () => Promise<NexiUpdateCheck>;
@@ -72,7 +86,7 @@ export function makeNexiUpdateProviderClass(deps: NexiUpdateProviderDeps) {
             path: file.name,
             sha512: file.sha512,
             releaseName: `Nexi Work ${check.version}`,
-            releaseNotes: check.notes,
+            releaseNotes: releaseNotesForNotice(check.notes),
             releaseDate: check.publishedAt ?? "",
           };
         }
