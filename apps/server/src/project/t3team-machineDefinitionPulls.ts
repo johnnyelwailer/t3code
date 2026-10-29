@@ -62,7 +62,10 @@ export const listSearchedPulls = Effect.fn("machineSearch.listPulls")(function* 
     pull.state === "open" || now - closedAt(pull) <= CLOSED_PULL_WINDOW_MS;
   // Keyed by number: a host that lists "closed" with merged ones would otherwise repeat them.
   const unique = new Map(
-    [...openPage.items, ...closedPage.items, ...mergedPage.items].map((pull) => [pull.number, pull]),
+    [...openPage.items, ...closedPage.items, ...mergedPage.items].map((pull) => [
+      pull.number,
+      pull,
+    ]),
   );
   const byNewest = [...unique.values()]
     .filter(inScope)

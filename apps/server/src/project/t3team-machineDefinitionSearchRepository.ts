@@ -64,7 +64,8 @@ export const searchRepository = Effect.fn("machineSearch.searchRepository")(func
   );
   if (pulls.forks.length > 0)
     note(`Pull requests from forks were not searched: ${numbers(pulls.forks)}.`);
-  if (pulls.partial) note("There are more pull requests than were listed; only the newest were searched.");
+  if (pulls.partial)
+    note("There are more pull requests than were listed; only the newest were searched.");
   const refs = yield* listRemoteRefs({
     url: input.url,
     cwd: input.cwd,
