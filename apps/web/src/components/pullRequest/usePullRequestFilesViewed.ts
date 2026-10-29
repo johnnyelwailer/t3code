@@ -9,6 +9,7 @@ import { useStableCallback } from "~/hooks/useStableCallback";
 
 import { toastManager } from "../ui/toast";
 import {
+  isFileTicked,
   isFileViewed,
   isStaleViewedState,
   revertFileViewedOverlay,
@@ -25,7 +26,12 @@ const NO_OVERLAY: FileViewedOverlay = new Map();
 
 export interface PullRequestFilesViewedView {
   readonly enabled: boolean;
+  /** The host has answered at least once, so `isStale` can be believed. */
+  readonly ready: boolean;
+  /** Fully viewed: the code on screen is the code that was cleared. This is what counts. */
   readonly isViewed: (path: string) => boolean;
+  /** What the checkbox shows: viewed, or cleared once and pushed to since. */
+  readonly isTicked: (path: string) => boolean;
   readonly isStale: (path: string) => boolean;
   readonly setViewed: (path: string, viewed: boolean) => void;
   readonly truncated: boolean;
@@ -149,7 +155,9 @@ export function usePullRequestFilesViewed(options: {
 
   return {
     enabled,
+    ready: states !== null,
     isViewed: (path: string) => isFileViewed(path, states, overlay),
+    isTicked: (path: string) => isFileTicked(path, states, overlay),
     isStale: (path: string) => !overlay.has(path) && isStaleViewedState(states?.get(path)),
     setViewed,
     truncated,
