@@ -492,6 +492,10 @@ const layerSourceControlProviderRegistry = SourceControlProviderRegistry.layer.p
   Layer.provideMerge(SourceControlBuiltInDrivers.layer),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(layerVcsDriverRegistry),
+  // t3team: the fork's GitHub facade (GitHubApi, GitHubRest, quota, credentials) is read by the
+  // websocket routes, the inbox and the cloud-session layers. Upstream's GitHub driver now builds
+  // its own transport inside the driver, so the fork's is provided here beside the registry.
+  Layer.provideMerge(GitHubApi.layerWithDependencies),
 );
 
 const layerRepositoryIdentityResolver = Layer.effect(

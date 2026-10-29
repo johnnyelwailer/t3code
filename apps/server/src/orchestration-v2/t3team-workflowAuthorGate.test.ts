@@ -246,7 +246,7 @@ it.effect(
         "req-fetch=decline",
         "req-permission=decline",
       ]);
-      // Nothing a person or another agent (t3_pending_request_respond) could answer.
+      // Nothing a person or another agent (t3_pending_request respond) could answer.
       assert.deepStrictEqual(result.ingested, []);
     }),
 );

@@ -78,7 +78,7 @@ import {
   resolveFileDiffPreviousPath,
   type RenderablePatch,
 } from "~/lib/diffRendering";
-import { APP_BASE_NAME } from "~/branding";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
 import { cn } from "~/lib/utils";
 import { createPullRequestDiffFileContentsLoader } from "~/lib/diffFileContents";
@@ -338,6 +338,7 @@ function PullRequestCodeTab({
 }) {
   const resolvedTheme = useRenderedAppearance();
   const canDetachSurface = useCanDetachSurface();
+  const appName = useT3TeamAppBaseName();
   // Initialize the shared tokenizer and workers while the diff request is still pending.
   useDiffWorkerPool();
   const settings = useClientSettings((settings) => ({
@@ -1278,7 +1279,7 @@ function PullRequestCodeTab({
                 {filePaths.filter(isFileViewed).length} / {files.length}
               </span>
               <span className="truncate">
-                {viewedFilesStore === "environment" ? `viewed in ${APP_BASE_NAME}` : "viewed"}
+                {viewedFilesStore === "environment" ? `viewed in ${appName}` : "viewed"}
               </span>
               {viewedFilesStore === "environment" ? (
                 <Tooltip>

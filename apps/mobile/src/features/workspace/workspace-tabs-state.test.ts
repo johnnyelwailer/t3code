@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   initialWorkspaceTabsState,
+  isWorkspaceTabActive,
   workspaceTabsReducer,
   workspaceTabForNativeSlot,
   resolveWorkspaceTabOrder,
@@ -159,5 +160,23 @@ describe("workspace root navigation", () => {
     expect(workspaceTabForNativeSlot(order, "first")).toBe("threads");
     expect(workspaceTabForNativeSlot(order, "third")).toBe("usage");
     expect(workspaceTabForNativeSlot(order, "removed")).toBeNull();
+  });
+});
+
+describe("isWorkspaceTabActive", () => {
+  it("is true only for the selected stock tab", () => {
+    const state = workspaceTabsReducer(initialWorkspaceTabsState(), { type: "select", tab: "usage" });
+    expect(isWorkspaceTabActive(state, "usage")).toBe(true);
+    expect(isWorkspaceTabActive(state, "threads")).toBe(false);
+  });
+  it("is false for every stock tab while the extra tab is selected", () => {
+    const state = workspaceTabsReducer(
+      workspaceTabsReducer(initialWorkspaceTabsState(), { type: "select", tab: "usage" }),
+      { type: "selectExtra" },
+    );
+    expect(state.selectedTab).toBe("usage");
+    for (const tab of ["threads", "pullRequests", "usage", "settings"] as const) {
+      expect(isWorkspaceTabActive(state, tab)).toBe(false);
+    }
   });
 });

@@ -171,7 +171,7 @@ import Migration0115 from "./Migrations/067_WebhookDedupe.ts";
 import Migration0116 from "./Migrations/t3team-082_SignalTriggerLaunches.ts";
 import Migration0117 from "./Migrations/t3team-083_CloudChildPlacements.ts";
 // New from the 2026-10-29 upstream sync (upstream 068-073). Appended above the fork's maximum id
-// (117), as for every earlier sync; upstream 063 stays held (see above).
+// (117; the new ones run 118-123), as for every earlier sync; upstream 063 stays held (see above).
 import Migration0118 from "./Migrations/068_ShellStopRequestIndex.ts";
 import Migration0119 from "./Migrations/069_ThreadMessageSearch.ts";
 import Migration0120 from "./Migrations/070_PeerLinks.ts";

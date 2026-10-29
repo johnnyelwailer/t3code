@@ -38,7 +38,7 @@ jobs:
               echo "::group::FAILED $d ($(grep -c 'error TS' /tmp/tsc-logs/$n.clean) errors)"
               echo "codes:"; grep -oE 'error TS[0-9]+' /tmp/tsc-logs/$n.clean | sort | uniq -c | sort -rn | head -20
               echo "--- non-noise errors"
-              grep 'error TS' /tmp/tsc-logs/$n.clean | grep -vE 'TS377030|TS377047|TS377004' | cut -c1-330 | head -250
+              grep 'error TS' /tmp/tsc-logs/$n.clean | grep -vE 'TS377030|TS377047|TS377004' | cut -c1-330 | head -700
               echo "--- noise (any-in-requirements / effectFn / missing context) files"
               grep -E 'TS377030|TS377047|TS377004' /tmp/tsc-logs/$n.clean | sed -E 's/\(.*//' | sort | uniq -c | sort -rn | head -25
               echo "::endgroup::"

@@ -10,6 +10,7 @@ import {
 } from "./navigation-tab-order";
 import {
   initialWorkspaceTabsState,
+  isWorkspaceTabActive,
   resolveWorkspaceTabOrder,
   workspaceTabsReducer,
   type WorkspaceSearchTab,
@@ -87,7 +88,7 @@ export function WorkspaceTabsProvider(props: {
     state,
     dispatch: (action: WorkspaceTabsAction) =>
       registry.set(model.stored, workspaceTabsReducer(registry.get(model.resolved), action)),
-    isTabActive: (tab: WorkspaceTab) => registry.get(model.resolved).selectedTab === tab,
+    isTabActive: (tab: WorkspaceTab) => isWorkspaceTabActive(registry.get(model.resolved), tab),
     bottomClearance: 0,
     settingsOpen: props.settingsOpen ?? false,
     getScrollOffset: model.getScrollOffset,

@@ -57,6 +57,14 @@ export function initialWorkspaceTabsState(extraSelected = false): WorkspaceTabsS
   };
 }
 
+/** Whether a stock tab is the selected one; the distribution's extra tab selects none of them. */
+export function isWorkspaceTabActive(
+  state: Pick<WorkspaceTabsState, "selectedTab" | "extraSelected">,
+  tab: WorkspaceTab,
+): boolean {
+  return state.extraSelected !== true && state.selectedTab === tab;
+}
+
 export type WorkspaceTabsAction =
   | { readonly type: "select"; readonly tab: WorkspaceTab }
   | { readonly type: "selectExtra" }

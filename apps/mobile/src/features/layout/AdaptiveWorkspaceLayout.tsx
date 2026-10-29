@@ -100,7 +100,7 @@ import {
   workspaceTabColumns,
   workspaceTabNavigationState,
 } from "../workspace/workspace-tab-navigation";
-import type { WorkspaceTab } from "../workspace/workspace-tabs-state";
+import { isWorkspaceTabActive, type WorkspaceTab } from "../workspace/workspace-tabs-state";
 import { workspaceRoutesOf } from "./workspace-overlay-routes";
 import { SettingsWorkspaceLayout } from "../settings/SettingsWorkspaceLayout";
 
@@ -190,7 +190,8 @@ function AdaptiveWorkspaceLayoutContent(
   const androidSettingsOpen = useAndroidWorkspaceRoot()?.settingsOpen ?? false;
   const safeAreaInsets = useSafeAreaInsets();
   const workspacePage =
-    Platform.OS === "android" && (androidSettingsOpen || workspace?.state.selectedTab === "usage");
+    Platform.OS === "android" && (androidSettingsOpen ||
+      (workspace !== null && isWorkspaceTabActive(workspace.state, "usage")));
   const navigation = useNavigation();
   const activeRoleOwner = useRef<symbol | null>(null);
   const [primarySidebarPreferredVisible, setPrimarySidebarPreferredVisible] = useState(true);
