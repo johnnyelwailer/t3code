@@ -19,6 +19,7 @@ export * from "./t3team-projectMachine.ts";
 export * from "./t3team-userSecretInjection.ts";
 export * from "./t3team-userSecretRequestUse.ts";
 export * from "./t3team-credentialSources.ts";
+export * from "./t3team-credentialRequests.ts";
 export * from "./t3team-userSecretApprovalCard.ts";
 export * from "./relayClient.ts";
 export * from "./desktopBootstrap.ts";

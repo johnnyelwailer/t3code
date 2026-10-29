@@ -37,6 +37,10 @@ import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import { UserSecretApprovals } from "./secrets/t3team-UserSecretApprovals.ts";
 import * as GitHubRest from "@t3tools/source-control-github/server/GitHubRest";
+import {
+  makeRequestedUserSecrets,
+  RequestedUserSecrets,
+} from "./secrets/t3team-RequestedUserSecrets.ts";
 import * as ServerBrowser from "./preview/ServerBrowser.ts";
 import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/server/AcpRegistryRuntimeCoordinator";
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
@@ -384,6 +388,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ToolAuthService.ToolAuthService)({}),
   Layer.mock(UserSecretApprovals)({}),
   Layer.mock(GitHubRest.GitHubRest)({}),
+  Layer.succeed(RequestedUserSecrets, makeRequestedUserSecrets({ reserved: () => false })),
 );
 
 const layerConfigSources = Layer.mergeAll(

@@ -115,6 +115,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.userSecretsAnswerApproval]: "secrets",
   [WS_METHODS.credentialSourcesProbe]: "secrets",
   [WS_METHODS.credentialSourcesRead]: "secrets",
+  [WS_METHODS.credentialRequestsList]: "secrets",
+  [WS_METHODS.credentialRequestsRevoke]: "secrets",
   [WS_METHODS.cloudGetRelayClientStatus]: "cloud",
   [WS_METHODS.cloudInstallRelayClient]: "cloud",
   [WS_METHODS.cloudSessionList]: "cloud",

@@ -4,7 +4,7 @@
  * restart forgets them, like every approval. A name the session was started with is never replaced,
  * and a login slot never registers.
  */
-import type { UserSecretGrant, UserSecretName } from "@t3tools/contracts";
+import type { UserSecretGrant, UserSecretName, UserSecretRequestUse } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as Redacted from "effect/Redacted";
@@ -34,6 +34,11 @@ export interface RequestedUserSecretEntry {
   readonly value: Redacted.Redacted<string>;
 }
 
+export interface PendingCredentialRequest {
+  readonly turnItemId: string;
+  readonly use: UserSecretRequestUse;
+}
+
 export class RequestedUserSecrets extends Context.Service<
   RequestedUserSecrets,
   {
@@ -47,6 +52,16 @@ export class RequestedUserSecrets extends Context.Service<
     readonly revoke: (name: UserSecretName) => Effect.Effect<boolean>;
     /** What was granted, for the card and for revoking; never a value. */
     readonly list: Effect.Effect<ReadonlyArray<RequestedUserSecretSummary>>;
+    /** A request whose card is waiting for the user, so the card can show what is asked. */
+    readonly trackPending: (input: {
+      readonly threadId: string;
+      readonly turnItemId: string;
+      readonly use: UserSecretRequestUse;
+    }) => Effect.Effect<void>;
+    readonly pendingFor: (
+      threadId: string,
+    ) => Effect.Effect<ReadonlyArray<PendingCredentialRequest>>;
+    readonly untrack: (turnItemId: string) => Effect.Effect<void>;
     /** Synchronous, for the resolver port's `grant`; the value only leaves through `resolve`. */
     readonly lookup: (name: string) => RequestedUserSecretEntry | undefined;
   }
@@ -59,6 +74,10 @@ export function makeRequestedUserSecrets(options: {
   readonly reserved: (name: string) => boolean;
 }): RequestedUserSecrets["Service"] {
   const entries = new Map<string, RequestedUserSecretEntry>();
+  const pending = new Map<
+    string,
+    { readonly threadId: string; readonly use: UserSecretRequestUse }
+  >();
   const check = (name: string) =>
     name.startsWith(LOGIN_SLOT_NAME_PREFIX)
       ? Effect.fail(new RequestedUserSecretRefused({ name, reason: "login_slot" }))
@@ -81,6 +100,15 @@ export function makeRequestedUserSecrets(options: {
         expiresAt: grant.expiresAt,
       })),
     ),
+    trackPending: ({ threadId, turnItemId, use }) =>
+      Effect.sync(() => void pending.set(turnItemId, { threadId, use })),
+    pendingFor: (threadId) =>
+      Effect.sync(() =>
+        [...pending.entries()]
+          .filter(([, request]) => request.threadId === threadId)
+          .map(([turnItemId, request]) => ({ turnItemId, use: request.use })),
+      ),
+    untrack: (turnItemId) => Effect.sync(() => void pending.delete(turnItemId)),
     lookup: (name) => entries.get(name),
   });
 }

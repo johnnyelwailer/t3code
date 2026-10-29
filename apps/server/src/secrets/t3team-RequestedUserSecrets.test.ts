@@ -206,4 +206,23 @@ it.layer(NodeServices.layer)("requested user secrets", (it) => {
       assert.strictEqual(Redacted.value(value), "rotated");
     }),
   );
+
+  it.effect("a pending request is listed for its thread until it is answered", () =>
+    Effect.gen(function* () {
+      const { requested } = yield* setup;
+      const mine = use({ host: "npm.pkg.github.com", scopes: ["read:packages"] });
+      yield* requested.trackPending({ threadId: "thread-1", turnItemId: "item-1", use: mine });
+      yield* requested.trackPending({
+        threadId: "thread-2",
+        turnItemId: "item-2",
+        use: use({ name: "OTHER_KEY" }),
+      });
+      assert.deepStrictEqual(yield* requested.pendingFor("thread-1"), [
+        { turnItemId: "item-1", use: mine },
+      ]);
+      yield* requested.untrack("item-1");
+      assert.deepStrictEqual(yield* requested.pendingFor("thread-1"), []);
+      assert.strictEqual((yield* requested.pendingFor("thread-2")).length, 1);
+    }),
+  );
 });

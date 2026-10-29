@@ -1978,6 +1978,9 @@ const make = Effect.gen(function* () {
               ),
             ),
           );
+      if (input.use !== undefined && useStore !== undefined) {
+        yield* useStore.trackPending({ threadId, turnItemId, use: input.use });
+      }
       yield* record("pending");
       // Only this call can hand the agent its ref, so the card must not
       // outlive it: a timeout, a failed wait or an aborted call closes it as
@@ -2024,6 +2027,7 @@ const make = Effect.gen(function* () {
           ),
         ),
         Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : closeCard)),
+        Effect.ensuring(useStore === undefined ? Effect.void : useStore.untrack(turnItemId)),
       );
       if (Option.isNone(answered)) yield* closeCard;
       const status = Option.isSome(answered)
