@@ -2,6 +2,7 @@ import { Project, ProjectId, SourceControlProviderKind, type VcsError } from "@t
 import type {
   PullRequestProviderApi,
   PullRequestProviderError,
+  ProviderChangeRequest,
 } from "@t3tools/source-control-core/server/PullRequestProvider";
 import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
@@ -43,9 +44,15 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
   readonly unsupported?: boolean;
   readonly gitOutput?: string | ((command: VcsProcessInput) => string);
   readonly gitExitCode?: number;
+  /** Per-command exit code, for a repository that refuses while another answers. */
+  readonly gitExitCodeFor?: (command: VcsProcessInput) => number | undefined;
   readonly gitTruncated?: boolean;
   readonly gitError?: VcsError;
   readonly readError?: PullRequestProviderError;
+  /** Files by commit; a commit not listed here reads `files`. */
+  readonly filesByRevision?: Record<string, Record<string, string>>;
+  /** What the host's pull request list answers; none by default. */
+  readonly pulls?: ReadonlyArray<ProviderChangeRequest>;
   readonly beforeRead?: Effect.Effect<void>;
   readonly manifest?: (root: string) => string;
 }) {
@@ -88,7 +95,7 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
   const read: NonNullable<PullRequestProviderApi["readFileAtRevision"]> = (request) => {
     reads.push(request);
     if (input.readError !== undefined) return Effect.fail(input.readError);
-    const content = input.files?.[request.path];
+    const content = (input.filesByRevision?.[request.revision] ?? input.files)?.[request.path];
     return Effect.andThen(
       input.beforeRead ?? Effect.void,
       Effect.succeed(
@@ -110,6 +117,8 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
     Effect.provide(
       Layer.mock(TestProvider)({
         kind,
+        listChangeRequests: () =>
+          Effect.succeed({ items: input.pulls ?? [], truncated: false, continues: false }),
         capabilities: {
           diff: false,
           comment: false,
@@ -146,7 +155,9 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
         commands.push(command);
         if (input.gitError !== undefined) return Effect.fail(input.gitError);
         return Effect.succeed({
-          exitCode: ChildProcessSpawner.ExitCode(input.gitExitCode ?? 0),
+          exitCode: ChildProcessSpawner.ExitCode(
+            input.gitExitCodeFor?.(command) ?? input.gitExitCode ?? 0,
+          ),
           stdout:
             typeof input.gitOutput === "function"
               ? input.gitOutput(command)
