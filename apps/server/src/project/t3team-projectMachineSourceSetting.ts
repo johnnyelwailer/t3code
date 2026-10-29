@@ -29,7 +29,7 @@ const SHORTHAND = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 // git check-ref-format, minus what makes no sense for a branch a person types.
 const FORBIDDEN_BRANCH = /[\u0000- \u007f~^:?*[\\]|\.\.|@\{|\/\/|\.lock(\/|$)|^[-/]|[/.]$/;
 
-export const isValidBranchName = (branch: string): boolean =>
+const isValidBranchName = (branch: string): boolean =>
   branch.length > 0 && branch !== "@" && !FORBIDDEN_BRANCH.test(branch);
 
 /** `owner/repo` shorthand resolves on the host of `ownUrl`; anything else must be an https URL. */
