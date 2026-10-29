@@ -10,7 +10,7 @@ import type { MachineDefinitionCandidate } from "./t3team-machineDefinitionSearc
 import type { SearchedPulls } from "./t3team-machineDefinitionPulls.ts";
 import type { RemoteRefs } from "./t3team-machineDefinitionRefs.ts";
 
-export const MAX_REFS_PER_REPOSITORY = 20;
+const MAX_REFS_PER_REPOSITORY = 20;
 
 export interface PlannedRef {
   readonly ref: MachineDefinitionCandidate["ref"];

@@ -14,7 +14,7 @@ import { providerCall } from "./t3team-machineDefinitionProviderCall.ts";
 import { RemoteUnavailable } from "./t3team-machineDefinitionReader.ts";
 import type { RemoteMachineTarget } from "./t3team-remoteMachineScan.ts";
 
-export const CLOSED_PULL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const CLOSED_PULL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 40;
 
 export interface SearchedPulls {

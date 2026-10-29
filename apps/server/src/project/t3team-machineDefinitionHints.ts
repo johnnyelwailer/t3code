@@ -10,7 +10,7 @@ import * as Effect from "effect/Effect";
 import { providerCall } from "./t3team-machineDefinitionProviderCall.ts";
 import type { RemoteMachineTarget } from "./t3team-remoteMachineScan.ts";
 
-export const SETUP_HINT_PATHS = [
+const SETUP_HINT_PATHS = [
   "Dockerfile",
   ".npmrc",
   ".env.example",
