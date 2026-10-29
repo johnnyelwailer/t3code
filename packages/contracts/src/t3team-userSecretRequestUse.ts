@@ -3,6 +3,7 @@
  * `t3_user_secret_run`, granted for this session when the user approves the card. It carries the same
  * policy fields as a broker-delivered `UserSecretGrant`, so both kinds are judged by the same rules.
  */
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -58,6 +59,6 @@ export function grantFromRequestUse(use: UserSecretRequestUse, nowMillis: number
     destinations,
     approval: use.approval ?? DEFAULT_USER_SECRET_APPROVAL,
     ...(use.requestHeader === undefined ? {} : { requestHeader: use.requestHeader }),
-    expiresAt: new Date(nowMillis + minutes * 60_000).toISOString(),
+    expiresAt: DateTime.formatIso(DateTime.makeUnsafe(nowMillis + minutes * 60_000)),
   };
 }

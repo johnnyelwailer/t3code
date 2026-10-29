@@ -1,4 +1,5 @@
 import { assert, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 import {
@@ -17,7 +18,7 @@ it("a minimal use asks for process injection, approved once per thread, for a li
   assert.strictEqual(grant.kind, "secret");
   assert.strictEqual(
     grant.expiresAt,
-    new Date(NOW + DEFAULT_REQUESTED_GRANT_MINUTES * 60_000).toISOString(),
+    DateTime.formatIso(DateTime.makeUnsafe(NOW + DEFAULT_REQUESTED_GRANT_MINUTES * 60_000)),
   );
 });
 
@@ -34,7 +35,7 @@ it("the host becomes the only destination, and the requested expiry and approval
   );
   assert.deepStrictEqual(grant.destinations, ["npm.pkg.github.com"]);
   assert.strictEqual(grant.approval, "perMachine");
-  assert.strictEqual(grant.expiresAt, new Date(NOW + 30 * 60_000).toISOString());
+  assert.strictEqual(grant.expiresAt, DateTime.formatIso(DateTime.makeUnsafe(NOW + 30 * 60_000)));
 });
 
 it("a login slot name, a lower-case name and an over-long lifetime are refused", () => {
