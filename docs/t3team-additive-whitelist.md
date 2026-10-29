@@ -621,3 +621,7 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 
 - `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx` — renders the distribution's `newTaskTop` slot (isolated, nothing without one) first in the New task project list: one import and one line, so a distribution can offer another way to start a thread (a cloud session) next to the stock ones.
 - `apps/mobile/src/features/threads/NewTaskContextPickerScreens.tsx` — renders the `environmentPickerTop` slot above the stock rows of the New task Environment picker: one import and one line, so a distribution can list an environment the stock list does not offer (a running cloud session) and start a thread on it.
+
+## Accepted machine source is saved on the user's own environment (2026-10-29, #791)
+
+- `apps/web/src/components/chat/usePendingThreadRequests.ts` — after a user-input response succeeds, hands the questions and answers to `useApplyMachineSourceAnswer` (`apps/web/src/cloud/t3team-useApplyMachineSourceAnswer.ts`): one hook call and one line. The machine-setup agent (in a cloud session) proposes a machine source through `t3_machine_set_source`, a `t3_ask_user` question whose id carries the proposal; the setting lives on the primary environment, so the web client saves it there when the answer is the accept label. Any other question or answer is a no-op.
