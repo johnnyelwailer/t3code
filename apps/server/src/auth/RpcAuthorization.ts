@@ -154,6 +154,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.cloudSessionCancel]: AuthRelayWriteScope,
   // Reads committed files in the project's own checkouts, like the other project reads.
   [WS_METHODS.projectMachineDiscover]: AuthOrchestrationReadScope,
+  [WS_METHODS.projectMachineSetSource]: AuthSettingsWriteScope,
   [WS_METHODS.pullRequestsList]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsListStats]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsSummary]: AuthOrchestrationReadScope,

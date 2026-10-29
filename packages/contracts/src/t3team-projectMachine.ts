@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ProjectMachineSourceReadout } from "./t3team-projectMachineSource.ts";
 
 /**
  * A project's machine: what a cloud session builds for it, defined once per project and shared
@@ -135,13 +136,15 @@ export const ProjectMachineDiscovery = Schema.Struct({
   status: ProjectMachineStatus,
   candidates: Schema.Array(ProjectMachineDefinition),
   rejected: Schema.Array(ProjectMachineRejectedCandidate),
+  /** Where the definition was looked for; absent when the project has no repository to look in. */
+  source: Schema.optional(ProjectMachineSourceReadout),
 });
 export type ProjectMachineDiscovery = typeof ProjectMachineDiscovery.Type;
 
 export class ProjectMachineDiscoveryError extends Schema.TaggedError<ProjectMachineDiscoveryError>()(
   "ProjectMachineDiscoveryError",
   {
-    reason: Schema.Literals(["unknown_project", "unreadable"]),
+    reason: Schema.Literals(["unknown_project", "unreadable", "invalid_source"]),
     /** Safe to show a user. */
     message: Schema.String,
   },

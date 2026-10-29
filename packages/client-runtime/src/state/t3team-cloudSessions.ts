@@ -78,6 +78,23 @@ export function createCloudSessionAtoms<R, E>(
       staleTimeMs: PROJECT_MACHINE_STALE_TIME_MS,
     }),
 
+    /** Saves where a project's machine definition is read from; null resets it. One at a time per project. */
+    setProjectMachineSource: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:cloud-sessions:set-project-machine-source",
+      tag: WS_METHODS.projectMachineSetSource,
+      scheduler: commandScheduler,
+      concurrency: {
+        mode: "serial" as const,
+        key: ({
+          environmentId,
+          input,
+        }: {
+          readonly environmentId: string;
+          readonly input: { readonly projectId: string };
+        }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
+
     cancel: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:cloud-sessions:cancel",
       tag: WS_METHODS.cloudSessionCancel,

@@ -11,6 +11,7 @@ import {
   type ProjectId,
   type ProjectMachineDiscovery as Discovery,
   ProjectMachineDiscoveryError,
+  type ProjectMachineSourceSetting,
 } from "@t3tools/contracts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as Context from "effect/Context";
@@ -22,11 +23,18 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import { ProjectService } from "./ProjectService.ts";
-import { scanCheckout } from "./t3team-projectMachineScan.ts";
+import { setProjectMachineSource } from "./t3team-projectMachineSourceSet.ts";
+import { scanLocation } from "./t3team-projectMachineLocationScan.ts";
 import type { ScannedMachine } from "./t3team-machineDefinitionScan.ts";
 import { machineRepositories } from "./t3team-projectMachineRepositories.ts";
 import { logMachineSelection } from "./t3team-projectMachineLog.ts";
-import { selectProjectMachine } from "./t3team-projectMachineOwnership.ts";
+import { OWN_REPOSITORY, selectProjectMachine } from "./t3team-projectMachineOwnership.ts";
+import {
+  defaultReadout,
+  isCustomSource,
+  scanSelectedSource,
+} from "./t3team-projectMachineSourceScan.ts";
+import { readMachineSource } from "./t3team-projectMachineSourceSetting.ts";
 import { makeRemoteMachineCache } from "./t3team-remoteMachineCache.ts";
 import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
@@ -45,6 +53,11 @@ export class ProjectMachineDiscovery extends Context.Service<
     readonly discover: (
       projectId: ProjectId,
     ) => Effect.Effect<Discovery, ProjectMachineDiscoveryError>;
+    /** Saves (or, with null, resets) where the project's machine definition is read from. */
+    readonly setSource: (
+      projectId: ProjectId,
+      source: ProjectMachineSourceSetting | null,
+    ) => Effect.Effect<Discovery, ProjectMachineDiscoveryError>;
     /** Like `discover`, plus where the default definition lives (null when there is none). */
     readonly resolveDefault: (
       projectId: ProjectId,
@@ -60,6 +73,8 @@ export class ProjectMachineDiscovery extends Context.Service<
         readonly checkouts: ReadonlyArray<{ readonly repository: string; readonly root: string }>;
         /** The project's title, so a session without a checkout can name its workspace after it. */
         readonly title: string;
+        /** Set when the user's chosen source cannot supply a machine: a plain session must not stand in. */
+        readonly sourceFailure?: string | undefined;
       },
       ProjectMachineDiscoveryError
     >;
@@ -98,59 +113,44 @@ const make = Effect.gen(function* () {
       }
       const repositories = yield* machineRepositories(project.value);
       const remoteEnabled = yield* readFeatureFlagFromConfig("CLOUD_PROJECT_MACHINE");
+      const own = repositories.find((location) => location.repository === OWN_REPOSITORY);
+      const choice = yield* readMachineSource(project.value.workspaceRoot);
       const roots = repositories
         .filter((location) => location.local)
         .map(({ repository, root }) => ({ repository, root }));
+      if (choice !== null && isCustomSource(choice, own)) {
+        const selected = yield* scanSelectedSource({
+          choice,
+          own,
+          cwd: project.value.workspaceRoot,
+          remoteEnabled,
+          cachedOnly: options?.remote === "cached-only",
+          scanRemote,
+        });
+        const selection = selectProjectMachine({
+          sources: selected.sources,
+          rejected: selected.rejected,
+          hints: selected.failure === undefined ? [] : [selected.failure],
+        });
+        return {
+          discovery: { ...selection.discovery, source: selected.readout },
+          source: selection.source,
+          ignoredRepositories: [],
+          checkouts: roots,
+          title: project.value.title,
+          sourceFailure: selected.failure,
+        };
+      }
       const scans = yield* Effect.forEach(
         repositories,
         (location) =>
-          Effect.gen(function* () {
-            if (location.local) {
-              const scan = yield* scanCheckout(location);
-              return {
-                rejected: scan.rejected,
-                sources: scan.candidates.map((machine): ProjectMachineSource => ({
-                  root: location.root,
-                  machine,
-                })),
-                notFoundRepository: undefined,
-                hint: undefined,
-              };
-            }
-            const scan =
-              location.url === undefined || !remoteEnabled
-                ? null
-                : yield* scanRemote(
-                    {
-                      repository: location.repository,
-                      url: location.url,
-                      cwd: project.value.workspaceRoot,
-                      provider: location.provider,
-                    },
-                    options?.remote === "cached-only",
-                  );
-            return {
-              rejected: scan?.rejected ?? [],
-              sources:
-                scan?.candidates.map((machine): ProjectMachineSource => ({
-                  root: project.value.workspaceRoot,
-                  machine,
-                  remote: scan.remote,
-                })) ?? [],
-              notFoundRepository: scan?.notFoundRepository,
-              hint: undefined,
-            };
-          }).pipe(
-            Effect.catchTags({
-              RemoteUnavailable: (error) =>
-                Effect.succeed({
-                  rejected: [],
-                  sources: [],
-                  notFoundRepository: undefined,
-                  hint: error.reason,
-                }),
-            }),
-          ),
+          scanLocation({
+            location,
+            cwd: project.value.workspaceRoot,
+            remoteEnabled,
+            cachedOnly: options?.remote === "cached-only",
+            scanRemote,
+          }),
         { concurrency: 4 },
       );
       const missing = [
@@ -173,8 +173,10 @@ const make = Effect.gen(function* () {
         hints,
       });
       yield* logMachineSelection(projectId, repositories, selection);
+      const readout = defaultReadout(own, selection.source?.remote?.commit ?? null);
       return {
-        discovery: selection.discovery,
+        discovery:
+          readout === undefined ? selection.discovery : { ...selection.discovery, source: readout },
         source: selection.source,
         ignoredRepositories: selection.ignoredRepositories,
         checkouts: roots,
@@ -192,7 +194,14 @@ const make = Effect.gen(function* () {
   const discover: ProjectMachineDiscovery["Service"]["discover"] = (projectId) =>
     resolveDefault(projectId).pipe(Effect.map((resolved) => resolved.discovery));
 
-  return ProjectMachineDiscovery.of({ discover, resolveDefault });
+  const setSource: ProjectMachineDiscovery["Service"]["setSource"] = (projectId, source) =>
+    setProjectMachineSource(projects, projectId, source).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+      Effect.andThen(discover(projectId)),
+    );
+
+  return ProjectMachineDiscovery.of({ discover, resolveDefault, setSource });
 });
 
 export const layer = Layer.effect(ProjectMachineDiscovery, make).pipe(

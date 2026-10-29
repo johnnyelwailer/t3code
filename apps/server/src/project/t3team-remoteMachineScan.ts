@@ -20,6 +20,8 @@ export interface RemoteMachineInput {
   readonly url: string;
   readonly cwd: string;
   readonly provider?: string | undefined;
+  /** The user's chosen branch; absent scans the repository's default branch. */
+  readonly branch?: string | undefined;
 }
 const decodeProvider = Schema.decodeUnknownOption(SourceControlProviderKind);
 
@@ -37,7 +39,7 @@ export const remoteTarget = Effect.fn("projectMachine.remoteTarget")(function* (
       reason: `Remote discovery isn't available for ${kind ?? "this provider"}; check the repository out locally.`,
     });
   }
-  return { url: input.url, cwd: input.cwd, kind, read, repository, host };
+  return { url: input.url, cwd: input.cwd, branch: input.branch, kind, read, repository, host };
 });
 export type RemoteMachineTarget = Effect.Success<ReturnType<typeof remoteTarget>>;
 
