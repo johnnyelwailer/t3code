@@ -126,7 +126,7 @@ const makeServiceHandlers = Effect.all({
  */
 export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
   T3TeamToolkit,
-  Effect.map(makeServiceHandlers, ({ syncLinkedRepository, findMachineDefinitions, setMachineSource }) => ({
+  Effect.map(makeServiceHandlers, (services) => ({
     t3_provider_usage: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3_provider_usage", (input) =>
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_provider_usage, input),
@@ -220,17 +220,19 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
     t3_linked_repository_sync: McpToolAccess.actsAsCaller(
       whenMcpToolEnabled("t3_linked_repository_sync", (input) =>
         requireOrchestrationScope.pipe(
-          Effect.flatMap((invocation) => syncLinkedRepository(invocation.thread.threadId, input)),
+          Effect.flatMap((invocation) =>
+            services.syncLinkedRepository(invocation.thread.threadId, input),
+          ),
         ),
       ),
     ),
     // Not a broker tool either: read-only, so it needs a thread and orchestration scope but no live run.
     t3_machine_find_definitions: McpToolAccess.readsAsCaller(
-      whenMcpToolEnabled("t3_machine_find_definitions", findMachineDefinitions),
+      whenMcpToolEnabled("t3_machine_find_definitions", services.findMachineDefinitions),
     ),
     // Not a broker tool: proposes a machine source through a t3_ask_user question and saves nothing.
     t3_machine_set_source: McpToolAccess.readsAsCaller(
-      whenMcpToolEnabled("t3_machine_set_source", setMachineSource),
+      whenMcpToolEnabled("t3_machine_set_source", services.setMachineSource),
     ),
     t3team_thread_skill_metadata: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3team_thread_skill_metadata", (input) => threadSkillMetadata(input)),
