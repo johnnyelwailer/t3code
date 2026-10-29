@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type { ToolAuthState } from "@t3tools/contracts";
 import type * as React from "react";
 
+import { CLOUD_MACHINE_SIGN_IN_COPY } from "~/cloud/t3team-cloudMachineSignIn";
 import { ToolAuthCard } from "~/components/settings/t3team-ToolAuthCard";
 import { TOOL_AUTH_TOOLS } from "~/components/settings/t3team-toolAuthTools";
 
@@ -30,12 +31,14 @@ function ToolAuthCardStory(props: {
    * args panel can toggle a boolean but not a function.
    */
   onInstall?: boolean;
+  signInDescription?: string;
 }) {
   return (
     <ToolAuthCardFrame>
       <ToolAuthCard
         meta={props.meta ?? CLAUDE_META}
         state={props.state}
+        signInDescription={props.signInDescription}
         onConnect={noop}
         onInstall={props.onInstall ? noop : undefined}
         onSubmitCode={noopSubmit}
@@ -59,6 +62,11 @@ type Story = StoryObj<typeof meta>;
 /** No state has arrived yet (or the tool was never connected): description + Connect. */
 export const NotConnected: Story = {
   args: { state: undefined },
+};
+
+/** On a cloud session's machine: the login did not carry over (missing or retired slot). */
+export const NotConnectedOnCloudMachine: Story = {
+  args: { state: undefined, signInDescription: CLOUD_MACHINE_SIGN_IN_COPY },
 };
 
 /**

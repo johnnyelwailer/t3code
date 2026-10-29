@@ -7,6 +7,7 @@ import { HttpRouter } from "effect/http";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
 import { tryAtlassianPromise } from "./t3team-atlassian-http.ts";
+import { isWithinRoot, KnownWorkspaces } from "./workspace/KnownWorkspaces.ts";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 
 type AssetContentInput = {
@@ -51,6 +52,67 @@ function resolveFallbackContentType(path: Path.Path, sourceUrl: string, mimeType
   }
 }
 
+/**
+ * The ticket attachment cache that `buildJiraTicketAttachmentAssetPath` writes, under whichever
+ * hidden project state dir this host uses. Nothing else in a workspace is served here.
+ */
+const ATTACHMENT_CACHE_PATH =
+  /^\.[^/]+\/context\/jira\/[^/]+\/items\/[^/]+\/attachments\/files\/[^/]+$/;
+
+type CachedAttachment =
+  | { readonly _tag: "Refused" }
+  | { readonly _tag: "Miss" }
+  | { readonly _tag: "Hit"; readonly bytes: Uint8Array; readonly contentType: string };
+
+const readCachedAttachment = Effect.fn("t3team.atlassianAssetContent.readCachedAttachment")(
+  function* (workspaceRoot: string, relativePath: string) {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const workspacePaths = yield* WorkspacePaths;
+    const knownWorkspaces = yield* KnownWorkspaces;
+    const refused: CachedAttachment = { _tag: "Refused" };
+    const miss: CachedAttachment = { _tag: "Miss" };
+
+    const known = yield* knownWorkspaces.assertContains(workspaceRoot).pipe(
+      Effect.as(true),
+      Effect.orElseSucceed(() => false),
+    );
+    if (!known) return refused;
+    const resolved = yield* workspacePaths.normalizeWorkspaceRoot(workspaceRoot).pipe(
+      Effect.flatMap((root) =>
+        workspacePaths
+          .resolveRelativePathWithinRoot({ workspaceRoot: root, relativePath })
+          .pipe(Effect.map((within) => ({ root, ...within }))),
+      ),
+      Effect.option,
+    );
+    if (Option.isNone(resolved) || !ATTACHMENT_CACHE_PATH.test(resolved.value.relativePath)) {
+      return refused;
+    }
+    const real = yield* Effect.all([
+      fileSystem.realPath(resolved.value.root),
+      fileSystem.realPath(resolved.value.absolutePath),
+    ]).pipe(Effect.option);
+    // Not cached yet: the caller fetches it from Atlassian instead.
+    if (Option.isNone(real)) return miss;
+    const [realRoot, realFile] = real.value;
+    // The checks above are lexical; a symlink must not lead out of the named workspace, nor out of
+    // its attachment cache to another file in it.
+    const realRelative = path.relative(realRoot, realFile).replaceAll("\\", "/");
+    if (!isWithinRoot(path, realFile, realRoot) || !ATTACHMENT_CACHE_PATH.test(realRelative)) {
+      return refused;
+    }
+    const bytes = yield* fileSystem.readFile(realFile).pipe(Effect.option);
+    return Option.isSome(bytes)
+      ? ({
+          _tag: "Hit",
+          bytes: bytes.value,
+          contentType: mimeTypeOrOctetStream(realFile),
+        } satisfies CachedAttachment)
+      : miss;
+  },
+);
+
 export const t3teamAtlassianAssetContentRouteLayer = HttpRouter.add(
   "GET",
   "/api/t3team/atlassian/asset/content",
@@ -64,33 +126,17 @@ export const t3teamAtlassianAssetContentRouteLayer = HttpRouter.add(
       return HttpServerResponse.text("Missing accountId or url parameter", { status: 400 });
     }
 
-    const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const workspacePaths = yield* WorkspacePaths;
 
     if (input.workspaceRoot && input.relativePath) {
-      const localAsset = yield* workspacePaths.normalizeWorkspaceRoot(input.workspaceRoot).pipe(
-        Effect.flatMap((workspaceRoot) =>
-          workspacePaths.resolveRelativePathWithinRoot({
-            workspaceRoot,
-            relativePath: input.relativePath!,
-          }),
-        ),
-        Effect.flatMap((resolved) =>
-          fileSystem.readFile(resolved.absolutePath).pipe(
-            Effect.map((bytes) => ({
-              bytes,
-              contentType: mimeTypeOrOctetStream(resolved.absolutePath),
-            })),
-          ),
-        ),
-        Effect.option,
-      );
-
-      if (Option.isSome(localAsset)) {
-        return HttpServerResponse.uint8Array(localAsset.value.bytes, {
+      const cached = yield* readCachedAttachment(input.workspaceRoot, input.relativePath);
+      if (cached._tag === "Refused") {
+        return HttpServerResponse.text("Not a cached attachment", { status: 403 });
+      }
+      if (cached._tag === "Hit") {
+        return HttpServerResponse.uint8Array(cached.bytes, {
           status: 200,
-          contentType: localAsset.value.contentType,
+          contentType: cached.contentType,
         });
       }
     }

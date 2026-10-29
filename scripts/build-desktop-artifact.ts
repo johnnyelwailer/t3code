@@ -3632,10 +3632,11 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
 // dtsDirectories: every .d.ts file under each asar-relative directory is
 // re-injected. dtsFiles: individual .d.ts files re-injected as-is.
 export const TYPECHECKER_DTS_DIRECTORIES = [
-  // The TypeScript lib declarations beside the emitted chunks: the inlined
-  // compiler's getDefaultLibFilePath resolves lib.esnext.d.ts / lib.dom.d.ts
-  // here (apps/server's t3team-typescriptLibPackPlugin ships dist/lib/).
-  "apps/server/dist/lib",
+  // The TypeScript lib declarations (lib.*.d.ts) beside the emitted chunks:
+  // the inlined compiler resolves lib.esnext.d.ts / lib.dom.d.ts at
+  // dirname(chunk)/<name>, with no lib/ subdirectory (apps/server's
+  // t3team-typescriptLibPackPlugin writes them into dist/ itself).
+  "apps/server/dist",
   // effect's declaration graph: the typecheck facet resolves effect/Schema
   // against it (a missing .d.ts is ts7016 on every workflow).
   "node_modules/effect",
@@ -3649,8 +3650,8 @@ export const TYPECHECKER_DTS_FILES = [
 // the staging tree and the emitted asar: the lib declarations, effect's
 // Schema typings, and the trimmed typescript API typings.
 export const TYPECHECKER_DTS_SPOT_CHECK_FILES = [
-  "apps/server/dist/lib/lib.esnext.d.ts",
-  "apps/server/dist/lib/lib.dom.d.ts",
+  "apps/server/dist/lib.esnext.d.ts",
+  "apps/server/dist/lib.dom.d.ts",
   "node_modules/effect/dist/Schema.d.ts",
   "node_modules/typescript/lib/typescript.d.ts",
 ] as const;

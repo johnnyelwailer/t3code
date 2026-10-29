@@ -1,8 +1,9 @@
 /**
  * The probe workflow bodies + probe source (split out of
  * scripts/t3team-check-orchestration-bundle.ts for the additive guard's LOC
- * ceiling). CLEAN is the same shape the SDK's typecheck tests use; BAD breaks
- * one argument type so the checker must report ts2345.
+ * ceiling). CLEAN is the same shape the SDK's typecheck tests use, plus
+ * Record/Promise annotations so the TypeScript lib declarations must resolve;
+ * BAD breaks one argument type so the checker must report ts2345.
  */
 
 const CLEAN_WORKFLOW = `import { Schema } from "effect";
@@ -14,7 +15,14 @@ export const meta = { name: "smoke.clean", inputs: Inputs } as const;
 export default async function run() {
   const input = Schema.decodeUnknownSync(Inputs)(getArgs());
   const summary = await agent(\`summarize \${input.topic}\`, { capabilities: "inherit" });
-  return { summary };
+  // Global lib types (Record, Promise): the compiler finds them only when the
+  // lib.*.d.ts files sit beside the emitted chunks. A bundle without them
+  // reports ts2304/ts2583 here, so this probe fails instead of passing a source
+  // that uses no globals.
+  const labels: Record<string, string> = { topic: input.topic };
+  const settled: Promise<void> = Promise.resolve();
+  await settled;
+  return { summary, labels };
 }
 `;
 const BAD_WORKFLOW = CLEAN_WORKFLOW.replace(

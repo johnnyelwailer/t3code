@@ -1090,7 +1090,6 @@ const layerMakeRoutes = Layer.mergeAll(
   // every time upstream moved. The `t3team` binary launches this same layer (cli/t3team-server.ts).
   // Routes that carry their own capability (t3team-routeAuth.ts says why each one may).
   Layer.mergeAll(
-    t3teamAtlassianAssetContentRouteLayer,
     t3teamAtlassianOAuthCallbackRouteLayer,
     t3teamCloudBrokerRouteLayer,
     hostServiceRoutes,
@@ -1099,6 +1098,7 @@ const layerMakeRoutes = Layer.mergeAll(
   // Every other t3team route requires a session, like upstream's raw routes (t3team-routeAuth.ts).
   Layer.mergeAll(
     t3teamAtlassianAccountsRouteLayer,
+    t3teamAtlassianAssetContentRouteLayer,
     t3teamAtlassianAssetRouteLayer,
     t3teamAtlassianBacklogRouteLayer,
     t3teamAtlassianConnectBasicRouteLayer,

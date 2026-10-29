@@ -52,6 +52,8 @@ export interface ToolAuthCardProps {
   readonly meta: ToolAuthToolMeta;
   /** `undefined` before the first snapshot arrives — rendered as `idle`. */
   readonly state: ToolAuthState | undefined;
+  /** Replaces the tool's own description on the Connect prompt, e.g. on a cloud session. */
+  readonly signInDescription?: string | undefined;
   readonly onConnect: () => void;
   /**
    * Present only when the CLI is missing (the model picker's needs-install
@@ -74,6 +76,7 @@ export interface ToolAuthCardProps {
 export function ToolAuthCard({
   meta,
   state,
+  signInDescription,
   onConnect,
   onInstall,
   onSubmitCode,
@@ -115,7 +118,7 @@ export function ToolAuthCard({
             <p className="text-xs text-muted-foreground/80">
               {onInstall
                 ? `${meta.label} isn't installed in this sandbox yet. Installing it also signs you in.`
-                : meta.description}
+                : (signInDescription ?? meta.description)}
             </p>
             <Button size="sm" variant="outline" className="shrink-0" onClick={primaryAction}>
               {onInstall ? "Install and connect" : "Connect"}

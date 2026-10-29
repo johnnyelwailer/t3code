@@ -11,7 +11,7 @@ import {
   sessionEndsAtMs,
 } from "~/cloud/t3team-cloudSessionEnding";
 import { useEnvironmentSessionEnded } from "~/cloud/t3team-useEnvironmentLiveState";
-import { useCloudSessions } from "~/state/t3team-cloudSessions";
+import { useCloudSessionsOfMachine } from "~/cloud/t3team-useCloudSessionsOfMachine";
 
 import { CloudSessionEndedActions } from "../cloud/t3team-CloudSessionEndedActions";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
@@ -46,7 +46,7 @@ export function endedSessionBannerItem(
  * re-render its thread every few seconds.
  */
 function useSessionEnding(environmentId: EnvironmentId | null) {
-  const { sessions } = useCloudSessions();
+  const { sessions } = useCloudSessionsOfMachine(environmentId);
   const live =
     environmentId === null ? null : liveCloudSessionForEnvironment(sessions, environmentId);
   const endsAtMs = live?.phase === "ready" ? sessionEndsAtMs(live) : null;
