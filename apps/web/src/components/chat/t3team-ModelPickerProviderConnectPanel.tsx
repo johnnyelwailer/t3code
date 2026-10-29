@@ -8,6 +8,8 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
 import { ToolAuthCard } from "../settings/t3team-ToolAuthCard";
 import { toolAuthMetaForTool } from "../settings/t3team-toolAuthTools";
+import { ModelPickerSignInRefreshNotice } from "./t3team-ModelPickerSignInRefreshNotice";
+import { useProviderRefreshAfterSignIn } from "./t3team-useProviderRefreshAfterSignIn";
 
 export interface ModelPickerProviderConnectPanelProps {
   /** The instance the user selected in the picker sidebar. */
@@ -36,6 +38,7 @@ export interface ModelPickerProviderConnectPanelProps {
  * settings pane — narrower card, no outer settings-list chrome.
  */
 export function ModelPickerProviderConnectPanel({
+  entry,
   tool,
   readiness,
   environmentId: threadEnvironmentId,
@@ -46,6 +49,13 @@ export function ModelPickerProviderConnectPanel({
   const states = useToolAuthStates(environmentId);
   const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
   const signInDescription = useSignInDescriptionForEnvironment(environmentId);
+  // The provider list is probed on an interval, so once the CLI is signed in the machine is asked
+  // to re-check this instance; the picker then swaps this panel for the model list by itself.
+  const refreshAfterSignIn = useProviderRefreshAfterSignIn({
+    environmentId,
+    instanceId: entry.instanceId,
+    signedIn: states.get(meta.tool)?.phase === "connected",
+  });
 
   // Top-aligned, not centred: the card is short and the picker's list area is
   // tall, so centring left a big dead gap above it that read as a broken panel.
@@ -68,6 +78,12 @@ export function ModelPickerProviderConnectPanel({
           onInstall={readiness === "needsInstall" ? onInstall : undefined}
           onSubmitCode={onSubmitCode}
           onCancel={onCancel}
+        />
+        <ModelPickerSignInRefreshNotice
+          displayName={entry.displayName}
+          status={refreshAfterSignIn.status}
+          error={refreshAfterSignIn.error}
+          onRetry={refreshAfterSignIn.retry}
         />
       </div>
     </div>
