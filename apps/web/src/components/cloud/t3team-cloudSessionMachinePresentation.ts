@@ -11,6 +11,14 @@ export interface ProjectMachineHint {
  * The words for a project's machine on the "New cloud session" item. Null when the project has no
  * definition at all: the session is a plain one, and saying so would be noise.
  */
+/** Where it was read from, when that is not the project's own default. */
+function sourceSentence(discovery: ProjectMachineDiscovery): string {
+  const { source } = discovery;
+  if (source === undefined || source.override === null) return "";
+  const where = source.branch === null ? "its default branch" : `branch ${source.branch}`;
+  return ` Read from ${source.repository}, ${where}.`;
+}
+
 export function presentProjectMachine(
   discovery: ProjectMachineDiscovery,
 ): ProjectMachineHint | null {
@@ -22,7 +30,7 @@ export function presentProjectMachine(
         repository === "."
           ? "In this project's machine"
           : `In the ${repository.split("/").pop()} machine`,
-      detail: `Runs in the devcontainer ${devcontainerPath} from ${owner}.`,
+      detail: `Runs in the devcontainer ${devcontainerPath} from ${owner}.${sourceSentence(discovery)}`,
       tone: "info",
     };
   }

@@ -214,6 +214,7 @@ import {
   ProjectMachineDiscovery,
   ProjectMachineDiscoveryError,
 } from "./t3team-projectMachine.ts";
+import { ProjectMachineSourceSetInput } from "./t3team-projectMachineSource.ts";
 import {
   RelayClientInstallFailedError,
   RelayClientInstallProgressEventSchema,
@@ -601,6 +602,7 @@ export const WS_METHODS = {
   cloudSessionCreate: "cloud.session.create",
   cloudSessionCancel: "cloud.session.cancel",
   projectMachineDiscover: "cloud.projectMachine.discover",
+  projectMachineSetSource: "cloud.projectMachine.setSource",
 
   pullRequestsList: "pullRequests.list",
   pullRequestsListStats: "pullRequests.listStats",
@@ -1088,6 +1090,12 @@ const WsCloudSessionCancelRpc = Rpc.make(WS_METHODS.cloudSessionCancel, {
 
 const WsProjectMachineDiscoverRpc = Rpc.make(WS_METHODS.projectMachineDiscover, {
   payload: ProjectMachineDiscoverInput,
+  success: ProjectMachineDiscovery,
+  error: Schema.Union([ProjectMachineDiscoveryError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectMachineSetSourceRpc = Rpc.make(WS_METHODS.projectMachineSetSource, {
+  payload: ProjectMachineSourceSetInput,
   success: ProjectMachineDiscovery,
   error: Schema.Union([ProjectMachineDiscoveryError, EnvironmentAuthorizationError]),
 });
@@ -2229,6 +2237,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsCloudSessionCreateRpc,
   WsCloudSessionCancelRpc,
   WsProjectMachineDiscoverRpc,
+  WsProjectMachineSetSourceRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsSummaryRpc,
