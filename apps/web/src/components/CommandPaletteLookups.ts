@@ -10,6 +10,7 @@ import { useClientSettings } from "../hooks/useSettings";
 import { getProjectOrderKey } from "../logicalProject";
 import { useProjects, useThreadShells } from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
+import { useCloudAdoptedProjects } from "../cloud/t3team-useCloudAdoptedProjects";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { orderItemsByPreferredIds, sortLogicalProjectsForSidebar } from "./Sidebar.logic";
@@ -61,7 +62,7 @@ export const selectCommandPaletteClientSettings = (settings: ClientSettings) => 
 });
 
 export function useSortedProjectGroups(environmentLabelById: ReadonlyMap<EnvironmentId, string>) {
-  const projects = useProjects();
+  const projects = useCloudAdoptedProjects(useProjects());
   const threads = useThreadShells();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const clientSettings = useClientSettings(selectCommandPaletteClientSettings);
