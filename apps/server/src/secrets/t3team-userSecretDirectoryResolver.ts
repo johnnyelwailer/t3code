@@ -13,7 +13,6 @@ import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
@@ -89,13 +88,7 @@ export const makeDirectoryResolver = Effect.fn("UserSecretResolver.makeDirectory
   },
 );
 
-export const UserSecretDirectoryResolverLive = Layer.effect(
-  UserSecretResolver,
-  Effect.gen(function* () {
-    const directory = yield* Config.String("T3CODE_USER_SECRETS_DIR").pipe(
-      Config.option,
-      Config.map(Option.getOrUndefined),
-    );
-    return yield* makeDirectoryResolver(directory);
-  }).pipe(Effect.orDie),
+export const userSecretsDirectory = Config.String("T3CODE_USER_SECRETS_DIR").pipe(
+  Config.option,
+  Config.map(Option.getOrUndefined),
 );

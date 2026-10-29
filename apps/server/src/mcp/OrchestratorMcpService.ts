@@ -116,6 +116,7 @@ import {
 } from "./McpInvocationContext.ts";
 import * as Metrics from "../observability/Metrics.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
+import { grantRequestedUse, requestUseTarget } from "./toolkits/t3team/t3team-requestSecretUse.ts";
 import { DelegatedTaskPreparation } from "./t3team-delegatedTaskPreparation.ts";
 import { resolveThreadSendMode, ThreadMailboxDelivery } from "./t3team-threadMailboxDelivery.ts";
 
@@ -1940,6 +1941,13 @@ const make = Effect.gen(function* () {
       }
       const runId = run.id;
       const nodeId = run.rootNodeId;
+      // t3team: a `use` is checked before the user is asked for a value that could not be granted.
+      const useStore =
+        input.use === undefined
+          ? undefined
+          : yield* requestUseTarget(input.use).pipe(
+              Effect.mapError((message) => failure("invalid_request", message)),
+            );
       const key = yield* requestKey(input.clientRequestId);
       const turnItemId = TurnItemId.make(
         `turn-item:secret-request:${stablePart(threadId)}:${stablePart(key)}`,
@@ -2044,6 +2052,16 @@ const make = Effect.gen(function* () {
           "orchestration_error",
           "The user saved the secret, but it could not be read. Ask again with a new clientRequestId.",
         );
+      }
+      if (input.use !== undefined && useStore !== undefined) {
+        const name = yield* grantRequestedUse({
+          store: useStore,
+          secretRequests,
+          use: input.use,
+          ref: secretRef.value,
+          projectId: parent.thread.projectId,
+        }).pipe(Effect.mapError((message) => failure("orchestration_error", message)));
+        return { status, name };
       }
       return { status, secretRef: secretRef.value };
     }),

@@ -1,3 +1,5 @@
+import { UserSecretName } from "./t3team-userSecretInjection.ts";
+import { UserSecretRequestUse } from "./t3team-userSecretRequestUse.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -757,10 +759,22 @@ export const OrchestratorMcpRequestSecretInput = Schema.Struct({
     description:
       "Reuse when retrying a call that lost its result, so the user sees one card and its answer is returned again. Use a new id to ask again after timed_out or cancelled.",
   }),
+  use: Schema.optional(UserSecretRequestUse).annotate({
+    description:
+      "Set when you need the value for a command: on approval it becomes a secret named use.name that t3_user_secret_run can inject, for this session only. The result then carries that name instead of a secretRef.",
+  }),
 });
 export type OrchestratorMcpRequestSecretInput = typeof OrchestratorMcpRequestSecretInput.Type;
 
 export const OrchestratorMcpRequestSecretResult = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literal("saved").annotate({
+      description: "The secret is granted under `name`.",
+    }),
+    name: UserSecretName.annotate({
+      description: "Bind this name in t3_user_secret_run; you never see the value.",
+    }),
+  }),
   Schema.Struct({
     status: Schema.Literal("saved").annotate({ description: "secretRef holds the value." }),
     secretRef: SecretRef.annotate({
