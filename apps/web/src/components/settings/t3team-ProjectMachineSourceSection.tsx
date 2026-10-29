@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ProjectId, ProjectMachineDiscovery } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
@@ -51,10 +52,10 @@ export function T3TeamProjectMachineSourceSection({
       setForm(null);
       return;
     }
-    const failure = outcome.cause;
+    const failure = squashAtomCommandFailure(outcome);
     setError(
       typeof failure === "object" && failure !== null && "message" in failure
-        ? String((failure as { message: unknown }).message)
+        ? String(failure.message)
         : "The machine source could not be saved.",
     );
   };
