@@ -50,6 +50,7 @@
     "apps/web/src/components/ProjectFavicon.test.tsx",
     "apps/web/src/components/ProjectFavicon.tsx",
     "apps/web/src/components/chat/QueuedRunsControl.tsx",
+    "apps/mobile/src/state/use-selected-thread-requests.ts",
     "apps/web/src/components/chat/usePendingThreadRequests.ts",
     "apps/web/src/components/threadActionMenu.logic.test.ts",
     "apps/web/src/components/threadActionMenu.logic.ts",

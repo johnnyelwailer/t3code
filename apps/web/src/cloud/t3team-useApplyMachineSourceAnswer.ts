@@ -10,8 +10,7 @@ import { useProjects } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { cloudSessionEnvironment } from "../state/t3team-cloudSessions";
 import { useAtomCommand } from "../state/use-atom-command";
-import { machineSourceAcceptedFrom } from "./t3team-machineSourceAnswer";
-import { resolveMachineSourceTarget } from "./t3team-machineSourceTarget";
+import { captureMachineSourceApply } from "./t3team-machineSourceCapture";
 
 const SET_IN_SETTINGS = "You can set it in the project's settings under Cloud machine.";
 
@@ -26,8 +25,10 @@ const failureMessage = (failure: unknown) =>
  * (`t3_machine_set_source`) and this saves the answer there, on the project the cloud thread's
  * project is a copy of. The outcome is always shown: it is never applied to a guessed project.
  *
- * Returns a function for the answer handler: it does nothing for any answer that is not an
- * accepted proposal.
+ * Returns a function for the answer handler to call when the user SUBMITS: it captures the source
+ * and the target project right then (the composer may show another thread by the time the answer
+ * is delivered) and returns null for any answer that is not an accepted proposal, else a function
+ * that saves it once the answer has gone through.
  */
 export function useApplyMachineSourceAnswer(thread: {
   readonly environmentId: EnvironmentId;
@@ -39,42 +40,50 @@ export function useApplyMachineSourceAnswer(thread: {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projects = useProjects();
   return useStableCallback(
-    async (
-      questions: Parameters<typeof machineSourceAcceptedFrom>[0],
+    (
+      questions: Parameters<typeof captureMachineSourceApply>[0]["questions"],
       answers: Record<string, unknown>,
     ) => {
-      const source = machineSourceAcceptedFrom(questions, answers);
-      if (source === null) return;
-      const target = resolveMachineSourceTarget({ thread, primaryEnvironmentId, projects });
-      if (target.kind !== "project") {
+      const captured = captureMachineSourceApply({
+        questions,
+        answers,
+        thread,
+        primaryEnvironmentId,
+        projects,
+      });
+      if (captured === null) return null;
+      const { source, target } = captured;
+      return async () => {
+        if (target.kind !== "project") {
+          toastManager.add({
+            type: "warning",
+            title: "Machine source not saved",
+            description:
+              target.kind === "none"
+                ? `This project was not found on your own environment. ${SET_IN_SETTINGS}`
+                : `Several of your projects match this one, so none was changed. ${SET_IN_SETTINGS}`,
+          });
+          return;
+        }
+        const { project } = target;
+        const outcome = await save({
+          environmentId: project.environmentId,
+          input: { projectId: project.id, source },
+        });
+        if (outcome._tag === "Success") {
+          toastManager.add({
+            type: "success",
+            title: `Saved the machine source for ${project.title}`,
+          });
+          return;
+        }
+        if (isAtomCommandInterrupted(outcome)) return;
         toastManager.add({
-          type: "warning",
+          type: "error",
           title: "Machine source not saved",
-          description:
-            target.kind === "none"
-              ? `This project was not found on your own environment. ${SET_IN_SETTINGS}`
-              : `Several of your projects match this one, so none was changed. ${SET_IN_SETTINGS}`,
+          description: `${failureMessage(squashAtomCommandFailure(outcome))} ${SET_IN_SETTINGS}`,
         });
-        return;
-      }
-      const { project } = target;
-      const outcome = await save({
-        environmentId: project.environmentId,
-        input: { projectId: project.id, source },
-      });
-      if (outcome._tag === "Success") {
-        toastManager.add({
-          type: "success",
-          title: `Saved the machine source for ${project.title}`,
-        });
-        return;
-      }
-      if (isAtomCommandInterrupted(outcome)) return;
-      toastManager.add({
-        type: "error",
-        title: "Machine source not saved",
-        description: `${failureMessage(squashAtomCommandFailure(outcome))} ${SET_IN_SETTINGS}`,
-      });
+      };
     },
   );
 }

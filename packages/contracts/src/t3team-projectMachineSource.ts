@@ -84,3 +84,24 @@ export function decodeMachineSourceQuestionId(id: string): ProjectMachineSourceS
   }
   return setting.value;
 }
+
+/**
+ * The machine source the user accepted, from the questions of a request they just answered and
+ * their answers (keyed by question id). Null for anything else: a declined proposal, other answer
+ * text, a question that is not a machine-source proposal, or a multiple-choice shape. Shared by
+ * the clients that answer the card (web saves it, mobile says it was not saved).
+ */
+export function machineSourceAcceptedFrom(
+  questions: ReadonlyArray<{ readonly id: string; readonly multiSelect?: boolean | undefined }>,
+  answers: Record<string, unknown>,
+): ProjectMachineSourceSetting | null {
+  for (const question of questions) {
+    if (question.multiSelect === true) continue;
+    const proposal = decodeMachineSourceQuestionId(question.id);
+    const answer = answers[question.id];
+    if (proposal !== null && typeof answer === "string") {
+      return answer.trim() === MACHINE_SOURCE_ACCEPT_LABEL ? proposal : null;
+    }
+  }
+  return null;
+}
