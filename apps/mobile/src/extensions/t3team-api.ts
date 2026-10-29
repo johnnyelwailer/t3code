@@ -10,6 +10,7 @@ export type {
   HomeCatalogState,
   HomeEmptyStateProps,
   HomeEmptyStateSlot,
+  EnvironmentPickerTopProps,
   HomeFiltersProps,
   MobileExtensions,
   UrlPolicy,

@@ -326,7 +326,13 @@ export function NewTaskEnvironmentPickerRouteScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          <EnvironmentPickerTopSlot close={() => navigation.goBack()} />
+          <EnvironmentPickerTopSlot
+            close={() => navigation.goBack()}
+            selectedProjectTitle={flow.selectedProject?.title ?? null}
+            hostingEnvironmentIds={flow.environments.map((environment) =>
+              String(environment.environmentId),
+            )}
+          />
           <PickerSurface>
             {flow.environments.map((environment, index) => (
               <EnvironmentPickerRow
