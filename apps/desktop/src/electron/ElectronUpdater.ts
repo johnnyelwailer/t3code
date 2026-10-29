@@ -1,13 +1,11 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
-import { autoUpdater as electronAutoUpdater } from "electron-updater";
+import type { autoUpdater } from "electron-updater";
 
-type AutoUpdater = typeof electronAutoUpdater;
-const defaultAutoUpdater = (): AutoUpdater => electronAutoUpdater;
+type AutoUpdater = typeof autoUpdater;
 
 export type ElectronUpdaterFeedUrl = Parameters<AutoUpdater["setFeedURL"]>[0];
 
@@ -174,8 +172,3 @@ export const makeFor = (resolve: () => AutoUpdater) => {
     },
   });
 };
-
-/** @public Service construction is part of the canonical Effect module API. */
-export const make = makeFor(() => defaultAutoUpdater());
-
-export const layer = Layer.succeed(ElectronUpdater, make);

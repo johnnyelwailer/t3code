@@ -73,7 +73,7 @@ export const disabledLayer = Layer.succeed(
   }),
 );
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const pool = yield* DesktopBackendPool.DesktopBackendPool;

@@ -14,10 +14,10 @@ import type { NexiGheRelease } from "@t3tools/shared/t3team-nexiUpdateSelect";
 
 import { fetchAssetResponse } from "./t3team-github-routes-asset-fetch.ts";
 
-export const NEXI_UPDATE_HOST = "nexplore.ghe.com";
-export const NEXI_UPDATE_REPO = "hive/nx-nexi";
-export const MAX_RELEASE_LIST_BYTES = 4 * 1024 * 1024;
-export const MAX_MANIFEST_BYTES = 64 * 1024;
+const NEXI_UPDATE_HOST = "nexplore.ghe.com";
+const NEXI_UPDATE_REPO = "hive/nx-nexi";
+const MAX_RELEASE_LIST_BYTES = 4 * 1024 * 1024;
+const MAX_MANIFEST_BYTES = 64 * 1024;
 /** Above any installer we ship (~300 MB); a bigger asset is refused, not streamed. */
 export const MAX_PAYLOAD_BYTES = 600 * 1024 * 1024;
 
