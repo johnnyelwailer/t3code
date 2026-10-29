@@ -2,9 +2,9 @@
  * Whether an environment value looks like a different kind of secret than the one a request names.
  * Only the leading characters are read, and nothing here returns or logs any part of the value.
  */
-export type SecretShape = "github" | "npm" | "aws" | "slack" | "openai" | "unknown";
+type SecretShape = "github" | "npm" | "aws" | "slack" | "openai" | "unknown";
 
-export function shapeOf(value: string): SecretShape {
+function shapeOf(value: string): SecretShape {
   if (/^(gh[pousr]_|github_pat_)/.test(value)) return "github";
   if (/^npm_[A-Za-z0-9]{20,}/.test(value)) return "npm";
   if (/^(AKIA|ASIA)[A-Z0-9]{12,}/.test(value)) return "aws";
