@@ -21,6 +21,7 @@ const MANUAL_REDIRECT: RequestInit = { redirect: "manual" };
 export function fetchAssetResponse(
   start: URL,
   token: string | undefined,
+  accept = "*/*",
 ): Effect.Effect<
   HttpClientResponse.HttpClientResponse,
   T3TeamAtlassianError,
@@ -36,7 +37,7 @@ export function fetchAssetResponse(
           : undefined;
       const response = yield* httpClient
         .get(target.toString(), {
-          headers: { Accept: "*/*", ...(authorization ? { Authorization: authorization } : {}) },
+          headers: { Accept: accept, ...(authorization ? { Authorization: authorization } : {}) },
         })
         .pipe(
           Effect.provideService(FetchHttpClient.RequestInit, MANUAL_REDIRECT),
