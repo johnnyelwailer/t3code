@@ -16,6 +16,8 @@
     "apps/server/__fixtures__/t3team-hostChangeRequestTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftToolUndeclared.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostWorkItemRead.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostWorkItemReadUndeclared.workflow.ts",
     "apps/server/__fixtures__/t3team-launchThread.workflow.ts",
     "apps/server/scripts/t3team-dev-entry.mjs",
     "apps/server/src/t3team-provider-tool-injection-codex-cli.ts",
