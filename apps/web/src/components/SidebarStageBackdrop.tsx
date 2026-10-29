@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentIdentificationMode } from "@t3tools/contracts";
 import { useId } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
@@ -65,11 +66,13 @@ const PACK_THEME_STAGE_ART = new Map<string, SidebarStageBackdropVariant>([
 
 export function resolveSidebarStageBackdropVariant(
   stageLabel: string,
-  enabled = true,
+  mode: EnvironmentIdentificationMode = "artwork",
   packThemeId?: string,
 ): SidebarStageBackdropVariant | null {
-  // `enabled` carries the user's environment-identification setting, so it still vetoes pack art.
-  if (!enabled) return null;
+  if (mode === "nightly-artwork") return "nightly";
+  if (mode === "dev-artwork") return "dev";
+  // The user's environment-identification setting still vetoes pack art.
+  if (mode !== "artwork") return null;
   const override = readStageArtOverride();
   if (override) return override;
   // Channel art is checked FIRST: `dev` and `nightly` art is a build-channel warning, and a dev
@@ -101,10 +104,12 @@ export function useEnvironmentStageLabel(): string {
   });
 }
 
-export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
+export function useSidebarStageBackdropVariant(
+  mode: EnvironmentIdentificationMode,
+): SidebarStageBackdropVariant | null {
   const stageLabel = useEnvironmentStageLabel();
   const packThemeId = useT3TeamPackAppearance()?.themeId;
-  return resolveSidebarStageBackdropVariant(stageLabel, enabled, packThemeId);
+  return resolveSidebarStageBackdropVariant(stageLabel, mode, packThemeId);
 }
 
 export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdropVariant }) {
@@ -118,7 +123,7 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
   );
 }
 
-export function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {
+function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {
   if (variant === "nexplore") return <T3TeamNexploreStageArt />;
   return variant === "nightly" ? <NightlySkyArt /> : <DevBlueprintArt />;
 }

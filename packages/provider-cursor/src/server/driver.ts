@@ -167,7 +167,6 @@ export const CursorDriver: ProviderDriver<
     let catalogModels: ReadonlyArray<ServerProviderModel> = [];
     const orchestrationAdapter = yield* makeCursorAdapterV2({
       instanceId,
-      settings: effectiveConfig,
       environment: processEnv,
       getModels: () => catalogModels,
     }).pipe(
@@ -225,23 +224,26 @@ export const CursorDriver: ProviderDriver<
           },
           auth.usesApiKey ? "api-key" : "browser",
         ).pipe(
-          Effect.flatMap((snapshot) =>
-            effectiveConfig.enabled &&
-            snapshot.installed &&
-            snapshot.auth.status === "authenticated"
-              ? host.settings.get.pipe(
-                  Effect.flatMap((settings) =>
-                    // Fork fix for upstream pingdotgg/t3code#15906; take upstream's version on sync.
-                    // A browser sign-in key must not hide the CLI login, so pass only a configured key.
-                    readCursorUsageLimits(
-                      effectiveConfig,
-                      processEnv,
-                      settings.cursorKeychainUsageEnabled,
-                    ),
+          Effect.filterOrElse(
+            (snapshot) =>
+              !(
+                effectiveConfig.enabled &&
+                snapshot.installed &&
+                snapshot.auth.status === "authenticated"
+              ),
+            (snapshot) =>
+              host.settings.get.pipe(
+                Effect.flatMap((settings) =>
+                  // Fork fix for upstream pingdotgg/t3code#15906; take upstream's version on sync.
+                  // A browser sign-in key must not hide the CLI login, so pass only a configured key.
+                  readCursorUsageLimits(
+                    effectiveConfig,
+                    processEnv,
+                    settings.cursorKeychainUsageEnabled,
                   ),
-                  Effect.map((usageLimits) => ({ ...snapshot, usageLimits })),
-                )
-              : Effect.succeed(snapshot),
+                ),
+                Effect.map((usageLimits) => ({ ...snapshot, usageLimits })),
+              ),
           ),
         ),
       ),

@@ -3,7 +3,6 @@ import type { AuthSessionState } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import React, { startTransition, useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { useT3TeamAppDisplayName } from "../../t3team/t3team-appBrandName";
 import { connectPairing } from "../../connection/onboarding";
 import {
   peekPairingTokenFromUrl,
@@ -17,11 +16,9 @@ import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 export function PairingPendingSurface() {
-  const appName = useT3TeamAppDisplayName();
   return (
-    <StandalonePage tone="pairing">
+    <StandalonePage>
       <StandalonePageHeader
-        eyebrow={appName}
         title="Pairing with this environment"
         description="Validating the pairing link and preparing your session."
       />
@@ -43,7 +40,6 @@ export function PairingRouteSurface({
   const [errorMessage, setErrorMessage] = useState(initialErrorMessage ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
-  const appName = useT3TeamAppDisplayName();
 
   const submitCredential = async (nextCredential: string) => {
     setIsSubmitting(true);
@@ -75,6 +71,7 @@ export function PairingRouteSurface({
     void submitCredential(token);
   });
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- strips the pairing token from the URL and submits it once when the route carries one
   useEffect(() => {
     if (!autoPairToken || autoSubmitAttemptedRef.current) {
       return;
@@ -86,9 +83,8 @@ export function PairingRouteSurface({
   }, [autoPairToken]);
 
   return (
-    <StandalonePage tone="pairing">
+    <StandalonePage>
       <StandalonePageHeader
-        eyebrow={appName}
         title="Pair with this environment"
         description={describeAuthGate(auth.bootstrapMethods)}
       />
@@ -156,7 +152,6 @@ export function HostedPairingRouteSurface() {
   const [canRetry, setCanRetry] = useState(false);
   const submitAttemptedRef = useRef(false);
   const tokenSubmittedRef = useRef(false);
-  const appName = useT3TeamAppDisplayName();
 
   const submitHostedPairingRequest = async () => {
     if (!request) {
@@ -200,6 +195,7 @@ export function HostedPairingRouteSurface() {
     void submitHostedPairingRequest();
   });
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- strips the pairing token from the URL and submits the hosted pairing request once on mount
   useEffect(() => {
     if (submitAttemptedRef.current) {
       return;
@@ -211,9 +207,8 @@ export function HostedPairingRouteSurface() {
   }, []);
 
   return (
-    <StandalonePage tone="pairing">
+    <StandalonePage>
       <StandalonePageHeader
-        eyebrow={appName}
         title={
           status === "paired"
             ? "Backend paired"

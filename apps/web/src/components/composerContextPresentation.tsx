@@ -1,6 +1,11 @@
 import ChatMarkdown from "./ChatMarkdown";
+import { isSvgAttachment } from "@t3tools/shared/image";
 import { ReadOnlySourcePreview } from "./files/AttachmentFilePreview";
-import type { PreviewAnnotationPayload, ThreadContextRecord } from "@t3tools/contracts";
+import type {
+  EnvironmentContextRecord,
+  PreviewAnnotationPayload,
+  ThreadContextRecord,
+} from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { videoMimeType } from "@t3tools/shared/video";
 import { MessageCircleIcon, MousePointerClickIcon } from "lucide-react";
@@ -35,7 +40,9 @@ import {
 import type { TerminalContextDraft } from "~/lib/terminalContext";
 import type { ReviewCommentContext } from "~/reviewCommentContext";
 import { ComposerPendingTerminalContextChip } from "./chat/ComposerPendingTerminalContexts";
+import { EnvironmentContextChip } from "./EnvironmentContextChip";
 import { ThreadContextChip } from "./ThreadContextChip";
+import { useLinkedEnvironments } from "~/state/peerLinks";
 import {
   createContextPresentationRegistry,
   type ContextPresentationCapability,
@@ -63,6 +70,7 @@ export type ComposerDraftContextRecord =
   | { kind: "image"; record: ComposerImageAttachment; upload?: AttachmentUploadState | undefined }
   | { kind: "file"; record: ComposerFileAttachment; upload?: AttachmentUploadState | undefined }
   | { kind: "thread"; record: ThreadContextRecord }
+  | { kind: "environment"; record: EnvironmentContextRecord }
   | { kind: "work-item"; record: WorkItemContextDraft };
 
 export interface ComposerContextActions {
@@ -102,6 +110,7 @@ export function composerContextRecordsFromDraft(input: {
   reviewComments?: ReadonlyArray<ReviewCommentContext>;
   previewAnnotations?: ReadonlyArray<PreviewAnnotationPayload>;
   threadContexts?: ReadonlyArray<ThreadContextRecord>;
+  environmentContexts?: ReadonlyArray<EnvironmentContextRecord>;
   workItems?: ReadonlyArray<WorkItemContextDraft>;
   images?: ReadonlyArray<ComposerImageAttachment>;
   files?: ReadonlyArray<ComposerFileAttachment>;
@@ -138,6 +147,9 @@ export function composerContextRecordsFromDraft(input: {
   }
   for (const record of input.threadContexts ?? []) {
     records.set(record.contextId, { kind: "thread", record });
+  }
+  for (const record of input.environmentContexts ?? []) {
+    records.set(record.contextId, { kind: "environment", record });
   }
   for (const record of input.workItems ?? []) {
     records.set(workItemContextId(record.key), { kind: "work-item", record });
@@ -231,6 +243,15 @@ function FileContextChip(props: {
   return (
     <FileChip
       name={props.record.name}
+      svgPreview={
+        isSvgAttachment(props.record)
+          ? {
+              file: props.record.file,
+              environmentId: props.record.uploadEnvironmentId,
+              attachmentId: props.record.uploadedAttachmentId,
+            }
+          : undefined
+      }
       size={size}
       isVideo={isVideo}
       theme={resolvedTheme}
@@ -334,10 +355,15 @@ function ComposerPreviewAnnotationDetails({
 
 function ComposerThreadContextChip(props: { record: ThreadContextRecord }) {
   const { environmentId } = use(ComposerContextActionsContext);
+  const linkedEnvironments = useLinkedEnvironments(environmentId);
   return (
     <ThreadContextChip
       record={props.record}
-      unreadable={environmentId !== null && props.record.environmentId !== environmentId}
+      unreadable={
+        environmentId !== null &&
+        props.record.environmentId !== environmentId &&
+        !linkedEnvironments.has(props.record.environmentId)
+      }
     />
   );
 }
@@ -385,6 +411,7 @@ const composerContextPresentationRegistry = createContextPresentationRegistry<
     "review-comment",
     "preview-annotation",
     "thread",
+    "environment",
     "work-item",
   ],
   handlers: [
@@ -478,6 +505,16 @@ const composerContextPresentationRegistry = createContextPresentationRegistry<
       render: (entry, context) =>
         entry.kind === "thread" ? (
           <ComposerThreadContextChip record={entry.record} />
+        ) : (
+          <UnresolvedContextChip label={context.label} />
+        ),
+    },
+    {
+      kind: "environment",
+      canRender: (entry) => entry.kind === "environment",
+      render: (entry, context) =>
+        entry.kind === "environment" ? (
+          <EnvironmentContextChip record={entry.record} />
         ) : (
           <UnresolvedContextChip label={context.label} />
         ),

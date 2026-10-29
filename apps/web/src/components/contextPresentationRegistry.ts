@@ -49,6 +49,10 @@ const DEFINITIONS = [
     capabilities: { details: "tooltip", expanded: "none", defaultDraftView: "compact" },
   },
   {
+    kind: "environment",
+    capabilities: { details: "tooltip", expanded: "none", defaultDraftView: "compact" },
+  },
+  {
     kind: "work-item",
     capabilities: { details: "tooltip", expanded: "none", defaultDraftView: "compact" },
   },

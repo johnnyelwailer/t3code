@@ -170,6 +170,14 @@ import Migration0115 from "./Migrations/067_WebhookDedupe.ts";
 // Recipe-trigger launch ledger: the claim and the pending launch commit together.
 import Migration0116 from "./Migrations/t3team-082_SignalTriggerLaunches.ts";
 import Migration0117 from "./Migrations/t3team-083_CloudChildPlacements.ts";
+// New from the 2026-10-29 upstream sync (upstream 068-073). Appended above the fork's maximum id
+// (117), as for every earlier sync; upstream 063 stays held (see above).
+import Migration0118 from "./Migrations/068_ShellStopRequestIndex.ts";
+import Migration0119 from "./Migrations/069_ThreadMessageSearch.ts";
+import Migration0120 from "./Migrations/070_PeerLinks.ts";
+import Migration0121 from "./Migrations/071_PeerLinkFence.ts";
+import Migration0122 from "./Migrations/072_WaitingLinkRequestIndex.ts";
+import Migration0123 from "./Migrations/073_ActiveTurnItemIndexes.ts";
 
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -257,7 +265,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 117) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 123) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -295,6 +303,13 @@ export const migrationEntries = [
   [115, "WebhookDedupe", Migration0115],
   [116, "SignalTriggerLaunches", Migration0116],
   [117, "CloudChildPlacements", Migration0117],
+  // Upstream 068-073 live at 118-123 in this fork's ledger; see the import comment.
+  [118, "ShellStopRequestIndex", Migration0118],
+  [119, "ThreadMessageSearch", Migration0119],
+  [120, "PeerLinks", Migration0120],
+  [121, "PeerLinkFence", Migration0121],
+  [122, "WaitingLinkRequestIndex", Migration0122],
+  [123, "ActiveTurnItemIndexes", Migration0123],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -318,20 +333,15 @@ export const FIRST_V2_MIGRATION_ID = 84;
 
 // The ledger ids that carry upstream-owned V2 migrations in this fork's ledger (upstream 055/056
 // at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109, 062 at 110, 064-067 at
-// 112-115; 063 is held). Only these are checked for being
+// 112-115, 068-073 at 118-123; 063 is held). Only these are checked for being
 // skipped: fork migrations (and the repair migrations for fork DBs that have gaps, e.g. 99, which
 // re-ensures 86-92 and 98) must keep starting on databases whose history has holes. Add each id a
 // sync appends from upstream.
 export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
-  84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115,
+  84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115, 118, 119, 120, 121, 122, 123,
 ]);
 
-/**
- * Fail before migrating when the migrator would skip one of V2's own
- * migrations. It skips every id up to the highest recorded one, whatever name
- * was recorded, so a database that took a V2 id for another migration would
- * start without V2's schema and fail on first use.
- */
+// Migrators skip ids up to the highest recorded; reject collisions that would skip V2 schema.
 const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function* (
   throughId?: number,
 ) {
