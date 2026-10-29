@@ -108,6 +108,8 @@ export class NexiMacUpdater extends BaseUpdater {
     try {
       NodeFS.accessSync(parent, NodeFS.constants.W_OK);
       NodeFS.rmSync(stage, { recursive: true, force: true });
+      // Only this app is running, so a backup beside it is left over from an earlier attempt.
+      NodeFS.rmSync(`${appBundlePath}.nexi-backup`, { recursive: true, force: true });
       NodeFS.mkdirSync(stage);
       NodeChildProcess.execFileSync("/usr/bin/ditto", ["-x", "-k", zip, stage]);
       const staged = stagedBundle(stage, appBundlePath, expected);

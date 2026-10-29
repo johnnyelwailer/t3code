@@ -51,6 +51,7 @@ interface Fake {
   readonly credentialFails?: boolean;
   readonly networkDown?: boolean;
   readonly body?: string;
+  readonly headers?: Record<string, string>;
 }
 function boot(fake: Fake) {
   const seen: Array<{
@@ -70,7 +71,7 @@ function boot(fake: Fake) {
       const respond = (body: string, init: ResponseInit = {}) =>
         Effect.succeed(HttpClientResponse.fromWeb(request, new Response(body, init)));
       if (fake.status !== undefined && fake.status !== 200)
-        return respond(fake.body ?? "", { status: fake.status });
+        return respond(fake.body ?? "", { status: fake.status, headers: fake.headers ?? {} });
       if (request.url.includes("/releases?")) return respond(JSON.stringify(fake.releases));
       if (request.url.endsWith("/102")) return respond(fake.manifestText ?? manifest("0.1.2-rc.5"));
       if (request.url.endsWith("/100")) {
@@ -201,6 +202,18 @@ describe("nexi-update routes", () => {
       expect(result.kind, String(status)).toBe("signed-out");
       expect(result.message).not.toContain(TOKEN);
     }
+  });
+
+  it("calls a 403 with no quota left a rate limit (unreachable), not a refused sign-in", async () => {
+    const limited = boot({ releases: [], status: 403, headers: { "x-ratelimit-remaining": "0" } });
+    expect(JSON.parse((await limited.call(LATEST)).text)).toMatchObject({ kind: "unreachable" });
+  });
+
+  it("answers a malformed asset path with a client error, never a server error", async () => {
+    const { call } = boot({ releases: twoReleases });
+    expect([400, 404]).toContain(
+      (await call("/api/t3team/nexi-update/asset/100/%E0%A4%A.zip")).status,
+    );
   });
 
   it("says unreachable, never the token, when GHE cannot be reached or answers 5xx", async () => {

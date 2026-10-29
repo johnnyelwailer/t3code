@@ -81,6 +81,46 @@ describe("DesktopUpdates with the interim Nexi feed", () => {
     },
   );
 
+  it.effect(
+    "never carries an old signed-out reason into a later, unrelated install failure",
+    () => {
+      let checks = 0;
+      const harness = makeHarness({
+        nexiFeed: feed(true),
+        checkForUpdates: Effect.suspend(() =>
+          checks++ === 0
+            ? Effect.fail(checkError(new NexiUpdateIssue("signed-out", "Sign in to GHE.")))
+            : Effect.void,
+        ),
+        quitAndInstall: Effect.fail(
+          new ElectronUpdater.ElectronUpdaterQuitAndInstallError({
+            channel: null,
+            isSilent: true,
+            isForceRunAfter: true,
+            cause: new Error("could not prepare"),
+          }),
+        ),
+      });
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+          yield* updates.check("manual");
+          assert.equal((yield* updates.getState).issue, "signed-out");
+          yield* updates.check("manual");
+          harness.emit("update-available", { version: "0.1.2-rc.5" });
+          yield* flushCallbacks;
+          harness.emit("update-downloaded", { version: "0.1.2-rc.5" });
+          yield* flushCallbacks;
+          yield* updates.install;
+          const state = yield* updates.getState;
+          assert.equal(state.errorContext, "install");
+          assert.notProperty(state, "issue");
+        }),
+      ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+    },
+  );
+
   it.effect("keeps an ordinary check error ordinary: no issue", () => {
     const harness = makeHarness({
       nexiFeed: feed(true),

@@ -88,6 +88,16 @@ export const makeNexiSource = (
       Effect.catchDefect(() => Effect.fail(null)),
       Effect.mapError(() => unreachable(`Could not reach ${NEXI_UPDATE_HOST}.`)),
     );
+    // A 403 with no quota left is GHE's rate limit, not a refused sign-in.
+    const rateLimited =
+      response.status === 403 &&
+      (response.headers["x-ratelimit-remaining"] === "0" ||
+        response.headers["retry-after"] !== undefined);
+    if (rateLimited) {
+      return yield* Effect.fail(
+        unreachable(`GHE (${NEXI_UPDATE_HOST}) is rate limiting this sign-in; trying again later.`),
+      );
+    }
     if (response.status === 401 || response.status === 403 || response.status === 404) {
       return yield* Effect.fail(
         signedOut(
@@ -107,7 +117,7 @@ export const makeNexiSource = (
     response.text.pipe(
       Effect.mapError(() => unreachable("The update answer could not be read.")),
       Effect.filterOrFail(
-        (text) => text.length <= cap,
+        (text) => new TextEncoder().encode(text).length <= cap,
         () => unreachable("The update answer was larger than expected."),
       ),
     );

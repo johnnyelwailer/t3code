@@ -9,6 +9,9 @@ import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 const GITHUB_ASSET_TIMEOUT_MS = 20_000;
 /** GitHub hands an asset to a signed object URL in one hop; this leaves room, not a chain. */
 const MAX_ASSET_REDIRECTS = 3;
+/** The one plain-http origin that may carry a credential: this machine (a local mock in tests and proofs). */
+const isLoopbackHttp = (url: URL) =>
+  url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname);
 /** Redirects are followed here, hop by hop, so the credential's reach is decided by this code. */
 const MANUAL_REDIRECT: RequestInit = { redirect: "manual" };
 
@@ -32,7 +35,9 @@ export function fetchAssetResponse(
     let target = start;
     for (let hop = 0; ; hop += 1) {
       const authorization =
-        token !== undefined && target.protocol === "https:" && target.origin === start.origin
+        token !== undefined &&
+        (target.protocol === "https:" || isLoopbackHttp(target)) &&
+        target.origin === start.origin
           ? `Bearer ${token}`
           : undefined;
       const response = yield* httpClient

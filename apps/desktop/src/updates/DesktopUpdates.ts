@@ -505,6 +505,7 @@ export const make = Effect.gen(function* () {
 
     const check = Effect.gen(function* () {
       const checkedAt = yield* currentIsoTimestamp;
+      yield* Ref.set(updateIssueRef, null);
       yield* setState(reduceDesktopUpdateStateOnCheckStart(state, checkedAt));
       yield* logUpdaterInfo("checking for updates", { reason });
 
@@ -557,6 +558,7 @@ export const make = Effect.gen(function* () {
     }
 
     return yield* Effect.gen(function* () {
+      yield* Ref.set(updateIssueRef, null);
       yield* setState(reduceDesktopUpdateStateOnDownloadStart(state));
       yield* electronUpdater.setDisableDifferentialDownload(
         isArm64HostRunningIntelBuild(environment.runtimeInfo),
@@ -706,6 +708,7 @@ export const make = Effect.gen(function* () {
         concurrency: "unbounded",
         discard: true,
       }).pipe(Effect.exit);
+      yield* Ref.set(updateIssueRef, null);
       yield* updateState((current) => reduceDesktopUpdateStateOnInstallFailure(current, message));
       if (Exit.isFailure(restartExit)) {
         yield* logUpdaterError("Desktop update install recovery could not restart every backend.");

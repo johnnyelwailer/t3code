@@ -31,7 +31,12 @@ const ASSET_PATH = new RegExp(`^${NEXI_UPDATE_ASSET_PATH}/(\\d{1,15})/([^/]+)$`,
 
 const readPathname = (request: HttpServerRequest.HttpServerRequest) => {
   const url = HttpServerRequest.toURL(request);
-  return url._tag === "Some" ? decodeURIComponent(url.value.pathname) : "";
+  if (url._tag !== "Some") return "";
+  try {
+    return decodeURIComponent(url.value.pathname);
+  } catch {
+    return "";
+  }
 };
 
 const readQuery = (request: HttpServerRequest.HttpServerRequest) => {

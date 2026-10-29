@@ -166,6 +166,31 @@ describe.skipIf(!mac)("the macOS swap helper", () => {
     expect(s.launcher.calls()).toHaveLength(2);
   });
 
+  it("does not take a leftover process of the old app, started from the same path, for the new app", () => {
+    const s = scenario("never");
+    const leftover = NodeChildProcess.spawn(
+      "/bin/bash",
+      [NodePath.join(s.app, "Contents/MacOS/NexiWork"), "run"],
+      { stdio: "ignore" },
+    );
+    spawned.push(leftover.pid ?? 0);
+    const result = s.run({}, { NEXI_SWAP_WAIT_LAUNCH: "2" });
+    expect(result.status).toBe(1);
+    expect(version(s.app)).toBe("0.1.2-test.1");
+    expect(s.logText()).toContain("did not stay running");
+  });
+
+  it("leaves a backup from an earlier update alone and changes nothing, instead of moving the app into it", () => {
+    const s = scenario("starts");
+    NodeFS.mkdirSync(NodePath.join(s.backup, "marker"), { recursive: true });
+    const result = s.run();
+    expect(result.status).toBe(1);
+    expect(version(s.app)).toBe("0.1.2-test.1");
+    expect(NodeFS.existsSync(NodePath.join(s.backup, "marker"))).toBe(true);
+    expect(NodeFS.existsSync(NodePath.join(s.backup, "Nexi Work.app"))).toBe(false);
+    expect(s.logText()).toContain("backup from an earlier update");
+  });
+
   it("changes nothing when the old app does not exit: no swap, no relaunch", () => {
     const s = scenario("starts");
     const alive = NodeChildProcess.spawn("/bin/sleep", ["30"], { stdio: "ignore" });
@@ -273,6 +298,40 @@ describe.skipIf(!mac)("NexiMacUpdater staging", () => {
     expect(otherApp.ok).toBe(false);
     expect(otherApp.errors[0]?.message).toMatch(/different app/u);
     expect(version(otherApp.running)).toBe("0.1.2-test.1");
+  });
+
+  it("clears a backup left beside the running app by an earlier attempt before staging", () => {
+    const root = NodeFS.realpathSync(
+      NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "nexi-stale-")),
+    );
+    roots.push(root);
+    const apps = NodePath.join(root, "Apps");
+    NodeFS.mkdirSync(apps);
+    const running = makeApp(apps, "Nexi Work.app", "0.1.2-test.1", FAKE_EXECUTABLE);
+    NodeFS.mkdirSync(`${running}.nexi-backup`);
+    const built = makeApp(
+      NodePath.join(root, "build"),
+      "Nexi Work.app",
+      "0.1.2-test.2",
+      FAKE_EXECUTABLE,
+    );
+    const zip = zipOf(root, built);
+    class TestUpdater extends NexiMacUpdater {
+      protected override get installerPath() {
+        return zip;
+      }
+    }
+    const updater = new TestUpdater({
+      appBundlePath: running,
+      logFile: NodePath.join(root, "swap.log"),
+      spawnHelper: () => {},
+      app: { version: "0.1.2-test.1", name: "Nexi Work" },
+    });
+    (updater as unknown as { updateInfoAndProvider: unknown }).updateInfoAndProvider = {
+      info: { version: "0.1.2-test.2" },
+    };
+    expect((updater as unknown as { doInstall(): boolean }).doInstall()).toBe(true);
+    expect(NodeFS.existsSync(`${running}.nexi-backup`)).toBe(false);
   });
 
   it("finds the running bundle from the executable path", () => {
