@@ -38,8 +38,7 @@ export const MachineDefinitionSearchResult = Schema.Struct({
       repository: Repository,
       refs: Schema.Array(Schema.String),
       omitted: Schema.Number.annotate({
-        description:
-          "refs and pull requests that were not looked at: past the per-repository cap, from forks, or beyond the newest listed",
+        description: "refs past the per-repository cap that were not looked at",
       }),
     }),
   ),

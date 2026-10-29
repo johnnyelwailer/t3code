@@ -21,8 +21,6 @@ export interface SearchedPulls {
   readonly open: ReadonlyArray<ProviderChangeRequest>;
   readonly closed: ReadonlyArray<ProviderChangeRequest>;
   readonly forks: ReadonlyArray<number>;
-  /** True when a page was full, so more eligible pull requests exist than were listed. */
-  readonly partial: boolean;
 }
 
 const closedAt = (pull: ProviderChangeRequest) =>
@@ -35,47 +33,32 @@ export const listSearchedPulls = Effect.fn("machineSearch.listPulls")(function* 
   if (!provider)
     return yield* new RemoteUnavailable({ reason: "This host has no pull request support." });
   const now = yield* Clock.currentTimeMillis;
-  // One listing per state: with a single "all" page, closed and fork pull requests could fill it
-  // before the open ones that matter are reached.
-  const list = (state: "open" | "closed" | "merged") =>
-    providerCall(
-      target,
-      provider.listChangeRequests({
-        cwd: target.cwd,
-        repository: target.repository,
-        host: target.host,
-        state,
-        // "all" involvement never reads the viewer; asking who it is would be one more call.
-        involvement: "all",
-        viewer: "",
-        limit: PAGE_SIZE,
-      }),
-    );
-  const [openPage, closedPage, mergedPage] = yield* Effect.all(
-    [list("open"), list("closed"), list("merged")],
-    { concurrency: 3 },
+  const page = yield* providerCall(
+    target,
+    provider.listChangeRequests({
+      cwd: target.cwd,
+      repository: target.repository,
+      host: target.host,
+      state: "all",
+      // "all" involvement never reads the viewer; asking who it is would be one more call.
+      involvement: "all",
+      viewer: "",
+      limit: PAGE_SIZE,
+    }),
   );
   const isFork = (pull: ProviderChangeRequest) =>
     pull.headRepositoryNameWithOwner != null &&
     pull.headRepositoryNameWithOwner.toLowerCase() !== target.repository.toLowerCase();
   const inScope = (pull: ProviderChangeRequest) =>
     pull.state === "open" || now - closedAt(pull) <= CLOSED_PULL_WINDOW_MS;
-  // Keyed by number: a host that lists "closed" with merged ones would otherwise repeat them.
-  const unique = new Map(
-    [...openPage.items, ...closedPage.items, ...mergedPage.items].map((pull) => [pull.number, pull]),
-  );
-  const byNewest = [...unique.values()]
+  const byNewest = page.items
     .filter(inScope)
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const forks = byNewest.filter(isFork).map((pull) => pull.number);
   const own = byNewest.filter((pull) => !isFork(pull));
-  // A closed page whose rows are all inside the window may be followed by more that are too.
-  const more = (page: typeof openPage, all: boolean) =>
-    (page.continues || page.truncated) && (all || page.items.every(inScope));
   return {
     open: own.filter((pull) => pull.state === "open"),
     closed: own.filter((pull) => pull.state !== "open"),
     forks,
-    partial: more(openPage, true) || more(closedPage, false) || more(mergedPage, false),
   } satisfies SearchedPulls;
 });

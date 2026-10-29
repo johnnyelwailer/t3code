@@ -53,7 +53,6 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
   readonly filesByRevision?: Record<string, Record<string, string>>;
   /** What the host's pull request list answers; none by default. */
   readonly pulls?: ReadonlyArray<ProviderChangeRequest>;
-  readonly pullsContinue?: boolean;
   readonly beforeRead?: Effect.Effect<void>;
   readonly manifest?: (root: string) => string;
 }) {
@@ -119,11 +118,7 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
       Layer.mock(TestProvider)({
         kind,
         listChangeRequests: () =>
-          Effect.succeed({
-            items: input.pulls ?? [],
-            truncated: false,
-            continues: input.pullsContinue ?? false,
-          }),
+          Effect.succeed({ items: input.pulls ?? [], truncated: false, continues: false }),
         capabilities: {
           diff: false,
           comment: false,

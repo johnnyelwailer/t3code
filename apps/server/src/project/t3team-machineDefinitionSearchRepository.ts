@@ -23,7 +23,7 @@ import {
   type RemoteMachineInput,
 } from "./t3team-remoteMachineScan.ts";
 
-const NO_PULLS: SearchedPulls = { open: [], closed: [], forks: [], partial: false };
+const NO_PULLS: SearchedPulls = { open: [], closed: [], forks: [] };
 const numbers = (list: ReadonlyArray<number>) => list.map((n) => `#${n}`).join(", ");
 
 type Found = MachineDefinitionCandidate & { readonly hash: string };
@@ -64,7 +64,6 @@ export const searchRepository = Effect.fn("machineSearch.searchRepository")(func
   );
   if (pulls.forks.length > 0)
     note(`Pull requests from forks were not searched: ${numbers(pulls.forks)}.`);
-  if (pulls.partial) note("There are more pull requests than were listed; only the newest were searched.");
   const refs = yield* listRemoteRefs({
     url: input.url,
     cwd: input.cwd,
@@ -114,14 +113,7 @@ export const searchRepository = Effect.fn("machineSearch.searchRepository")(func
   );
   return {
     candidates: found.map(({ hash: _hash, ...candidate }) => candidate),
-    checked: [
-      {
-        repository: name,
-        refs: planned.map((entry) => entry.label),
-        // Skipped fork pull requests count too, so a search that left some out never reads 0.
-        omitted: omitted + pulls.forks.length + (pulls.partial ? 1 : 0),
-      },
-    ],
+    checked: [{ repository: name, refs: planned.map((entry) => entry.label), omitted }],
     unreadable,
     setupHints: hints.flat(),
   } satisfies MachineDefinitionSearchResult;
