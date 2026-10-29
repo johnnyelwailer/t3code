@@ -31,7 +31,7 @@ export { ListRow } from "../components/ui/ListRow";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";
 export { useProjects, useServerConfigs } from "../state/entities";
-export { useRemoteConnectionStatus } from "../state/use-remote-environment-registry";
+export { useWorkspaceEnvironments } from "../state/workspace";
 export { useAtomCommand } from "../state/use-atom-command";
 
 /**
