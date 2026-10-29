@@ -489,13 +489,15 @@ const layerPersistence = Layer.empty.pipe(Layer.provideMerge(SqlitePersistence.l
 const layerVcsDriverRegistry = VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer));
 
 const layerSourceControlProviderRegistry = SourceControlProviderRegistry.layer.pipe(
-  Layer.provideMerge(SourceControlBuiltInDrivers.layer),
-  Layer.provideMerge(GitVcsDriver.layer),
-  Layer.provideMerge(layerVcsDriverRegistry),
   // t3team: the fork's GitHub facade (GitHubApi, GitHubRest, quota, credentials) is read by the
   // websocket routes, the inbox and the cloud-session layers. Upstream's GitHub driver now builds
   // its own transport inside the driver, so the fork's is provided here beside the registry.
+  // Mounted before the built-in drivers so their SourceControlHost / SourceControlRateLimit
+  // (provideMerge'd by SourceControlBuiltInDrivers.layer) satisfy its requirements.
   Layer.provideMerge(GitHubApi.layerWithDependencies),
+  Layer.provideMerge(SourceControlBuiltInDrivers.layer),
+  Layer.provideMerge(GitVcsDriver.layer),
+  Layer.provideMerge(layerVcsDriverRegistry),
 );
 
 const layerRepositoryIdentityResolver = Layer.effect(

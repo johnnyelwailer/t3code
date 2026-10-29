@@ -14,7 +14,11 @@ import {
   fallbackTextGenerationModelSelection,
 } from "@t3tools/shared/serverSettings";
 import * as ServerSettings from "../serverSettings.ts";
-import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
+import type {
+  ProviderTextGeneration,
+  StructuredGenerationInput,
+} from "@t3tools/provider-core/server/textGeneration";
+import type * as Schema from "effect/Schema";
 import { TextGenerationError } from "@t3tools/contracts";
 
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
@@ -78,13 +82,13 @@ export const make = Effect.gen(function* () {
   const registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
   const sourceControl = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
-  const generate = Effect.fn("TextGeneration.generate")(function* <A>(
+  const generate = Effect.fn("TextGeneration.generate")(function* <A, R = never>(
     operation: TextGenerationOp,
     selection: ModelSelection,
     invoke: (
       service: ProviderTextGeneration,
       modelSelection: ModelSelection,
-    ) => Effect.Effect<A, TextGenerationError>,
+    ) => Effect.Effect<A, TextGenerationError, R>,
   ) {
     const snapshots = yield* registry.listInstances.pipe(
       Effect.flatMap((instances) =>
@@ -190,23 +194,22 @@ export const make = Effect.gen(function* () {
               ),
       );
     }),
-    generateStructured: Effect.fn("TextGeneration.generateStructured")(function (input) {
-      return generate(
+    // Not `Effect.fn`: a generic signature, so the schema's decoding services travel through
+    // `generate`'s requirement channel instead of being erased.
+    generateStructured: <S extends Schema.Top>(input: StructuredGenerationInput<S>) =>
+      generate<S["Type"], S["DecodingServices"]>(
         "generateStructured",
         input.modelSelection,
         (textGeneration, modelSelection) =>
-          // The structured schema's decoding services are erased here (the service shape
-          // re-types them); `generate` only carries requirement-free effects.
-          (textGeneration.generateStructured
+          textGeneration.generateStructured
             ? textGeneration.generateStructured({ ...input, modelSelection })
             : Effect.fail(
                 new TextGenerationError({
                   operation: "generateStructured",
                   detail: "Provider does not support structured background generation.",
                 }),
-              )) as Effect.Effect<never, TextGenerationError>,
-      ) as never;
-    }),
+              ),
+      ).pipe(Effect.withSpan("TextGeneration.generateStructured")),
   });
   // t3team: a distribution-pinned text-generation model overrides every caller's selection.
   return withPinnedTextGenerationModel(routed);

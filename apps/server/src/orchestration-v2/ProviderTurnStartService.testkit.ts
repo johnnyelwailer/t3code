@@ -53,7 +53,7 @@ export const layerRealGit = GitWorkflow.layer.pipe(
       Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
       Layer.mock(ProjectStore.ProjectStoreV2)({}),
       // These tests never check out a pull request in a linked repository, the only on-demand clone.
-      Layer.mock(T3TeamLinkedRepositorySync)({}),
+      Layer.mock(T3TeamLinkedRepositorySync)({ phase: () => undefined }),
       ServerSettings.layerTest(),
     ),
   ),

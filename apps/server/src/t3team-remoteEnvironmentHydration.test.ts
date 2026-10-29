@@ -57,7 +57,6 @@ const testHttpClient = Layer.succeed(
 const backgroundPolicy = Layer.mock(BackgroundPolicy.BackgroundPolicy)({
   shouldRunScopeWork: () => Effect.succeed(true),
   shouldRunOpportunisticWork: Effect.succeed(true),
-  streamChanges: Stream.empty,
 });
 
 const registryDependencies = Layer.mergeAll(

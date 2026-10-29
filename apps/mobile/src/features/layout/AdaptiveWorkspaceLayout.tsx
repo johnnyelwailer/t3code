@@ -190,8 +190,8 @@ function AdaptiveWorkspaceLayoutContent(
   const androidSettingsOpen = useAndroidWorkspaceRoot()?.settingsOpen ?? false;
   const safeAreaInsets = useSafeAreaInsets();
   const workspacePage =
-    Platform.OS === "android" && (androidSettingsOpen ||
-      (workspace !== null && isWorkspaceTabActive(workspace.state, "usage")));
+    Platform.OS === "android" &&
+    (androidSettingsOpen || (workspace !== null && isWorkspaceTabActive(workspace.state, "usage")));
   const navigation = useNavigation();
   const activeRoleOwner = useRef<symbol | null>(null);
   const [primarySidebarPreferredVisible, setPrimarySidebarPreferredVisible] = useState(true);
