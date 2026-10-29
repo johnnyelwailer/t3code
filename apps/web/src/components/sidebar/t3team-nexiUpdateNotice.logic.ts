@@ -42,8 +42,11 @@ export function getNexiUpdateNoticeView(
         return {
           kind: "signed-out",
           title: "Sign in to GHE to get updates",
+          // The server's "Sign in to GHE…" sentence would repeat the title; a rejected sign-in keeps its own.
           description:
-            state.message ?? "Nexi Work gets its updates from GHE with your existing sign-in.",
+            state.message && !state.message.startsWith("Sign in to GHE")
+              ? state.message
+              : "Nexi Work reads its updates from GHE with your existing sign-in.",
           action: "open-settings",
           actionLabel: "Open sign-in settings",
           dismissible: false,

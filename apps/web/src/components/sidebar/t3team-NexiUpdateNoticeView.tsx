@@ -1,6 +1,6 @@
 import { DownloadIcon, KeyRoundIcon, RefreshCwIcon, TriangleAlertIcon } from "lucide-react";
 
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 import type { NexiUpdateNoticeView as View } from "./t3team-nexiUpdateNotice.logic";
 
@@ -53,17 +53,17 @@ export function NexiUpdateNoticeView({
             ))}
           </ul>
         ) : null}
-      </AlertDescription>
-      <AlertAction>
-        <Button size="xs" disabled={busy} onClick={onAction}>
-          {view.actionLabel}
-        </Button>
-        {view.dismissible ? (
-          <Button size="xs" variant="ghost-muted" disabled={busy} onClick={onLater}>
-            Later
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Button size="xs" disabled={busy} onClick={onAction}>
+            {view.actionLabel}
           </Button>
-        ) : null}
-      </AlertAction>
+          {view.dismissible ? (
+            <Button size="xs" variant="ghost-muted" disabled={busy} onClick={onLater}>
+              Later
+            </Button>
+          ) : null}
+        </div>
+      </AlertDescription>
     </Alert>
   );
 }
