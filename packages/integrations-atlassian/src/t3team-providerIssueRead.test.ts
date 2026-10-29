@@ -74,22 +74,42 @@ describe("AtlassianIntegrationProvider work-item reads", () => {
     expect(page).toEqual({ items: [], nextCursor: undefined });
   });
 
-  it("listIssueComments renders ADF bodies to markdown, oldest first as the tracker returns them", async () => {
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({
+  it("listIssueComments asks for the newest page, returns it oldest-first and reports a cut", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return Response.json({
+        // The tracker answers newest-first because of `orderBy=-created`.
         comments: [
-          { id: "1", author: { displayName: "Pat" }, body: adf("ship it"), created: "2026-10-01" },
           { id: "2", body: "plain" },
+          { id: "1", author: { displayName: "Pat" }, body: adf("ship it"), created: "2026-10-01" },
         ],
-      }),
-    ) as unknown as typeof fetch;
-    const comments = await provider().listIssueComments({
+        total: 9,
+      });
+    }) as unknown as typeof fetch;
+    const result = await provider().listIssueComments({
       accountId: "https://test.atlassian.net",
       issueIdOrKey: "IES-1",
+      limit: 2,
     });
-    expect(comments).toEqual([
+    const query = new URL(urls[0]!).searchParams;
+    expect(query.get("maxResults")).toBe("2");
+    expect(query.get("orderBy")).toBe("-created");
+    expect(result.comments).toEqual([
       { id: "1", author: "Pat", body: "ship it", created: "2026-10-01" },
       { id: "2", body: "plain" },
     ]);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("listIssueComments is not truncated when every comment came back", async () => {
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({ comments: [{ id: "1", body: "only" }], total: 1 }),
+    ) as unknown as typeof fetch;
+    const result = await provider().listIssueComments({
+      accountId: "https://test.atlassian.net",
+      issueIdOrKey: "IES-1",
+    });
+    expect(result).toEqual({ comments: [{ id: "1", body: "only" }], truncated: false });
   });
 });

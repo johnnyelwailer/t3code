@@ -66,6 +66,37 @@ describe("restrictJqlToProject", () => {
     );
   });
 
+  it("refuses a backslash outside a string: the quote-parity desync", () => {
+    const desync = 'a = x\\") OR project = OTHER OR (b = y"';
+    const result = restrictJqlToProject(desync, PROJECT);
+    expect(result).toEqual({ ok: false, reason: "backslash outside a string" });
+    refused("a = x\\ OR project = OTHER");
+  });
+
+  it("refuses the functions that follow links or run subqueries into other projects", () => {
+    for (const jql of [
+      'issueFunction in linkedIssuesOf("project = OTHER")',
+      "ISSUEFUNCTION in hasComments()",
+      'issue in linkedIssues("OTHER-1")',
+      "issue in linkedIssuesOf(OTHER-1)",
+      'key not in (A-1, subtasksOf("project = OTHER"))',
+    ]) {
+      refused(jql);
+    }
+  });
+
+  it("says why it refused a probe", () => {
+    expect(restrictJqlToProject("issueFunction in x()", PROJECT)).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining("issueFunction"),
+    });
+  });
+
+  it("still accepts plain key lists and the words inside strings", () => {
+    expect(scoped("issue in (IES-1, IES-2)")).toBe(`(issue in (IES-1, IES-2)) AND ${CLAUSE}`);
+    expect(scoped('summary ~ "issueFunction linkedIssues"')).toContain("summary ~");
+  });
+
   it("refuses homoglyphs and control characters outside a string", () => {
     refused("рroject = OTHER");
     refused("ｐroject = OTHER");

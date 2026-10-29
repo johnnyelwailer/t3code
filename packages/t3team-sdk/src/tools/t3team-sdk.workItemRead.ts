@@ -80,7 +80,10 @@ export const WorkItemComment = Schema.Struct({
   created: Schema.optional(Schema.String),
 });
 
-/** A relation to another work item; only the key is shown, never the other item's content. */
+/**
+ * A relation to another work item; only the key and relation text are shown, never the other
+ * item's content. The key may belong to a project other than the bound one.
+ */
 export const WorkItemLink = Schema.Struct({ relation: Schema.String, issueKey: Schema.String });
 
 export const GetWorkItemToolResult = Schema.Struct({
@@ -89,7 +92,11 @@ export const GetWorkItemToolResult = Schema.Struct({
     ...WorkItemSummary.fields,
     description: Schema.optional(Schema.String),
   }),
+  /** The newest comments, oldest first; see `commentsTruncated`. */
   comments: Schema.Array(WorkItemComment),
+  /** True when the item has older comments than the ones returned. */
+  commentsTruncated: Schema.Boolean,
+  /** `issueKey` here and `item.parentKey` may name work items outside the bound project (key only). */
   links: Schema.Array(WorkItemLink),
   children: Schema.Array(WorkItemSummary),
 });

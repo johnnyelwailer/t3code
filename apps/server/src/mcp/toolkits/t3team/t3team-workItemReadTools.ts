@@ -3,8 +3,9 @@
  * (`t3team-toolBrokerBindingWorkItemRead.ts`); the parameters are the SDK's schemas and the
  * descriptions come from the catalog, so an agent, a workflow body and the broker share one contract.
  *
- * Listed only while Jira is connected for the calling thread's project: see
- * `t3team-mcpToolThreadList.ts`. A stale call is answered by the broker's refusal.
+ * Listed only while Jira is connected for the calling thread's project (account state, not the
+ * thread's tool context): see `t3team-mcpToolThreadList.ts`, which also drops them when the broker
+ * is unreachable. A stale call is answered by the broker's refusal.
  */
 import { GetWorkItemToolArgs, SearchWorkItemsToolArgs } from "@t3team/sdk";
 import * as Schema from "effect/Schema";

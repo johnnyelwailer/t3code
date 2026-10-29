@@ -83,7 +83,14 @@ describe("t3team.work_item.search / get", () => {
   });
 
   it("get returns the host's detail and rejects an empty key", async () => {
-    const detail = { ok: true, item: row, comments: [], links: [], children: [] };
+    const detail = {
+      ok: true,
+      item: row,
+      comments: [],
+      commentsTruncated: false,
+      links: [],
+      children: [],
+    };
     const ctx = createToolCtx({ t3team: { callHostTool: async () => detail } });
     expect(await executeRegisteredTool(getWorkItemTool.id, { issueKey: "PROJ-1" }, ctx)).toEqual(
       detail,

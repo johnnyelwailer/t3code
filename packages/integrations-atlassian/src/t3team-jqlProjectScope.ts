@@ -9,6 +9,11 @@
  * the appended clause inside a string literal, and `a) OR project = X OR (b` would close the
  * wrapping parenthesis early.
  *
+ * Two things are refused on top of structure because they let a query ask about OTHER projects
+ * even though the result stays a subset of the bound one: a backslash outside a string (the lexers
+ * can disagree on where a string ends, which is the quote-parity desync the scan exists to stop),
+ * and the link/subquery functions of {@link refusedProbe}. The refusal list is deliberately small.
+ *
  * Absent or blank JQL is not "no filter" (to Jira it selects every issue the account can see); it
  * becomes the project clause itself.
  */
@@ -28,6 +33,24 @@ const isControl = (code: number): boolean => code < 0x20 || code === 0x7f;
 const isTokenBoundary = (text: string, index: number): boolean =>
   index < 0 || /[\s)]/.test(text[index] ?? "");
 
+/**
+ * Constructs that probe other projects' data, matched on the query with string contents blanked:
+ * `issueFunction` (ScriptRunner subqueries), `linkedIssues…` (follows links to other projects), and
+ * a nested `(` inside `issue in (…)` (a subquery where a key list belongs).
+ */
+function refusedProbe(outsideStrings: string): string | null {
+  if (/\bissueFunction\b/i.test(outsideStrings)) {
+    return "issueFunction can read other projects";
+  }
+  if (/\blinkedIssues\w*/i.test(outsideStrings)) {
+    return "linkedIssues functions follow links into other projects";
+  }
+  if (/\b(?:issue|key|id)\s+(?:not\s+)?in\s*\([^)]*\(/i.test(outsideStrings)) {
+    return "a subquery inside issue in (...) can read other projects";
+  }
+  return null;
+}
+
 type Scan =
   | { readonly ok: true; readonly orderByAt: number | null }
   | { readonly ok: false; readonly reason: string };
@@ -36,6 +59,7 @@ type Scan =
 function scanJql(text: string): Scan {
   let depth = 0;
   let orderByAt: number | null = null;
+  let outsideStrings = "";
   let index = 0;
   while (index < text.length) {
     const char = text[index] ?? "";
@@ -60,8 +84,11 @@ function scanJql(text: string): Scan {
         }
       }
       if (!closed) return { ok: false, reason: "unterminated string" };
+      outsideStrings += '""';
       continue;
     }
+    if (char === "\\") return { ok: false, reason: "backslash outside a string" };
+    outsideStrings += char;
     // Structure is ASCII: a homoglyph such as a fullwidth `ｐroject` would hide it from this scan.
     if (code > 0x7e) return { ok: false, reason: "non-ASCII character outside a string" };
     if (char === "(") depth += 1;
@@ -79,7 +106,9 @@ function scanJql(text: string): Scan {
     }
     index += 1;
   }
-  return depth === 0 ? { ok: true, orderByAt } : { ok: false, reason: "unbalanced parenthesis" };
+  if (depth !== 0) return { ok: false, reason: "unbalanced parenthesis" };
+  const probe = refusedProbe(outsideStrings);
+  return probe === null ? { ok: true, orderByAt } : { ok: false, reason: probe };
 }
 
 /** The numeric Jira project id as the only accepted binding shape: it is interpolated into JQL. */

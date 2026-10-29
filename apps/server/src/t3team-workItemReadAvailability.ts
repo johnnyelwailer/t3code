@@ -9,6 +9,16 @@
  * the caller's own binding does not hold) and from the workflow host-tool grant. A client holding
  * an older list gets {@link JIRA_NOT_CONNECTED_MESSAGE} instead of a "not enabled" riddle. Read
  * live on every bind, like the feature flags beside it, never cached.
+ *
+ * OFFERED BY ACCOUNT STATE, NOT BY TOOL CONTEXT. The reads are added to whatever the thread's synced
+ * tool context lists, so a thread whose project has a usable Jira account gets them even when its
+ * context does not name them. That is deliberate: `/mcp` threads (cloud, headless) carry no synced
+ * web tool context at all, and the reads are read-only and project-scoped. Writes and drafts are
+ * NOT affected: they still need the tool context (and, for a recipe, `allowedToolGroups`). A
+ * recipe-launched binding that carries `allowedToolGroups` without `integration.read` does not get
+ * them either. Behavior change to know: because the reads are added before the empty check, a bind
+ * with an empty tool context returns a binding (holding just the two reads) while Jira is
+ * connected, where it used to return no binding.
  */
 import type { OrchestrationProjectShell, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";

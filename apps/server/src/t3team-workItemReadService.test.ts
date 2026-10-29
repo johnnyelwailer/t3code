@@ -31,8 +31,12 @@ const makePort = (input: {
   readonly mirror?: ReadonlyArray<Record<string, unknown>> | "unsynced";
   readonly live?: ReadonlyArray<Record<string, unknown>>;
   readonly comments?: ReadonlyArray<WorkItemComment>;
+  readonly commentsTruncated?: boolean;
+  /** Keys the tracker still holds in the bound project; default: whatever the mirror holds. */
+  readonly trackerKeys?: ReadonlyArray<string>;
 }) => {
   const liveJql: string[] = [];
+  const commentCalls: Array<{ key: string; limit: number }> = [];
   const mirrorQueries: unknown[] = [];
   const mirror = input.mirror === "unsynced" ? [] : (input.mirror ?? []);
   const port: WorkItemReadPort = {
@@ -46,11 +50,28 @@ const makePort = (input: {
       Effect.succeed(mirror.filter((row) => row["parentId"] === parent)),
     searchLive: (_b, jql) => {
       liveJql.push(jql);
+      // The tracker answers a scoped `key = X` lookup only for keys it still holds in the project.
+      const lookedUp = /^\(key = "([^"]+)"\)/.exec(jql)?.[1];
+      if (lookedUp !== undefined && input.mirror !== "unsynced") {
+        const held = input.trackerKeys ?? mirror.map((row) => String(row["displayId"]));
+        return Effect.succeed({
+          items: held.includes(lookedUp)
+            ? mirror.filter((row) => row["displayId"] === lookedUp)
+            : [],
+          nextCursor: undefined,
+        });
+      }
       return Effect.succeed({ items: input.live ?? [], nextCursor: "tok" });
     },
-    comments: () => Effect.succeed(input.comments ?? []),
+    comments: (_b, key, limit) => {
+      commentCalls.push({ key, limit });
+      return Effect.succeed({
+        comments: input.comments ?? [],
+        truncated: input.commentsTruncated ?? false,
+      });
+    },
   };
-  return { service: makeWorkItemReadService(port), liveJql, mirrorQueries };
+  return { service: makeWorkItemReadService(port), liveJql, mirrorQueries, commentCalls };
 };
 
 const failure = <A>(effect: Effect.Effect<A, string>) =>
@@ -163,7 +184,7 @@ it.effect("search refuses a cursor that belongs to the other path or was not iss
 it.effect("get returns fields, description, comments, links and children", () =>
   Effect.gen(function* () {
     const comment = { id: "c1", author: "Pat", body: "ship it", created: "2026-10-01" };
-    const { service } = makePort({
+    const { service, commentCalls } = makePort({
       mirror: [
         resource("IES-1", {
           description: "As a user",
@@ -180,11 +201,41 @@ it.effect("get returns fields, description, comments, links and children", () =>
     assert.equal(result.item.description, "As a user");
     assert.equal(result.item.assignee, "Pat");
     assert.deepEqual(result.comments, [comment]);
+    assert.equal(result.commentsTruncated, false);
+    assert.deepEqual(commentCalls, [{ key: "IES-1", limit: 50 }]);
     assert.deepEqual(result.links, [{ relation: "blocks", issueKey: "IES-7" }]);
     assert.deepEqual(
       result.children.map((child) => child.issueKey),
       ["IES-2"],
     );
+  }),
+);
+
+it.effect("get reports a cut comment thread", () =>
+  Effect.gen(function* () {
+    const { service } = makePort({
+      mirror: [resource("IES-1")],
+      comments: [{ id: "c9", body: "latest" }],
+      commentsTruncated: true,
+    });
+    const result = yield* service.get(binding, { issueKey: "IES-1" });
+    assert.equal(result.commentsTruncated, true);
+  }),
+);
+
+it.effect("get does not trust a mirror row of an issue the tracker moved out of the project", () =>
+  Effect.gen(function* () {
+    const { service, commentCalls } = makePort({
+      mirror: [resource("IES-1", { description: "secret of the new project" })],
+      trackerKeys: [],
+      comments: [{ id: "c1", body: "moved-project comment" }],
+    });
+    assert.include(
+      yield* failure(service.get(binding, { issueKey: "IES-1" })),
+      "not in this project",
+    );
+    // Neither the stale row nor the key-addressed comments were read.
+    assert.deepEqual(commentCalls, []);
   }),
 );
 

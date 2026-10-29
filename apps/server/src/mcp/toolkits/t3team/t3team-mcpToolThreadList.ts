@@ -5,9 +5,10 @@
  * the broker refuses. This wrapper drops an opt-in tool from the list unless the caller's own
  * binding holds it, which is the same check the call makes.
  *
- * Fails open (list unchanged) only when the broker is not reachable from the list handler, because
- * then enablement cannot be evaluated; a credential with no thread, or a thread with no binding,
- * cannot call the tool and does not see it.
+ * When the broker is not reachable from the list handler, enablement cannot be evaluated: the
+ * opt-in tools keep today's behavior (list unchanged), but the work-item read tools are dropped,
+ * because they exist only while a Jira account is verified and that cannot be verified here. A
+ * credential with no thread, or a thread with no binding, cannot call the tool and does not see it.
  */
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -44,6 +45,12 @@ function optInMcpTools(): ReadonlyMap<string, string> {
   );
 }
 
+const WORK_ITEM_READ_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
+  Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP)
+    .filter(([, toolId]) => WORK_ITEM_READ_TOOL_IDS.has(toolId))
+    .map(([name]) => name),
+);
+
 /** `tools` without the gated tools the calling thread cannot call. */
 const filterToolsForCaller = Effect.fn("filterToolsForCaller")(function* <T extends ListedTool>(
   tools: ReadonlyArray<T>,
@@ -51,7 +58,9 @@ const filterToolsForCaller = Effect.fn("filterToolsForCaller")(function* <T exte
   const optIn = optInMcpTools();
   if (!tools.some((tool) => optIn.has(tool.name))) return tools;
   const broker = yield* Effect.serviceOption(T3TeamToolBroker);
-  if (Option.isNone(broker)) return tools;
+  if (Option.isNone(broker)) {
+    return tools.filter((tool) => !WORK_ITEM_READ_MCP_TOOL_NAMES.has(tool.name));
+  }
   const invocation = yield* Effect.serviceOption(McpInvocationContext.McpInvocationContext);
   const threadId = Option.getOrUndefined(invocation)?.thread?.threadId;
   const binding =

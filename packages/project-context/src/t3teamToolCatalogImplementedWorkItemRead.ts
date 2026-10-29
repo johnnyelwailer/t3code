@@ -60,9 +60,12 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_READ_TOOL_CATALOG = {
       "Read one work item (ticket) of this thread's project by its key: its fields, description, " +
       "comments, links and child work items. A key of another project is refused. " +
       `Answer: { ok, item: ${WORK_ITEM_SUMMARY_ANSWER} + description?, ` +
-      "comments: [{ id, author?, body, created? }], links: [{ relation, issueKey }], " +
-      "children: [work item] }. Links name the related key only; read it with this tool if it is " +
-      "in this project. Read-only. Not available when no Jira account is connected for this project.",
+      "comments: [{ id, author?, body, created? }] (the newest 50, oldest first), " +
+      "commentsTruncated: true when older comments were left out, links: [{ relation, issueKey }], " +
+      "children: [work item] }. Links[].issueKey and item.parentKey may be keys outside this " +
+      "project: they give the key and relation text only, never that item's content; read a key " +
+      "with this tool only if it is in this project. Read-only. Not available when no Jira " +
+      "account is connected for this project.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["work-item"],

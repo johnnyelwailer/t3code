@@ -5,7 +5,10 @@
  * SCOPE: nothing a caller passes can name another project. Mirror reads are keyed by the binding;
  * every live query is the caller's JQL conjoined with `project in (<bound id>)` by
  * `restrictJqlToProject` (a JQL that cannot be read with confidence is refused, never repaired),
- * and a key outside the project is answered exactly like a key that does not exist.
+ * and a key outside the project is answered exactly like a key that does not exist. `get` asks the
+ * tracker whether the key is in the project BEFORE it returns any mirror content or comments: the
+ * mirror keeps a row of an issue that was moved out until its pruning pass, and comments are
+ * fetched by key (the tracker resolves a moved key), so neither may vouch for membership.
  */
 import {
   buildWorkItemFilterJql,
@@ -34,6 +37,7 @@ import {
 import type { JiraMirrorBinding } from "./t3team-workflowSignalWorkItemProjectMirror.ts";
 
 const CHILD_LIMIT = 50;
+const COMMENT_LIMIT = 50;
 
 export interface WorkItemComment {
   readonly id: string;
@@ -69,10 +73,15 @@ export interface WorkItemReadPort {
     { readonly items: ReadonlyArray<WorkItemResource>; readonly nextCursor?: string | undefined },
     string
   >;
+  /** The newest `limit` comments, oldest first; `truncated` when older ones were left out. */
   readonly comments: (
     binding: JiraMirrorBinding,
     issueKey: string,
-  ) => Effect.Effect<ReadonlyArray<WorkItemComment>, string>;
+    limit: number,
+  ) => Effect.Effect<
+    { readonly comments: ReadonlyArray<WorkItemComment>; readonly truncated: boolean },
+    string
+  >;
 }
 
 const summaries = (resources: ReadonlyArray<WorkItemResource>): WorkItemSummary[] =>
@@ -133,15 +142,18 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
     } satisfies SearchWorkItemsToolResult;
   });
 
-  /** One work item of the project by key, from the mirror or (new/unsynced) the tracker. */
+  /**
+   * One work item of the project by key. The tracker decides membership (`key = X` scoped to the
+   * project); the mirror row, when there is one, only supplies the richer synced fields.
+   */
   const findInProject = Effect.fn("t3team.workItemRead.find")(function* (
     binding: JiraMirrorBinding,
     key: string,
   ) {
-    const mirrored = yield* port.mirrorGet(binding, key);
-    if (mirrored !== null) return mirrored;
     const jql = yield* scoped(restrictJqlToProject(`key = "${key}"`, binding.externalProjectId));
-    return (yield* port.searchLive(binding, jql, 1, undefined)).items[0] ?? null;
+    const live = (yield* port.searchLive(binding, jql, 1, undefined)).items[0] ?? null;
+    if (live === null) return null;
+    return (yield* port.mirrorGet(binding, key)) ?? live;
   });
 
   const get = Effect.fn("t3team.workItemRead.get")(function* (
@@ -155,7 +167,7 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
     if (found === null || item === null) {
       return yield* Effect.fail(`Work item ${key} is not in this project.`);
     }
-    const comments = yield* port.comments(binding, key);
+    const { comments, truncated } = yield* port.comments(binding, key, COMMENT_LIMIT);
     const childRows = (yield* port.mirrorReady(binding))
       ? yield* port.mirrorChildren(binding, key, CHILD_LIMIT)
       : (yield* port.searchLive(
@@ -170,6 +182,7 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
       ok: true,
       item: { ...item, ...(description === undefined ? {} : { description }) },
       comments,
+      commentsTruncated: truncated,
       links: links.flatMap((link: unknown) => {
         const { outward, key: linked } = (link ?? {}) as { outward?: unknown; key?: unknown };
         return typeof outward === "string" && typeof linked === "string"

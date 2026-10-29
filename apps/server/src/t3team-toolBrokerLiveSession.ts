@@ -49,7 +49,10 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
             };
 
       // Whether the work-item read tools exist is the environment's call, read live per bind: no
-      // usable Jira account for this thread's project means neither the list nor a grant has them.
+      // usable Jira account for this thread's project means neither the list nor a grant has them,
+      // and a usable one adds them even when the synced tool context does not list them (/mcp
+      // threads carry none). They are added before the empty check below, so a connected thread
+      // with an empty context now gets a binding holding just them.
       const jiraConnected = deps.workItemReadTools
         ? yield* deps.workItemReadTools.connected(threadId)
         : false;

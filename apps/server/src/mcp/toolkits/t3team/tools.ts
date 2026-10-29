@@ -58,6 +58,11 @@ export { mcpDescriptionOf };
  * survives. Their `publishDraft` is also pinned to the launch thread so the draft carrier message
  * lands where the user can review it. Exposing them over `/mcp`, whose invocation scope carries
  * none of that, would bypass all three gates and unpin the target thread.
+ *
+ * The work-item READ tools (`t3_work_item_search` / `_get`) are the opposite case and ARE on `/mcp`:
+ * they are read-only and project-scoped, and are offered by account state (a usable Jira account for
+ * the thread's project), not by the thread's synced tool context, which `/mcp` threads do not carry
+ * (`t3team-workItemReadAvailability.ts`). Only a recipe's `allowedToolGroups` can further withhold them.
  */
 export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
   "t3team.backlog.set_assignee_filter",

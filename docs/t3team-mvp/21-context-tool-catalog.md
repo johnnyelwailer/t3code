@@ -395,7 +395,11 @@ Implemented: read-only work-item queries (group `integration.read`; MCP `t3_work
 project argument, and a JQL or a key that would leave the project is conjoined away or refused. They
 exist only while a usable Atlassian account is bound to that project in this environment: without
 one they are absent from `tools/list` and from a workflow's host tools, and a stale call answers
-"Jira is not connected in this environment. Continue without it."
+"Jira is not connected in this environment. Continue without it." They are offered by that account
+state alone, not by the thread's synced tool context (`/mcp` threads carry none); drafts and writes
+still need the tool context. `get` asks the tracker whether the key is in the project before it
+returns any mirrored content or comments, returns the newest 50 comments with `commentsTruncated`,
+and `links[].issueKey` / `parentKey` may be keys outside the project (key and relation text only).
 
 ```text
 t3team.work_item.search

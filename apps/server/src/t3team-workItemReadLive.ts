@@ -79,12 +79,16 @@ export const makeWorkItemReadToolHandlers = Effect.fn("t3team.workItemRead.make"
             nextCursor: page.nextCursor,
           })),
         ),
-      comments: (binding, issueKey) =>
+      comments: (binding, issueKey, limit) =>
         provider(binding).pipe(
           Effect.flatMap((jira) =>
             Effect.tryPromise({
               try: () =>
-                jira.listIssueComments({ accountId: binding.accountId, issueIdOrKey: issueKey }),
+                jira.listIssueComments({
+                  accountId: binding.accountId,
+                  issueIdOrKey: issueKey,
+                  limit,
+                }),
               catch: message,
             }),
           ),
