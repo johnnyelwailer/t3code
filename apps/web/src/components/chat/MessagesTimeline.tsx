@@ -829,12 +829,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const t3teamRows = useT3TeamTimelineRowsState(t3team, timelineEntries);
   const visibleRawRows = useVisibleTimelineRows(rawRows, t3teamRows);
   const rows = useStableRows(visibleRawRows, listIdentityKey);
-  useT3TeamWorkflowCardNavigation({
-    request: t3team.workflowCardNavigationRequest,
-    rows,
-    listRef,
-    onManualNavigation,
-  });
   const unmatchedPendingApprovals = new Map(pendingApprovalsByRequestId);
   if (unmatchedPendingApprovals.size > 0) {
     for (const row of rows) {
@@ -871,6 +865,13 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const listOpenedOn = nextOpening.mounted ? nextOpening.identity : null;
   const viewportRef = useRef<TimelineViewport | null>(null);
   const navigateTimeline = () => viewportRef.current?.navigate({ releasesFollow: true });
+  // t3team: scroll to a workflow card's reply; a manual jump releases follow like any navigation.
+  useT3TeamWorkflowCardNavigation({
+    request: t3team.workflowCardNavigationRequest,
+    rows,
+    listRef,
+    onManualNavigation: navigateTimeline,
+  });
   const restoreReady = restoringThreadPosition && rows.length > 0;
   // Z: syncs LegendList's scroll position with which thread it shows. The list
   // is not keyed per thread and reports no "new data" event, and the restore

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderDriverKind, ProviderInstanceId, type ServerProviderModel } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProviderModel,
+} from "@t3tools/contracts";
 import { listCapabilityModels } from "./t3team-capabilityModels.ts";
 
 const model = (slug: string, extra: Partial<ServerProviderModel> = {}): ServerProviderModel => ({

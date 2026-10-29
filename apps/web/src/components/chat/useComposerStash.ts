@@ -619,7 +619,8 @@ export function useComposerStash(input: {
           sizeBytes: result.image.sizeBytes,
           dataUrl: result.image.dataUrl,
           type: "image",
-          ...(image.source
+          // Only a screen snap-shot has a persisted source; a pasted-text file has none to keep.
+          ...(image.source && "kind" in image.source
             ? { source: resizeSnapShotSource(image.source, result.image.imageSize) }
             : {}),
         });

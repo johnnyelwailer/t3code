@@ -1,6 +1,7 @@
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 
 import { isElectron } from "~/env";
+import { useEnvironmentIdentificationMode } from "~/hooks/useSettings";
 import { cn, isMacPlatform } from "~/lib/utils";
 import {
   SidebarStageBackdrop,
@@ -36,7 +37,7 @@ export function resolveProjectSidebarBrandInset(input: {
  * backdrop so a pack's own background always wins when both are present.
  */
 export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHeaderProps) {
-  const backdropVariant = useSidebarStageBackdropVariant();
+  const backdropVariant = useSidebarStageBackdropVariant(useEnvironmentIdentificationMode());
   const onBackdrop = backdropVariant !== null;
   const brandInsetClass = resolveProjectSidebarBrandInset({
     isMac: isMacPlatform(navigator.platform),

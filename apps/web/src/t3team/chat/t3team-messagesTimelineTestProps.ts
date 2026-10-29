@@ -5,7 +5,6 @@ import type { LegendListRef } from "@legendapp/list/react";
 export function buildT3TeamMessagesTimelineTestProps() {
   return {
     isWorking: false,
-    activeTurnInProgress: false,
     activeTurnStartedAt: null,
     listRef: createRef<LegendListRef | null>(),
     latestRun: null,

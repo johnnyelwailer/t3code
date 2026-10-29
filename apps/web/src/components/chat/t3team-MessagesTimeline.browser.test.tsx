@@ -25,7 +25,6 @@ function baseProps() {
   threadCount += 1;
   return {
     isWorking: false,
-    activeTurnInProgress: false,
     listRef: createRef<LegendListRef | null>(),
     latestRun: null,
     turnDiffSummaries: [],
@@ -338,7 +337,6 @@ describe("MessagesTimeline t3team working row (GHE #201/#208/#236)", () => {
   const workingProps = () => ({
     ...baseProps(),
     isWorking: true,
-    activeTurnInProgress: true,
     activeTurnStartedAt: MESSAGE_CREATED_AT,
     timelineEntries: [],
   });

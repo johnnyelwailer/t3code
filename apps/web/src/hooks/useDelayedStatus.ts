@@ -20,11 +20,12 @@ export function useDelayedStatus<A>(
   value: A | null,
   timing?: DelayedStatusTiming,
 ): A | null {
+  const timingInput = timing === undefined ? {} : { timing };
   const [state, setState] = useState(() =>
-    stepDelayedStatus<A>(null, { key, value, deadlinePassed: false, timing }, Date.now),
+    stepDelayedStatus<A>(null, { key, value, deadlinePassed: false, ...timingInput }, Date.now),
   );
   const deadlinePassed = useDeadlinePassed(delayedStatusDeadline(state));
-  const next = stepDelayedStatus(state, { key, value, deadlinePassed, timing }, Date.now);
+  const next = stepDelayedStatus(state, { key, value, deadlinePassed, ...timingInput }, Date.now);
   if (next !== state) setState(next);
   return shownDelayedStatus(next, key);
 }

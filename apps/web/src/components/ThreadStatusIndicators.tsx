@@ -691,15 +691,31 @@ export function nextThreadChangeRequestSnapshot(input: {
   };
 }
 
+// t3team: `snapshot` / `retainTerminalOnBranchMismatch` are the fork's sidebar-row inputs; omitted
+// (as upstream callers do), both resolvers behave exactly like upstream's.
 export function resolveDisplayedThreadPr(input: {
   threadBranch: string | null;
   gitStatus: VcsStatusResult | null;
+  snapshot?: ThreadChangeRequestSnapshot | null | undefined;
+  retainTerminalOnBranchMismatch?: boolean | undefined;
   linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;
   linkedPullRequestStatus?: LinkedThreadPullRequestStatus | null | undefined;
 }): ThreadPr | null {
-  const { threadBranch, gitStatus, linkedPullRequest, linkedPullRequestStatus } = input;
+  const {
+    threadBranch,
+    gitStatus,
+    snapshot,
+    retainTerminalOnBranchMismatch = false,
+    linkedPullRequest,
+    linkedPullRequestStatus,
+  } = input;
   if (linkedPullRequest != null) {
-    return linkedPullRequestStatus?.pr ?? null;
+    return (
+      linkedPullRequestStatus?.pr ??
+      (linkedPullRequestsEqual(snapshot?.linkedPullRequest, linkedPullRequest)
+        ? (snapshot?.pr ?? null)
+        : null)
+    );
   }
   if (
     threadBranch !== null &&
@@ -710,18 +726,51 @@ export function resolveDisplayedThreadPr(input: {
     return gitStatus.pr;
   }
 
+  if (
+    gitStatus === null &&
+    threadBranch !== null &&
+    snapshot?.branch === threadBranch &&
+    snapshot.linkedPullRequest === undefined
+  ) {
+    return snapshot.pr;
+  }
+
+  if (
+    threadBranch !== null &&
+    retainTerminalOnBranchMismatch &&
+    snapshot != null &&
+    snapshot.linkedPullRequest === undefined &&
+    isTerminalChangeRequestState(snapshot.pr.state)
+  ) {
+    return snapshot.pr;
+  }
+
   return null;
 }
 
 export function resolveDisplayedThreadPrProvider(input: {
   threadBranch: string | null;
   gitStatus: VcsStatusResult | null;
+  snapshot?: ThreadChangeRequestSnapshot | null | undefined;
+  retainTerminalOnBranchMismatch?: boolean | undefined;
   linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;
   linkedPullRequestStatus?: LinkedThreadPullRequestStatus | null | undefined;
 }): VcsStatusResult["sourceControlProvider"] | undefined {
-  const { threadBranch, gitStatus, linkedPullRequest, linkedPullRequestStatus } = input;
+  const {
+    threadBranch,
+    gitStatus,
+    snapshot,
+    retainTerminalOnBranchMismatch = false,
+    linkedPullRequest,
+    linkedPullRequestStatus,
+  } = input;
   if (linkedPullRequest != null) {
-    return linkedPullRequestStatus?.sourceControlProvider;
+    return (
+      linkedPullRequestStatus?.sourceControlProvider ??
+      (linkedPullRequestsEqual(snapshot?.linkedPullRequest, linkedPullRequest)
+        ? snapshot?.sourceControlProvider
+        : undefined)
+    );
   }
   if (
     threadBranch !== null &&
@@ -730,6 +779,25 @@ export function resolveDisplayedThreadPrProvider(input: {
     gitStatus.pr != null
   ) {
     return gitStatus.sourceControlProvider;
+  }
+
+  if (
+    gitStatus === null &&
+    threadBranch !== null &&
+    snapshot?.branch === threadBranch &&
+    snapshot.linkedPullRequest === undefined
+  ) {
+    return snapshot.sourceControlProvider;
+  }
+
+  if (
+    threadBranch !== null &&
+    retainTerminalOnBranchMismatch &&
+    snapshot != null &&
+    snapshot.linkedPullRequest === undefined &&
+    isTerminalChangeRequestState(snapshot.pr.state)
+  ) {
+    return snapshot.sourceControlProvider;
   }
 
   return undefined;

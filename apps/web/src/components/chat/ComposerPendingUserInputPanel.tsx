@@ -197,12 +197,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           {isCollapsed ? (
             <>
               <ComposerBanner.Separator />
-              {/* The question is often a short "which option?" pointer; when it carries context,
-                  the header must show it, otherwise the collapsed card is unintelligible. */}
               <span className="min-w-0 flex-1 truncate text-secondary-label">
-                {activeQuestion.context
-                  ? `${activeQuestion.context} — ${activeQuestion.question}`
-                  : activeQuestion.question}
+                {activeQuestion.question}
               </span>
             </>
           ) : null}
@@ -239,38 +235,6 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       <CollapsiblePanel>
         <ComposerBanner.Scroll className="max-h-[calc(100dvh-13rem)]">
           <ComposerBanner.Body className="ps-6 pe-4 pb-1 wrap-anywhere sm:ps-5.5">
-            {activeQuestion.context ? (
-              // Context strip: the earlier-thread content the question points
-              // at, so the question reads without scrolling back. Subtle,
-              // clamped to ~4 lines, expandable via the same Collapsible
-              // pattern the card itself uses.
-              <div className="mb-2 rounded-md bg-muted/40 px-2.5 py-1.5">
-                <T3TeamPendingQuestionMarkdown
-                  cwd={cwd}
-                  threadRef={threadRef}
-                  text={activeQuestion.context}
-                  className="text-secondary-label text-2xs line-clamp-4"
-                />
-                <Collapsible>
-                  <CollapsibleTrigger
-                    render={<button type="button" />}
-                    className="mt-0.5 text-3xs font-medium text-muted-foreground"
-                  >
-                    Show full context
-                  </CollapsibleTrigger>
-                  <CollapsiblePanel>
-                    <div className="pt-0.5">
-                      <T3TeamPendingQuestionMarkdown
-                        cwd={cwd}
-                        threadRef={threadRef}
-                        text={activeQuestion.context}
-                        className="text-secondary-label text-2xs"
-                      />
-                    </div>
-                  </CollapsiblePanel>
-                </Collapsible>
-              </div>
-            ) : null}
             <T3TeamPendingQuestionMarkdown
               cwd={cwd}
               threadRef={threadRef}

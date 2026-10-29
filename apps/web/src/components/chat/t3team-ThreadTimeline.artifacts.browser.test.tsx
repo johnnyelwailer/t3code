@@ -140,10 +140,7 @@ function timeline() {
       activeThreadKey={`${environmentId}:${threadId}`}
       syncing={false}
       detailLoading
-      readyMarkdownCwd={null}
-      readyWorkspaceRoot={null}
       isWorking={false}
-      activeTurnInProgress={false}
       listRef={createRef<LegendListRef | null>()}
       latestRun={null}
       turnDiffSummaries={[]}

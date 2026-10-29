@@ -32,6 +32,7 @@ export function endedSessionBannerItem(
   return {
     id: `${ENDED_BANNER_PREFIX}${environmentId}`,
     variant: "warning",
+    group: "environment",
     icon: <CloudOffIcon aria-hidden="true" />,
     title: ENDED_SESSION_BANNER_COPY.title,
     description: ENDED_SESSION_BANNER_COPY.description,
@@ -99,7 +100,7 @@ export function useCloudSessionEndedBannerItem(
   return {
     id: `cloud-session-ending:${environmentId}`,
     variant: "warning",
-    priority: "notice",
+    group: "environment",
     icon: <ClockIcon aria-hidden="true" />,
     title: notice.title,
     description: notice.description,

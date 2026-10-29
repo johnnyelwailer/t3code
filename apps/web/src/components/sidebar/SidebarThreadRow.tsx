@@ -95,6 +95,7 @@ import {
 } from "../Sidebar.logic";
 import { resolveLocalCheckoutBranchMismatch } from "../BranchToolbar.logic";
 import {
+  resolveDisplayedThreadPr,
   resolveDisplayedThreadPrProvider,
   ThreadPullRequestBadgeControl,
   ThreadPullRequestsMiniList,
@@ -728,18 +729,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     JSON.stringify([thread.environmentId, gitCwd]),
     gitStatus.data,
   );
-  const pr = linkedPullRequestStatus?.pr ?? null;
   // t3team: a local checkout falls back to the last terminal CR state when
   // the branch moved on (worktree threads always track their live branch).
   const retainTerminalOnBranchMismatch = thread.worktreePath === null;
-  const prProvider = resolveDisplayedThreadPrProvider({
+  const displayedPrInput = {
     threadBranch: thread.branch,
     gitStatus: visibleGitStatus,
     snapshot: changeRequestSnapshot,
     retainTerminalOnBranchMismatch,
     linkedPullRequest: thread.linkedPullRequest,
     linkedPullRequestStatus,
-  });
+  };
+  const pr = linkedPullRequestStatus?.pr ?? resolveDisplayedThreadPr(displayedPrInput);
+  const prProvider =
+    linkedPullRequestStatus?.sourceControlProvider ??
+    resolveDisplayedThreadPrProvider(displayedPrInput);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records the last terminal change-request state in the shared snapshot store, which is where the row reads it back from
   useEffect(() => {
     const nextSnapshot = nextThreadChangeRequestSnapshot({
