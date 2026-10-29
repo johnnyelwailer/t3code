@@ -86,9 +86,10 @@ export const openNexiAsset = Effect.fn("t3team.nexiUpdate.openAsset")(function* 
   source: NexiSource,
   registry: NexiAssetRegistry,
   assetId: number,
+  name: string,
 ) {
   const asset = registry.get(assetId);
-  if (asset === undefined) return null;
+  if (asset === undefined || asset.name !== name) return null;
   const response = yield* source.openAsset(assetId);
   const length = response.headers["content-length"];
   if (length !== undefined && Number(length) !== asset.size) {

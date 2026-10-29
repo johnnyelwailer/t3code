@@ -27,6 +27,13 @@ const refuse = (status: number, error: string) =>
 const hasLocalBearer = (request: HttpServerRequest.HttpServerRequest) =>
   /^Bearer\s+\S+$/u.test(request.headers["authorization"] ?? "");
 
+const ASSET_PATH = new RegExp(`^${NEXI_UPDATE_ASSET_PATH}/(\\d{1,15})/([^/]+)$`, "u");
+
+const readPathname = (request: HttpServerRequest.HttpServerRequest) => {
+  const url = HttpServerRequest.toURL(request);
+  return url._tag === "Some" ? decodeURIComponent(url.value.pathname) : "";
+};
+
 const readQuery = (request: HttpServerRequest.HttpServerRequest) => {
   const url = HttpServerRequest.toURL(request);
   return url._tag === "Some" ? url.value.searchParams : new URLSearchParams();
@@ -63,15 +70,16 @@ export const makeNexiUpdateRouteLayer = (registry: NexiAssetRegistry) => {
 
   const asset = HttpRouter.add(
     "GET",
-    NEXI_UPDATE_ASSET_PATH,
+    `${NEXI_UPDATE_ASSET_PATH}/*`,
     Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
       if (!hasLocalBearer(request))
         return refuse(403, "Update downloads are for the desktop app only.");
-      const rawId = readQuery(request).get("id") ?? "";
-      if (!/^\d{1,15}$/u.test(rawId)) return refuse(400, "A numeric asset id is required.");
+      // /asset/<id>/<file name>: the updater picks its installer by the URL's extension.
+      const match = ASSET_PATH.exec(readPathname(request));
+      if (match === null) return refuse(400, "A numeric asset id and file name are required.");
       const source = yield* sourceFromContext;
-      const opened = yield* openNexiAsset(source, registry, Number(rawId));
+      const opened = yield* openNexiAsset(source, registry, Number(match[1]), match[2] ?? "");
       if (opened === null) return refuse(404, "Not an update asset. Check for updates again.");
       return HttpServerResponse.stream(opened.response.stream, {
         contentType: "application/octet-stream",

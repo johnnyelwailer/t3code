@@ -156,27 +156,37 @@ describe("nexi-update routes", () => {
     await call(LATEST);
     const before = seen.length;
     for (const id of ["500", "101", "1", "99999999999999"]) {
-      const refused = await call(`/api/t3team/nexi-update/asset?id=${id}`);
+      const refused = await call(
+        `/api/t3team/nexi-update/asset/${id}/Nexi-Work-0.1.2-rc.5-arm64-mac.zip`,
+      );
       expect(refused.status, id).toBe(404);
     }
-    expect((await call("/api/t3team/nexi-update/asset?id=abc")).status).toBe(400);
-    expect((await call("/api/t3team/nexi-update/asset?id=100/../x")).status).toBe(400);
+    expect((await call("/api/t3team/nexi-update/asset/abc/x.zip")).status).toBe(400);
+    expect((await call("/api/t3team/nexi-update/asset/100/../x.zip")).status).toBe(400);
+    expect((await call("/api/t3team/nexi-update/asset/100/other-name.zip")).status).toBe(404);
     expect(seen.length).toBe(before);
-    const served = await call("/api/t3team/nexi-update/asset?id=100");
+    const served = await call(
+      "/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip",
+    );
     expect(served).toEqual({ status: 200, text: BYTES });
     expect(seen.at(-1)?.url).toBe(`${API}/releases/assets/100`);
   });
 
   it("refuses an asset id before any check has vetted one", async () => {
     const { seen, call } = boot({ releases: twoReleases });
-    expect((await call("/api/t3team/nexi-update/asset?id=100")).status).toBe(404);
+    expect(
+      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip")).status,
+    ).toBe(404);
     expect(seen).toEqual([]);
   });
 
   it("answers only the desktop's bearer: no Authorization header means 403 and no GHE traffic", async () => {
     const { seen, call } = boot({ releases: twoReleases });
     expect((await call(LATEST, {})).status).toBe(403);
-    expect((await call("/api/t3team/nexi-update/asset?id=100", {})).status).toBe(403);
+    expect(
+      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip", {}))
+        .status,
+    ).toBe(403);
     expect((await call(LATEST, { cookie: "t3_session=abc" })).status).toBe(403);
     expect(seen).toEqual([]);
   });
@@ -231,7 +241,9 @@ describe("nexi-update routes", () => {
   it("refuses a download whose size is not the size the release lists", async () => {
     const { call } = boot({ releases: twoReleases, contentLength: "999999" });
     await call(LATEST);
-    expect((await call("/api/t3team/nexi-update/asset?id=100")).status).toBe(502);
+    expect(
+      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip")).status,
+    ).toBe(502);
   });
 });
 
