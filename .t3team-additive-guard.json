@@ -5,6 +5,8 @@
     "apps/mobile/src/components/LoadingScreen.tsx",
     "apps/mobile/src/lib/mobileThemeVariables.ts",
     "apps/mobile/src/features/home/HomeScreen.tsx",
+    "apps/mobile/src/features/threads/NewTaskRouteScreen.tsx",
+    "apps/mobile/src/features/threads/NewTaskContextPickerScreens.tsx",
     "apps/mobile/modules/t3-native-controls/android/src/main/java/expo/modules/t3nativecontrols/T3WorkspaceNavigationModule.kt",
     "apps/mobile/src/features/workspace/AndroidWorkspaceNavigation.android.tsx",
     "apps/mobile/src/features/workspace/AndroidWorkspaceSidebar.android.tsx",

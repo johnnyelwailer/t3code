@@ -85,6 +85,15 @@ export interface UrlPolicy {
   readonly documentBaseUrl?: (httpBase: string) => string | undefined;
 }
 
+export interface EnvironmentPickerTopProps {
+  /** Leaves the picker. */
+  readonly close: () => void;
+  /** Title of the project the new thread is for; null when none is selected (scratch or empty). */
+  readonly selectedProjectTitle?: string | null;
+  /** Ids of the environments that host the selected project, by the stock picker's own rule. */
+  readonly hostingEnvironmentIds?: ReadonlyArray<string>;
+}
+
 export interface MobileExtensions {
   /** Policy for URLs handed to other apps, native downloads and stream documents. */
   readonly urlPolicy?: UrlPolicy;
@@ -116,6 +125,18 @@ export interface MobileExtensions {
    * (null: no tab) or move it at runtime. It must not throw. Android only; iOS has no extra tab.
    */
   readonly workspaceTab?: { readonly useTab: () => WorkspaceExtraTab | null };
+  /**
+   * Rendered first in the New task screen (the project list the New thread button opens), above the
+   * stock rows, so a distribution can offer another way to start a thread (for example a cloud
+   * session) next to the stock ones. Nothing without one.
+   */
+  readonly newTaskTop?: ComponentType;
+  /**
+   * Rendered first in the New task Environment picker, above the stock rows, so a distribution can
+   * list environments the stock list does not offer (for example a running cloud session) and start
+   * a thread on one. `close` leaves the picker. Nothing without one.
+   */
+  readonly environmentPickerTop?: ComponentType<EnvironmentPickerTopProps>;
   /** Replaces the empty home screen shown before any thread exists. */
   readonly homeEmptyState?: HomeEmptyStateSlot;
   /** Replaces the wordmark title of the home header. */

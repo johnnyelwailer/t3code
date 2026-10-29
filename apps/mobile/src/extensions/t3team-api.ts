@@ -10,6 +10,7 @@ export type {
   HomeCatalogState,
   HomeEmptyStateProps,
   HomeEmptyStateSlot,
+  EnvironmentPickerTopProps,
   HomeFiltersProps,
   MobileExtensions,
   UrlPolicy,
@@ -29,7 +30,8 @@ export { createMobileThemeVariables } from "../lib/mobileTheme";
 export { ListRow } from "../components/ui/ListRow";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";
-export { useServerConfigs } from "../state/entities";
+export { useProjects, useServerConfigs } from "../state/entities";
+export { useWorkspaceEnvironments } from "../state/workspace";
 export { useAtomCommand } from "../state/use-atom-command";
 
 /**

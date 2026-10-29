@@ -612,3 +612,8 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 - `apps/mobile/src/features/workspace/WorkspaceRootScreen.tsx` — `TAB_TITLES` needs an `extra` entry now that `WorkspaceTab` has one; the iOS/web screen never selects it.
 - `apps/mobile/modules/t3-native-controls/android/.../T3WorkspaceNavigationModule.kt` — the hardcoded tab list becomes a `tabs` prop (default: the stock three, same titles and icons); an unknown id uses the generic extra icon and the given title.
 - `apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml` — the extra tab's icon (allowed unprefixed in `.t3team-additive-guard.json`: an Android resource name cannot contain `-` or `.`).
+
+## Mobile `newTaskTop` and `environmentPickerTop` seams (2026-10-29)
+
+- `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx` — renders the distribution's `newTaskTop` slot (isolated, nothing without one) first in the New task project list: one import and one line, so a distribution can offer another way to start a thread (a cloud session) next to the stock ones.
+- `apps/mobile/src/features/threads/NewTaskContextPickerScreens.tsx` — renders the `environmentPickerTop` slot above the stock rows of the New task Environment picker: one import and one line, so a distribution can list an environment the stock list does not offer (a running cloud session) and start a thread on it.

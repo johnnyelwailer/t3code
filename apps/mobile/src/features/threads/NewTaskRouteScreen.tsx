@@ -37,6 +37,7 @@ import { usePromptLinkResolver } from "../prompt-links/usePromptLinkResolver";
 import { useIncomingShare } from "../sharing/IncomingShareProvider";
 import { useNewTaskFlow } from "./new-task-flow-provider";
 import { filterProjectScopes, getProjectScopeSelectionTarget } from "./new-task-project-selection";
+import { NewTaskTopSlot } from "../../extensions/t3team-NewTaskTopSlot";
 
 type NewTaskRouteParams = {
   readonly incomingShareId?: string | string[];
@@ -323,6 +324,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               : {}),
           }}
         >
+          <NewTaskTopSlot />
           {canStartScratch && listScopes.length > 0 ? (
             Platform.OS === "android" ? (
               <View collapsable={false} className="overflow-hidden rounded-[28px] bg-grouped-card">
