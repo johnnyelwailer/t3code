@@ -2,13 +2,18 @@ import type { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useEffect, useEffectEvent, useState } from "react";
 
+import {
+  deriveProviderInstanceEntries,
+  isProviderInstancePickerReady,
+} from "../../providerInstances";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 /**
  * - `idle`: not signed in (or nothing to refresh yet).
  * - `refreshing`: signed in; the machine is re-checking the provider.
- * - `notReady`: the re-check finished and the instance still is not ready.
+ * - `notReady`: the re-check finished and the instance still is not ready. A re-check that already
+ *   reports it ready stays `refreshing`: the live list is about to swap the panel for the models.
  * - `failed`: the re-check itself could not run.
  */
 export type ProviderRefreshAfterSignInStatus = "idle" | "refreshing" | "notReady" | "failed";
@@ -30,7 +35,6 @@ type Outcome =
  * that one instance as soon as `signedIn` turns true; the live provider list then flips the
  * instance to ready and the picker swaps the connect panel for the model list by itself.
  *
- * Mirrors `CodexSetupSection`, which does the same after the provider-auth flow succeeds.
  */
 export function useProviderRefreshAfterSignIn(input: {
   readonly environmentId: EnvironmentId | null;
@@ -43,17 +47,30 @@ export function useProviderRefreshAfterSignIn(input: {
   });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Each new sign-in (Reconnect after connected) is a new attempt, so it never shows the previous
+  // attempt's answer.
+  const [wasSignedIn, setWasSignedIn] = useState(signedIn);
+  if (wasSignedIn !== signedIn) {
+    setWasSignedIn(signedIn);
+    if (signedIn) setAttempt((current) => current + 1);
+  }
   const key = `${environmentId}:${instanceId}:${attempt}`;
 
   const refresh = useEffectEvent(async (target: EnvironmentId, requestKey: string) => {
     const result = await refreshProviders({ environmentId: target, input: { instanceId } });
-    return result._tag === "Success"
-      ? ({ key: requestKey, status: "notReady" } as const)
-      : ({
-          key: requestKey,
-          status: "failed",
-          error: errorMessage(squashAtomCommandFailure(result)),
-        } as const);
+    if (result._tag === "Success") {
+      const refreshed = deriveProviderInstanceEntries(result.value.providers).find(
+        (candidate) => candidate.instanceId === instanceId,
+      );
+      return refreshed && isProviderInstancePickerReady(refreshed)
+        ? null
+        : ({ key: requestKey, status: "notReady" } as const);
+    }
+    return {
+      key: requestKey,
+      status: "failed",
+      error: errorMessage(squashAtomCommandFailure(result)),
+    } as const;
   });
 
   useEffect(() => {

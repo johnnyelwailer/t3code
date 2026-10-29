@@ -36,7 +36,7 @@ export function ModelPickerSignInRefreshNotice({
   }
   return (
     <div
-      role="status"
+      role={status === "failed" ? "alert" : "status"}
       className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <p className="text-xs text-muted-foreground">

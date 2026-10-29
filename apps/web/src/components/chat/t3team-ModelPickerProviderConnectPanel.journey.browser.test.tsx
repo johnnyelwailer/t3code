@@ -2,6 +2,7 @@ import {
   EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
+  type ServerProvider,
   type ToolAuthState,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -69,22 +70,21 @@ const { ModelPickerProviderConnectPanel } =
 
 const cloud = EnvironmentId.make("env-cloud");
 const codexInstance = ProviderInstanceId.make("codex");
-const [codex] = deriveProviderInstanceEntries([
-  {
-    instanceId: codexInstance,
-    driver: ProviderDriverKind.make("codex"),
-    displayName: "Codex",
-    enabled: true,
-    installed: false,
-    version: null,
-    status: "error",
-    auth: { status: "unknown" },
-    checkedAt: "2026-01-01T00:00:00.000Z",
-    models: [],
-    slashCommands: [],
-    skills: [],
-  },
-]);
+const codexSnapshot: ServerProvider = {
+  instanceId: codexInstance,
+  driver: ProviderDriverKind.make("codex"),
+  displayName: "Codex",
+  enabled: true,
+  installed: false,
+  version: null,
+  status: "error",
+  auth: { status: "unknown" },
+  checkedAt: "2026-01-01T00:00:00.000Z",
+  models: [],
+  slashCommands: [],
+  skills: [],
+};
+const [codex] = deriveProviderInstanceEntries([codexSnapshot]);
 
 function setup(refresh: "pending" | "settled" | "failed" = "settled") {
   harness.state.current = new Map();
@@ -115,6 +115,7 @@ function phase(next: Partial<ToolAuthState> & Pick<ToolAuthState, "phase">) {
   });
 }
 
+// Every render below passes `router: false`: the panel has no links or navigation.
 describe("model picker connect panel journey", () => {
   it("not installed -> install -> sign-in -> signed in -> the machine re-checks the provider", async () => {
     setup("pending");
@@ -186,5 +187,41 @@ describe("model picker connect panel journey", () => {
     await userEvent.click(screen.getByRole("button", { name: "Reconnect" }));
     expect(harness.state.connect).toHaveBeenCalledTimes(1);
     expect(harness.state.refresh).not.toHaveBeenCalled();
+  });
+
+  it("a re-check that already reports the provider ready keeps saying models are loading", async () => {
+    setup();
+    harness.state.refresh.mockResolvedValue({
+      _tag: "Success",
+      value: {
+        providers: [
+          { ...codexSnapshot, installed: true, status: "ready", auth: { status: "authenticated" } },
+        ],
+      },
+    });
+    await using screen = await render(panel, { router: false });
+    await phase({ phase: "connected" });
+    await vi.waitFor(() => expect(harness.state.refresh).toHaveBeenCalledTimes(1));
+    await expect
+      .element(screen.getByText("Loading Codex models", { exact: false }))
+      .toBeInTheDocument();
+    expect(screen.container.textContent).not.toContain("has not reported");
+  });
+
+  it("signing in again after Reconnect shows the new check, not the previous answer", async () => {
+    setup();
+    await using screen = await render(panel, { router: false });
+    await phase({ phase: "connected" });
+    await expect
+      .element(screen.getByText("has not reported", { exact: false }))
+      .toBeInTheDocument();
+
+    harness.state.refresh.mockImplementation(() => new Promise(() => {}));
+    await phase({ phase: "starting" });
+    await phase({ phase: "connected" });
+    await expect
+      .element(screen.getByText("Loading Codex models", { exact: false }))
+      .toBeInTheDocument();
+    expect(screen.container.textContent).not.toContain("has not reported");
   });
 });
