@@ -55,9 +55,11 @@ export const searchRepository = Effect.fn("machineSearch.searchRepository")(func
   const note = (reason: string) => unreadable.push({ repository: name, reason });
 
   const pulls = yield* listSearchedPulls(target).pipe(
-    Effect.catchTag("RemoteUnavailable", (error) => {
-      note(`Pull requests were not searched. ${error.reason}`);
-      return Effect.succeed(NO_PULLS);
+    Effect.catchTags({
+      RemoteUnavailable: (error) => {
+        note(`Pull requests were not searched. ${error.reason}`);
+        return Effect.succeed(NO_PULLS);
+      },
     }),
   );
   if (pulls.forks.length > 0)
@@ -80,9 +82,11 @@ export const searchRepository = Effect.fn("machineSearch.searchRepository")(func
           rejected: scan.rejected,
           found: scan.candidates.map((machine) => candidateOf(name, entry, machine)),
         })),
-        Effect.catchTag("RemoteUnavailable", (error: RemoteUnavailable) => {
-          note(`${entry.label} could not be read. ${error.reason}`);
-          return Effect.succeed({ entry, rejected: [], found: [] as ReadonlyArray<Found> });
+        Effect.catchTags({
+          RemoteUnavailable: (error: RemoteUnavailable) => {
+            note(`${entry.label} could not be read. ${error.reason}`);
+            return Effect.succeed({ entry, rejected: [], found: [] as ReadonlyArray<Found> });
+          },
         }),
       ),
     { concurrency: 4 },

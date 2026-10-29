@@ -24,7 +24,6 @@ export interface PlannedRef {
 }
 
 const oneLine = (text: string) =>
-  // oxlint-disable-next-line no-control-regex -- a title is shown in a sentence
   text
     .replace(/[\u0000-\u001f\u007f\s]+/g, " ")
     .trim()

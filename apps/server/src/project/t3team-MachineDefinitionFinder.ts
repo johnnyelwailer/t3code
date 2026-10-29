@@ -91,9 +91,9 @@ const make = Effect.gen(function* () {
           cwd: project.value.workspaceRoot,
           provider: location.provider,
         }).pipe(
-          Effect.catchTag("RemoteUnavailable", (error) =>
-            Effect.succeed(empty(repository, error.reason)),
-          ),
+          Effect.catchTags({
+            RemoteUnavailable: (error) => Effect.succeed(empty(repository, error.reason)),
+          }),
         );
       },
       { concurrency: 2 },
