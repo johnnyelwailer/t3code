@@ -1,3 +1,5 @@
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
 import { ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
@@ -35,3 +37,50 @@ export const ProjectMachineSourceReadout = Schema.Struct({
   override: Schema.NullOr(ProjectMachineSourceSetting),
 });
 export type ProjectMachineSourceReadout = typeof ProjectMachineSourceReadout.Type;
+
+/** The question the machine-setup agent asks before a machine source is proposed to the user. */
+export const MACHINE_SOURCE_QUESTION_PREFIX = "machine-source:v1:";
+/** The two answers of that question; the web client applies the proposal only on the first. */
+export const MACHINE_SOURCE_ACCEPT_LABEL = "Use this machine definition";
+export const MACHINE_SOURCE_DECLINE_LABEL = "Keep the default";
+
+const ProposalJson = Schema.fromJsonString(ProjectMachineSourceSetting);
+const decodeProposal = Schema.decodeUnknownOption(ProposalJson);
+const encodeProposal = Schema.encodeSync(ProposalJson);
+
+/**
+ * The question id carrying a proposal: `machine-source:v1:<base64url JSON of the setting>`. The id
+ * is the machine-readable form of the proposal, so the client that shows the question can apply
+ * the user's answer without parsing prose.
+ */
+export function encodeMachineSourceQuestionId(setting: ProjectMachineSourceSetting): string {
+  return `${MACHINE_SOURCE_QUESTION_PREFIX}${Base64Url.encode(encodeProposal(setting))}`;
+}
+
+/**
+ * The proposal a question id carries, or null for any other id or a malformed one. Never throws.
+ * A repository with credentials, a query or a fragment is refused, so a token cannot ride in an id.
+ */
+export function decodeMachineSourceQuestionId(id: string): ProjectMachineSourceSetting | null {
+  if (!id.startsWith(MACHINE_SOURCE_QUESTION_PREFIX)) return null;
+  const text = Base64Url.decodeString(id.slice(MACHINE_SOURCE_QUESTION_PREFIX.length));
+  if (!Result.isSuccess(text)) return null;
+  const setting = decodeProposal(text.success);
+  if (setting._tag !== "Some") return null;
+  const { repository, branch } = setting.value;
+  if (repository === undefined && branch === undefined) return null;
+  if (repository !== undefined) {
+    const url = URL.parse(repository);
+    if (
+      url === null ||
+      url.protocol !== "https:" ||
+      url.username !== "" ||
+      url.password !== "" ||
+      url.search !== "" ||
+      url.hash !== ""
+    ) {
+      return null;
+    }
+  }
+  return setting.value;
+}
