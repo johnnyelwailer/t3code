@@ -1,14 +1,13 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 
 import { useEnvironmentPresentation } from "~/state/presentation";
-import { useCloudSessions } from "~/state/t3team-cloudSessions";
-
 import { isCloudSessionEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
+import { useCloudSessionsOfMachine } from "./t3team-useCloudSessionsOfMachine";
 
 /** Whether `environmentId` is a cloud session's machine (see `isCloudSessionEnvironment`). */
 export function useIsCloudSessionEnvironment(environmentId: EnvironmentId | null): boolean {
   const { presentation } = useEnvironmentPresentation(environmentId);
-  const { sessions } = useCloudSessions();
+  const { sessions } = useCloudSessionsOfMachine(environmentId);
   return (
     environmentId !== null &&
     isCloudSessionEnvironment({

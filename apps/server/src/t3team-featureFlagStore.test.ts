@@ -75,35 +75,30 @@ describe("feature flag layering", () => {
     expect(resolveProjectStateDirName(() => "1")).toBe(".nexi");
     replaceFeatureFlagPresetValues(new Map());
     expect(PROJECT_STATE_DIR).toBe(startup);
-    expect(listFeatureFlags().slice(0, 7)).toEqual([
-      expect.objectContaining({ key: "MAIN_REPOSITORY", requiresRestart: false }),
-      expect.objectContaining({
-        key: "NEXI_STATE_DIR",
-        requiresRestart: true,
-        userToggleable: false,
-      }),
-      expect.objectContaining({ key: "MACHINE_SETUP", requiresRestart: false }),
-      expect.objectContaining({
-        key: "WORK_PROFILE_CHOOSER",
-        requiresRestart: false,
-        defaultEnabled: false,
-      }),
-      expect.objectContaining({
-        key: "MYWORK_RIGHT_PANEL",
-        requiresRestart: false,
-        defaultEnabled: true,
-      }),
-      expect.objectContaining({
-        key: "TRANSIENT_AUTO_RESUME",
-        requiresRestart: false,
-        defaultEnabled: true,
-      }),
-      expect.objectContaining({
-        key: "GHE_REPOSITORY_CATALOG",
-        requiresRestart: false,
-        defaultEnabled: true,
-      }),
-    ]);
+    // Looked up by key, not by position: a flag added to the registry must not break this test.
+    const registered = new Map(listFeatureFlags().map((flag) => [flag.key, flag]));
+    expect(registered.get("MAIN_REPOSITORY")).toMatchObject({ requiresRestart: false });
+    expect(registered.get("NEXI_STATE_DIR")).toMatchObject({
+      requiresRestart: true,
+      userToggleable: false,
+    });
+    expect(registered.get("MACHINE_SETUP")).toMatchObject({ requiresRestart: false });
+    expect(registered.get("WORK_PROFILE_CHOOSER")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: false,
+    });
+    expect(registered.get("MYWORK_RIGHT_PANEL")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: true,
+    });
+    expect(registered.get("TRANSIENT_AUTO_RESUME")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: true,
+    });
+    expect(registered.get("GHE_REPOSITORY_CATALOG")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: true,
+    });
   });
 });
 

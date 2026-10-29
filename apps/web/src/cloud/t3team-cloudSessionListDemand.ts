@@ -1,0 +1,51 @@
+/**
+ * When the cloud session list is worth loading. Every list is a GitHub Actions read, so a plain
+ * local thread must not ask: the list loads only for a cloud surface, a thread bound to a session,
+ * or work this client already started. Everything here is a fact that does not depend on the list.
+ */
+export interface CloudSessionListDemand {
+  /** The "Run on" menu is open. */
+  readonly menuOpen: boolean;
+  /**
+   * The pointer or keyboard focus reached the Run-on trigger recently, so the menu is likely
+   * next. Held for a short window by `useCloudSessionListDemand`, then released.
+   */
+  readonly triggerHinted: boolean;
+  /** A page that shows the cloud session panel is mounted. */
+  readonly panelVisible: boolean;
+  /** This composer has a Run-on cloud target, or a first message queued for a session. */
+  readonly bound: boolean;
+  /** A create is in flight for some composer. */
+  readonly creating: boolean;
+  /** A draft's first message waits for its cloud session. */
+  readonly queuedSendPending: boolean;
+  /** This client created a session that the server list may not carry yet. */
+  readonly localSession: boolean;
+  /**
+   * The loaded list still has something in flight (a provisioning session, a connect in progress).
+   * Not an input to the first load, only what keeps it loaded after its surface closes.
+   */
+  readonly lingering: boolean;
+}
+
+export function cloudSessionListWanted(demand: CloudSessionListDemand): boolean {
+  return (
+    demand.menuOpen ||
+    demand.triggerHinted ||
+    demand.panelVisible ||
+    demand.bound ||
+    demand.creating ||
+    demand.queuedSendPending ||
+    demand.localSession ||
+    demand.lingering
+  );
+}
+
+/**
+ * Whether an environment with this connection target can be a cloud session's machine, so a thread
+ * there needs the list to tell. A machine joins as a relay environment or is reached through the
+ * broker; the primary environment, SSH hosts and saved backends never are.
+ */
+export function environmentMayBeCloudSessionMachine(targetTag: string | null): boolean {
+  return targetTag === "RelayConnectionTarget" || targetTag === "BrokerConnectionTarget";
+}

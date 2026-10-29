@@ -105,11 +105,24 @@ it.effect("a restart-only flag reports the pending restart and locked flags refu
   withFlags(
     Effect.gen(function* () {
       const flags = yield* FeatureFlags.FeatureFlags;
-      const view = yield* flags.set({ key: "OPS_STALL_PROFILER", enabled: true });
+      // Derived, not hardcoded: a default flip changes which value differs from the startup one.
+      const atStartup = (yield* flags.view).flags.find((flag) => flag.key === "OPS_STALL_PROFILER");
+      assert.isDefined(atStartup);
+      assert.deepInclude(atStartup, { requiresRestart: true, restartPending: false });
+
+      const desired = !atStartup.enabled;
+      const changed = yield* flags.set({ key: "OPS_STALL_PROFILER", enabled: desired });
       assert.deepInclude(
-        view.flags.find((flag) => flag.key === "OPS_STALL_PROFILER"),
-        { enabled: true, requiresRestart: true, restartPending: true },
+        changed.flags.find((flag) => flag.key === "OPS_STALL_PROFILER"),
+        { enabled: desired, requiresRestart: true, restartPending: true },
       );
+
+      const restored = yield* flags.set({ key: "OPS_STALL_PROFILER", enabled: null });
+      assert.deepInclude(
+        restored.flags.find((flag) => flag.key === "OPS_STALL_PROFILER"),
+        { enabled: atStartup.enabled, requiresRestart: true, restartPending: false },
+      );
+
       const error = yield* Effect.flip(flags.set({ key: "NEXI_STATE_DIR", enabled: false }));
       assert.equal(error.category, "locked");
     }),

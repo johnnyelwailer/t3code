@@ -147,7 +147,7 @@ export const stageAuthoringTypes = Effect.fn("desktopArtifact.stageAuthoringType
       // fallback in packages/runbook-ts/src/typescript.ts loadable from the
       // asar. The lib/*.d.ts type libraries are NOT copied here: the inlined
       // compiler (the primary path) finds them beside the emitted chunks
-      // (apps/server's t3team-typescriptLibPackPlugin ships dist/lib/).
+      // (apps/server's t3team-typescriptLibPackPlugin ships dist/lib.*.d.ts).
       const typescriptEntry = NodeModule.createRequire(
         path.join(input.repoRoot, "packages", "runbook-ts", "package.json"),
       ).resolve("typescript");

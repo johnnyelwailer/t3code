@@ -63,7 +63,11 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
-private val TABS = listOf("threads", "pullRequests", "settings")
+/** One destination of the navigation; a null title keeps the built-in title of a known id. */
+internal data class WorkspaceTabSpec(val id: String, val title: String?)
+
+private val STOCK_TABS =
+  listOf("threads", "pullRequests", "settings").map { WorkspaceTabSpec(it, null) }
 
 class T3WorkspaceNavigationModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -71,6 +75,9 @@ class T3WorkspaceNavigationModule : Module() {
     View(T3WorkspaceNavigationView::class) {
       Prop("selectedTab") { view: T3WorkspaceNavigationView, value: String ->
         view.selectedTab = value
+      }
+      Prop("tabs") { view: T3WorkspaceNavigationView, value: List<Map<String, String>> ->
+        view.tabs = value.map { WorkspaceTabSpec(it["id"] ?: "", it["title"]) }
       }
       Prop("rail") { view: T3WorkspaceNavigationView, value: Boolean -> view.rail = value }
       Prop("dark") { view: T3WorkspaceNavigationView, value: Boolean -> view.dark = value }
@@ -122,6 +129,7 @@ class T3WorkspaceNavigationView(
   private val onNewThread by EventDispatcher()
   private val onOverlayChange by EventDispatcher()
   var selectedTab by mutableStateOf("threads")
+  internal var tabs by mutableStateOf(STOCK_TABS)
   var rail by mutableStateOf(false)
   var dark by mutableStateOf(false)
   var textScale by mutableStateOf(1f)
@@ -175,7 +183,7 @@ class T3WorkspaceNavigationView(
                 tonalElevation = androidx.compose.ui.unit.Dp(0f),
                 windowInsets = WindowInsets(0),
               ) {
-                TABS.forEach { tab ->
+                tabs.forEach { (tab) ->
                   NavigationBarItem(
                     selected = selectedTab == tab,
                     onClick = { onTabSelected(mapOf("tab" to tab)) },
@@ -272,7 +280,7 @@ class T3WorkspaceNavigationView(
           onNewThread(emptyMap<String, Any>())
         }
         Spacer(Modifier.weight(1f))
-        TABS.forEach { tab ->
+        tabs.forEach { (tab) ->
           railItem(tab, fraction) {
             expanded = false
             onTabSelected(mapOf("tab" to tab))
@@ -354,11 +362,12 @@ class T3WorkspaceNavigationView(
     }
   }
 
-  private fun tabTitle(tab: String) = when (tab) {
-    "threads" -> "Chats"
-    "pullRequests" -> "PRs"
-    else -> "Settings"
-  }
+  private fun tabTitle(tab: String) =
+    tabs.firstOrNull { it.id == tab }?.title ?: when (tab) {
+      "threads" -> "Chats"
+      "pullRequests" -> "PRs"
+      else -> "Settings"
+    }
 
   private fun expandedTabTitle(tab: String) =
     if (tab == "pullRequests") "Pull Requests" else tabTitle(tab)
@@ -368,7 +377,8 @@ class T3WorkspaceNavigationView(
     when (tab) {
       "threads" -> R.drawable.t3_chats
       "pullRequests" -> R.drawable.t3_pull_requests
-      else -> R.drawable.t3_settings
+      "settings" -> R.drawable.t3_settings
+      else -> R.drawable.t3_extra_tab
     }
   )
 

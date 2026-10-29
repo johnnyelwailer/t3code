@@ -13,6 +13,11 @@ import { useKeyboardState } from "react-native-keyboard-controller";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { useToolbarLayout } from "../../components/ui/useToolbarLayout";
 import { useWorkspaceConnectionState } from "../../state/workspace";
+import {
+  nativeWorkspaceTabs,
+  visibleWorkspaceTab,
+} from "../../extensions/t3team-workspaceExtraTab";
+import { useWorkspaceExtraTab } from "../../extensions/t3team-useWorkspaceExtraTab";
 import { androidWorkspaceNavigationColors } from "./android-workspace-navigation-colors";
 import {
   androidWorkspaceTabNavigationState,
@@ -28,6 +33,11 @@ export const ANDROID_WORKSPACE_RAIL_WIDTH = 72;
 interface NativeNavigationProps extends ViewProps {
   readonly rail: boolean;
   readonly selectedTab: AndroidWorkspaceNavigationTab;
+  /** The tabs in order; a stock tab has no title, the native side owns it. */
+  readonly tabs: ReadonlyArray<{
+    readonly id: AndroidWorkspaceNavigationTab;
+    readonly title?: string;
+  }>;
   readonly dark: boolean;
   readonly textScale: number;
   readonly newEnabled: boolean;
@@ -70,12 +80,13 @@ export function AndroidWorkspaceNavigation(props: {
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const { themeAppearance, themeVariables: colors } = useAppearancePreferences();
   const { scale } = useAndroidControlSizing();
+  const extraTab = useWorkspaceExtraTab();
   const rail = Boolean(props.rail);
   const { containerColor, indicatorColor, selectedColor, unselectedColor } =
     androidWorkspaceNavigationColors(colors, rail);
   const selectedTab: AndroidWorkspaceNavigationTab = root?.settingsOpen
     ? "settings"
-    : workspace.state.selectedTab;
+    : visibleWorkspaceTab(workspace.state.selectedTab, extraTab);
   if (!rail && keyboardVisible) return null;
 
   return (
@@ -89,6 +100,7 @@ export function AndroidWorkspaceNavigation(props: {
       <NativeNavigation
         rail={rail}
         selectedTab={selectedTab}
+        tabs={nativeWorkspaceTabs(extraTab)}
         dark={themeAppearance === "dark"}
         textScale={scale}
         newEnabled={connectionState.hasConnections}

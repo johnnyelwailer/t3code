@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { Platform } from "react-native";
+import { launchWorkspaceTab } from "../../extensions/t3team-workspaceExtraTab";
+import { useWorkspaceExtraTab } from "../../extensions/t3team-useWorkspaceExtraTab";
 import { androidWorkspaceSettingsOpen } from "./android-workspace-tabs";
 import { WorkspaceTabsProvider } from "./WorkspaceTabsContext";
 
@@ -45,8 +47,9 @@ export function AndroidWorkspaceTabsProvider(props: {
   const key = props.state.key;
   const settingsOpen = Platform.OS === "android" && androidWorkspaceSettingsOpen(props.state);
   const root = useMemo(() => ({ key, getState, settingsOpen }), [key, getState, settingsOpen]);
+  const initialTab = launchWorkspaceTab(useWorkspaceExtraTab());
   return Platform.OS === "android" ? (
-    <WorkspaceTabsProvider>
+    <WorkspaceTabsProvider initialTab={initialTab}>
       <AndroidWorkspaceRootContext value={root}>{props.children}</AndroidWorkspaceRootContext>
     </WorkspaceTabsProvider>
   ) : (

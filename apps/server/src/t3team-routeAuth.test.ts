@@ -180,7 +180,6 @@ describe("t3team route registry", () => {
   it("authenticates every t3team route except the ones that carry their own capability", () => {
     expect([...unauthenticatedRouteLayers()].toSorted()).toEqual([
       "t3teamAccountRouteLayer",
-      "t3teamAtlassianAssetContentRouteLayer",
       "t3teamAtlassianOAuthCallbackRouteLayer",
       "t3teamCloudBrokerRouteLayer",
     ]);

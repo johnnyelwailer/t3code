@@ -121,6 +121,8 @@ export interface BranchToolbarEnvironmentSelectorBaseProps {
    * the menu closed: no polling.
    */
   onCloudMenuOpenChange?: (open: boolean) => void;
+  /** The pointer or focus reached the trigger: the menu is likely next, so load its sessions. */
+  onCloudMenuHint?: () => void;
   /** t3team: connects a ready, not-yet-connected cloud session from the "Move to" menu. */
   onConnectCloudSession?: (session: CloudSession) => void;
 }
@@ -167,6 +169,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onSelectCloudSession,
   onDismissCloudSession,
   onCloudMenuOpenChange,
+  onCloudMenuHint,
   onHandoffToEnvironment,
   onConnectCloudSession,
   projectHasRemote,
@@ -364,6 +367,8 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 aria-label="Run on"
                 data-composer-shortcut="composer.host"
                 data-composer-context-control
+                onPointerEnter={onCloudMenuHint}
+                onFocus={onCloudMenuHint}
               />
             ) : (
               <ComposerSelectControl
@@ -372,6 +377,8 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 aria-label="Run on"
                 data-composer-shortcut="composer.host"
                 data-composer-context-control
+                onPointerEnter={onCloudMenuHint}
+                onFocus={onCloudMenuHint}
               />
             )
           }

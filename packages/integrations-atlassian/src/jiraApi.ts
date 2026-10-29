@@ -102,6 +102,36 @@ async function fetchWithJiraTimeout(url: string, init?: RequestInit): Promise<Re
   }
 }
 
+const MAX_ASSET_REDIRECTS = 5;
+
+/** A 3xx the caller asked to see (`redirect: "manual"`), rather than a failure. */
+function isFollowableRedirect(response: Response, redirect: RequestInit["redirect"]): boolean {
+  return redirect === "manual" && response.status >= 300 && response.status < 400;
+}
+
+/**
+ * Whether `url` stays under `prefix` (an absolute URL ending in `/`), also once its path is
+ * decoded: an encoded `%2f`/`%5c` hides a `..` from the URL parser but not from a server that
+ * decodes it. A path still encoded after one decode is refused outright.
+ */
+function isUnderPrefix(url: string, prefix: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const base = new URL(prefix);
+    const once = decodeURIComponent(parsed.pathname);
+    // Still encoded after one decode: only a server that decodes twice could read it as a separator.
+    if (/%(?:2f|5c|2e)/i.test(once)) return false;
+    const decoded = new URL(once, base.origin).pathname;
+    return (
+      parsed.origin === base.origin &&
+      parsed.pathname.startsWith(base.pathname) &&
+      decoded.startsWith(base.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class JiraApiClient {
   private readonly auth: JiraApiAuth;
   private cachedCloudId?: string;
@@ -154,34 +184,78 @@ export class JiraApiClient {
    * site itself — the built-in issue-type icons (`<site>/images/icons/issuetypes/epic.svg`). The
    * bearer token is not valid there, and those files are public, so they are fetched without it.
    * Only the connection's own site and its static `/images/` tree qualify, and redirects are
-   * refused (the asset route is unauthenticated, so a redirect must not steer the fetch elsewhere).
+   * refused (the asset URL comes from a client, so a redirect must not steer the fetch elsewhere).
    * The token never leaves the gateway.
    */
   private isOAuthSiteUrl(url: string): boolean {
     if (this.auth.kind !== "oauth" || !this.auth.siteUrl) return false;
     try {
-      const parsed = new URL(url);
-      return (
-        parsed.origin === new URL(this.auth.siteUrl).origin &&
-        parsed.pathname.startsWith("/images/")
-      );
+      return isUnderPrefix(url, new URL("/images/", this.auth.siteUrl).href);
     } catch {
       return false;
     }
   }
 
-  private async fetchPublicSiteAsset(url: string): Promise<Response> {
+  /**
+   * An asset URL comes from a client and is fetched with the account's credentials, so it must sit
+   * under the account's own site. For OAuth the origin check alone would admit every other cloud
+   * and product on `api.atlassian.com`.
+   */
+  private assetUrlWithinSite(url: string): string {
+    const { url: resolved, path } = this.resolveUrl(url);
+    if (!isUnderPrefix(resolved, `${this.baseUrl}/`)) {
+      throw new AtlassianApiError({
+        status: 400,
+        message: "Refusing to fetch Atlassian asset outside the account's site.",
+        path,
+      });
+    }
+    return resolved;
+  }
+
+  private async fetchPublicSiteAsset(
+    url: string,
+    redirect: "error" | "manual" = "error",
+  ): Promise<Response> {
     const path = new URL(url).pathname;
     let response: Response;
     try {
-      response = await fetchWithJiraTimeout(url, { headers: { Accept: "*/*" }, redirect: "error" });
+      response = await fetchWithJiraTimeout(url, { headers: { Accept: "*/*" }, redirect });
     } catch (cause) {
       throw new AtlassianNetworkError({ cause, path });
     }
-    if (!response.ok) {
+    if (!response.ok && !isFollowableRedirect(response, redirect)) {
       throw new AtlassianApiError({ status: response.status, message: "Asset fetch failed", path });
     }
     return response;
+  }
+
+  /**
+   * Follows redirects by hand: fetch keeps `Authorization` on a same-origin hop, which on the
+   * shared gateway can leave the account's site. Only hops under the site get the credentials; any
+   * other (the media CDN an attachment redirects to) is fetched without them, and only over https.
+   */
+  private async fetchSiteAsset(url: string): Promise<Response> {
+    let target = url;
+    for (let hop = 0; ; hop += 1) {
+      const response = isUnderPrefix(target, `${this.baseUrl}/`)
+        ? (await this.fetchResponse(target, { redirect: "manual" }, { accept: "*/*" })).response
+        : await this.fetchPublicSiteAsset(target, "manual");
+      const location = response.headers.get("location");
+      if (!isFollowableRedirect(response, "manual") || !location) return response;
+      const next = new URL(location, target);
+      if (
+        hop >= MAX_ASSET_REDIRECTS ||
+        (next.protocol !== "https:" && !isUnderPrefix(next.href, `${this.baseUrl}/`))
+      ) {
+        throw new AtlassianApiError({
+          status: response.status,
+          message: "Refusing to follow the Atlassian asset redirect.",
+          path: new URL(target).pathname,
+        });
+      }
+      target = next.href;
+    }
   }
 
   private async fetchResponse(
@@ -222,7 +296,7 @@ export class JiraApiClient {
       });
     }
 
-    if (!response.ok) {
+    if (!response.ok && !isFollowableRedirect(response, init?.redirect)) {
       const text = await response.text().catch(() => "Unknown error");
       throw new AtlassianApiError({
         status: response.status,
@@ -331,7 +405,7 @@ export class JiraApiClient {
   async downloadAsset(url: string): Promise<{ bytes: Uint8Array; mimeType?: string }> {
     const response = this.isOAuthSiteUrl(url)
       ? await this.fetchPublicSiteAsset(url)
-      : (await this.fetchResponse(url, undefined, { accept: "*/*" })).response;
+      : await this.fetchSiteAsset(this.assetUrlWithinSite(url));
     const bytes = new Uint8Array(await response.arrayBuffer());
     const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
     return {
