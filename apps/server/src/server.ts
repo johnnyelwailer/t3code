@@ -302,6 +302,7 @@ import { T3TeamStallProfilerLive } from "./t3team-stallProfilerLive.ts";
 import { StandbyInterestLive } from "./cloud/t3team-StandbyInterest.ts";
 import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectMachineDiscovery.ts";
+import { layer as MachineDefinitionFinderLayer } from "./project/t3team-MachineDefinitionFinder.ts";
 import { T3TeamSettleGuardsLive } from "./t3team-childSettleGuards.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import {
@@ -1137,6 +1138,8 @@ const layerMakeRoutes = Layer.mergeAll(
     ),
     // t3team: t3_thread_send mode "mailbox" (shared inter-agent mailbox instance).
     Layer.provide(T3TeamThreadMailboxDeliveryLive),
+    // t3team: t3_machine_find_definitions searches the project's repositories for machine definitions.
+    Layer.provide(MachineDefinitionFinderLayer),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
   ),
 ).pipe(

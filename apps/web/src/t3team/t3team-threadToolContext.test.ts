@@ -194,6 +194,11 @@ describe("createT3TeamTurnToolContext", () => {
           label: "Sync linked repository",
           capabilities: ["write"],
         },
+        {
+          id: "t3team.machine.find_definitions",
+          label: "Find machine definitions",
+          capabilities: ["read"],
+        },
       ],
       state: {
         view: {
