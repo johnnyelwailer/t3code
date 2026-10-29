@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
 import { useScratchProject } from "~/hooks/useScratchProject";
-import { selectProjectGroupingSettings } from "~/logicalProject";
+import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
 import { useProjects, useThreadShells } from "~/state/entities";
 import { useEnvironments } from "~/state/environments";
 import { threadEnvironment } from "~/state/threads";

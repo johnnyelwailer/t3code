@@ -470,7 +470,7 @@ function PullRequestCodeTab({
         nextCursor: data.nextCursor,
         omittedFileStats: data.omittedFileStats ?? [],
       };
-      const applied = applyDiffSlicePage(slices, cursor, next) as ReadonlyArray<DiffSlice>;
+      const applied = applyDiffSlicePage(slices, cursor, next);
       // A no-op refresh (the same first page came back) hands the caller back the slices it
       // already held, so the focused file and scroll position survive; only a page that changed
       // replaces the slices and restarts paging from the top.

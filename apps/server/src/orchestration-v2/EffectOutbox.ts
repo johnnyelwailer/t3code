@@ -225,16 +225,6 @@ export interface EffectOutboxV2Shape {
     readonly workerId: string;
     readonly excludeRestartContinuations?: boolean;
   }) => Effect.Effect<Option.Option<OrchestrationEffectV2>, EffectOutboxError>;
-  /**
-   * Extends the lease of an effect this worker still runs, so a long effect
-   * (such as a checkpoint capture on a large worktree) is not reclaimed and run
-   * a second time while the first execution is still going.
-   */
-  readonly renewLease: (input: {
-    readonly effectId: string;
-    readonly workerId: string;
-    readonly leaseDurationMs: number;
-  }) => Effect.Effect<boolean, EffectOutboxError>;
   readonly nextClaimableAt: Effect.Effect<Option.Option<DateTime.Utc>, EffectOutboxError>;
   readonly succeed: (input: {
     readonly effectId: string;
@@ -558,24 +548,6 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
           return Option.some(yield* rowToEffect(row));
         },
         Effect.mapError((cause) => new EffectOutboxError({ operation: "claim", cause })),
-      ),
-      renewLease: Effect.fn("EffectOutbox.renewLease")(
-        function* ({ effectId, workerId, leaseDurationMs }) {
-          const now = yield* DateTime.now;
-          const leaseExpiresAt = DateTime.formatIso(
-            DateTime.add(now, { milliseconds: Math.max(1, leaseDurationMs) }),
-          );
-          const rows = yield* sql<{ readonly effect_id: string }>`
-            UPDATE orchestration_v2_effect_outbox
-            SET lease_expires_at = ${leaseExpiresAt}
-            WHERE effect_id = ${effectId}
-              AND status = 'running'
-              AND lease_owner = ${workerId}
-            RETURNING effect_id
-          `.pipe(Effect.withTracerEnabled(false));
-          return rows.length === 1;
-        },
-        Effect.mapError((cause) => new EffectOutboxError({ operation: "renew-lease", cause })),
       ),
       nextClaimableAt: Effect.gen(function* () {
         const rows = yield* sql<{ readonly available_at: string | null }>`

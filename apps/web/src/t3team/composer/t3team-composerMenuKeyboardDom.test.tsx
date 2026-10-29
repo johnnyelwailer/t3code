@@ -36,7 +36,7 @@ vi.mock(import("~/state/queries"), async (original) => ({
 }));
 vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 
-import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
+import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditorTiptap";
 import { KickoffComposerEditor } from "~/t3team/composer/t3team-KickoffComposerEditor";
 import { composerSuggestionOptionId } from "~/components/chat/ComposerCommandMenu";
 import type { T3TeamComposerMenuSelectionEffect } from "~/t3team/composer/t3team-composerMenuSelection";

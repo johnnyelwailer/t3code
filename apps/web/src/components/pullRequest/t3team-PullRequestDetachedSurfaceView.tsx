@@ -86,9 +86,9 @@ export function PullRequestDetachedSurfaceView({
 
   if (surface === null) {
     return (
-      <StandalonePage tone="error">
+      <StandalonePage>
         <StandalonePageHeader
-          eyebrow="Pull request"
+          context="Pull request"
           title="This window does not name a pull request"
           description="Close it and open the pull request again from the app."
         />

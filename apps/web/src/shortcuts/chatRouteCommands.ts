@@ -3,18 +3,15 @@ import type { AnyRouter } from "@tanstack/react-router";
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { isPreviewAvailableFor } from "../browser/previewRuntime";
-import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
+import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { dispatchPreviewAction, type PreviewAction } from "../components/preview/previewActionBus";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
 import { createNewThreadHandler, resolveDefaultProjectRef } from "../hooks/useHandleNewThread";
 import { createScratchProjectActions } from "../hooks/useScratchProject";
-import { getClientSettings } from "../hooks/useSettings";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { appAtomRegistry } from "../rpc/atomRegistry";
-import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { readProjects, readThreadShell } from "../state/entities";
 import { environmentPresentations } from "../state/presentation";
 import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
@@ -23,6 +20,8 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { useUiStateStore } from "../uiStateStore";
+import { readT3TeamAppBaseName } from "../t3team/t3team-appBrandName";
+import { readT3TeamDefaultProjectScope } from "../t3team/t3team-newThreadDefaultProject";
 import { type CommandHandler, registerCommands } from "./dispatcher";
 
 const CHAT_ROUTE_ID = "/_chat";
@@ -72,17 +71,11 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       defaultProjectRef: resolveDefaultProjectRef(
         readProjects(),
         useUiStateStore.getState().projectOrder,
+        readT3TeamDefaultProjectScope(),
       ),
       handleNewThread,
     };
   };
-  const readProjectGroupCount = () =>
-    buildSidebarProjectSnapshots({
-      projects: readProjects(),
-      settings: selectProjectGroupingSettings(getClientSettings()),
-      primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),
-      resolveEnvironmentLabel: () => null,
-    }).length;
   const canOperatePreview = (environmentId: EnvironmentId) =>
     readEnvironmentScope(environmentId, AuthPreviewOperateScope);
 
@@ -116,17 +109,9 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
         claim(event);
         void scratch.startScratchThread(environmentId);
       },
-      "chat.new": (event) => {
-        // The boring sidebar's folders already show the context, so it starts in
-        // the current project like the legacy sidebar did.
-        const { boringSidebarEnabled, legacySidebarEnabled } = getClientSettings();
-        if (!boringSidebarEnabled && !legacySidebarEnabled && readProjectGroupCount() > 1) {
-          claim(event);
-          openCommandPalette({ open: "new-thread-in" });
-          return;
-        }
-        startNewLocal(event);
-      },
+      // t3team: "New thread" always starts in the current project (sidebar scope, open thread or
+      // draft), never the "new-thread-in" palette detour upstream shows with several projects.
+      "chat.new": startNewLocal,
       "preview.toggle": (event) => {
         claim(event);
         const threadRef = readRouteThreadRef();
@@ -138,7 +123,7 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open T3 Code in the desktop app to use the in-app preview.",
+              description: `Open ${readT3TeamAppBaseName()} in the desktop app to use the in-app preview.`,
             }),
           );
           return;

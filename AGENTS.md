@@ -120,7 +120,7 @@ in this area: it ships, authors copy it, and unwinding it later touches a dozen 
 Two mechanisms already drifted in this way because agents skipped that step:
 
 - **`appliesTo.visiblePredicates` + the `RecipeSignal*` comparison DSL** (`{ signal: "some.key", gt:
-  3 }` with `all`/`any`/`not`). Appeared NOWHERE in the MVP docs: a string-keyed mini expression
+3 }` with `all`/`any`/`not`). Appeared NOWHERE in the MVP docs: a string-keyed mini expression
   language, the exact shape Phase 1 retired when it replaced `recipe.json`'s `{{ }}` expression
   strings with typed functions. **REMOVED** — do not reintroduce a predicate DSL. Conditional
   visibility is a typed field on `appliesTo` (its one real use became
@@ -310,7 +310,6 @@ For mobile verification, a missing or outdated native client is an install step,
 ## Storybook
 
 Stories start with the real components and realistic sample data — never re-creations, fakes, or parallel mock views. Render the production component (the real PR panel, the real work-item view, the real recipe list) with fixture data shaped like what the app actually receives. If a component fetches its own data, mock at the data seam (the atom/RPC boundary, scoped to the storybook build) rather than building a look-alike around it — and if no seam exists, add one to the real component instead of recreating the view beside it.
-
 
 ## Pull requests
 

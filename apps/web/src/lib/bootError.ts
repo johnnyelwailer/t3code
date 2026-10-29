@@ -373,8 +373,7 @@ export function showBootError(error: unknown) {
       : []),
     element("div", {}, [
       element("p", {
-        textContent:
-          `Run this on the computer that runs ${appName}. Your agent can check the local logs and help you file a bug report.`,
+        textContent: `Run this on the computer that runs ${appName}. Your agent can check the local logs and help you file a bug report.`,
       }),
       element("div", { id: "boot-error-command" }, [command, copyCommand]),
     ]),

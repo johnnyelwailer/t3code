@@ -6,7 +6,7 @@ import {
 } from "@t3tools/client-runtime/providerSkills";
 
 import type { ComposerTrigger } from "~/composer-logic";
-import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
+import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditorTiptap";
 import { useProviderWorkspaceSnapshotRefresh } from "~/hooks/t3team-useProviderWorkspaceSnapshotRefresh";
 import { useT3TeamKickoffWorkspaceScopes } from "~/t3team/composer/t3team-kickoffPathSearchScope";
 import { T3TEAM_COMPOSER_BUILT_IN_SLASH_COMMANDS } from "~/t3team/composer/t3team-composerMenuItems";

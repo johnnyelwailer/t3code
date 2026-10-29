@@ -841,7 +841,7 @@ export function ThreadWorktreeIndicator({
   );
 }
 
-function ThreadStatusLabel({
+export function ThreadStatusLabel({
   status,
   compact = false,
 }: {

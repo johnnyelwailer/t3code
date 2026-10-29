@@ -31,7 +31,11 @@ export function AndroidWorkspaceSidebar(props: {
   const extraTab = useWorkspaceExtraTab();
   const insets = useSafeAreaInsets();
   const { scale, fabSize } = useAndroidControlSizing();
-  const floating = floatingTabsMetrics(enabled.length + 1 + (extraTab === null ? 0 : 1), scale, fabSize);
+  const floating = floatingTabsMetrics(
+    enabled.length + 1 + (extraTab === null ? 0 : 1),
+    scale,
+    fabSize,
+  );
   const bottomClearance = floatingTabsEnabled
     ? insets.bottom + FLOATING_TABS.bottom + FLOATING_TABS.edge + floating.height
     : 16;

@@ -14,6 +14,7 @@ import {
 import { gitHubMediaUrl } from "./gitHubMedia.ts";
 import { icon } from "./icon.ts";
 import { gitHubReferenceAutolinks } from "./referenceAutolinks.ts";
+import { isGitHubEnterpriseFork } from "./t3team-githubEnterpriseHost.ts";
 
 const CHECKOUT_COMMAND = /^gh\s+pr\s+checkout\s+(.+)$/i;
 const CHANGE_REQUEST_REFERENCE =
@@ -135,7 +136,8 @@ export const definition = defineSourceControl({
   recognizeRemote: ({ host, hostname }) =>
     hostname === "github.com" ||
     hostname.endsWith(".ghe.com") ||
-    hostname.split(".").includes("github")
+    hostname.split(".").includes("github") ||
+    isGitHubEnterpriseFork(hostname)
       ? {
           kind: KIND,
           name: hostname === "github.com" ? "GitHub" : "GitHub Self-Hosted",

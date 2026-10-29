@@ -21,8 +21,6 @@ import { Route as ChatIndexRouteImport } from './routes/_chat.index'
 import { Route as T3teamNewRouteImport } from './routes/t3team.new'
 import { Route as T3teamMyWorkRouteImport } from './routes/t3team.my-work'
 import { Route as T3teamDetachedKindRouteImport } from './routes/t3team-detached.$kind'
-import { Route as SettingsFeaturesRouteImport } from './routes/settings.features'
-import { Route as SettingsConnectedToolsRouteImport } from './routes/settings.connected-tools'
 import { Route as ProjectsProjectKeyRouteImport } from './routes/projects.$projectKey'
 import { Route as OauthCallbackRouteImport } from './routes/oauth.callback'
 import { Route as ChatUsageRouteImport } from './routes/_chat.usage'
@@ -46,10 +44,12 @@ import { Route as ChatSettingsLabsRouteImport } from './routes/_chat.settings.la
 import { Route as ChatSettingsKeybindingsRouteImport } from './routes/_chat.settings.keybindings'
 import { Route as ChatSettingsIntegrationsRouteImport } from './routes/_chat.settings.integrations'
 import { Route as ChatSettingsGeneralRouteImport } from './routes/_chat.settings.general'
+import { Route as ChatSettingsFeaturesRouteImport } from './routes/_chat.settings.features'
 import { Route as ChatSettingsDiffsRouteImport } from './routes/_chat.settings.diffs'
 import { Route as ChatSettingsDiagnosticsRouteImport } from './routes/_chat.settings.diagnostics'
 import { Route as ChatSettingsDevicesRouteImport } from './routes/_chat.settings.devices'
 import { Route as ChatSettingsConnectionsRouteImport } from './routes/_chat.settings.connections'
+import { Route as ChatSettingsConnectedToolsRouteImport } from './routes/_chat.settings.connected-tools'
 import { Route as ChatSettingsChatRouteImport } from './routes/_chat.settings.chat'
 import { Route as ChatSettingsBrowserRouteImport } from './routes/_chat.settings.browser'
 import { Route as ChatSettingsBetaRouteImport } from './routes/_chat.settings.beta'
@@ -119,16 +119,6 @@ const T3teamMyWorkRoute = T3teamMyWorkRouteImport.update({
 const T3teamDetachedKindRoute = T3teamDetachedKindRouteImport.update({
   id: '/t3team-detached/$kind',
   path: '/t3team-detached/$kind',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsFeaturesRoute = SettingsFeaturesRouteImport.update({
-  id: '/settings/features',
-  path: '/settings/features',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsConnectedToolsRoute = SettingsConnectedToolsRouteImport.update({
-  id: '/settings/connected-tools',
-  path: '/settings/connected-tools',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectKeyRoute = ProjectsProjectKeyRouteImport.update({
@@ -250,6 +240,11 @@ const ChatSettingsGeneralRoute = ChatSettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => ChatSettingsRoute,
 } as any)
+const ChatSettingsFeaturesRoute = ChatSettingsFeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
+  getParentRoute: () => ChatSettingsRoute,
+} as any)
 const ChatSettingsDiffsRoute = ChatSettingsDiffsRouteImport.update({
   id: '/diffs',
   path: '/diffs',
@@ -270,6 +265,12 @@ const ChatSettingsConnectionsRoute = ChatSettingsConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => ChatSettingsRoute,
 } as any)
+const ChatSettingsConnectedToolsRoute =
+  ChatSettingsConnectedToolsRouteImport.update({
+    id: '/connected-tools',
+    path: '/connected-tools',
+    getParentRoute: () => ChatSettingsRoute,
+  } as any)
 const ChatSettingsChatRoute = ChatSettingsChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -344,8 +345,6 @@ export interface FileRoutesByFullPath {
   '/usage': typeof ChatUsageRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
-  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
-  '/settings/features': typeof SettingsFeaturesRoute
   '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
@@ -358,10 +357,12 @@ export interface FileRoutesByFullPath {
   '/settings/beta': typeof ChatSettingsBetaRoute
   '/settings/browser': typeof ChatSettingsBrowserRoute
   '/settings/chat': typeof ChatSettingsChatRoute
+  '/settings/connected-tools': typeof ChatSettingsConnectedToolsRoute
   '/settings/connections': typeof ChatSettingsConnectionsRoute
   '/settings/devices': typeof ChatSettingsDevicesRoute
   '/settings/diagnostics': typeof ChatSettingsDiagnosticsRoute
   '/settings/diffs': typeof ChatSettingsDiffsRoute
+  '/settings/features': typeof ChatSettingsFeaturesRoute
   '/settings/general': typeof ChatSettingsGeneralRoute
   '/settings/integrations': typeof ChatSettingsIntegrationsRoute
   '/settings/keybindings': typeof ChatSettingsKeybindingsRoute
@@ -396,8 +397,6 @@ export interface FileRoutesByTo {
   '/usage': typeof ChatUsageRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
-  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
-  '/settings/features': typeof SettingsFeaturesRoute
   '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
@@ -411,10 +410,12 @@ export interface FileRoutesByTo {
   '/settings/beta': typeof ChatSettingsBetaRoute
   '/settings/browser': typeof ChatSettingsBrowserRoute
   '/settings/chat': typeof ChatSettingsChatRoute
+  '/settings/connected-tools': typeof ChatSettingsConnectedToolsRoute
   '/settings/connections': typeof ChatSettingsConnectionsRoute
   '/settings/devices': typeof ChatSettingsDevicesRoute
   '/settings/diagnostics': typeof ChatSettingsDiagnosticsRoute
   '/settings/diffs': typeof ChatSettingsDiffsRoute
+  '/settings/features': typeof ChatSettingsFeaturesRoute
   '/settings/general': typeof ChatSettingsGeneralRoute
   '/settings/integrations': typeof ChatSettingsIntegrationsRoute
   '/settings/keybindings': typeof ChatSettingsKeybindingsRoute
@@ -451,8 +452,6 @@ export interface FileRoutesById {
   '/_chat/usage': typeof ChatUsageRoute
   '/oauth/callback': typeof OauthCallbackRoute
   '/projects/$projectKey': typeof ProjectsProjectKeyRoute
-  '/settings/connected-tools': typeof SettingsConnectedToolsRoute
-  '/settings/features': typeof SettingsFeaturesRoute
   '/t3team-detached/$kind': typeof T3teamDetachedKindRoute
   '/t3team/my-work': typeof T3teamMyWorkRoute
   '/t3team/new': typeof T3teamNewRoute
@@ -466,10 +465,12 @@ export interface FileRoutesById {
   '/_chat/settings/beta': typeof ChatSettingsBetaRoute
   '/_chat/settings/browser': typeof ChatSettingsBrowserRoute
   '/_chat/settings/chat': typeof ChatSettingsChatRoute
+  '/_chat/settings/connected-tools': typeof ChatSettingsConnectedToolsRoute
   '/_chat/settings/connections': typeof ChatSettingsConnectionsRoute
   '/_chat/settings/devices': typeof ChatSettingsDevicesRoute
   '/_chat/settings/diagnostics': typeof ChatSettingsDiagnosticsRoute
   '/_chat/settings/diffs': typeof ChatSettingsDiffsRoute
+  '/_chat/settings/features': typeof ChatSettingsFeaturesRoute
   '/_chat/settings/general': typeof ChatSettingsGeneralRoute
   '/_chat/settings/integrations': typeof ChatSettingsIntegrationsRoute
   '/_chat/settings/keybindings': typeof ChatSettingsKeybindingsRoute
@@ -507,8 +508,6 @@ export interface FileRouteTypes {
     | '/usage'
     | '/oauth/callback'
     | '/projects/$projectKey'
-    | '/settings/connected-tools'
-    | '/settings/features'
     | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
@@ -521,10 +520,12 @@ export interface FileRouteTypes {
     | '/settings/beta'
     | '/settings/browser'
     | '/settings/chat'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/devices'
     | '/settings/diagnostics'
     | '/settings/diffs'
+    | '/settings/features'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
@@ -559,8 +560,6 @@ export interface FileRouteTypes {
     | '/usage'
     | '/oauth/callback'
     | '/projects/$projectKey'
-    | '/settings/connected-tools'
-    | '/settings/features'
     | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
@@ -574,10 +573,12 @@ export interface FileRouteTypes {
     | '/settings/beta'
     | '/settings/browser'
     | '/settings/chat'
+    | '/settings/connected-tools'
     | '/settings/connections'
     | '/settings/devices'
     | '/settings/diagnostics'
     | '/settings/diffs'
+    | '/settings/features'
     | '/settings/general'
     | '/settings/integrations'
     | '/settings/keybindings'
@@ -613,8 +614,6 @@ export interface FileRouteTypes {
     | '/_chat/usage'
     | '/oauth/callback'
     | '/projects/$projectKey'
-    | '/settings/connected-tools'
-    | '/settings/features'
     | '/t3team-detached/$kind'
     | '/t3team/my-work'
     | '/t3team/new'
@@ -628,10 +627,12 @@ export interface FileRouteTypes {
     | '/_chat/settings/beta'
     | '/_chat/settings/browser'
     | '/_chat/settings/chat'
+    | '/_chat/settings/connected-tools'
     | '/_chat/settings/connections'
     | '/_chat/settings/devices'
     | '/_chat/settings/diagnostics'
     | '/_chat/settings/diffs'
+    | '/_chat/settings/features'
     | '/_chat/settings/general'
     | '/_chat/settings/integrations'
     | '/_chat/settings/keybindings'
@@ -664,8 +665,6 @@ export interface RootRouteChildren {
   WelcomeRoute: typeof WelcomeRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
   ProjectsProjectKeyRoute: typeof ProjectsProjectKeyRoute
-  SettingsConnectedToolsRoute: typeof SettingsConnectedToolsRoute
-  SettingsFeaturesRoute: typeof SettingsFeaturesRoute
   T3teamDetachedKindRoute: typeof T3teamDetachedKindRoute
 }
 
@@ -753,20 +752,6 @@ declare module '@tanstack/react-router' {
       path: '/t3team-detached/$kind'
       fullPath: '/t3team-detached/$kind'
       preLoaderRoute: typeof T3teamDetachedKindRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings/features': {
-      id: '/settings/features'
-      path: '/settings/features'
-      fullPath: '/settings/features'
-      preLoaderRoute: typeof SettingsFeaturesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings/connected-tools': {
-      id: '/settings/connected-tools'
-      path: '/settings/connected-tools'
-      fullPath: '/settings/connected-tools'
-      preLoaderRoute: typeof SettingsConnectedToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectKey': {
@@ -930,6 +915,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatSettingsGeneralRouteImport
       parentRoute: typeof ChatSettingsRoute
     }
+    '/_chat/settings/features': {
+      id: '/_chat/settings/features'
+      path: '/features'
+      fullPath: '/settings/features'
+      preLoaderRoute: typeof ChatSettingsFeaturesRouteImport
+      parentRoute: typeof ChatSettingsRoute
+    }
     '/_chat/settings/diffs': {
       id: '/_chat/settings/diffs'
       path: '/diffs'
@@ -956,6 +948,13 @@ declare module '@tanstack/react-router' {
       path: '/connections'
       fullPath: '/settings/connections'
       preLoaderRoute: typeof ChatSettingsConnectionsRouteImport
+      parentRoute: typeof ChatSettingsRoute
+    }
+    '/_chat/settings/connected-tools': {
+      id: '/_chat/settings/connected-tools'
+      path: '/connected-tools'
+      fullPath: '/settings/connected-tools'
+      preLoaderRoute: typeof ChatSettingsConnectedToolsRouteImport
       parentRoute: typeof ChatSettingsRoute
     }
     '/_chat/settings/chat': {
@@ -1046,10 +1045,12 @@ interface ChatSettingsRouteChildren {
   ChatSettingsBetaRoute: typeof ChatSettingsBetaRoute
   ChatSettingsBrowserRoute: typeof ChatSettingsBrowserRoute
   ChatSettingsChatRoute: typeof ChatSettingsChatRoute
+  ChatSettingsConnectedToolsRoute: typeof ChatSettingsConnectedToolsRoute
   ChatSettingsConnectionsRoute: typeof ChatSettingsConnectionsRoute
   ChatSettingsDevicesRoute: typeof ChatSettingsDevicesRoute
   ChatSettingsDiagnosticsRoute: typeof ChatSettingsDiagnosticsRoute
   ChatSettingsDiffsRoute: typeof ChatSettingsDiffsRoute
+  ChatSettingsFeaturesRoute: typeof ChatSettingsFeaturesRoute
   ChatSettingsGeneralRoute: typeof ChatSettingsGeneralRoute
   ChatSettingsIntegrationsRoute: typeof ChatSettingsIntegrationsRoute
   ChatSettingsKeybindingsRoute: typeof ChatSettingsKeybindingsRoute
@@ -1075,10 +1076,12 @@ const ChatSettingsRouteChildren: ChatSettingsRouteChildren = {
   ChatSettingsBetaRoute: ChatSettingsBetaRoute,
   ChatSettingsBrowserRoute: ChatSettingsBrowserRoute,
   ChatSettingsChatRoute: ChatSettingsChatRoute,
+  ChatSettingsConnectedToolsRoute: ChatSettingsConnectedToolsRoute,
   ChatSettingsConnectionsRoute: ChatSettingsConnectionsRoute,
   ChatSettingsDevicesRoute: ChatSettingsDevicesRoute,
   ChatSettingsDiagnosticsRoute: ChatSettingsDiagnosticsRoute,
   ChatSettingsDiffsRoute: ChatSettingsDiffsRoute,
+  ChatSettingsFeaturesRoute: ChatSettingsFeaturesRoute,
   ChatSettingsGeneralRoute: ChatSettingsGeneralRoute,
   ChatSettingsIntegrationsRoute: ChatSettingsIntegrationsRoute,
   ChatSettingsKeybindingsRoute: ChatSettingsKeybindingsRoute,
@@ -1168,8 +1171,6 @@ const rootRouteChildren: RootRouteChildren = {
   WelcomeRoute: WelcomeRoute,
   OauthCallbackRoute: OauthCallbackRoute,
   ProjectsProjectKeyRoute: ProjectsProjectKeyRoute,
-  SettingsConnectedToolsRoute: SettingsConnectedToolsRoute,
-  SettingsFeaturesRoute: SettingsFeaturesRoute,
   T3teamDetachedKindRoute: T3teamDetachedKindRoute,
 }
 export const routeTree = rootRouteImport

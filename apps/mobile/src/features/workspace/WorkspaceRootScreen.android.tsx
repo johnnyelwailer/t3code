@@ -44,8 +44,7 @@ export function WorkspaceRootScreen() {
   const extraSelected = extraTabSelected(state, extraTab);
   // The pane on show; while the extra tab is selected, `selectedTab` keeps its last stock value.
   const pane: WorkspacePane = extraSelected ? EXTRA_WORKSPACE_TAB : state.selectedTab;
-  const tabs: readonly WorkspacePane[] =
-    extraTab === null ? TABS : [...TABS, EXTRA_WORKSPACE_TAB];
+  const tabs: readonly WorkspacePane[] = extraTab === null ? TABS : [...TABS, EXTRA_WORKSPACE_TAB];
   const floating = floatingTabsMetrics(
     enabled.length + 1 + (extraTab === null ? 0 : 1),
     scale,

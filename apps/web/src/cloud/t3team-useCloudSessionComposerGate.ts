@@ -36,7 +36,7 @@ import {
 } from "./t3team-cloudSessionQueueSend";
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { useClientSettings } from "~/hooks/useSettings";
-import { selectProjectGroupingSettings } from "~/logicalProject";
+import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
 import { useProjects } from "~/state/entities";
 import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";

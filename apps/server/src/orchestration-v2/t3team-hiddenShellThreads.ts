@@ -4,7 +4,8 @@
  * A workflow's "Orchestration author" thread is a parentless, headless spawn the workflow host
  * drives for its own bookkeeping (t3team-workflowAuthorTurn.ts). Subagents are hidden by their
  * `subagent` lineage; the author has no parent to hang under, so it is dropped instead: from
- * shell snapshots (active and archive) in the orchestrator's `getShellSnapshot`, and from live
+ * shell snapshots (active and archive) in the orchestrator's `getShellSnapshot`/`readShellSnapshot`,
+ * from the active shell index (`listActiveShellIndex`, which feeds the older-settled counts), and from live
  * shell deltas in ws.ts. The thread itself
  * stays: the host still reads, drives and retires it.
  */
@@ -32,6 +33,11 @@ export const visibleShellSnapshot = <
   threads: visibleShellThreads(snapshot.threads),
   archivedThreads: visibleShellThreads(snapshot.archivedThreads),
 });
+
+/** The active shell index (what trims and older-settled counts read) without host-machinery threads. */
+export const visibleShellIndex = <T extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">>(
+  index: ReadonlyArray<T>,
+): ReadonlyArray<T> => visibleShellThreads(index);
 
 /** The shell the transport may show: a hidden thread reads as gone (deltas become removals). */
 export const shownShell = <T extends Pick<OrchestrationV2ThreadShell, "id" | "lineage">>(

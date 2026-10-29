@@ -95,6 +95,11 @@ export function applyT3TeamPackAppearance(appearance: EnvironmentAppearance | un
   for (const listener of listeners) listener();
 }
 
+/** Non-reactive read for event handlers (keyboard commands) that run outside React. */
+export function readT3TeamPackAppearance(): EnvironmentAppearance | undefined {
+  return activeAppearance;
+}
+
 export function useT3TeamPackAppearance(): EnvironmentAppearance | undefined {
   return useSyncExternalStore(
     (listener) => {

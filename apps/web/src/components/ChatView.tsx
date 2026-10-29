@@ -3721,7 +3721,10 @@ export default function ChatView(props: ChatViewProps) {
                         : undefined
                     }
                   >
-                    <ComposerSurface.Shell contextRow={showComposerContextStrip} working={isWorking}>
+                    <ComposerSurface.Shell
+                      contextRow={showComposerContextStrip}
+                      working={isWorking}
+                    >
                       <ComposerSurface.Host
                         inert={queuedRunEdit.isSaving}
                         aria-busy={queuedRunEdit.isSaving}

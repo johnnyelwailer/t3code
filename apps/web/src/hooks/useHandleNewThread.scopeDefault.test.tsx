@@ -41,7 +41,8 @@ vi.mock("../uiStateStore", () => ({
   legacyProjectCwdPreferenceKey: (root: string) => root,
   useUiStateStore: (selector: (state: unknown) => unknown) => selector({ projectOrder: [] }),
 }));
-vi.mock("../logicalProject", () => ({
+vi.mock("@t3tools/client-runtime/state/project-grouping", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@t3tools/client-runtime/state/project-grouping")>()),
   deriveLogicalProjectKeyFromSettings: () => "key",
   getProjectOrderKey: (project: { id: string }) => project.id,
   selectProjectGroupingSettings: () => ({}),

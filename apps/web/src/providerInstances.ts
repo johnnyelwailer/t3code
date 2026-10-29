@@ -181,7 +181,7 @@ export function providerInstanceEntriesFor(
   );
 }
 
-function sortProviderInstanceEntries(
+export function sortProviderInstanceEntries(
   entries: ReadonlyArray<ProviderInstanceEntry>,
 ): ReadonlyArray<ProviderInstanceEntry> {
   const byKind = new Map<ProviderDriverKind, ProviderInstanceEntry[]>();

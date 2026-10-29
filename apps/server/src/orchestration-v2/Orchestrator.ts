@@ -173,7 +173,7 @@ import { planThreadDeletion } from "./ThreadDeletion.ts";
 import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 import { keepsRenderedWakeText } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 import { t3teamUserInputAnswerText } from "./t3team-userInputAnswerText.ts";
-import { visibleShellSnapshot } from "./t3team-hiddenShellThreads.ts";
+import { visibleShellIndex, visibleShellSnapshot } from "./t3team-hiddenShellThreads.ts";
 import { rewritePersistenceFailureCause } from "./persistenceStorageError.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ServerSettings from "../serverSettings.ts";
@@ -13634,10 +13634,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       },
     ),
     getShellSnapshot: Effect.fn("OrchestratorV2.getShellSnapshot")(function (options) {
-      return projectionStore
-        .getShellSnapshot(options)
-        // t3team: host-machinery threads stay off the navigation shell (t3team-hiddenShellThreads.ts).
-        .pipe(Effect.map(visibleShellSnapshot), Effect.mapError(shellProjectionError));
+      return (
+        projectionStore
+          .getShellSnapshot(options)
+          // t3team: host-machinery threads stay off the navigation shell (t3team-hiddenShellThreads.ts).
+          .pipe(Effect.map(visibleShellSnapshot), Effect.mapError(shellProjectionError))
+      );
     }),
     listActiveSubagentThreadIds: Effect.fn("OrchestratorV2.listActiveSubagentThreadIds")(
       function () {
@@ -13650,7 +13652,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return projectionStore.countThreads().pipe(Effect.mapError(shellProjectionError));
     }),
     listActiveShellIndex: Effect.fn("OrchestratorV2.listActiveShellIndex")(function () {
-      return projectionStore.listActiveShellIndex().pipe(Effect.mapError(shellProjectionError));
+      return (
+        projectionStore
+          .listActiveShellIndex()
+          // t3team: the index feeds the older-settled counts, so host-machinery threads leave it too.
+          .pipe(Effect.map(visibleShellIndex), Effect.mapError(shellProjectionError))
+      );
     }),
     listOlderSettledThreads: Effect.fn("OrchestratorV2.listOlderSettledThreads")(function (query) {
       return projectionStore
@@ -13658,14 +13665,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         .pipe(Effect.mapError(shellProjectionError));
     }),
     readShellSnapshot: Effect.fn("OrchestratorV2.readShellSnapshot")(function (options) {
-      return projectionStore
-        .readShellSnapshot(options)
-        .pipe(
-          Effect.mapError(shellProjectionError),
-          Effect.map((read) =>
-            read.pipe(Effect.map(visibleShellSnapshot), Effect.mapError(shellProjectionError)),
-          ),
-        );
+      return projectionStore.readShellSnapshot(options).pipe(
+        Effect.mapError(shellProjectionError),
+        Effect.map((read) =>
+          read.pipe(Effect.map(visibleShellSnapshot), Effect.mapError(shellProjectionError)),
+        ),
+      );
     }),
     getThreadShell: Effect.fn("OrchestratorV2.getThreadShell")(function (threadId) {
       return projectionStore

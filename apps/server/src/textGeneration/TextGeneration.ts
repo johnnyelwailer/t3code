@@ -176,27 +176,33 @@ export const make = Effect.gen(function* () {
       );
     }),
     generateActivityLabel: Effect.fn("TextGeneration.generateActivityLabel")(function (input) {
-      return generate("generateActivityLabel", input.modelSelection, (textGeneration, modelSelection) =>
-        textGeneration.generateActivityLabel
-          ? textGeneration.generateActivityLabel({ ...input, modelSelection })
-          : Effect.fail(
-              new TextGenerationError({
-                operation: "generateActivityLabel",
-                detail: "The resolved provider does not support activity labels.",
-              }),
-            ),
+      return generate(
+        "generateActivityLabel",
+        input.modelSelection,
+        (textGeneration, modelSelection) =>
+          textGeneration.generateActivityLabel
+            ? textGeneration.generateActivityLabel({ ...input, modelSelection })
+            : Effect.fail(
+                new TextGenerationError({
+                  operation: "generateActivityLabel",
+                  detail: "The resolved provider does not support activity labels.",
+                }),
+              ),
       );
     }),
     generateStructured: Effect.fn("TextGeneration.generateStructured")(function (input) {
-      return generate("generateStructured", input.modelSelection, (textGeneration, modelSelection) =>
-        textGeneration.generateStructured
-          ? textGeneration.generateStructured({ ...input, modelSelection })
-          : Effect.fail(
-              new TextGenerationError({
-                operation: "generateStructured",
-                detail: "Provider does not support structured background generation.",
-              }),
-            ),
+      return generate(
+        "generateStructured",
+        input.modelSelection,
+        (textGeneration, modelSelection) =>
+          textGeneration.generateStructured
+            ? textGeneration.generateStructured({ ...input, modelSelection })
+            : Effect.fail(
+                new TextGenerationError({
+                  operation: "generateStructured",
+                  detail: "Provider does not support structured background generation.",
+                }),
+              ),
       ) as never;
     }),
   });

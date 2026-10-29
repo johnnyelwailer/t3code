@@ -167,12 +167,14 @@ export function AndroidWorkspaceNavigation(props: {
           const rootState = rootNavigationRef.getRootState();
           if (root && rootState) {
             navigation.dispatch({
-              ...CommonActions.reset(androidWorkspaceTabNavigationState(
+              ...CommonActions.reset(
+                androidWorkspaceTabNavigationState(
                   rootState,
                   // Like Chats, the extra tab shows over a Home that has dropped stale history.
                   tab === EXTRA_WORKSPACE_TAB ? "threads" : tab,
                   rail,
-                ),),
+                ),
+              ),
               target: root.key,
             });
           }

@@ -7,7 +7,10 @@ import {
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveLogicalProjectKeyFromSettings, type ProjectGroupingMode } from "~/logicalProject";
+import {
+  deriveLogicalProjectKeyFromSettings,
+  type ProjectGroupingMode,
+} from "@t3tools/client-runtime/state/project-grouping";
 import {
   logicalProjectPerEnvironment,
   resolveCloudSessionRestartProjectId,

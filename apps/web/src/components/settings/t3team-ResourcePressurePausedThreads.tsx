@@ -15,7 +15,7 @@ import { ThreadId } from "@t3tools/contracts";
 import { useThreadShell } from "../../state/entities";
 import { useThreadResourceCleanup } from "../../t3team/t3team-useThreadResourceCleanup";
 import { Button } from "../ui/button";
-import { useRelativeTimeTick } from "./settingsLayout";
+import { useNowSecond } from "../../hooks/useNowSecond";
 import { Ago } from "./t3team-ResourcePressureParts";
 import { autoPauseStateLabel } from "./t3team-ResourcePressurePanel.logic";
 
@@ -55,7 +55,7 @@ export function PausedThreadList(props: {
 }) {
   const { cleanUp, busy } = useThreadResourceCleanup(props.environmentId);
   // Ticks once a second so the cooldown countdown stays live between panel refreshes.
-  const nowMs = useRelativeTimeTick();
+  const nowMs = useNowSecond();
   const autoPause = props.autoPause;
   if (autoPause === undefined || autoPause.threads.length === 0) return null;
   const stateLabel = autoPauseStateLabel(autoPause, nowMs);
