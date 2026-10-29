@@ -196,6 +196,12 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
       ),
     ),
+    t3_work_item_search: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_search, input),
+    ),
+    t3_work_item_get: McpToolAccess.readsAsCaller((input) =>
+      callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_get, input),
+    ),
     t3_change_request_publish: McpToolAccess.actsAsCaller(
       whenMcpToolEnabled("t3_change_request_publish", (input) =>
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_change_request_publish, input),

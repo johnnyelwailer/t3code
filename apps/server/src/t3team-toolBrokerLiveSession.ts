@@ -17,6 +17,10 @@ import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSour
 import { callT3TeamSearchThreadTool } from "./t3team-toolBrokerBindingSearchThread.ts";
 import { withFlaggedOptInTools } from "./t3team-threadOptInTools.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
+import {
+  refuseWorkItemReadUnlessConnected,
+  withWorkItemReadTools,
+} from "./t3team-workItemReadAvailability.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 
 export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
@@ -44,8 +48,16 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
               })),
             };
 
-      const toolIds = Array.from(
-        new Set([...resolvedToolContext.tools.map((tool) => tool.id), ...(grantedToolIds ?? [])]),
+      // Whether the work-item read tools exist is the environment's call, read live per bind: no
+      // usable Jira account for this thread's project means neither the list nor a grant has them.
+      const jiraConnected = deps.workItemReadTools
+        ? yield* deps.workItemReadTools.connected(threadId)
+        : false;
+      const toolIds = withWorkItemReadTools(
+        Array.from(
+          new Set([...resolvedToolContext.tools.map((tool) => tool.id), ...(grantedToolIds ?? [])]),
+        ),
+        jiraConnected,
       );
       if (toolIds.length === 0) {
         return undefined;
@@ -98,6 +110,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           }),
         recipeTools: deps.recipeToolsForThread(threadId),
         ...(deps.myWorkTools ? { myWorkTools: deps.myWorkTools } : {}),
+        ...(deps.workItemReadTools ? { workItemReadTools: deps.workItemReadTools } : {}),
         ...(deps.workflowTools.workflowRunToolsForThread
           ? { workflowRunTools: deps.workflowTools.workflowRunToolsForThread(threadId) }
           : {}),
@@ -114,6 +127,9 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           ? { changeRequestTools: deps.changeRequestToolsForThread(threadId) }
           : {}),
       });
-      return withPressureLines(binding, deps.resourcePressure);
+      return refuseWorkItemReadUnlessConnected(
+        withPressureLines(binding, deps.resourcePressure),
+        jiraConnected,
+      );
     });
 }

@@ -149,3 +149,28 @@ it.effect("drops it when the thread has no binding or the credential has no thre
     );
   }),
 );
+
+/** The work-item read tools are listed only while the caller's binding holds them (Jira connected). */
+const WORK_ITEM_MCP = ["t3_work_item_search", "t3_work_item_get"];
+const WORK_ITEM_TOOLS = ["t3team.work_item.search", "t3team.work_item.get"];
+
+it.effect("lists the work-item read tools for a thread whose binding holds them", () =>
+  Effect.gen(function* () {
+    const names = yield* listedTools({ heldToolIds: WORK_ITEM_TOOLS });
+    for (const name of WORK_ITEM_MCP) expect(names).toContain(name);
+  }),
+);
+
+it.effect("drops the work-item read tools when the binding lacks them or there is no thread", () =>
+  Effect.gen(function* () {
+    for (const input of [
+      { heldToolIds: ["t3team.thread.search"] },
+      { heldToolIds: undefined },
+      { heldToolIds: WORK_ITEM_TOOLS, withThread: false },
+    ]) {
+      const names = yield* listedTools(input);
+      for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
+      expect(names).toContain("t3_show_widget");
+    }
+  }),
+);

@@ -39,6 +39,8 @@ import { getProjectRecipeToolGroupForToolId } from "@t3tools/project-recipes";
 import {
   defineTool,
   defineToolGroup,
+  getWorkItemTool,
+  searchWorkItemsTool,
   type T3TeamToolHandlerClient,
   type ToolRef,
 } from "@t3team/sdk";
@@ -89,7 +91,17 @@ const T3TEAM_WORKFLOW_HOST_TOOLS = [
   { id: "t3team.change_request.publish", group: T3TEAM_WORKFLOW_CHANGE_REQUEST_TOOL_GROUP },
 ];
 
-const HOST_TOOL_ID_SET: ReadonlySet<string> = new Set(T3TEAM_WORKFLOW_HOST_TOOLS.map((t) => t.id));
+/** The `integration.read` work-item reads are SDK-defined (`t3team-sdk.workItemRead.ts`), so their
+ * refs are the SDK's own; only the id joins the table's allowlist. */
+const T3TEAM_WORKFLOW_SDK_READ_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> = [
+  searchWorkItemsTool,
+  getWorkItemTool,
+] as unknown as ReadonlyArray<ToolRef<unknown, unknown>>;
+
+const HOST_TOOL_ID_SET: ReadonlySet<string> = new Set([
+  ...T3TEAM_WORKFLOW_HOST_TOOLS.map((t) => t.id),
+  ...T3TEAM_WORKFLOW_SDK_READ_TOOL_REFS.map((ref) => ref.id),
+]);
 
 /** Permissive on purpose: the broker already validates each tool's arguments and answers a bad
  * call specifically (`… requires issue_id.`). Restating those shapes here would be a second copy
@@ -123,8 +135,10 @@ function hostToolRef(tool: (typeof T3TEAM_WORKFLOW_HOST_TOOLS)[number]): ToolRef
 /** Registered ONCE at module load — `defineTool` refuses a duplicate id, and the engine executes a
  * tool by looking its id up in that global registry, so per-run refs would never be reached. The
  * per-run part is the `ctx.t3team` client the handlers read. */
-const T3TEAM_WORKFLOW_HOST_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> =
-  T3TEAM_WORKFLOW_HOST_TOOLS.map(hostToolRef);
+const T3TEAM_WORKFLOW_HOST_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> = [
+  ...T3TEAM_WORKFLOW_HOST_TOOLS.map(hostToolRef),
+  ...T3TEAM_WORKFLOW_SDK_READ_TOOL_REFS,
+];
 
 /**
  * The tool ids this run's grant adds to the binding for ONE call: the called tool itself, and only

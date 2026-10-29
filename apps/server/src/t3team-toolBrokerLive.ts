@@ -24,6 +24,7 @@ import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts"
 import { makeChangeRequestToolsForThread } from "./t3team-toolBrokerChangeRequestLive.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
+import { makeWorkItemReadToolHandlers } from "./t3team-workItemReadLive.ts";
 import { makeMyWorkToolHandlers } from "./t3team-toolBrokerMyWorkLive.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
@@ -94,6 +95,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     loadThreadProject,
   });
 
+  const workItemReadTools = yield* makeWorkItemReadToolHandlers({ loadThreadProject });
+
   const bindSession = makeBindSession({
     contextStore,
     genericThreadToolIds: T3TEAM_GENERIC_THREAD_TOOL_IDS,
@@ -112,6 +115,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
     manageChildren,
     myWorkTools,
+    workItemReadTools,
     recipeToolsForThread: makeRecipeToolHandlers({
       fileSystem,
       path,

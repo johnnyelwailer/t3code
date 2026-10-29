@@ -16,6 +16,7 @@ import type { McpProtocol } from "effect/ai";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
 import { listOptInThreadTools } from "../../../t3team-threadOptInTools.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
+import { WORK_ITEM_READ_TOOL_IDS } from "../../../t3team-workItemReadAvailability.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 interface ListedTool {
@@ -28,15 +29,22 @@ interface ToolListingCore {
   };
 }
 
-/** The MCP tool name → catalog tool id of every opt-in tool the MCP surface exposes. */
+/**
+ * The MCP tool name → catalog tool id of every tool the MCP surface lists only when the caller's
+ * binding holds it: the opt-in tools, and the work-item read tools (held only while Jira is
+ * connected for the thread's project, `t3team-workItemReadAvailability.ts`).
+ */
 function optInMcpTools(): ReadonlyMap<string, string> {
-  const optIn = new Set(listOptInThreadTools().map((tool) => tool.toolId));
+  const optIn = new Set([
+    ...listOptInThreadTools().map((tool) => tool.toolId),
+    ...WORK_ITEM_READ_TOOL_IDS,
+  ]);
   return new Map(
     Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP).filter(([, toolId]) => optIn.has(toolId)),
   );
 }
 
-/** `tools` without the opt-in tools the calling thread cannot call. */
+/** `tools` without the gated tools the calling thread cannot call. */
 const filterToolsForCaller = Effect.fn("filterToolsForCaller")(function* <T extends ListedTool>(
   tools: ReadonlyArray<T>,
 ) {

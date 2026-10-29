@@ -17,6 +17,7 @@ import { TOOL_SPECS, foldResource, resourceResult } from "./t3team-toolBrokerHel
 import { buildBindingState, permissionMessage } from "./t3team-toolBrokerBindingPermissions.ts";
 import { dispatchT3TeamToolCall } from "./t3team-toolBrokerBindingDispatch.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
+import type { T3TeamWorkItemReadToolHandlers } from "./t3team-toolBrokerBindingWorkItemRead.ts";
 import type { T3TeamMyWorkToolHandlers } from "./t3team-toolBrokerBindingMyWork.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
@@ -40,6 +41,7 @@ export type CreateBindingInput<TReadError = never, TBacklogAssigneeFilterError =
   readonly refreshContextBundle?: T3TeamContextRefreshServiceShape;
   readonly recipeTools?: T3TeamRecipeToolHandlers;
   readonly myWorkTools?: T3TeamMyWorkToolHandlers;
+  readonly workItemReadTools?: T3TeamWorkItemReadToolHandlers;
   readonly workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   readonly workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
@@ -99,6 +101,7 @@ export function createToolSurface<TReadError, TBacklogAssigneeFilterError>(
       ...(input.refreshContextBundle ? { refreshContextBundle: input.refreshContextBundle } : {}),
       ...(input.recipeTools ? { recipeTools: input.recipeTools } : {}),
       ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
+      ...(input.workItemReadTools ? { workItemReadTools: input.workItemReadTools } : {}),
       ...(input.workflowRunTools ? { workflowRunTools: input.workflowRunTools } : {}),
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),

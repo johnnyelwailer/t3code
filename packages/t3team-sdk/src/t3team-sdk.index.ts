@@ -34,6 +34,7 @@ export {
 export {
   githubRead,
   githubWrite,
+  integrationRead,
   jiraRead,
   jiraWrite,
   releaseNotesWrite,

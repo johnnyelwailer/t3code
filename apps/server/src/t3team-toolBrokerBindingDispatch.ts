@@ -27,6 +27,11 @@ import {
   isT3TeamMyWorkTool,
   type T3TeamMyWorkToolHandlers,
 } from "./t3team-toolBrokerBindingMyWork.ts";
+import {
+  callT3TeamWorkItemReadTool,
+  isT3TeamWorkItemReadTool,
+  type T3TeamWorkItemReadToolHandlers,
+} from "./t3team-toolBrokerBindingWorkItemRead.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
@@ -58,6 +63,7 @@ export function dispatchT3TeamToolCall(input: {
   refreshContextBundle?: T3TeamContextRefreshServiceShape;
   recipeTools?: T3TeamRecipeToolHandlers;
   myWorkTools?: T3TeamMyWorkToolHandlers;
+  workItemReadTools?: T3TeamWorkItemReadToolHandlers;
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
@@ -108,6 +114,15 @@ export function dispatchT3TeamToolCall(input: {
       toolArgs,
       ...(input.threadId ? { threadId: input.threadId } : {}),
       ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
+    });
+  }
+  if (isT3TeamWorkItemReadTool(tool)) {
+    return callT3TeamWorkItemReadTool({
+      tool,
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      threadId: input.threadId,
+      workItemReadTools: input.workItemReadTools,
     });
   }
   const workflowToolCall = tryDispatchWorkflowToolCall({
