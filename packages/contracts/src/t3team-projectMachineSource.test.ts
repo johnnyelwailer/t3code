@@ -21,12 +21,10 @@ describe("machine source question id", () => {
   });
 
   it("round-trips a repository without a branch, and a branch without a repository", () => {
-    expect(
-      decodeMachineSourceQuestionId(encodeMachineSourceQuestionId({ repository: URL_OF_TOOLS })),
-    ).toEqual({ repository: URL_OF_TOOLS });
-    expect(decodeMachineSourceQuestionId(encodeMachineSourceQuestionId({ branch: "setup" }))).toEqual(
-      { branch: "setup" },
-    );
+    const repositoryOnly = encodeMachineSourceQuestionId({ repository: URL_OF_TOOLS });
+    const branchOnly = encodeMachineSourceQuestionId({ branch: "setup" });
+    expect(decodeMachineSourceQuestionId(repositoryOnly)).toEqual({ repository: URL_OF_TOOLS });
+    expect(decodeMachineSourceQuestionId(branchOnly)).toEqual({ branch: "setup" });
   });
 
   it("answers null for ids that are not a proposal, never throwing", () => {

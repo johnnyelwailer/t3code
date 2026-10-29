@@ -303,6 +303,7 @@ import { StandbyInterestLive } from "./cloud/t3team-StandbyInterest.ts";
 import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectMachineDiscovery.ts";
 import { layer as MachineDefinitionFinderLayer } from "./project/t3team-MachineDefinitionFinder.ts";
+import { layer as MachineSourceProposalLayer } from "./project/t3team-MachineSourceProposal.ts";
 import { T3TeamSettleGuardsLive } from "./t3team-childSettleGuards.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import {
@@ -1140,6 +1141,8 @@ const layerMakeRoutes = Layer.mergeAll(
     Layer.provide(T3TeamThreadMailboxDeliveryLive),
     // t3team: t3_machine_find_definitions searches the project's repositories for machine definitions.
     Layer.provide(MachineDefinitionFinderLayer),
+    // t3team: t3_machine_set_source proves a proposed machine source before the user is asked.
+    Layer.provide(MachineSourceProposalLayer),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
   ),
 ).pipe(

@@ -199,6 +199,11 @@ describe("createT3TeamTurnToolContext", () => {
           label: "Find machine definitions",
           capabilities: ["read"],
         },
+        {
+          id: "t3team.machine.set_source",
+          label: "Propose machine source",
+          capabilities: ["read"],
+        },
       ],
       state: {
         view: {

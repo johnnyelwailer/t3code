@@ -28,6 +28,7 @@ import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workIt
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
 import { T3TeamMachineFindDefinitionsTool } from "./t3team-machineDefinitionTools.ts";
+import { T3TeamMachineSetSourceTool } from "./t3team-machineSourceTools.ts";
 
 /**
  * What every t3team tool fails with. `OrchestratorMcpFailure` is the refusal
@@ -516,5 +517,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamChangeRequestPublishTool,
   T3TeamLinkedRepositorySyncTool,
   T3TeamMachineFindDefinitionsTool,
+  T3TeamMachineSetSourceTool,
   T3TeamThreadSkillMetadataTool,
 );
