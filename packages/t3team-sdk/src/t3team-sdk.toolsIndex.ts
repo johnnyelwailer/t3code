@@ -21,3 +21,17 @@ export type {
   ValidateRecipeToolArgs,
   ValidateRecipeToolResult,
 } from "./tools/t3team-sdk.t3teamRecipes.ts";
+export type {
+  GetWorkItemToolResult,
+  SearchWorkItemsToolResult,
+  WorkItemSummary,
+} from "./tools/t3team-sdk.workItemRead.ts";
+export {
+  GetWorkItemToolArgs,
+  getWorkItemTool,
+  SearchWorkItemsToolArgs,
+  searchWorkItemsTool,
+  WORK_ITEM_GET_TOOL_ID,
+  WORK_ITEM_SEARCH_MAX_LIMIT,
+  WORK_ITEM_SEARCH_TOOL_ID,
+} from "./tools/t3team-sdk.workItemRead.ts";

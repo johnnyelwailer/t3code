@@ -1,5 +1,5 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { afterEach, beforeEach, expect, it } from "@effect/vitest";
+import { afterEach, beforeEach, describe, expect, it } from "@effect/vitest";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -7,7 +7,13 @@ import * as Layer from "effect/Layer";
 import { McpServer } from "effect/ai";
 import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 
+import { layerMemory as SqlitePersistenceMemory } from "../../../persistence/Sqlite.ts";
+import { atlassianAuths } from "../../../t3team-atlassian-auth-state.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
+import {
+  makeBrokerLayer,
+  threadId as brokerThreadId,
+} from "../../../t3team-toolBrokerTestUtils.ts";
 import { T3_MCP_PROTOCOL, T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -26,12 +32,15 @@ beforeEach(() =>
 afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 const threadId = ThreadId.make("thread-opt-in-list");
-const invocation = (withThread: boolean): McpInvocationContext.McpInvocationScope => ({
+const invocation = (
+  withThread: boolean,
+  callerThreadId: ThreadId = threadId,
+): McpInvocationContext.McpInvocationScope => ({
   environmentId: EnvironmentId.make("environment-opt-in-list"),
   requestNamespace: "provider-session-opt-in-list",
   thread: withThread
     ? {
-        threadId,
+        threadId: callerThreadId,
         providerSessionId: "provider-session-opt-in-list",
         providerInstanceId: ProviderInstanceId.make("pack-test"),
       }
@@ -54,6 +63,9 @@ const resultOf = (text: string): any => {
 const listedTools = (input: {
   readonly heldToolIds: ReadonlyArray<string> | undefined;
   readonly withThread?: boolean;
+  /** The broker the list handler sees: a fake holding `heldToolIds`, the real layer, or none. */
+  readonly broker?: Layer.Layer<T3TeamToolBroker> | "absent";
+  readonly callerThreadId?: ThreadId;
 }) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -79,7 +91,7 @@ const listedTools = (input: {
           httpEffect.pipe(
             Effect.provideService(
               McpInvocationContext.McpInvocationContext,
-              invocation(input.withThread ?? true),
+              invocation(input.withThread ?? true, input.callerThreadId),
             ),
           ),
         ),
@@ -97,7 +109,13 @@ const listedTools = (input: {
       const serverLayer = T3TeamToolkitRegistrationLive.pipe(
         Layer.provide(registrationServices),
         Layer.provideMerge(transport),
-        Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+        Layer.provideMerge(
+          input.broker === "absent"
+            ? // The registration only needs the broker at call time; the list handler looks it up
+              // optionally, which is the path under test.
+              (Layer.empty as unknown as Layer.Layer<T3TeamToolBroker>)
+            : (input.broker ?? Layer.succeed(T3TeamToolBroker, broker)),
+        ),
       );
       yield* HttpRouter.serve(serverLayer, { disableListenLog: true, disableLogger: true }).pipe(
         Layer.build,
@@ -149,3 +167,84 @@ it.effect("drops it when the thread has no binding or the credential has no thre
     );
   }),
 );
+
+/** The work-item read tools are listed only while the caller's binding holds them (Jira connected). */
+const WORK_ITEM_MCP = ["t3_work_item_search", "t3_work_item_get"];
+const WORK_ITEM_TOOLS = ["t3team.work_item.search", "t3team.work_item.get"];
+
+it.effect("lists the work-item read tools for a thread whose binding holds them", () =>
+  Effect.gen(function* () {
+    const names = yield* listedTools({ heldToolIds: WORK_ITEM_TOOLS });
+    for (const name of WORK_ITEM_MCP) expect(names).toContain(name);
+  }),
+);
+
+it.effect("drops the work-item read tools when the binding lacks them or there is no thread", () =>
+  Effect.gen(function* () {
+    for (const input of [
+      { heldToolIds: ["t3team.thread.search"] },
+      { heldToolIds: undefined },
+      { heldToolIds: WORK_ITEM_TOOLS, withThread: false },
+    ]) {
+      const names = yield* listedTools(input);
+      for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
+      expect(names).toContain("t3_show_widget");
+    }
+  }),
+);
+
+it.effect("drops the work-item read tools when the list handler cannot reach the broker", () =>
+  Effect.gen(function* () {
+    const names = yield* listedTools({ heldToolIds: WORK_ITEM_TOOLS, broker: "absent" });
+    for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
+    // Every other tool keeps the existing fail-open behavior.
+    expect(names).toContain("t3_show_widget");
+    expect(names).toContain(PUBLISH_MCP);
+  }),
+);
+
+/**
+ * The production `/mcp` path: the list handler binds the caller's thread with NO
+ * `allowedToolGroups` and the real broker decides from the project's Jira account state alone.
+ * (A recipe-launched binding that carries `allowedToolGroups` without `integration.read` is pinned
+ * in `t3team-workItemReadAvailability.test.ts`.) Reads are offered by account state, not by the
+ * thread's synced tool context: /mcp threads (cloud, headless) carry none.
+ */
+describe("through the real broker on the production /mcp bind path", () => {
+  const jiraSource = {
+    provider: "atlassian",
+    accountId: "acct-1",
+    externalProjectId: "10001",
+  } as const;
+  const realBroker = makeBrokerLayer(undefined, { projectSource: jiraSource }).pipe(
+    Layer.provide(SqlitePersistenceMemory),
+  );
+  const listed = () =>
+    listedTools({
+      heldToolIds: undefined,
+      broker: realBroker as unknown as Layer.Layer<T3TeamToolBroker>,
+      callerThreadId: brokerThreadId,
+    });
+
+  afterEach(() => atlassianAuths.clear());
+
+  it.effect("offers the work-item read tools while Jira is connected", () =>
+    Effect.gen(function* () {
+      atlassianAuths.set("acct-1", {
+        kind: "basic",
+        siteUrl: "https://example.atlassian.net",
+        email: "a@example.com",
+        apiToken: "x",
+      });
+      const names = yield* listed();
+      for (const name of WORK_ITEM_MCP) expect(names).toContain(name);
+    }),
+  );
+
+  it.effect("does not offer them while Jira is not connected", () =>
+    Effect.gen(function* () {
+      const names = yield* listed();
+      for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
+    }),
+  );
+});
