@@ -27,7 +27,7 @@ export function ModelPickerSignInRefreshNotice({
     return (
       <div
         role="status"
-        className="flex items-center gap-2 border-t px-3 py-2 text-xs text-muted-foreground"
+        className="flex items-center gap-2 border-t px-4 py-3 text-xs text-muted-foreground"
       >
         <Spinner className="size-3.5" />
         Signed in. Loading {displayName} models…
@@ -37,7 +37,7 @@ export function ModelPickerSignInRefreshNotice({
   return (
     <div
       role="status"
-      className="flex flex-col gap-2 border-t px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <p className="text-xs text-muted-foreground">
         {status === "failed"
