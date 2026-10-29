@@ -8,6 +8,8 @@ describe("mobileExtensions", () => {
     expect(mobileExtensions.connectionsNewTop).toBeUndefined();
     expect(mobileExtensions.homeFilters).toBeUndefined();
     expect(mobileExtensions.workspaceTab).toBeUndefined();
+    expect(mobileExtensions.newTaskTop).toBeUndefined();
+    expect(mobileExtensions.environmentPickerTop).toBeUndefined();
     expect(homeEmptyStateFor(mobileExtensions, catalog, "android")).toBeNull();
   });
 });

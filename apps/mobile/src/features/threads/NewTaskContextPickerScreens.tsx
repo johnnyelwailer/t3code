@@ -41,6 +41,7 @@ import {
 import { useNativeMailSearchToolbar } from "../../native/use-native-mail-search-toolbar";
 import { branchBadgeLabel, useNewTaskFlow } from "./new-task-flow-provider";
 import { checkoutNewTaskBranch } from "./checkout-new-task-branch";
+import { EnvironmentPickerTopSlot } from "../../extensions/t3team-EnvironmentPickerTopSlot";
 
 import { useEnvironmentPresentation } from "../../state/presentation";
 import { useRemoteConnections } from "../../state/use-remote-environment-registry";
@@ -325,6 +326,13 @@ export function NewTaskEnvironmentPickerRouteScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
+          <EnvironmentPickerTopSlot
+            close={() => navigation.goBack()}
+            selectedProjectTitle={flow.selectedProject?.title ?? null}
+            hostingEnvironmentIds={flow.environments.map((environment) =>
+              String(environment.environmentId),
+            )}
+          />
           <PickerSurface>
             {flow.environments.map((environment, index) => (
               <EnvironmentPickerRow
