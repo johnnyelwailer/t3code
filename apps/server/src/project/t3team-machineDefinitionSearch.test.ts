@@ -264,6 +264,22 @@ it.layer(NodeServices.layer)("machine definition search", (it) => {
         "Pull requests from forks were not searched: #5.",
       ]);
       expect(fixture.commands.flatMap((command) => command.args)).not.toContain("refs/pull/5/head");
+      // A skipped pull request is never reported as nothing left out.
+      expect(result.checked[0]?.omitted).toBe(1);
+    }),
+  );
+
+  it.effect("says when the host has more pull requests than the newest it listed", () =>
+    Effect.gen(function* () {
+      const { result } = yield* find({
+        pulls: [pull({ number: 7, state: "open" })],
+        pullsContinue: true,
+        gitOutput: refsOutput({ main: 1, pulls: { 7: 2 } }),
+      });
+      expect(result.unreadable.map((entry) => entry.reason)).toContain(
+        "There are more pull requests than were listed; only the newest were searched.",
+      );
+      expect(result.checked[0]?.omitted).toBeGreaterThan(0);
     }),
   );
 
