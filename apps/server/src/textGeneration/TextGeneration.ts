@@ -195,14 +195,16 @@ export const make = Effect.gen(function* () {
         "generateStructured",
         input.modelSelection,
         (textGeneration, modelSelection) =>
-          textGeneration.generateStructured
+          // The structured schema's decoding services are erased here (the service shape
+          // re-types them); `generate` only carries requirement-free effects.
+          (textGeneration.generateStructured
             ? textGeneration.generateStructured({ ...input, modelSelection })
             : Effect.fail(
                 new TextGenerationError({
                   operation: "generateStructured",
                   detail: "Provider does not support structured background generation.",
                 }),
-              ),
+              )) as Effect.Effect<never, TextGenerationError>,
       ) as never;
     }),
   });

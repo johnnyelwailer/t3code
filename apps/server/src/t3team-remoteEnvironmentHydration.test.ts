@@ -26,9 +26,11 @@ import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import { NexiBrokerService } from "./cloud/t3team-NexiBrokerService.ts";
 import * as ServerConfig from "./config.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as PortScanner from "./preview/PortScanner.ts";
 import { RepositoryIdentityResolver } from "./project/RepositoryIdentityResolver.ts";
 import * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
 import * as CodexInstallation from "./provider/CodexInstallation.ts";
+import * as CodexManagedTokenBroker from "./provider/CodexManagedTokenBroker.ts";
 import * as ModelManifest from "./provider/ModelManifest.ts";
 import * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
@@ -53,7 +55,6 @@ const testHttpClient = Layer.succeed(
 ).pipe(Layer.provideMerge(ModelManifest.layerTest));
 
 const backgroundPolicy = Layer.mock(BackgroundPolicy.BackgroundPolicy)({
-  hasDemand: () => Effect.succeed(true),
   shouldRunScopeWork: () => Effect.succeed(true),
   shouldRunOpportunisticWork: Effect.succeed(true),
   streamChanges: Stream.empty,
@@ -64,6 +65,10 @@ const registryDependencies = Layer.mergeAll(
   OpenCodeRuntime.layer.pipe(Layer.provide(OpenCodeServerLedger.layerTest)),
   remoteEnvironmentPlacementsMemoryLayer,
   Layer.mock(RepositoryIdentityResolver)({ resolve: () => Effect.succeed(null) }),
+  PortScanner.layerTest,
+  Layer.mock(CodexManagedTokenBroker.CodexManagedTokenBroker)({
+    endpoint: Effect.succeed("unused-private-pipe"),
+  }),
 ).pipe(
   Layer.provideMerge(ServerSettingsModule.layerTest()),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-remote-environment-" })),

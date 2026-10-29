@@ -3702,7 +3702,9 @@ export const layer = Layer.unwrap(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(
                     SourceControlProviderRegistry.layer.pipe(
-                      Layer.provide(SourceControlBuiltInDrivers.makeLayer(gitHubTransport)),
+                      // Upstream's GitHub driver builds its own transport; the fork's `gitHubTransport`
+                      // (GitHubApi facade over the server's shared GitHubRest) is provided separately.
+                      Layer.provide(SourceControlBuiltInDrivers.layer),
                       Layer.provideMerge(GitVcsDriver.layer),
                       Layer.provide(
                         VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer)),

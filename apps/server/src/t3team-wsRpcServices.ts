@@ -25,6 +25,7 @@ import type * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import type * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import type * as EnvironmentTheme from "./environmentTheme.ts";
 import type * as GitWorkflowService from "./git/GitWorkflowService.ts";
+import type * as GuestShareService from "./guest/GuestShareService.ts";
 import type * as Keybindings from "./keybindings.ts";
 import type * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import type * as OtlpEndpointCheck from "./observability/OtlpEndpointCheck.ts";
@@ -76,6 +77,7 @@ import type * as SourceControlRepositoryService from "./sourceControl/SourceCont
 import type * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import type * as StorageCleanup from "./storageCleanup.ts";
 import type * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+import type * as TriageService from "./triage/TriageService.ts";
 import type * as TerminalManager from "./terminal/Manager.ts";
 import type * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import type * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
@@ -127,6 +129,7 @@ export type WsRpcHandlerServices =
   | ExternalLauncher.ExternalLauncher
   | FileSystem.FileSystem
   | GitWorkflowService.GitWorkflowService
+  | GuestShareService.GuestShareService
   | HostResources.HostResources
   | Keybindings.Keybindings
   | ManagedProjectFolders.ManagedProjectFolders
@@ -184,6 +187,7 @@ export type WsRpcHandlerServices =
   | ThreadSearch.ThreadSearch
   | ToolAuthService.ToolAuthService
   | TraceDiagnostics.TraceDiagnostics
+  | TriageService.TriageService
   | UsageLimitSources.UsageLimitSources
   | UsageService.UsageService
   | VcsProvisioningService.VcsProvisioningService

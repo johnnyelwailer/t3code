@@ -10205,7 +10205,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const runInterruptReason = Effect.fnUntraced(function* (
     command: Extract<
       OrchestrationV2ServerCommand,
-      { readonly type: "run.interrupt" | "thread.background-work.settle" }
+      {
+        readonly type:
+          | "run.interrupt"
+          | "thread.background-work.settle"
+          | "message.dispatch"
+          | "queued-message.promote-to-steer";
+      }
     >,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
     runId: RunId,

@@ -24,6 +24,7 @@ import * as ConnectionCredentialStore from "../connection/credentialStore.ts";
 import { BearerConnectionTarget } from "../connection/model.ts";
 import * as ConnectionProfileStore from "../connection/profileStore.ts";
 import * as ConnectionResolver from "../connection/resolver.ts";
+import { BrokerEnvironmentGateway } from "../connection/t3team-brokerConnection.ts";
 
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
 const ENDPOINT = {
@@ -282,6 +283,7 @@ const prepareDirectBearer = Effect.fn("TestRemoteAuthorization.prepareDirectBear
           prepare: unused,
           disconnect: unused,
         }),
+        Layer.succeed(BrokerEnvironmentGateway, { attach: unused, pair: unused }),
       ),
     ),
   );

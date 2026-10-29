@@ -32,10 +32,13 @@ import { ManagedProjectFolders } from "../project/ManagedProjectFolders.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import { ProjectSetupScriptRunner } from "../project/ProjectSetupScriptRunner.ts";
 import { PullRequestReviewGuideService } from "../pullRequest/PullRequestReviewGuideService.ts";
+import { PullRequestService } from "../pullRequest/PullRequestService.ts";
 import { ScheduledTaskService } from "../scheduledTasks/ScheduledTaskService.ts";
 import { SecretRequests } from "../secrets/SecretRequests.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { SourceControlRepositoryService } from "../sourceControl/SourceControlRepositoryService.ts";
+import { T3TeamAskUserWriter } from "../mcp/toolkits/t3team/t3team-askUserWriter.ts";
+import { T3TeamToolBroker } from "../t3team-toolBroker.ts";
 import { GitVcsDriver } from "../vcs/GitVcsDriver.ts";
 import { VcsStatusBroadcaster } from "../vcs/VcsStatusBroadcaster.ts";
 import { buildCodexAdditionalContext } from "./CodexDeveloperInstructions.ts";
@@ -63,6 +66,7 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(ProviderAdapterRegistryV2)({}),
   Layer.mock(ProviderRegistry)({}),
   Layer.mock(PullRequestReviewGuideService)({}),
+  Layer.mock(PullRequestService)({}),
   Layer.mock(RemoteDelegation)({}),
   Layer.mock(ScheduledTaskService)({}),
   Layer.mock(SecretRequests)({}),
@@ -71,6 +75,8 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(ServerSecretStore)({}),
   Layer.mock(ServerSettingsService)({}),
   Layer.mock(SourceControlRepositoryService)({}),
+  Layer.mock(T3TeamAskUserWriter)({}),
+  Layer.mock(T3TeamToolBroker)({}),
   Layer.mock(ThreadLaunchService)({}),
   Layer.mock(ThreadManagementService)({}),
   Layer.mock(ThreadSearch)({}),

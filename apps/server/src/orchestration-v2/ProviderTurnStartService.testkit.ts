@@ -11,6 +11,7 @@ import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.t
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
+import { T3TeamLinkedRepositorySync } from "../t3team-linkedRepositorySync.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as Effect from "effect/Effect";
@@ -51,6 +52,8 @@ export const layerRealGit = GitWorkflow.layer.pipe(
       Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({}),
       Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
       Layer.mock(ProjectStore.ProjectStoreV2)({}),
+      // These tests never check out a pull request in a linked repository, the only on-demand clone.
+      Layer.mock(T3TeamLinkedRepositorySync)({}),
       ServerSettings.layerTest(),
     ),
   ),

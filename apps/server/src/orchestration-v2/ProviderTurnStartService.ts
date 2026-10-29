@@ -7,7 +7,6 @@ import {
   latestProviderTurnForAttempt,
   type OrchestrationV2ContextHandoff,
   type OrchestrationV2DomainEvent,
-  type OrchestrationV2ContextHandoff,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2Run,
@@ -1202,8 +1201,9 @@ export const layer: Layer.Layer<
             alreadyDeliveredItemIds: context.deliveredItemIds,
             persist: () => Effect.void,
           }).pipe(
+            // The fork's deliverContextHandoffs falls back to middle-truncate recall instead of
+            // failing with ContextHandoffBudgetError, so there is no budget failure to catch here.
             Effect.as(true),
-            Effect.catchTags({ ContextHandoffBudgetError: () => Effect.succeed(false) }),
           );
           if (fits) return resumed.success;
           const freshThread = { ...resumed.success, nativeThreadRef: null };
@@ -1216,8 +1216,9 @@ export const layer: Layer.Layer<
             alreadyDeliveredItemIds: freshContext.deliveredItemIds,
             persist: () => Effect.void,
           }).pipe(
+            // The fork's deliverContextHandoffs falls back to middle-truncate recall instead of
+            // failing with ContextHandoffBudgetError, so there is no budget failure to catch here.
             Effect.as(true),
-            Effect.catchTags({ ContextHandoffBudgetError: () => Effect.succeed(false) }),
           );
           if (!fitsFresh) return resumed.success;
           const hasPendingWork = yield* (

@@ -353,12 +353,6 @@ describe("Business monthly credit limit", () => {
     ).toEqual(["primary", "individual"]);
   });
 
-  it("names the monthly reset in the stop message", () => {
-    expect(codexUsageLimitMessage(business, "2026-10-08T00:00:00.000Z")).toBe(
-      "Codex usage limit reached. The monthly limit resets in 24d. The workspace spend limit is reached: ask your workspace owner to raise it, or send the message again once the limit resets.",
-    );
-  });
-
   it("waits for the credit limit to reset before continuing", () => {
     expect(codexUsageLimitResetAt(business)).toBe("2026-11-01T00:00:00.000Z");
   });

@@ -196,7 +196,7 @@ describe("thread resume cursor identity", () => {
       const sink = yield* EventSink.EventSinkV2;
       const stored = yield* sink.write({ events });
       const maintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
-      const summary = yield* maintenance.compactEventStore;
+      const summary = yield* maintenance.compactEventStore();
       // Title 1 and 2 are superseded by title 3, so the client's cursor event is gone.
       assert.equal(summary.deletedEventCount, 2);
       const items = yield* Stream.unwrap(

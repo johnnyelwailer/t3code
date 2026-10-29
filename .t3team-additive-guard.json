@@ -750,7 +750,17 @@
     "apps/server/src/provider/CodexProvider.test.ts",
     "packages/contracts/src/orchestratorMcp.test.ts",
     "apps/web/src/shortcuts/chatRouteCommands.ts",
-    "packages/source-control-github/src/shared/definition.ts"
+    "packages/source-control-github/src/shared/definition.ts",
+    "apps/mobile/src/features/home/ThreadListToolbar.tsx",
+    "apps/mobile/src/features/layout/AdaptiveWorkspaceLayout.tsx",
+    "apps/mobile/src/features/workspace/workspace-tabs-state.test.ts",
+    "apps/server/src/orchestration-v2/ProviderTurnStartService.testkit.ts",
+    "apps/server/src/persistence/Migrations/069_ThreadMessageSearch.test.ts",
+    "apps/server/src/provider/AgentContextBudget.test.ts",
+    "apps/server/src/provider/EventNdjsonLogger.test.ts",
+    "packages/client-runtime/src/authorization/layer.test.ts",
+    "packages/source-control-github/src/server/gitHubPullRequestJson.test.ts",
+    "packages/source-control-testing/src/TestSourceControlHost.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

@@ -148,7 +148,7 @@ const project = (workspaceRoot: string): OrchestrationProjectShell => ({
       remoteName: "origin",
       remoteUrl: "https://github.com/acme/app.git",
     },
-    provider: "github",
+    provider: SourceControlProviderKind.make("github"),
     displayName: "acme/app",
   },
   defaultModelSelection: null,

@@ -150,7 +150,12 @@ const runForReal = (
     if (exitCode !== 0 && !input.allowNonZeroExit) {
       return yield* VcsProcessExitError.fromProcessExit(
         context,
-        { exitCode, stderr: stderr.text, stderrTruncated: stderr.truncated },
+        {
+          exitCode,
+          stderr: stderr.text,
+          originalStderrLength: stderr.text.length,
+          stderrTruncated: stderr.truncated,
+        },
         input.classifyFailure?.(stderr.text) ?? "command-failed",
         input.notFoundDetail === undefined ? undefined : { notFoundDetail: input.notFoundDetail },
       );

@@ -1028,6 +1028,7 @@ it.effect("lists pull request watch tools only to threads that are not delegated
             Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
             Layer.mock(Orchestrator.OrchestratorV2)({}),
             Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
+            Layer.mock(PullRequestService.PullRequestService)({}),
             NodeServices.layer,
           ),
         ),

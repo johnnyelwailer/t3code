@@ -2926,6 +2926,7 @@ describe("provider usage echo", () => {
       adapterRegistryLayer(providers.map((provider) => provider.instanceId)),
       Layer.mock(ProjectService.ProjectService)({}),
       Layer.mock(SecretRequests.SecretRequests)({}),
+      Layer.mock(RemoteDelegation.RemoteDelegation)({}),
       Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
     );
 

@@ -20,7 +20,12 @@ function step(
   const deadline = state === null ? null : delayedStatusDeadline(state);
   return stepDelayedStatus(
     state,
-    { key: "a", value, deadlinePassed: deadline !== null && now >= deadline, timing },
+    {
+      key: "a",
+      value,
+      deadlinePassed: deadline !== null && now >= deadline,
+      ...(timing === undefined ? {} : { timing }),
+    },
     () => now,
   );
 }

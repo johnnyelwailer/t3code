@@ -1385,7 +1385,7 @@ export const make = Effect.gen(function* () {
           message: unreadableRepositoryMessage({
             repository,
             host,
-            reason: hostError ? providerDetail(hostError) : null,
+            reason: hostError ? providerDetail(requirementOf, hostError) : null,
           }),
         };
       });

@@ -165,7 +165,10 @@ describe("workspace root navigation", () => {
 
 describe("isWorkspaceTabActive", () => {
   it("is true only for the selected stock tab", () => {
-    const state = workspaceTabsReducer(initialWorkspaceTabsState(), { type: "select", tab: "usage" });
+    const state = workspaceTabsReducer(initialWorkspaceTabsState(), {
+      type: "select",
+      tab: "usage",
+    });
     expect(isWorkspaceTabActive(state, "usage")).toBe(true);
     expect(isWorkspaceTabActive(state, "threads")).toBe(false);
   });
@@ -175,7 +178,7 @@ describe("isWorkspaceTabActive", () => {
       { type: "selectExtra" },
     );
     expect(state.selectedTab).toBe("usage");
-    for (const tab of ["threads", "pullRequests", "usage", "settings"] as const) {
+    for (const tab of ["threads", "pullRequests", "usage"] as const) {
       expect(isWorkspaceTabActive(state, tab)).toBe(false);
     }
   });

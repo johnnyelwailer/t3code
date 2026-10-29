@@ -20,6 +20,7 @@ import { derive } from "@t3tools/provider-core/server/IdAllocator";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
@@ -178,6 +179,7 @@ const makeDependencies = (
     Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
     Layer.mock(ProjectService.ProjectService)({}),
     Layer.mock(SecretRequests.SecretRequests)({}),
+    Layer.mock(RemoteDelegation.RemoteDelegation)({}),
   );
 };
 

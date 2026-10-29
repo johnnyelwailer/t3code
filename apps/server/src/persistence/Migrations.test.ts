@@ -189,7 +189,7 @@ it.effect("registers every upstream migration file at some id, except the held o
       return match?.[2] === undefined ? [] : [match[2]];
     });
     assert.isAbove(upstreamFileNames.length, 0);
-    const registeredNames = new Set(migrationManifest.map(([, name]) => name));
+    const registeredNames = new Set<string>(migrationManifest.map(([, name]) => name));
     assert.deepStrictEqual(
       upstreamFileNames.filter((name) => !registeredNames.has(name)).toSorted(),
       HELD_UPSTREAM_MIGRATIONS,

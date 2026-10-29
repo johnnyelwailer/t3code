@@ -40,6 +40,7 @@ import * as Stream from "effect/Stream";
 
 import * as ServerSettings from "../serverSettings.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
+import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -169,6 +170,7 @@ const runScenario = (threadId: string, makeEvents: (ids: Ids) => ProviderAdapter
           }),
           ServerSettings.layerTest(),
           McpAppModelContext.layerEmpty,
+          PreviewAgentActivity.layer,
         ),
       ),
     );

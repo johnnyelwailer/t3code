@@ -2242,10 +2242,10 @@ describe("EnvironmentThreads", () => {
       yield* awaitThreadState(harness.observed, (value) => value.status === "live");
       yield* harness.replaceSession;
       for (let attempt = 0; attempt < 100; attempt += 1) {
-        if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
+        if ((yield* SubscriptionRef.get(harness.subscriptionCount)) >= 2) break;
         yield* Effect.yieldNow;
       }
-      expect(yield* Ref.get(harness.subscriptionCount)).toBe(2);
+      expect(yield* SubscriptionRef.get(harness.subscriptionCount)).toBe(2);
       // The cursor moved to a sequence nothing can name, so it is not resumable:
       // the server is asked for a snapshot rather than a delta.
       expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBeUndefined();
@@ -2264,10 +2264,10 @@ describe("EnvironmentThreads", () => {
       // The cached projection paints right away; only the resume cursor is withheld.
       yield* awaitThreadState(harness.observed, (value) => Option.isSome(value.data));
       for (let attempt = 0; attempt < 100; attempt += 1) {
-        if ((yield* Ref.get(harness.subscriptionCount)) >= 1) break;
+        if ((yield* SubscriptionRef.get(harness.subscriptionCount)) >= 1) break;
         yield* Effect.yieldNow;
       }
-      expect(yield* Ref.get(harness.subscriptionCount)).toBe(1);
+      expect(yield* SubscriptionRef.get(harness.subscriptionCount)).toBe(1);
       expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBeUndefined();
     }),
   );
