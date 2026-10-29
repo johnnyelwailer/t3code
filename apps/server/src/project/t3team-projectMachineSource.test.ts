@@ -136,6 +136,24 @@ it.layer(NodeServices.layer)("project machine source", (it) => {
     }),
   );
 
+  it.effect("fails, instead of going plain, when the chosen repository has no commits", () =>
+    Effect.gen(function* () {
+      const fixture = yield* remoteFixture({
+        files: DEVCONTAINER,
+        gitOutput: "ref: refs/heads/main\tHEAD\n",
+      });
+      const result = yield* Effect.gen(function* () {
+        const service = yield* ProjectMachineDiscovery;
+        yield* service.setSource(remoteProjectId, { repository: "acme/empty" });
+        return yield* service.resolveDefault(remoteProjectId);
+      }).pipe(Effect.provide(fixture.layer));
+      expect(result.source).toBeNull();
+      expect(result.sourceFailure).toBe(
+        "No machine definition was found in acme/empty on its default branch: it has no commits to read.",
+      );
+    }),
+  );
+
   it.effect("resets to the default and removes the saved choice", () =>
     Effect.gen(function* () {
       const fixture = yield* remoteFixture({ files: DEVCONTAINER, gitOutput: lsRemote });

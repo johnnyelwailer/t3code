@@ -119,7 +119,16 @@ export const scanSelectedSource = Effect.fn("projectMachine.scanSelectedSource")
       }),
     );
   if (!scan.ok) return { ...none, readout: readout(null), failure: scan.failure };
-  if (scan.value === null) return { ...none, readout: readout(null), failure: undefined };
+  // No advertised HEAD (an empty repository). A cached-only background scan simply has no answer yet.
+  if (scan.value === null) {
+    return {
+      ...none,
+      readout: readout(null),
+      failure: input.cachedOnly
+        ? undefined
+        : `No machine definition was found in ${label} on ${where}: it has no commits to read.`,
+    };
+  }
   const { value } = scan;
   const found = value.candidates.length > 0 || value.rejected.length > 0;
   return {

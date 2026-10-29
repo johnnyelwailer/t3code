@@ -31,6 +31,9 @@ export function T3TeamProjectMachineSourceSection({
   const result = useAtomValue(
     cloudSessionEnvironment.projectMachine({ environmentId, input: { projectId } }),
   );
+  const canWrite = useAtomValue(
+    cloudSessionEnvironment.setProjectMachineSource.permissionAtom(environmentId),
+  );
   const save = useAtomCommand(cloudSessionEnvironment.setProjectMachineSource, {
     reportFailure: false,
   });
@@ -60,6 +63,7 @@ export function T3TeamProjectMachineSourceSection({
     );
   };
 
+  const locked = pending || !canWrite;
   const customized = discovery?.source?.override != null;
   return (
     <SettingsSection title="Cloud machine">
@@ -79,7 +83,7 @@ export function T3TeamProjectMachineSourceSection({
           customized ? (
             <SettingResetButton
               label="machine definition source"
-              disabled={pending}
+              disabled={locked}
               onClick={() => void run(null)}
             />
           ) : null
@@ -90,21 +94,21 @@ export function T3TeamProjectMachineSourceSection({
               aria-label="Machine definition repository"
               placeholder="owner/repo or https URL"
               value={values.repository}
-              disabled={pending}
+              disabled={locked}
               onChange={(event) => setForm({ ...values, repository: event.target.value })}
             />
             <Input
               aria-label="Machine definition branch"
               placeholder="default branch"
               value={values.branch}
-              disabled={pending}
+              disabled={locked}
               onChange={(event) => setForm({ ...values, branch: event.target.value })}
             />
             <Button
               size="sm"
               variant="outline"
               type="button"
-              disabled={pending || form === null}
+              disabled={locked || form === null}
               onClick={() => void run(machineSourceFromForm(values))}
             >
               Save
