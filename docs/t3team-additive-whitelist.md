@@ -613,6 +613,10 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 - `apps/mobile/modules/t3-native-controls/android/.../T3WorkspaceNavigationModule.kt` — the hardcoded tab list becomes a `tabs` prop (default: the stock three, same titles and icons); an unknown id uses the generic extra icon and the given title.
 - `apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml` — the extra tab's icon (allowed unprefixed in `.t3team-additive-guard.json`: an Android resource name cannot contain `-` or `.`).
 
+## Cloud checkout joins the user's project in the sidebar (2026-10-29, #777)
+
+- `apps/web/src/hooks/useSidebarProjectGroups.ts`, `components/settings/useSettingsProjectGroups.ts`, `components/CommandPaletteLookups.ts`, `components/chat/DraftHeroHeadline.tsx` — run the project list through `useCloudAdoptedProjects` (`t3team-cloudCheckoutProjectAdoption.ts`) before grouping: a cloud session's checkout (named after a runner folder, unbound) adopts the title and work-source binding of the primary environment's project for the same repository, so both group as one project under the user's name and icon. One changed line each (plus the import); with no broker environment the list is returned unchanged.
+
 ## Mobile `newTaskTop` and `environmentPickerTop` seams (2026-10-29)
 
 - `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx` — renders the distribution's `newTaskTop` slot (isolated, nothing without one) first in the New task project list: one import and one line, so a distribution can offer another way to start a thread (a cloud session) next to the stock ones.

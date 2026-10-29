@@ -1,10 +1,11 @@
+import { useCloudAdoptedProjects } from "../../cloud/t3team-useCloudAdoptedProjects";
 import { useClientSettings } from "../../hooks/useSettings";
 import { buildSidebarProjectSnapshots } from "../../sidebarProjectGrouping";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 
 export function useSettingsProjectGroups() {
-  const projects = useProjects();
+  const projects = useCloudAdoptedProjects(useProjects());
   // Read the grouping fields one by one: a selector that builds an object hands back a new
   // identity on every client settings write, which rebuilds every group and, through the
   // settings scope, re-renders every settings row.
