@@ -5,6 +5,7 @@ import {
   type DesktopUpdateActionResult,
   type DesktopUpdateChannel,
   type DesktopUpdateCheckResult,
+  type DesktopUpdateIssue,
   type DesktopUpdateState,
 } from "@t3tools/contracts";
 import { errorTag } from "@t3tools/shared/observability";
@@ -34,6 +35,8 @@ import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
+import { NexiUpdateFeed } from "./t3team-nexiUpdateFeed.ts";
+import { withUpdateIssue } from "./t3team-updateIssue.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
   createInitialDesktopUpdateState,
@@ -345,6 +348,7 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  const nexiFeed = yield* NexiUpdateFeed;
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -363,6 +367,8 @@ export const make = Effect.gen(function* () {
     ),
   );
 
+  // The named reason behind the current error, shown only while the state is in error.
+  const updateIssueRef = yield* Ref.make<DesktopUpdateIssue | null>(null);
   const stateChanges = yield* PubSub.sliding<DesktopUpdateState>(16);
   // Makes ref writes + publishes atomic against subscribe, so a snapshot
   // never overlaps with the first change a subscriber receives.
@@ -373,11 +379,15 @@ export const make = Effect.gen(function* () {
   );
 
   const setState = (state: DesktopUpdateState): Effect.Effect<void> =>
-    stateMutex
-      .withPermits(1)(
-        Ref.set(updateStateRef, state).pipe(Effect.andThen(PubSub.publish(stateChanges, state))),
-      )
-      .pipe(Effect.andThen(emitState));
+    Ref.get(updateIssueRef).pipe(
+      Effect.flatMap((issue) => {
+        const next = withUpdateIssue(state, issue);
+        return stateMutex.withPermits(1)(
+          Ref.set(updateStateRef, next).pipe(Effect.andThen(PubSub.publish(stateChanges, next))),
+        );
+      }),
+      Effect.andThen(emitState),
+    );
 
   const updateState = (
     f: (state: DesktopUpdateState) => DesktopUpdateState,
@@ -412,7 +422,11 @@ export const make = Effect.gen(function* () {
       : false;
 
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
-    Effect.map((appUpdateYmlConfig) => Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
+    Effect.flatMap((appUpdateYmlConfig) =>
+      Option.isSome(appUpdateYmlConfig) || config.mockUpdates
+        ? Effect.succeed(true)
+        : nexiFeed.enabled,
+    ),
   );
 
   const resolveDisabledReason = Effect.gen(function* () {
@@ -501,8 +515,17 @@ export const make = Effect.gen(function* () {
             "desktop.updates.handleCheckForUpdatesFailure",
           )(function* (error) {
             const failedAt = yield* currentIsoTimestamp;
+            const failure = nexiFeed.describeFailure(error.cause);
+            yield* Ref.set(
+              updateIssueRef,
+              Option.match(failure, { onNone: () => null, onSome: (f) => f.issue }),
+            );
             yield* updateState((current) =>
-              reduceDesktopUpdateStateOnCheckFailure(current, error.message, failedAt),
+              reduceDesktopUpdateStateOnCheckFailure(
+                current,
+                Option.match(failure, { onNone: () => error.message, onSome: (f) => f.message }),
+                failedAt,
+              ),
             );
             yield* logUpdaterError(error.message, {
               errorTag: error._tag,
@@ -545,8 +568,16 @@ export const make = Effect.gen(function* () {
       Effect.catchTags({
         ElectronUpdaterDownloadUpdateError: Effect.fn("desktop.updates.handleDownloadFailure")(
           function* (error) {
+            const failure = nexiFeed.describeFailure(error.cause);
+            yield* Ref.set(
+              updateIssueRef,
+              Option.match(failure, { onNone: () => null, onSome: (f) => f.issue }),
+            );
             yield* updateState((current) =>
-              reduceDesktopUpdateStateOnDownloadFailure(current, error.message),
+              reduceDesktopUpdateStateOnDownloadFailure(
+                current,
+                Option.match(failure, { onNone: () => error.message, onSome: (f) => f.message }),
+              ),
             );
             yield* logUpdaterError(error.message, {
               errorTag: error._tag,
@@ -1053,6 +1084,8 @@ export const make = Effect.gen(function* () {
           provider: "generic",
           url: `http://localhost:${config.mockUpdateServerPort}`,
         } as ElectronUpdater.ElectronUpdaterFeedUrl);
+      } else if (Option.isNone(appUpdateYmlConfig) && (yield* nexiFeed.enabled)) {
+        yield* electronUpdater.setFeedURL(yield* nexiFeed.feedOptions);
       }
 
       const settings = yield* desktopSettings.get;
