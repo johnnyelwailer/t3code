@@ -48,7 +48,7 @@ export function isSupportedNexiRuntime(runtime: NexiRuntime): boolean {
   return (
     selectNexiPayload(
       [
-        { id: 0, name: "x-0.0.0-arm64-mac.zip", size: 0, state: "uploaded" },
+        { id: 0, name: "x-0.0.0-arm64.zip", size: 0, state: "uploaded" },
         { id: 0, name: "x-0.0.0-x64.exe", size: 0, state: "uploaded" },
         { id: 0, name: "latest-mac.yml", size: 0, state: "uploaded" },
         { id: 0, name: "latest.yml", size: 0, state: "uploaded" },
@@ -75,7 +75,8 @@ export function selectNexiPayload(
   let payloadMatches: (asset: NexiGheAsset) => boolean;
   let manifestName: string;
   if (runtime.platform === "darwin" && runtime.arch === "arm64") {
-    payloadMatches = (asset) => asset.name.endsWith("-arm64-mac.zip") && versioned(asset);
+    payloadMatches = (asset) =>
+      asset.name.endsWith(".zip") && asset.name.includes("-arm64") && versioned(asset);
     manifestName = "latest-mac.yml";
   } else if (runtime.platform === "win32" && (runtime.arch === "x64" || runtime.arch === "arm64")) {
     payloadMatches = (asset) =>

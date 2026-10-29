@@ -12,7 +12,7 @@ const SHA = Buffer.alloc(64, 7).toString("base64");
 const asset = (id: number, name: string, size = 100) => ({ id, name, size, state: "uploaded" });
 
 function release(version: string, over: Partial<NexiGheRelease> = {}): NexiGheRelease {
-  const arm = `Nexi-Work-${version}-arm64-mac.zip`;
+  const arm = `Nexi-Work-${version}-arm64-20261029-2040.zip`;
   const exe = `Nexi-Work-${version}-x64-20261027-0647.exe`;
   return {
     tag_name: `desktop-v${version}`,
@@ -23,7 +23,8 @@ function release(version: string, over: Partial<NexiGheRelease> = {}): NexiGheRe
     published_at: "2026-10-29T10:00:00Z",
     assets: [
       asset(1, arm),
-      asset(2, `Nexi-Work-${version}-arm64.dmg`),
+      asset(2, `Nexi-Work-${version}-arm64-20261029-2040.dmg`),
+      asset(6, `Nexi-Work-${version}-arm64-20261029-2040.zip.sha256`, 90),
       asset(3, exe),
       asset(4, "latest-mac.yml", 200),
       asset(5, "latest.yml", 200),
@@ -141,9 +142,9 @@ describe("pickNexiUpdate: only real desktop releases", () => {
 
 describe("selectNexiPayload: the right asset per platform and arch", () => {
   const r = release("0.1.2");
-  it("macOS arm64 takes the ZIP (not the DMG) and latest-mac.yml", () => {
+  it("macOS arm64 takes the ZIP (not the DMG or its .sha256, named as the real build names it) and latest-mac.yml", () => {
     const picked = selectNexiPayload(r.assets, "0.1.2", mac);
-    expect(picked?.payload.name).toBe("Nexi-Work-0.1.2-arm64-mac.zip");
+    expect(picked?.payload.name).toBe("Nexi-Work-0.1.2-arm64-20261029-2040.zip");
     expect(picked?.manifest.name).toBe("latest-mac.yml");
   });
   it("Windows x64 takes the NSIS .exe (not its .sha256) and latest.yml", () => {
@@ -166,14 +167,33 @@ describe("selectNexiPayload: the right asset per platform and arch", () => {
   });
 });
 
+describe("selectNexiPayload with the names a real build publishes (workflow run 365078677)", () => {
+  const real = [
+    asset(1, "Nexi-Work-0.1.2-test.1-arm64-20261029-2040.dmg"),
+    asset(2, "Nexi-Work-0.1.2-test.1-arm64-20261029-2040.dmg.sha256"),
+    asset(3, "Nexi-Work-0.1.2-test.1-arm64-20261029-2040.dmg.verification.txt"),
+    asset(4, "Nexi-Work-0.1.2-test.1-arm64-20261029-2040.zip"),
+    asset(5, "Nexi-Work-0.1.2-test.1-arm64-20261029-2040.zip.sha256"),
+    asset(6, "Nexi-Work-0.1.2-test.1-x64-20261029-1733.exe"),
+    asset(7, "Nexi-Work-0.1.2-test.1-x64-20261029-1733.exe.sha256"),
+    asset(8, "Nexi-Work-0.1.2-test.1-x64-20261029-1733.exe.verification.txt"),
+    asset(9, "latest-mac.yml"),
+    asset(10, "latest.yml"),
+  ];
+  it("picks the ZIP on macOS arm64 and the .exe on Windows x64", () => {
+    expect(selectNexiPayload(real, "0.1.2-test.1", mac)?.payload.id).toBe(4);
+    expect(selectNexiPayload(real, "0.1.2-test.1", win)?.payload.id).toBe(6);
+  });
+});
+
 describe("parseNexiUpdateManifest", () => {
   const text = (over = "") =>
-    `version: 0.1.2\nfiles:\n  - url: Nexi-Work-0.1.2-arm64-mac.zip\n    sha512: ${SHA}\n    size: 100\npath: Nexi-Work-0.1.2-arm64-mac.zip\nsha512: ${SHA}\nreleaseDate: '2026-10-29T00:00:00.000Z'\n${over}`;
+    `version: 0.1.2\nfiles:\n  - url: Nexi-Work-0.1.2-arm64-20261029-2040.zip\n    sha512: ${SHA}\n    size: 100\npath: Nexi-Work-0.1.2-arm64-20261029-2040.zip\nsha512: ${SHA}\nreleaseDate: '2026-10-29T00:00:00.000Z'\n${over}`;
 
   it("reads the version, file, sha512 and size", () => {
     expect(parseNexiUpdateManifest(text())).toEqual({
       version: "0.1.2",
-      path: "Nexi-Work-0.1.2-arm64-mac.zip",
+      path: "Nexi-Work-0.1.2-arm64-20261029-2040.zip",
       sha512: SHA,
       size: 100,
     });

@@ -34,14 +34,14 @@ const release = (version: string, firstId: number, tag = `desktop-v${version}`) 
   html_url: `https://nexplore.ghe.com/hive/nx-nexi/releases/tag/${tag}`,
   published_at: "2026-10-29T10:00:00Z",
   assets: [
-    asset(firstId, `Nexi-Work-${version}-arm64-mac.zip`, BYTES.length),
+    asset(firstId, `Nexi-Work-${version}-arm64-20261029-2040.zip`, BYTES.length),
     asset(firstId + 1, `Nexi-Work-${version}-x64-20261027-0647.exe`, 10),
     asset(firstId + 2, "latest-mac.yml", 300),
     asset(firstId + 3, "latest.yml", 300),
   ],
 });
 const manifest = (version: string, sha = SHA512, size = BYTES.length) =>
-  `version: ${version}\nfiles:\n  - url: Nexi-Work-${version}-arm64-mac.zip\n    sha512: ${sha}\n    size: ${size}\npath: Nexi-Work-${version}-arm64-mac.zip\nsha512: ${sha}\n`;
+  `version: ${version}\nfiles:\n  - url: Nexi-Work-${version}-arm64-20261029-2040.zip\n    sha512: ${sha}\n    size: ${size}\npath: Nexi-Work-${version}-arm64-20261029-2040.zip\nsha512: ${sha}\n`;
 
 interface Fake {
   readonly releases: unknown;
@@ -132,7 +132,7 @@ describe("nexi-update routes", () => {
       notes: "Notes for 0.1.2-rc.5",
       file: {
         assetId: 100,
-        name: "Nexi-Work-0.1.2-rc.5-arm64-mac.zip",
+        name: "Nexi-Work-0.1.2-rc.5-arm64-20261029-2040.zip",
         size: BYTES.length,
         sha512: SHA512,
       },
@@ -158,7 +158,7 @@ describe("nexi-update routes", () => {
     const before = seen.length;
     for (const id of ["500", "101", "1", "99999999999999"]) {
       const refused = await call(
-        `/api/t3team/nexi-update/asset/${id}/Nexi-Work-0.1.2-rc.5-arm64-mac.zip`,
+        `/api/t3team/nexi-update/asset/${id}/Nexi-Work-0.1.2-rc.5-arm64-20261029-2040.zip`,
       );
       expect(refused.status, id).toBe(404);
     }
@@ -167,7 +167,7 @@ describe("nexi-update routes", () => {
     expect((await call("/api/t3team/nexi-update/asset/100/other-name.zip")).status).toBe(404);
     expect(seen.length).toBe(before);
     const served = await call(
-      "/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip",
+      "/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-20261029-2040.zip",
     );
     expect(served).toEqual({ status: 200, text: BYTES });
     expect(seen.at(-1)?.url).toBe(`${API}/releases/assets/100`);
@@ -176,7 +176,8 @@ describe("nexi-update routes", () => {
   it("refuses an asset id before any check has vetted one", async () => {
     const { seen, call } = boot({ releases: twoReleases });
     expect(
-      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip")).status,
+      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-20261029-2040.zip"))
+        .status,
     ).toBe(404);
     expect(seen).toEqual([]);
   });
@@ -185,8 +186,12 @@ describe("nexi-update routes", () => {
     const { seen, call } = boot({ releases: twoReleases });
     expect((await call(LATEST, {})).status).toBe(403);
     expect(
-      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip", {}))
-        .status,
+      (
+        await call(
+          "/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-20261029-2040.zip",
+          {},
+        )
+      ).status,
     ).toBe(403);
     expect((await call(LATEST, { cookie: "t3_session=abc" })).status).toBe(403);
     expect(seen).toEqual([]);
@@ -255,7 +260,8 @@ describe("nexi-update routes", () => {
     const { call } = boot({ releases: twoReleases, contentLength: "999999" });
     await call(LATEST);
     expect(
-      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-mac.zip")).status,
+      (await call("/api/t3team/nexi-update/asset/100/Nexi-Work-0.1.2-rc.5-arm64-20261029-2040.zip"))
+        .status,
     ).toBe(502);
   });
 });
