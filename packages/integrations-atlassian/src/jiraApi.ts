@@ -634,8 +634,18 @@ export class JiraApiClient {
     );
   }
 
-  async getIssueComments(issueIdOrKey: string): Promise<JiraCommentsResponse> {
-    return this.fetchJson<JiraCommentsResponse>(`/rest/api/3/issue/${issueIdOrKey}/comment`);
+  /** `page` bounds the answer: Jira's default is 50 oldest-first, and `-created` asks newest-first. */
+  async getIssueComments(
+    issueIdOrKey: string,
+    page?: { readonly maxResults: number; readonly newestFirst?: boolean },
+  ): Promise<JiraCommentsResponse> {
+    const query =
+      page === undefined
+        ? ""
+        : `?maxResults=${page.maxResults}${page.newestFirst === true ? "&orderBy=-created" : ""}`;
+    return this.fetchJson<JiraCommentsResponse>(
+      `/rest/api/3/issue/${issueIdOrKey}/comment${query}`,
+    );
   }
 
   async addIssueComment(issueIdOrKey: string, body: unknown): Promise<unknown> {

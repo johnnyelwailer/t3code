@@ -23,6 +23,7 @@ import {
   type JiraIssueLinkType,
 } from "./client.ts";
 import { markdownToAdf } from "./adf/index.ts";
+import { convertAdfToMarkdown } from "./adf/toMarkdown.ts";
 import { JiraApiClient, jiraCloudApiBaseUrl, type JiraApiAuth } from "./jiraApi.ts";
 import {
   normalizeAccount,
@@ -1754,6 +1755,81 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       }
     }
     return matched;
+  }
+
+  /**
+   * One page of `jql` run as given, as backlog items (sprint, estimate and links stamped like the
+   * mirror walk). The CALLER owns scoping: an agent-facing read passes its JQL through
+   * `restrictJqlToProject` first, because this method runs whatever it is handed.
+   */
+  async searchIssuesByJql(input: {
+    readonly accountId: string;
+    readonly jql: string;
+    readonly limit?: number;
+    readonly cursor?: string;
+  }): Promise<{
+    items: ReadonlyArray<ReturnType<typeof normalizeIssueSearch>[number]>;
+    nextCursor: string | undefined;
+  }> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) throw new Error(`No Atlassian client available for account "${input.accountId}".`);
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+    const response = await entry.client.searchIssues(
+      input.jql,
+      input.limit ?? jiraIssueSearchPageSize,
+      [...(estimateField ? [estimateField.id] : []), ...(sprintField ? [sprintField.id] : [])],
+      input.cursor,
+    );
+    return {
+      items: response.issues.map((issue) =>
+        this.toBacklogItem(issue as JiraIssue, entry.siteUrl, estimateField, sprintField),
+      ),
+      nextCursor:
+        response.nextPageToken && response.isLast !== true ? response.nextPageToken : undefined,
+    };
+  }
+
+  /**
+   * The issue's NEWEST `limit` comments, returned oldest-first so they read in order, bodies
+   * rendered to markdown. `truncated` is true when the issue has older comments that were not
+   * returned, so a long thread is reported as cut, never silently shortened.
+   */
+  async listIssueComments(input: {
+    readonly accountId: string;
+    readonly issueIdOrKey: string;
+    readonly limit?: number;
+  }): Promise<{
+    readonly comments: ReadonlyArray<{
+      readonly id: string;
+      readonly author?: string;
+      readonly body: string;
+      readonly created?: string;
+    }>;
+    readonly truncated: boolean;
+  }> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) throw new Error(`No Atlassian client available for account "${input.accountId}".`);
+    const limit = input.limit ?? 50;
+    const response = await entry.client.getIssueComments(input.issueIdOrKey, {
+      maxResults: limit,
+      newestFirst: true,
+    });
+    const newest = response.comments.slice(0, limit);
+    return {
+      comments: newest.toReversed().map((comment) => ({
+        id: comment.id,
+        ...(comment.author?.displayName ? { author: comment.author.displayName } : {}),
+        body:
+          typeof comment.body === "string"
+            ? comment.body
+            : convertAdfToMarkdown(comment.body).trim(),
+        ...(comment.created ? { created: comment.created } : {}),
+      })),
+      truncated: response.total > newest.length,
+    };
   }
 
   async getAvailableActions(_ref: unknown): Promise<ReadonlyArray<IntegrationAction>> {

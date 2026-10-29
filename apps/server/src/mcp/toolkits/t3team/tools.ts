@@ -24,6 +24,7 @@ import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
 import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
+import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workItemReadTools.ts";
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
 import { T3TeamMachineFindDefinitionsTool } from "./t3team-machineDefinitionTools.ts";
@@ -57,6 +58,11 @@ export { mcpDescriptionOf };
  * survives. Their `publishDraft` is also pinned to the launch thread so the draft carrier message
  * lands where the user can review it. Exposing them over `/mcp`, whose invocation scope carries
  * none of that, would bypass all three gates and unpin the target thread.
+ *
+ * The work-item READ tools (`t3_work_item_search` / `_get`) are the opposite case and ARE on `/mcp`:
+ * they are read-only and project-scoped, and are offered by account state (a usable Jira account for
+ * the thread's project), not by the thread's synced tool context, which `/mcp` threads do not carry
+ * (`t3team-workItemReadAvailability.ts`). Only a recipe's `allowedToolGroups` can further withhold them.
  */
 export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
   "t3team.backlog.set_assignee_filter",
@@ -505,6 +511,8 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRecipeValidateTool,
   T3TeamMyWorkDigestTool,
   T3TeamMyWorkArrangeTool,
+  T3TeamWorkItemSearchTool,
+  T3TeamWorkItemGetTool,
   T3TeamChangeRequestPublishTool,
   T3TeamLinkedRepositorySyncTool,
   T3TeamMachineFindDefinitionsTool,

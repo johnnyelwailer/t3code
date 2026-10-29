@@ -593,6 +593,7 @@
     "packages/contracts/src/vcs.ts",
     "packages/effect-codex-app-server/src/schema.test.ts",
     "packages/integrations-atlassian/src/client.ts",
+    "packages/integrations-atlassian/src/index.ts",
     "packages/integrations-atlassian/src/jiraApi.live.test.ts",
     "packages/integrations-atlassian/src/jiraApi.test.ts",
     "packages/integrations-atlassian/src/jiraApi.ts",
