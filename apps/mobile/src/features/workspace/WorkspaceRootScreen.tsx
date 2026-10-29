@@ -33,6 +33,7 @@ import { useSidebarWorkspaceTabs, useSystemWorkspaceTabBar } from "./useSystemWo
 const TAB_TITLES = {
   threads: "Threads",
   pullRequests: "Pull requests",
+  extra: "Threads", // Android only; never selected on this platform.
 };
 
 function WorkspaceRootTitle(props: {

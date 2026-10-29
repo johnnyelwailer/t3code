@@ -5,6 +5,14 @@
     "apps/mobile/src/components/LoadingScreen.tsx",
     "apps/mobile/src/lib/mobileThemeVariables.ts",
     "apps/mobile/src/features/home/HomeScreen.tsx",
+    "apps/mobile/modules/t3-native-controls/android/src/main/java/expo/modules/t3nativecontrols/T3WorkspaceNavigationModule.kt",
+    "apps/mobile/src/features/workspace/AndroidWorkspaceNavigation.android.tsx",
+    "apps/mobile/src/features/workspace/AndroidWorkspaceSidebar.android.tsx",
+    "apps/mobile/src/features/workspace/AndroidWorkspaceTabsProvider.tsx",
+    "apps/mobile/src/features/workspace/WorkspaceRootScreen.android.tsx",
+    "apps/mobile/src/features/workspace/WorkspaceRootScreen.tsx",
+    "apps/mobile/src/features/workspace/WorkspaceTabsContext.tsx",
+    "apps/mobile/src/features/workspace/workspace-tabs-state.ts",
     "apps/mobile/src/features/browser/PreviewStreamWebView.tsx",
     "apps/mobile/src/features/devices/device-stream-document.ts",
     "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx",
@@ -746,6 +754,7 @@
     "packages/contracts/src/orchestratorMcp.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
+    "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
     ".agents/skills/merge-upstream/SKILL.md",
     ".claude/**",
     ".cursor/**",

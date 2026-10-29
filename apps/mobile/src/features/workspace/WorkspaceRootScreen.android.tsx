@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { View } from "react-native";
 import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
@@ -6,6 +6,13 @@ import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
+import { WorkspaceExtraTabPane } from "../../extensions/t3team-WorkspaceExtraTabPane";
+import { useWorkspaceExtraTab } from "../../extensions/t3team-useWorkspaceExtraTab";
+import {
+  lateLaunchSelection,
+  visibleWorkspaceTab,
+  workspacePaneTabs,
+} from "../../extensions/t3team-workspaceExtraTab";
 import { HomeRouteScreen } from "../home/HomeRouteScreen";
 import { PullRequestFilterMenuProvider } from "../pull-requests/PullRequestFilterMenuContext";
 import { PullRequestsScreen } from "../pull-requests/PullRequestsScreen";
@@ -16,8 +23,7 @@ import { WorkspaceTabsContext, useWorkspaceTabs } from "./WorkspaceTabsContext";
 import { WorkspaceTabPanes } from "./WorkspaceTabPanes";
 import type { WorkspaceTab } from "./workspace-tabs-state";
 
-const TABS: readonly WorkspaceTab[] = ["threads", "pullRequests"];
-
+const SPLIT_TABS: readonly WorkspaceTab[] = ["threads", "pullRequests"];
 export function WorkspaceRootScreen() {
   const { layout, startNewTask } = useAdaptiveWorkspaceLayout();
   const workspace = useWorkspaceTabs()!;
@@ -30,13 +36,28 @@ export function WorkspaceRootScreen() {
     }),
     [workspace, fabClearance],
   );
-  const tab = workspace.state.selectedTab;
+  const extraTab = useWorkspaceExtraTab();
+  const tab = visibleWorkspaceTab(workspace.state.selectedTab, extraTab);
+  const tabs = workspacePaneTabs(extraTab);
+  // An extra tab that appears late and asks for it opens untouched workspaces once; one that
+  // went away while selected hands the selection back to Chats.
+  const launched = useRef(false);
+  const { state, dispatch } = workspace;
+  useEffect(() => {
+    if (extraTab !== null && !launched.current) {
+      launched.current = true;
+      const selection = lateLaunchSelection(extraTab, state);
+      if (selection) dispatch(selection);
+    }
+    if (tab !== state.selectedTab) dispatch({ type: "select", tab });
+  }, [extraTab, state, tab, dispatch]);
 
   if (layout.usesSplitView) {
     return (
       <WorkspaceTabPanes
-        tabs={TABS}
-        selected={tab}
+        tabs={SPLIT_TABS}
+        // The extra tab lives in the sidebar column; its detail pane stays the empty chat detail.
+        selected={tab === "extra" ? "threads" : tab}
         renderTab={(tab) =>
           tab === "threads" ? (
             <HomeRouteScreen />
@@ -64,11 +85,13 @@ export function WorkspaceRootScreen() {
         <NativeStackScreenOptions options={{ headerShown: false }} />
         <SafeAreaInsetsContext value={{ ...insets, bottom: 0 }}>
           <WorkspaceTabPanes
-            tabs={TABS}
+            tabs={tabs}
             selected={tab}
             renderTab={(tab) =>
               tab === "threads" ? (
                 <HomeRouteScreen />
+              ) : tab === "extra" ? (
+                <WorkspaceExtraTabPane tab={extraTab} />
               ) : (
                 <PullRequestFilterMenuProvider>
                   <PullRequestToolbar />

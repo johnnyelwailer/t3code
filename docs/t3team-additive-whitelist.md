@@ -601,3 +601,14 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 
 - `apps/web/src/components/chat/ThreadTimeline.tsx` — derives the streamed entries itself (upstream #23117), bypassing ChatView's fork-artifact join, so a plan card showed as bare "Plan: <name>" text. It now joins the thread's fork artifacts onto its own entries with `useT3TeamTimelineArtifacts`.
 - `apps/web/src/components/ChatView.tsx` — passes the join's inputs (`t3teamArtifacts`) to `ThreadTimeline`.
+
+## Mobile `homeFilters` and `workspaceTab` seams (2026-10-28)
+
+- `apps/mobile/src/features/home/HomeScreen.tsx` (already listed for `homeTop`) — renders the distribution's `homeFilters` slot (isolated, nothing without one, Android only) directly under `homeTop` in the Chats list header: one added line. The Android "no threads match" early return gets the same line plus a wrapper `View`, so a selected project with no threads still shows the Nexi rows (`homeTop`) and the pills and can be cleared (`px-4` moves to the inner view).
+- `apps/mobile/src/features/workspace/workspace-tabs-state.ts`, `WorkspaceTabsContext.tsx` — `WorkspaceTab` gains `"extra"` (the distribution's one extra Android tab): its state, its scroll offset, and an optional `initialTab` for the provider. Stock behavior is unchanged.
+- `apps/mobile/src/features/workspace/AndroidWorkspaceTabsProvider.tsx` — opens on the extra tab when it asks for it (`selectOnLaunch`).
+- `apps/mobile/src/features/workspace/WorkspaceRootScreen.android.tsx`, `AndroidWorkspaceSidebar.android.tsx` — the panes list and the extra tab's pane come from `t3team-workspaceExtraTab`; with no extra tab the list is the stock two. In split view the extra tab fills the sidebar column and the detail pane stays the empty chat detail.
+- `apps/mobile/src/features/workspace/AndroidWorkspaceNavigation.android.tsx` — passes the ordered `tabs` to the native navigation (the stock three when there is no extra tab).
+- `apps/mobile/src/features/workspace/WorkspaceRootScreen.tsx` — `TAB_TITLES` needs an `extra` entry now that `WorkspaceTab` has one; the iOS/web screen never selects it.
+- `apps/mobile/modules/t3-native-controls/android/.../T3WorkspaceNavigationModule.kt` — the hardcoded tab list becomes a `tabs` prop (default: the stock three, same titles and icons); an unknown id uses the generic extra icon and the given title.
+- `apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml` — the extra tab's icon (allowed unprefixed in `.t3team-additive-guard.json`: an Android resource name cannot contain `-` or `.`).

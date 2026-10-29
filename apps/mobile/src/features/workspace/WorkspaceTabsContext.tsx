@@ -30,14 +30,21 @@ export function useWorkspaceTabs() {
   return use(WorkspaceTabsContext);
 }
 
-export function WorkspaceTabsProvider(props: { readonly children: ReactNode }) {
-  const [state, dispatch] = useReducer(workspaceTabsReducer, undefined, initialWorkspaceTabsState);
+export function WorkspaceTabsProvider(props: {
+  readonly children: ReactNode;
+  readonly initialTab?: WorkspaceTab;
+}) {
+  const [state, dispatch] = useReducer(
+    workspaceTabsReducer,
+    props.initialTab,
+    initialWorkspaceTabsState,
+  );
   const activeTab = useRef(state.selectedTab);
   useLayoutEffect(() => {
     activeTab.current = state.selectedTab;
   }, [state.selectedTab]);
   const isTabActive = useCallback((tab: WorkspaceTab) => activeTab.current === tab, []);
-  const scrollOffsets = useRef({ threads: 0, pullRequests: 0 });
+  const scrollOffsets = useRef({ threads: 0, pullRequests: 0, extra: 0 });
   const getScrollOffset = useCallback((tab: WorkspaceTab) => scrollOffsets.current[tab], []);
   const recordScrollOffset = useCallback((tab: WorkspaceTab, offset: number) => {
     scrollOffsets.current[tab] = offset;
