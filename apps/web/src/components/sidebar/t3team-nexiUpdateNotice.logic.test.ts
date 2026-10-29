@@ -102,10 +102,18 @@ describe("getNexiUpdateNoticeView", () => {
 
   it("keeps the reason when GHE rejected the sign-in instead of repeating the title", () => {
     const view = getNexiUpdateNoticeView(
-      { ...base, status: "error", errorContext: "check", issue: "signed-out", message: "GHE (nexplore.ghe.com) did not accept your sign-in for hive/nx-nexi (HTTP 401)." },
+      {
+        ...base,
+        status: "error",
+        errorContext: "check",
+        issue: "signed-out",
+        message: "GHE (nexplore.ghe.com) did not accept your sign-in for hive/nx-nexi (HTTP 401).",
+      },
       null,
     );
-    expect(view && "description" in view ? view.description : "").toContain("did not accept your sign-in");
+    expect(view && "description" in view ? view.description : "").toContain(
+      "did not accept your sign-in",
+    );
   });
 
   it("shows a visible could-not-check state that promises a retry", () => {

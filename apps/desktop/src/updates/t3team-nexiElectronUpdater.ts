@@ -41,17 +41,18 @@ function pickUpdater(): typeof autoUpdater {
   const platform = NodeOS.platform();
   if (!app.isPackaged || !isLiveBuild()) return autoUpdater;
   const appBundlePath = platform === "darwin" ? appBundleOf(process.execPath) : null;
-  const updater =
-    appBundlePath === null
-      ? autoUpdater
-      : (macUpdater ??= new NexiMacUpdater({
-          appBundlePath,
-          logFile: NodePath.join(app.getPath("userData"), "updates", "nexi-swap.log"),
-          // Tests and proofs relaunch through a wrapper that carries an isolated environment.
-          ...(process.env.T3CODE_NEXI_UPDATE_LAUNCHER
-            ? { launcher: process.env.T3CODE_NEXI_UPDATE_LAUNCHER }
-            : {}),
-        }) as unknown as typeof autoUpdater);
+  let updater: typeof autoUpdater = autoUpdater;
+  if (appBundlePath !== null) {
+    macUpdater ??= new NexiMacUpdater({
+      appBundlePath,
+      logFile: NodePath.join(app.getPath("userData"), "updates", "nexi-swap.log"),
+      // Tests and proofs relaunch through a wrapper that carries an isolated environment.
+      ...(process.env.T3CODE_NEXI_UPDATE_LAUNCHER
+        ? { launcher: process.env.T3CODE_NEXI_UPDATE_LAUNCHER }
+        : {}),
+    });
+    updater = macUpdater as unknown as typeof autoUpdater;
+  }
   if (!configured.has(updater)) {
     configured.add(updater);
     // The setter also drops any feed set before it, so it runs before the first setFeedURL.
