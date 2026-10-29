@@ -96,9 +96,15 @@ const make = Effect.gen(function* () {
       discovery: found,
       source,
       ignoredRepositories,
+      sourceFailure,
     } = yield* discovery
       .resolveDefault(projectId)
       .pipe(Effect.mapError((error) => unavailable(error.message)));
+    // The user chose where the machine comes from: a plain session must not stand in for it.
+    if (sourceFailure !== undefined) {
+      yield* logMachineOutcome(projectId, { outcome: "unusable", reason: sourceFailure });
+      return yield* unavailable(sourceFailure);
+    }
     if (source === null) {
       const broken = found.rejected[0];
       if (broken === undefined) {

@@ -12,6 +12,7 @@ import {
 } from "./t3teamToolCatalogImplementedDrafts.ts";
 import { IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG } from "./t3teamToolCatalogImplementedMyWork.ts";
 import { IMPLEMENTED_T3TEAM_PROJECT_TOOL_CATALOG } from "./t3teamToolCatalogImplementedProject.ts";
+import { IMPLEMENTED_T3TEAM_MACHINE_TOOL_CATALOG } from "./t3team-toolCatalogImplementedMachine.ts";
 import { PLANNED_WORK_ITEM_GITHUB_THREAD_T3TEAM_TOOL_CATALOG } from "./t3teamToolCatalogItemTools.ts";
 import { PLANNED_PROJECT_BACKLOG_MY_WORK_T3TEAM_TOOL_CATALOG } from "./t3teamToolCatalogProjectTools.ts";
 
@@ -22,6 +23,7 @@ const IMPLEMENTED_T3TEAM_TOOL_IDS = new Set([
   ...Object.keys(IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG),
   ...Object.keys(IMPLEMENTED_T3TEAM_CHANGE_REQUEST_TOOL_CATALOG),
   ...Object.keys(IMPLEMENTED_T3TEAM_PROJECT_TOOL_CATALOG),
+  ...Object.keys(IMPLEMENTED_T3TEAM_MACHINE_TOOL_CATALOG),
 ]);
 
 const PLANNED_PROJECT_BACKLOG_MY_WORK_TOOL_CATALOG = Object.fromEntries(
@@ -59,6 +61,7 @@ export const T3TEAM_TOOL_CATALOG = {
   ...IMPLEMENTED_T3TEAM_MY_WORK_TOOL_CATALOG,
   ...IMPLEMENTED_T3TEAM_CHANGE_REQUEST_TOOL_CATALOG,
   ...IMPLEMENTED_T3TEAM_PROJECT_TOOL_CATALOG,
+  ...IMPLEMENTED_T3TEAM_MACHINE_TOOL_CATALOG,
 } as const satisfies Record<string, T3TeamToolCatalogEntry>;
 
 type T3TeamToolCatalog = typeof T3TEAM_TOOL_CATALOG;

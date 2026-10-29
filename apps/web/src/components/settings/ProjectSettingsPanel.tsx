@@ -47,6 +47,7 @@ import {
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { T3TeamProjectLinkedRepositoriesSetting } from "./t3team-ProjectLinkedRepositoriesSetting";
+import { T3TeamProjectMachineSourceSection } from "./t3team-ProjectMachineSourceSection";
 import { projectGroupTitleNeedsUpdate } from "./ProjectSettingsPanel.logic";
 import { useSettingsProjectGroups } from "./useSettingsProjectGroups";
 import { settingsScopeEnvironmentLabels } from "./settingsScopeAxis";
@@ -551,6 +552,10 @@ function ProjectDetail({
         <ProjectDefaultsSettings category="project" />
         <ProjectActionsSettings />
         <T3TeamProjectLinkedRepositoriesSetting projectId={representative.id} />
+        <T3TeamProjectMachineSourceSection
+          environmentId={representative.environmentId}
+          projectId={representative.id}
+        />
         {hasMultipleCheckouts ? checkoutChoices : null}
         <SettingsSection title="Danger">
           <SettingsRow

@@ -117,6 +117,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.cloudSessionCreate]: "cloud",
   [WS_METHODS.cloudSessionCancel]: "cloud",
   [WS_METHODS.projectMachineDiscover]: "cloud",
+  [WS_METHODS.projectMachineSetSource]: "cloud",
   [WS_METHODS.pullRequestsList]: "pull-requests",
   [WS_METHODS.pullRequestsListStats]: "pull-requests",
   [WS_METHODS.pullRequestsSummary]: "pull-requests",

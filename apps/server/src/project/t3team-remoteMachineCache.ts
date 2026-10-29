@@ -6,7 +6,13 @@ import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
 import * as Hash from "effect/Hash";
 import * as Option from "effect/Option";
-import { remoteHead } from "./t3team-remoteMachineHead.ts";
+import type { VcsProcess } from "../vcs/VcsProcess.ts";
+import type {
+  BranchNotFound,
+  RemoteUnavailable,
+  RepositoryRefused,
+} from "./t3team-machineDefinitionReader.ts";
+import { remoteBranchHead, remoteHead } from "./t3team-remoteMachineHead.ts";
 import {
   remoteTarget,
   scanRemoteAtCommit,
@@ -27,16 +33,34 @@ class RemoteKey implements Equal.Equal {
       other instanceof RemoteKey &&
       this.target.url === other.target.url &&
       this.target.cwd === other.target.cwd &&
+      this.target.branch === other.target.branch &&
       this.target.kind === other.target.kind &&
       this.commit === other.commit
     );
   }
   [Hash.symbol](): number {
     return Hash.string(
-      JSON.stringify([this.target.url, this.target.cwd, this.target.kind, this.commit]),
+      JSON.stringify([
+        this.target.url,
+        this.target.cwd,
+        this.target.branch,
+        this.target.kind,
+        this.commit,
+      ]),
     );
   }
 }
+
+const headOf = (
+  key: RemoteKey,
+): Effect.Effect<
+  string | null,
+  RemoteUnavailable | RepositoryRefused | BranchNotFound,
+  VcsProcess
+> =>
+  key.target.branch === undefined
+    ? remoteHead(key.target)
+    : remoteBranchHead({ ...key.target, branch: key.target.branch });
 
 export const makeRemoteMachineCache = Effect.gen(function* () {
   const lastHeads = yield* Cache.make({
@@ -44,12 +68,17 @@ export const makeRemoteMachineCache = Effect.gen(function* () {
     timeToLive: Duration.infinity,
     lookup: (_key: RemoteKey) => Effect.succeed<string | null>(null),
   });
-  const heads = yield* Cache.make({
-    capacity: 256,
-    timeToLive: "5 minutes",
-    lookup: (key: RemoteKey) =>
-      remoteHead(key.target).pipe(Effect.tap((commit) => Cache.set(lastHeads, key, commit))),
-  });
+  const heads = yield* Cache.makeWith(
+    (key: RemoteKey) => headOf(key).pipe(Effect.tap((commit) => Cache.set(lastHeads, key, commit))),
+    {
+      capacity: 256,
+      // A chosen branch that is missing may be pushed a moment later, so a failed read of it is short-lived.
+      timeToLive: (exit, key) =>
+        Exit.isFailure(exit) && key.target.branch !== undefined
+          ? Duration.seconds(10)
+          : Duration.minutes(5),
+    },
+  );
   const scans = yield* Cache.makeWith(
     (key: RemoteKey) => scanRemoteAtCommit(key.target, key.commit),
     {

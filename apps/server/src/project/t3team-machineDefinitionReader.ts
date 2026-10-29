@@ -13,6 +13,17 @@ export class RemoteUnavailable extends Schema.TaggedError<RemoteUnavailable>()(
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
+/** The user's chosen repository answered `ls-remote` with a refusal: missing, or not readable with their sign-in. */
+export class RepositoryRefused extends Schema.TaggedError<RepositoryRefused>()(
+  "RepositoryRefused",
+  {
+    reason: Schema.String,
+  },
+) {}
+/** The user's chosen branch does not exist in the repository. */
+export class BranchNotFound extends Schema.TaggedError<BranchNotFound>()("BranchNotFound", {
+  branch: Schema.String,
+}) {}
 export interface MachineDefinitionReader {
   readonly read: (path: string) => Effect.Effect<string | null, Rejected | RemoteUnavailable>;
   readonly nestedPaths: Effect.Effect<ReadonlyArray<string>>;

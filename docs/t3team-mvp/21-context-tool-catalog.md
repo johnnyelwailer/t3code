@@ -198,6 +198,7 @@ t3team.project.attach_context_bundle
 t3team.project.refresh_context_bundle
 t3team.project.list_linked_repositories
 t3team.project.sync_linked_repository
+t3team.machine.find_definitions
 t3team.project.open_dashboard_mode
 t3team.project.open_linked_repository_manager
 t3team.project.refresh_integrations
@@ -212,6 +213,12 @@ Notes:
   Linked repositories sync on demand: the bootstrap only records them, and
   `context/linked-repositories.json` lists each with its checkout state. The agent clones or
   fetches the one it needs; delegating into an uncloned linked repository clones it too.
+- `t3team.machine.find_definitions` is implemented (MCP `t3_machine_find_definitions`). It is
+  read-only: it looks for `.nexi/machine.json` and devcontainer definitions in the project's own
+  and linked repositories (default branch, other branches, open and recently closed pull
+  requests) so a machine-setup agent proposes an existing one instead of asking for a repository
+  and branch. It is a direct MCP tool like `t3_linked_repository_sync`, not a broker tool, and
+  honors `CLOUD_PROJECT_MACHINE`.
 - `create_context_bound_thread` creates a thread under the current project or view.
 - `t3team.project.refresh_context_bundle` is implemented. It rebuilds the lightweight
   project context bundle (`work-items/index.json` plus summary JSON) from the current backlog

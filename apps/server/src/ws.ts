@@ -2689,6 +2689,8 @@ export const layerWsRpc = (
         [WS_METHODS.cloudSessionCreate]: (input) => cloudSessions.create(input),
         [WS_METHODS.cloudSessionCancel]: (input) => cloudSessions.cancel(input),
         [WS_METHODS.projectMachineDiscover]: (input) => projectMachines.discover(input.projectId),
+        [WS_METHODS.projectMachineSetSource]: (input) =>
+          projectMachines.setSource(input.projectId, input.source),
         [WS_METHODS.cloudInstallRelayClient]: (_input) =>
           Stream.callback<RelayClientInstallProgressEvent, RelayClientInstallFailedError>((queue) =>
             relayClient
