@@ -615,7 +615,7 @@ export const WS_METHODS = {
   userSecretsAnswerApproval: "userSecrets.answerApproval",
   credentialSourcesProbe: "credentialSources.probe",
   credentialSourcesRead: "credentialSources.read",
-  credentialRequestsList: "credentialRequests.list",
+  credentialRequestsSubscribe: "credentialRequests.subscribe",
   credentialRequestsRevoke: "credentialRequests.revoke",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
@@ -2157,10 +2157,11 @@ const WsCredentialSourcesReadRpc = Rpc.make(WS_METHODS.credentialSourcesRead, {
   error: Schema.Union([CredentialSourcesError, EnvironmentAuthorizationError]),
 });
 
-const WsCredentialRequestsListRpc = Rpc.make(WS_METHODS.credentialRequestsList, {
+const WsCredentialRequestsSubscribeRpc = Rpc.make(WS_METHODS.credentialRequestsSubscribe, {
   payload: CredentialRequestsListInput,
   success: CredentialRequestsListResult,
   error: EnvironmentAuthorizationError,
+  stream: true,
 });
 
 const WsCredentialRequestsRevokeRpc = Rpc.make(WS_METHODS.credentialRequestsRevoke, {
@@ -2283,7 +2284,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsUserSecretsAnswerApprovalRpc,
   WsCredentialSourcesProbeRpc,
   WsCredentialSourcesReadRpc,
-  WsCredentialRequestsListRpc,
+  WsCredentialRequestsSubscribeRpc,
   WsCredentialRequestsRevokeRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,

@@ -1376,6 +1376,24 @@ export function createServerEnvironmentAtoms<R, E>(
           JSON.stringify([environmentId, input.threadId, input.turnItemId]),
       },
     }),
+    // t3team: credential requests. The first two run on the session's environment, the last two on the
+    // user's own machine (the primary environment), where their gh and environment live.
+    credentialRequests: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+      label: "environment-data:server:credential-requests",
+      tag: WS_METHODS.credentialRequestsSubscribe,
+    }),
+    revokeCredentialRequest: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:credential-requests:revoke",
+      tag: WS_METHODS.credentialRequestsRevoke,
+    }),
+    probeCredentialSources: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:credential-sources:probe",
+      tag: WS_METHODS.credentialSourcesProbe,
+    }),
+    readCredentialSource: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:credential-sources:read",
+      tag: WS_METHODS.credentialSourcesRead,
+    }),
     answerUserSecretApproval: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:user-secrets:answer-approval",
       tag: WS_METHODS.userSecretsAnswerApproval,

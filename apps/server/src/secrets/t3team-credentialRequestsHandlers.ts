@@ -5,8 +5,7 @@ import type { RequestedUserSecrets } from "./t3team-RequestedUserSecrets.ts";
 
 export function makeCredentialRequestsHandlers(store: RequestedUserSecrets["Service"]) {
   return {
-    list: (threadId: string) =>
-      Effect.all({ pending: store.pendingFor(threadId), granted: store.list }),
+    subscribe: (threadId: string) => store.subscribe(threadId),
     revoke: (name: string) => store.revoke(name).pipe(Effect.map((revoked) => ({ revoked }))),
   };
 }

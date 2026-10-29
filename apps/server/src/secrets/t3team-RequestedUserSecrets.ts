@@ -9,6 +9,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
 
 export class RequestedUserSecretRefused extends Schema.TaggedError<RequestedUserSecretRefused>()(
   "RequestedUserSecretRefused",
@@ -52,6 +54,11 @@ export class RequestedUserSecrets extends Context.Service<
     readonly revoke: (name: UserSecretName) => Effect.Effect<boolean>;
     /** What was granted, for the card and for revoking; never a value. */
     readonly list: Effect.Effect<ReadonlyArray<RequestedUserSecretSummary>>;
+    /** Pending requests and grants for a thread, emitted again whenever either changes. */
+    readonly subscribe: (threadId: string) => Stream.Stream<{
+      readonly pending: ReadonlyArray<PendingCredentialRequest>;
+      readonly granted: ReadonlyArray<RequestedUserSecretSummary>;
+    }>;
     /** A request whose card is waiting for the user, so the card can show what is asked. */
     readonly trackPending: (input: {
       readonly threadId: string;
@@ -72,43 +79,61 @@ const LOGIN_SLOT_NAME_PREFIX = "AUTH_SLOT_";
 export function makeRequestedUserSecrets(options: {
   /** True for a name the session's own grants already cover. */
   readonly reserved: (name: string) => boolean;
+  /** Bumped on every change, so `subscribe` can push a new snapshot. Absent: `subscribe` emits once. */
+  readonly versions?: SubscriptionRef.SubscriptionRef<number>;
 }): RequestedUserSecrets["Service"] {
   const entries = new Map<string, RequestedUserSecretEntry>();
   const pending = new Map<
     string,
     { readonly threadId: string; readonly use: UserSecretRequestUse }
   >();
+  const bump =
+    options.versions === undefined
+      ? Effect.void
+      : SubscriptionRef.update(options.versions, (n) => n + 1);
   const check = (name: string) =>
     name.startsWith(LOGIN_SLOT_NAME_PREFIX)
       ? Effect.fail(new RequestedUserSecretRefused({ name, reason: "login_slot" }))
       : options.reserved(name)
         ? Effect.fail(new RequestedUserSecretRefused({ name, reason: "already_granted" }))
         : Effect.void;
+  const list = Effect.sync(() =>
+    [...entries.values()].map(({ grant }) => ({
+      name: grant.name,
+      approval: grant.approval,
+      deliveryModes: grant.deliveryModes,
+      destinations: grant.destinations,
+      expiresAt: grant.expiresAt,
+    })),
+  );
+  const pendingFor = (threadId: string) =>
+    Effect.sync(() =>
+      [...pending.entries()]
+        .filter(([, request]) => request.threadId === threadId)
+        .map(([turnItemId, request]) => ({ turnItemId, use: request.use })),
+    );
+  const snapshot = (threadId: string) =>
+    Effect.all({ pending: pendingFor(threadId), granted: list });
   return RequestedUserSecrets.of({
     check,
     register: (grant, value) =>
       check(grant.name).pipe(
         Effect.andThen(Effect.sync(() => void entries.set(grant.name, { grant, value }))),
+        Effect.andThen(bump),
       ),
-    revoke: (name) => Effect.sync(() => entries.delete(name)),
-    list: Effect.sync(() =>
-      [...entries.values()].map(({ grant }) => ({
-        name: grant.name,
-        approval: grant.approval,
-        deliveryModes: grant.deliveryModes,
-        destinations: grant.destinations,
-        expiresAt: grant.expiresAt,
-      })),
-    ),
+    revoke: (name) => Effect.sync(() => entries.delete(name)).pipe(Effect.tap(() => bump)),
+    list,
+    subscribe: (threadId) =>
+      options.versions === undefined
+        ? Stream.fromEffect(snapshot(threadId))
+        : SubscriptionRef.changes(options.versions).pipe(
+            Stream.mapEffect(() => snapshot(threadId)),
+          ),
     trackPending: ({ threadId, turnItemId, use }) =>
-      Effect.sync(() => void pending.set(turnItemId, { threadId, use })),
-    pendingFor: (threadId) =>
-      Effect.sync(() =>
-        [...pending.entries()]
-          .filter(([, request]) => request.threadId === threadId)
-          .map(([turnItemId, request]) => ({ turnItemId, use: request.use })),
-      ),
-    untrack: (turnItemId) => Effect.sync(() => void pending.delete(turnItemId)),
+      Effect.sync(() => void pending.set(turnItemId, { threadId, use })).pipe(Effect.andThen(bump)),
+    pendingFor,
+    untrack: (turnItemId) =>
+      Effect.sync(() => void pending.delete(turnItemId)).pipe(Effect.andThen(bump)),
     lookup: (name) => entries.get(name),
   });
 }

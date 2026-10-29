@@ -2326,7 +2326,8 @@ export const layerWsRpc = (
           ),
         [WS_METHODS.credentialSourcesProbe]: (input) => credentialSources.probe(input),
         [WS_METHODS.credentialSourcesRead]: (input) => credentialSources.read(input),
-        [WS_METHODS.credentialRequestsList]: (input) => credentialRequests.list(input.threadId),
+        [WS_METHODS.credentialRequestsSubscribe]: (input) =>
+          credentialRequests.subscribe(input.threadId),
         [WS_METHODS.credentialRequestsRevoke]: (input) => credentialRequests.revoke(input.name),
         [WS_METHODS.scheduledTasksListWebhookDeliveries]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
