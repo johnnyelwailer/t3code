@@ -95,6 +95,7 @@ import type { ProjectMachineDiscovery } from "./project/t3team-ProjectMachineDis
 import type { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import type { FeatureFlags } from "./t3team-FeatureFlags.ts";
 import type { UserSecretApprovals } from "./secrets/t3team-UserSecretApprovals.ts";
+import type * as GitHubRest from "@t3tools/source-control-github/server/GitHubRest";
 
 export type WsRpcHandlerServices =
   | AcpRegistrySupport.AcpRegistryCatalog
@@ -175,6 +176,7 @@ export type WsRpcHandlerServices =
   | ThreadSearch.ThreadSearch
   | ToolAuthService.ToolAuthService
   | UserSecretApprovals
+  | GitHubRest.GitHubRest
   | TraceDiagnostics.TraceDiagnostics
   | UsageLimitSources.UsageLimitSources
   | UsageService.UsageService

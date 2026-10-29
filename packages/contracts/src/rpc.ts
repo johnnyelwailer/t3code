@@ -387,6 +387,13 @@ import {
   UserSecretApprovalsSubscribeInput,
 } from "./t3team-userSecretApprovalCard.ts";
 import {
+  CredentialSourcesError,
+  CredentialSourcesProbeInput,
+  CredentialSourcesProbeResult,
+  CredentialSourcesReadInput,
+  CredentialSourcesReadResult,
+} from "./t3team-credentialSources.ts";
+import {
   ProjectCloneActionInput,
   ProjectCloneActionResult,
   ProjectCloneListEvent,
@@ -600,6 +607,8 @@ export const WS_METHODS = {
   secretsAnswerRequest: "secrets.answerRequest",
   userSecretsSubscribeApprovals: "userSecrets.subscribeApprovals",
   userSecretsAnswerApproval: "userSecrets.answerApproval",
+  credentialSourcesProbe: "credentialSources.probe",
+  credentialSourcesRead: "credentialSources.read",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
 
@@ -2128,6 +2137,18 @@ const WsUserSecretsAnswerApprovalRpc = Rpc.make(WS_METHODS.userSecretsAnswerAppr
   error: Schema.Union([UserSecretApprovalAnswerError, EnvironmentAuthorizationError]),
 });
 
+const WsCredentialSourcesProbeRpc = Rpc.make(WS_METHODS.credentialSourcesProbe, {
+  payload: CredentialSourcesProbeInput,
+  success: CredentialSourcesProbeResult,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsCredentialSourcesReadRpc = Rpc.make(WS_METHODS.credentialSourcesRead, {
+  payload: CredentialSourcesReadInput,
+  success: CredentialSourcesReadResult,
+  error: Schema.Union([CredentialSourcesError, EnvironmentAuthorizationError]),
+});
+
 const WsScheduledTasksListWebhookDeliveriesRpc = Rpc.make(
   WS_METHODS.scheduledTasksListWebhookDeliveries,
   {
@@ -2240,6 +2261,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsSecretsAnswerRequestRpc,
   WsUserSecretsSubscribeApprovalsRpc,
   WsUserSecretsAnswerApprovalRpc,
+  WsCredentialSourcesProbeRpc,
+  WsCredentialSourcesReadRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
   WsServerReportClientActivityRpc,

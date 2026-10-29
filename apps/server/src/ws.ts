@@ -124,6 +124,8 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import { UserSecretApprovals } from "./secrets/t3team-UserSecretApprovals.ts";
+import { makeCredentialSources } from "./secrets/t3team-CredentialSources.ts";
+import { credentialSourceDeps } from "./secrets/t3team-credentialSourceDeps.ts";
 import {
   archivedShellStreamItemFromThreadShell,
   buildActiveShellSnapshot,
@@ -1323,6 +1325,7 @@ export const layerWsRpc = (
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const userSecretApprovals = yield* UserSecretApprovals;
+      const credentialSources = makeCredentialSources(yield* credentialSourceDeps);
       const pullRequests = yield* PullRequestService.PullRequestService;
       const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
@@ -2318,6 +2321,8 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(userSecretApprovals.answer(input)),
           ),
+        [WS_METHODS.credentialSourcesProbe]: (input) => credentialSources.probe(input),
+        [WS_METHODS.credentialSourcesRead]: (input) => credentialSources.read(input),
         [WS_METHODS.scheduledTasksListWebhookDeliveries]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.listWebhookDeliveries(input)),
