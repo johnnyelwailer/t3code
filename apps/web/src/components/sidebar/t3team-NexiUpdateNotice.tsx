@@ -70,15 +70,12 @@ function NexiUpdateNoticeContent() {
 
   if (!view) return null;
 
-  const run = async (work: () => Promise<unknown>, title: string) => {
+  // No try/finally: React Compiler skips a component that has one.
+  const run = (work: () => Promise<unknown>, title: string) => {
     setBusy(true);
-    try {
-      await work();
-    } catch (error) {
-      fail(title, error);
-    } finally {
-      setBusy(false);
-    }
+    void work()
+      .catch((error: unknown) => fail(title, error))
+      .then(() => setBusy(false));
   };
 
   const onAction = () => {
