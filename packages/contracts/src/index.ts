@@ -8,6 +8,7 @@ export * from "./auth.ts";
 export * from "./environment.ts";
 export * from "./environmentHttp.ts";
 export * from "./t3team-voiceSettings.ts";
+export * from "./t3team-credentialSources.ts";
 export * from "./t3team-desktopVoice.ts";
 export * from "./t3team-desktopVoiceStream.ts";
 export * from "./t3team-desktopVoiceWidget.ts";
