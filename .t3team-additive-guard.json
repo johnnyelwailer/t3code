@@ -349,6 +349,7 @@
     "apps/server/src/t3team-toolBrokerChildrenShared.ts",
     "apps/server/src/t3team-toolBrokerChildrenTypes.ts",
     "apps/server/src/t3team-toolBrokerLive.ts",
+    "apps/server/src/telemetry/AnalyticsService.ts",
     "apps/server/src/textGeneration/ClaudeTextGeneration.ts",
     "apps/server/src/textGeneration/CodexTextGeneration.test.ts",
     "apps/server/src/textGeneration/CodexTextGeneration.ts",
