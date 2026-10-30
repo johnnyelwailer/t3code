@@ -1,11 +1,15 @@
 /**
  * The advertised `tools/list` text is minimal: a bullet list per tool and a short note on a field
  * only where its name is not self-evident. The original description and field docs are kept
- * as registered, and `t3_tool_help` returns them on demand, so nothing is lost.
+ * as registered, and `t3_tool_help` returns them on demand.
+ *
+ * Models rarely ask for what was cut (8 of 182 gateway runs), so the rule is: enum values, op
+ * and mode names, companion arguments and the short meaning of each value stay (`placement:
+ * side=compact|main=grouped|footer=collapsed`); only prose, examples and rationale go.
  *
  * A tool with an entry in the tables gets its description replaced and every schema field
  * description dropped except the ones the entry names. A tool without one is advertised as
- * registered; `t3team-toolDocs.test.ts` fails when it exceeds a cap.
+ * registered; `AgentContextBudget.test.ts` fails when a fork tool exceeds a cap.
  */
 import * as Effect from "effect/Effect";
 import { McpSchema, McpServer } from "effect/ai";
