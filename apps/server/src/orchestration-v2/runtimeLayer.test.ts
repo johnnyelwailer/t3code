@@ -4183,6 +4183,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         threadId,
       });
 
+      assert.isNotNull((yield* orchestrator.getThreadShell(threadId))?.activeRunId);
       // The settle guard (fork layer) refuses it now with the pin named; a deferred settle
       // would answer "ok, at turn end" and then silently fail.
       const exit = yield* Effect.exit(

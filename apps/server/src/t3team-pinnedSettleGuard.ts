@@ -16,7 +16,7 @@ export const isUserCommandId = (commandId: string): boolean =>
   !NON_USER_COMMAND_ID_PREFIXES.some((prefix) => commandId.startsWith(prefix));
 
 const pinnedThreadSettleRefusal = (threadId: ThreadId): string =>
-  `Thread ${threadId} is pinned, so only the user can settle it. Agents and sweeps never settle or unpin it.`;
+  `Thread ${threadId} is pinned, so only the user can settle it. Agents and sweeps never settle it.`;
 
 export const makePinnedSettleGuard = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
