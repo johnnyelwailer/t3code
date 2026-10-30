@@ -29,11 +29,9 @@ export interface PendingDraft {
 }
 
 /**
- * Drafts that wait for an environment that is not in the catalog yet, by draft key. The hook may
- * subscribe to the distribution's own store and must not throw. Keep a draft in the map (with
- * `sendBlockedReason: null` once it is ready) until the catalog lists its project: a draft
- * whose project is neither in the catalog nor in the map returns to the project picker. To swap in
- * a real project, call `retargetPendingDraft` once the catalog lists it, then drop the map entry.
+ * Drafts that wait for an environment not in the catalog yet, by draft key; the hook must not
+ * throw. Keep a draft in the map until the catalog lists its project, or it returns to the picker.
+ * To swap in a real project call `retargetPendingDraft`, then drop the map entry.
  */
 export interface PendingDraftSlot {
   readonly usePendingDrafts: () => ReadonlyMap<string, PendingDraft>;
