@@ -172,6 +172,7 @@ import {
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 import { keepsRenderedWakeText } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
+import { t3teamMultiSelectSeparator } from "./t3team-userInputAnswerText.ts";
 import { visibleShellIndex, visibleShellSnapshot } from "./t3team-hiddenShellThreads.ts";
 import { rewritePersistenceFailureCause } from "./persistenceStorageError.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -8809,7 +8810,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               cause: "Answer each question before sending.",
             });
           }
-          const text = typeof answer === "string" ? answer : answer.join(", ");
+          const text =
+            typeof answer === "string"
+              ? answer
+              : answer.join(t3teamMultiSelectSeparator(command.requestId));
           replies.push(`${question.question}\n${text.trim()}`);
         }
         if (replies.length === 0) {

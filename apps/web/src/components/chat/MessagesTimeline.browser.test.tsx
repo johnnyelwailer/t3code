@@ -160,6 +160,7 @@ const TASK_ID = ScheduledTaskId.make("task-1");
 const AUTOMATION_PROMPT = "Triage the inbox\n\nLabel every new issue and close duplicates.";
 
 describe("MessagesTimeline messages", () => {
+  // oxlint-disable-next-line t3code/no-test-timeout-or-unreasoned-skip -- the fork CI runner (ubuntu-latest) settles this 81-row layout in 12-19 s against the 15 s ceiling the upstream runner meets
   it("settles when equally long messages have very different rendered heights", async () => {
     const props = baseProps();
     const tall = message("a\n\n".repeat(6000), { role: "assistant" }, "tall");

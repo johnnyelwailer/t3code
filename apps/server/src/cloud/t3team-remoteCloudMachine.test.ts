@@ -53,17 +53,12 @@ it.layer(NodeServices.layer)("remote cloud machines", (it) => {
       );
     }),
   );
-  it.effect("keeps the linked pointer pool after HEAD expiry over the local devcontainer", () =>
+  // A linked repository's machine is reported but never used (#681), so the pool that survives HEAD
+  // expiry is the project's own repository's, even when a linked repository also has a pointer.
+  it.effect("keeps the own pointer pool after HEAD expiry and ignores a linked pointer", () =>
     Effect.gen(function* () {
       const fixture = yield* remoteFixture({
-        gitOutput: (command) =>
-          command.operation === "machine.origin"
-            ? "https://nexplore.ghe.com/acme/api.git"
-            : `${remoteCommit}\tHEAD\n`,
-        localFiles: {
-          ".git/HEAD": "ref: refs/heads/main",
-          ".devcontainer.json": '{"image":"local"}',
-        },
+        gitOutput: `${remoteCommit}\tHEAD\n`,
         files: {
           ".nexi/machine.json": '{"version":1,"devcontainer":".devcontainer.json"}',
           ".devcontainer.json": '{"image":"remote"}',
@@ -82,11 +77,11 @@ it.layer(NodeServices.layer)("remote cloud machines", (it) => {
       yield* Effect.gen(function* () {
         const machines = yield* Machines.CloudSessionMachines;
         const machine = yield* machines.resolve(remoteProjectId);
-        expect(machine?.repository.name).toBe("linked");
+        expect(machine?.repository.name).toBe("api");
         const commands = fixture.commands.length;
         const reads = fixture.reads.length;
         yield* TestClock.adjust("10 minutes");
-        expect(yield* projectPoolKeys).toEqual(["acme.linked"]);
+        expect(yield* projectPoolKeys).toEqual(["acme.api"]);
         expect(fixture.commands).toHaveLength(commands);
         expect(fixture.reads).toHaveLength(reads);
       }).pipe(
