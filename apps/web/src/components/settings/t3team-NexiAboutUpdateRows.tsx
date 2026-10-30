@@ -31,7 +31,8 @@ export function NexiAboutUpdateRow() {
   const state = useDesktopUpdateState();
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
-  const nowMinute = Date.parse(useNowMinute());
+  // useNowMinute is a UTC ISO time without its zone suffix.
+  const nowMinute = Date.parse(`${useNowMinute()}Z`);
   const status = getNexiAboutStatus(state);
   if (!status) return null;
 
