@@ -70,34 +70,40 @@ it.layer(NodeServices.layer)("telemetry default", (it) => {
     }),
   );
 
-  it.effect("a deployment-owned T3CODE_POSTHOG_HOST turns it on when the flag is unset", () =>
+  it.effect("an own host and key together turn it on when the flag is unset", () =>
     Effect.gen(function* () {
-      assert.equal(
-        yield* resolveEnabled({ T3CODE_POSTHOG_HOST: "https://ingest.example.test" }),
-        true,
-      );
-      const sent = yield* requestsSentUnder({
+      const env = {
         T3CODE_POSTHOG_HOST: "https://ingest.example.test",
         T3CODE_POSTHOG_KEY: "phc_test_key",
-      });
-      assert.equal(sent.length > 0, true);
+      };
+      assert.equal(yield* resolveEnabled(env), true);
+      assert.equal((yield* requestsSentUnder(env)).length > 0, true);
     }),
   );
 
-  it.effect("an explicit T3CODE_TELEMETRY_ENABLED=false beats a configured host", () =>
+  it.effect("a host alone, a key alone or blank values stay off", () =>
+    Effect.gen(function* () {
+      const host = { T3CODE_POSTHOG_HOST: "https://ingest.example.test" };
+      const key = { T3CODE_POSTHOG_KEY: "phc_test_key" };
+      assert.equal(yield* resolveEnabled(host), false);
+      assert.equal(yield* resolveEnabled(key), false);
+      assert.equal(
+        yield* resolveEnabled({ T3CODE_POSTHOG_HOST: "  ", T3CODE_POSTHOG_KEY: "  " }),
+        false,
+      );
+      assert.deepEqual(yield* requestsSentUnder(host), []);
+    }),
+  );
+
+  it.effect("an explicit T3CODE_TELEMETRY_ENABLED=false beats an own host and key", () =>
     Effect.gen(function* () {
       const env = {
         T3CODE_TELEMETRY_ENABLED: "false",
         T3CODE_POSTHOG_HOST: "https://ingest.example.test",
+        T3CODE_POSTHOG_KEY: "phc_test_key",
       };
       assert.equal(yield* resolveEnabled(env), false);
       assert.deepEqual(yield* requestsSentUnder(env), []);
-    }),
-  );
-
-  it.effect("a blank T3CODE_POSTHOG_HOST does not count as a configured ingest", () =>
-    Effect.gen(function* () {
-      assert.equal(yield* resolveEnabled({ T3CODE_POSTHOG_HOST: "  " }), false);
     }),
   );
 
