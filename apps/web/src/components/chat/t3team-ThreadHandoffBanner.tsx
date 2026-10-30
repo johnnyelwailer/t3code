@@ -34,7 +34,7 @@ export function useThreadHandoffBannerItem(input: {
     return {
       id: "thread-handoff",
       variant: "info",
-      priority: "notice",
+      group: "environment",
       icon: <ArrowRightLeftIcon className="size-3.5" aria-hidden="true" />,
       title: direction === "moved_to" ? `Moved to ${peerLabel}` : `Moved here from ${peerLabel}`,
       actions: (

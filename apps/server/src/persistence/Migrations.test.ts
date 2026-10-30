@@ -1,7 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import {
@@ -147,7 +150,7 @@ describe("runMigrations", () => {
     Effect.sync(() => {
       assert.deepStrictEqual(
         [...UPSTREAM_V2_MIGRATION_IDS].toSorted((a, b) => a - b),
-        [84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115],
+        [84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115, 118, 119, 120, 121, 122, 123],
       );
     }),
   );
@@ -165,3 +168,31 @@ describe("runMigrations", () => {
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 });
+
+// Upstream's version of this test compares the `NNN_Name.ts` files to the manifest one to one,
+// because the npm launcher reads its highest migration id from those file names. That cannot hold
+// here: the manifest also carries fork-owned `t3team-NNN_Name.ts` entries, and upstream's 055+
+// are registered at other ids (see `UPSTREAM_V2_MIGRATION_IDS`). What is still true, and what
+// keeps an upstream migration from being merged in but never run, is that every upstream file is
+// registered under its own name at some id. Upstream 063 is held on purpose (it drops
+// `projection_thread_activities`, which the fork's V1 lineage cutover still reads); it is
+// listed here so that registering it later shows up as a change to this test.
+const HELD_UPSTREAM_MIGRATIONS = ["DropUnusedV1Projections"];
+
+it.effect("registers every upstream migration file at some id, except the held ones", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const dir = path.join(import.meta.dirname, "Migrations");
+    const upstreamFileNames = (yield* fs.readDirectory(dir)).flatMap((name) => {
+      const match = /^(\d+)_(\w+)\.ts$/.exec(name);
+      return match?.[2] === undefined ? [] : [match[2]];
+    });
+    assert.isAbove(upstreamFileNames.length, 0);
+    const registeredNames = new Set<string>(migrationManifest.map(([, name]) => name));
+    assert.deepStrictEqual(
+      upstreamFileNames.filter((name) => !registeredNames.has(name)).toSorted(),
+      HELD_UPSTREAM_MIGRATIONS,
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
+);

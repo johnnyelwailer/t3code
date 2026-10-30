@@ -125,7 +125,7 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
       if (lastReconcileAtMs > 0) {
         void launcher.retryDue().catch((error) => log("launch retry failed", String(error)));
       }
-      for (const trigger of [...liveTriggers]) {
+      for (const trigger of liveTriggers) {
         if (trigger.modelSelection === null) continue;
         const entries = await runStore(
           store.listUndeliveredInboxEntries({ ...trigger.instance, limit: DRAIN_LIMIT }),

@@ -68,7 +68,8 @@ describe("waitForAny through the durable engine", () => {
     const parked = broker.sent.filter((envelope) => envelope.kind === "signal.waitAny");
     expect(parked).toHaveLength(1);
     expect(parked[0]?.correlationId).toBe(first);
-    const branches = (parked[0]?.payload as { branches: Array<{ signal: string }> }).branches;
+    const parkedPayload = parked[0]?.payload as { branches: Array<{ signal: string }> };
+    const branches = parkedPayload.branches;
     expect(branches.map((branch) => branch.signal)).toEqual([
       "scm.change-request.merged",
       "scm.change-request.closed",

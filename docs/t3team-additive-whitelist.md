@@ -22,7 +22,11 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261022` → the 2026-10-22 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261029` → the 2026-10-29 upstream sync merge commit
+  `862e690b2c` (906 upstream commits absorbed, `60b35a1ee0..52f4ec6f9`, on top of fork main
+  `81f7e41d0e`). Grandfathered: upstream's tree plus the conflict resolutions that port the fork
+  features into it (208 conflicted files). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261022` → the 2026-10-22 upstream sync merge commit
   `08997b085a` (203 upstream commits absorbed, `4f651cb10d..60b35a1ee0`, on top of
   `t3team/fork-baseline-20261021`). Grandfathered: upstream's tree (ChatView/ChatComposer/
   MessagesTimeline/Sidebar split into hooks and row files, pnpm 12) plus the conflict resolutions

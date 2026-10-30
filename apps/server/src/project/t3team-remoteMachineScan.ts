@@ -1,5 +1,4 @@
 import { SourceControlProviderKind } from "@t3tools/contracts";
-import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 import { repositoryPathFromRemoteUrl } from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as Effect from "effect/Effect";
@@ -7,6 +6,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
+import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import {
   MAX_DEFINITION_FILE_BYTES,
   Rejected,
@@ -29,7 +29,7 @@ export const remoteTarget = Effect.fn("projectMachine.remoteTarget")(function* (
   input: RemoteMachineInput,
 ) {
   const providers = yield* PullRequestProviderRegistry;
-  const detected = detectSourceControlProviderFromRemoteUrl(input.url);
+  const detected = sourceControlDefinitions.recognizeRemote(input.url);
   const kind = Option.getOrUndefined(decodeProvider(input.provider)) ?? detected?.kind;
   const read = kind === undefined ? undefined : providers.get(kind)?.readFileAtRevision;
   const repository = repositoryPathFromRemoteUrl(input.url);

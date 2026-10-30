@@ -31,7 +31,6 @@ export const DEVCONTAINER_CANDIDATE_PATHS = [
  */
 export const RepositoryRelativePath = TrimmedNonEmptyString.check(
   Schema.isMaxLength(512),
-  // oxlint-disable-next-line no-control-regex -- rejecting control characters is the point
   Schema.isPattern(/^(?!\/)(?![A-Za-z]:)(?!.*[\\\u0000-\u001f])(?!(?:.*\/)?\.\.(?:\/|$)).+$/),
 );
 export type RepositoryRelativePath = typeof RepositoryRelativePath.Type;

@@ -123,6 +123,12 @@ const knownRecords: Record<(typeof COMPOSER_CONTEXT_KINDS)[number], Record<strin
     url: "https://example.atlassian.net/browse/NXAI-8",
     capturedAt: "2026-10-10T09:00:00.000Z",
   },
+  environment: {
+    ...base,
+    kind: "environment",
+    label: "vps",
+    environmentId: "environment-vps",
+  },
 };
 
 describe("ComposerContextRecord", () => {
@@ -194,7 +200,11 @@ describe("OrchestrationMessageContext", () => {
   });
 
   it("sends a message without the records the wire cannot carry", () => {
-    const wire = Schema.encodeUnknownSync(Schema.toCodecJson(OrchestrationMessageContext))({
+    const encodeOrchestrationMessageContext = Schema.encodeUnknownSync(
+      Schema.toCodecJson(OrchestrationMessageContext),
+    );
+
+    const wire = encodeOrchestrationMessageContext({
       version: 1,
       records: [
         decodeContext({ version: 1, records: [knownRecords.terminal] }).records[0],

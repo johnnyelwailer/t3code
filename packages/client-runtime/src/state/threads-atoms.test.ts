@@ -117,6 +117,7 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
     subscribeServerConfig: (input) => client.subscribeServerConfig(input),
     ready: Effect.void,
     probe: Effect.void,
+    inboundFrames: Effect.succeed(0),
     closed: Effect.never,
   };
   const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
@@ -144,7 +145,7 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
     networkStatus: yield* SubscriptionRef.make<NetworkStatus>("online"),
     start: Effect.void,
     register: () => Effect.die("Unexpected environment registration"),
-    registerPlatform: () => Effect.die("Unexpected environment registration"),
+    assertKnownAddress: () => Effect.die("Unexpected address check"),
     reconcilePlatform: () => Effect.die("Unexpected environment reconciliation"),
     remove: () => Effect.die("Unexpected environment removal"),
     removeRoute: () => Effect.die("Unexpected route removal"),
@@ -527,7 +528,6 @@ describe("createEnvironmentThreadStateAtoms", () => {
           historyCursor: "socket-older-1",
           hasMoreHistory: true,
           latestLocalTurnOrdinal: 4,
-          payloadBudgetExceeded: false,
         });
         yield* Queue.offer(subscription.events, { kind: "synchronized" });
         yield* observeState(

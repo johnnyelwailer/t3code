@@ -9,7 +9,7 @@ import {
 } from "./t3team-messageExtContext.ts";
 
 const roundTrip = (context: OrchestrationMessageContext) =>
-  Schema.decodeUnknownSync(OrchestrationMessageContext)(
+  Schema.decodeSync(OrchestrationMessageContext)(
     JSON.parse(JSON.stringify(Schema.encodeSync(OrchestrationMessageContext)(context))),
   );
 
@@ -31,7 +31,7 @@ describe("t3team message ext context record", () => {
 
   it("replaces an earlier ext record and keeps the other records", () => {
     const first = withT3TeamMessageExtContext({ displayText: "one" });
-    const mention = Schema.decodeUnknownSync(OrchestrationMessageContext)({
+    const mention = Schema.decodeSync(OrchestrationMessageContext)({
       version: 1,
       records: [
         {

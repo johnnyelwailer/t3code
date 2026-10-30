@@ -18,7 +18,7 @@ import type { DraftSessionState } from "~/composerDraftStore";
 import {
   deriveLogicalProjectKeyFromSettings,
   type selectProjectGroupingSettings,
-} from "~/logicalProject";
+} from "@t3tools/client-runtime/state/project-grouping";
 import { type CloudProjectWait, classifyCloudProjectWait } from "./t3team-cloudProjectWait";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {

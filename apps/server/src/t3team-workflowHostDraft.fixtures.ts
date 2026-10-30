@@ -6,7 +6,9 @@
  * (`t3team-draftMutationPublish.ts`), never as a message.
  */
 import type { T3TeamMessageDraftMutationAttachment } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
+import { afterAll, beforeAll } from "vite-plus/test";
 
 import { T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND } from "./t3team-draftMutationStatus.ts";
 import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
@@ -18,6 +20,16 @@ import {
 import type { T3TeamThreadArtifactInput } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 
 export const WORKFLOW_DRAFT_TOOL = "t3team.work_item.description.draft_update";
+
+/**
+ * Every draft tool refuses while `WORKITEM_DETAIL_DRAFTS` is off (its code default), so a test
+ * that expects a draft to land must turn the flag on. Call once at the top of the test file: the
+ * preset is installed before its cases and cleared after them.
+ */
+export function enableWorkItemDraftsFlagForFile(): void {
+  beforeAll(() => replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFTS", true]])));
+  afterAll(() => replaceFeatureFlagPresetValues(new Map()));
+}
 
 /** The tool context a thread offers the draft tool with. */
 export const draftToolContext = () =>

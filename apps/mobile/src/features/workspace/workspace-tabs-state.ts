@@ -1,6 +1,25 @@
-/** "extra" is the distribution's extra Android tab (`workspaceTab` extension slot). */
-export type WorkspaceTab = "threads" | "pullRequests" | "extra";
+import {
+  NAVIGATION_TAB_ORDER,
+  navigationCustomizationAvailable,
+  resolveNavigationTabOrder,
+  type NavigationTab,
+} from "./navigation-tab-order";
+
+export function resolveWorkspaceTabOrder(saved: readonly unknown[] | undefined) {
+  return navigationCustomizationAvailable()
+    ? resolveNavigationTabOrder(saved)
+    : NAVIGATION_TAB_ORDER;
+}
+
+export type WorkspaceTab = NavigationTab;
+/** Lists with their own search: the searchable tabs and the Settings list. */
+export type WorkspaceSearchTab = WorkspaceTab | "settings";
 export type WorkspaceSearchMode = "resting" | "active" | "expanded";
+
+/** Settings, Chats and pull requests pair a list with a detail column; Usage is one page. */
+export function workspaceUsesColumns(tab: WorkspaceTab, settingsOpen = false) {
+  return settingsOpen || tab === "threads" || tab === "pullRequests";
+}
 
 export interface WorkspaceTabState {
   readonly query: string;
@@ -11,45 +30,69 @@ export interface WorkspaceTabState {
 
 export interface WorkspaceTabsState {
   readonly selectedTab: WorkspaceTab;
+  /**
+   * The distribution's extra Android tab (`workspaceTab` extension slot) is selected. It is not a
+   * `WorkspaceTab`, so the stock tab types stay closed; `selectedTab` keeps its last stock value.
+   */
+  readonly extraSelected?: boolean;
   readonly selectionRevision: number;
-  readonly tabs: Readonly<Record<WorkspaceTab, WorkspaceTabState>>;
+  readonly tabs: Readonly<Record<WorkspaceSearchTab, WorkspaceTabState>>;
 }
 
 function emptyTab(): WorkspaceTabState {
   return { query: "", searchMode: "resting", scrollOffset: 0, searchEntryOffset: 0 };
 }
 
-export function initialWorkspaceTabsState(
-  selectedTab: WorkspaceTab = "threads",
-): WorkspaceTabsState {
+export function initialWorkspaceTabsState(extraSelected = false): WorkspaceTabsState {
   return {
-    selectedTab,
+    selectedTab: "threads",
+    ...(extraSelected ? { extraSelected } : {}),
     selectionRevision: 0,
-    tabs: { threads: emptyTab(), pullRequests: emptyTab(), extra: emptyTab() },
+    tabs: {
+      threads: emptyTab(),
+      pullRequests: emptyTab(),
+      usage: emptyTab(),
+      settings: emptyTab(),
+    },
   };
+}
+
+/** Whether a stock tab is the selected one; the distribution's extra tab selects none of them. */
+export function isWorkspaceTabActive(
+  state: Pick<WorkspaceTabsState, "selectedTab" | "extraSelected">,
+  tab: WorkspaceTab,
+): boolean {
+  return state.extraSelected !== true && state.selectedTab === tab;
 }
 
 export type WorkspaceTabsAction =
   | { readonly type: "select"; readonly tab: WorkspaceTab }
-  | { readonly type: "search"; readonly tab?: WorkspaceTab }
-  | { readonly type: "query"; readonly query: string; readonly tab?: WorkspaceTab }
-  | { readonly type: "expand"; readonly tab?: WorkspaceTab }
-  | { readonly type: "cancel"; readonly tab?: WorkspaceTab }
-  | { readonly type: "scroll"; readonly tab: WorkspaceTab; readonly offset: number };
+  | { readonly type: "selectExtra" }
+  | { readonly type: "search"; readonly tab?: WorkspaceSearchTab }
+  | { readonly type: "query"; readonly query: string; readonly tab?: WorkspaceSearchTab }
+  | { readonly type: "expand"; readonly tab?: WorkspaceSearchTab }
+  | { readonly type: "cancel"; readonly tab?: WorkspaceSearchTab }
+  | { readonly type: "scroll"; readonly tab: WorkspaceSearchTab; readonly offset: number };
 
 export function workspaceTabsReducer(
   state: WorkspaceTabsState,
   action: WorkspaceTabsAction,
 ): WorkspaceTabsState {
+  if (action.type === "selectExtra")
+    return state.extraSelected
+      ? state
+      : { ...state, extraSelected: true, selectionRevision: state.selectionRevision + 1 };
   if (action.type === "select")
-    return action.tab === state.selectedTab
+    return action.tab === state.selectedTab && !state.extraSelected
       ? state
       : {
           ...state,
+          ...(state.extraSelected ? { extraSelected: false } : {}),
           selectedTab: action.tab,
           selectionRevision: state.selectionRevision + 1,
         };
   const tab = action.tab ?? state.selectedTab;
+  if (tab !== "threads" && tab !== "pullRequests" && tab !== "settings") return state;
   const current = state.tabs[tab];
   let next: WorkspaceTabState;
   switch (action.type) {
@@ -87,8 +130,43 @@ export function workspaceTabsReducer(
 export const WORKSPACE_TOOLBAR = { height: 48, expandedGap: 10, edge: 16, gap: 8 };
 export const WORKSPACE_DOCK = { height: 48, tabsWidth: 176, gap: 12, bottomGap: 6 };
 
+export function workspaceDockBottomClearance(input: {
+  readonly bottomInset: number;
+  readonly keyboardHeight: number;
+}) {
+  return 64 + Math.max(input.bottomInset, input.keyboardHeight) + 16;
+}
+
+export function workspaceSearchBottomClearance(input: {
+  readonly bottomInset: number;
+  readonly bottomBarInset?: number;
+  readonly keyboardHeight: number;
+}) {
+  const bottom = input.bottomBarInset ?? Math.max(input.bottomInset, 12);
+  // AboveKeyboard lifts the field to an 8-point gap above the keyboard.
+  return (
+    Math.max(bottom, input.keyboardHeight > 0 ? input.keyboardHeight + 8 : 0) +
+    WORKSPACE_TOOLBAR.height +
+    16
+  );
+}
+
 export function workspaceToolbarHeight(mode: WorkspaceSearchMode): number {
   return mode === "expanded"
     ? WORKSPACE_TOOLBAR.height * 2 + WORKSPACE_TOOLBAR.expandedGap
     : WORKSPACE_TOOLBAR.height;
+}
+
+export const NATIVE_WORKSPACE_TAB_SLOTS = [
+  "first",
+  "second",
+  "third",
+  "fourth",
+  "settings",
+] as const;
+
+export function workspaceTabForNativeSlot(order: readonly WorkspaceTab[], slot: string) {
+  if (slot === "settings") return "settings";
+  const index = NATIVE_WORKSPACE_TAB_SLOTS.findIndex((candidate) => candidate === slot);
+  return order[index] ?? null;
 }

@@ -85,47 +85,57 @@ export class ElectronUpdater extends Context.Service<
  */
 export const makeFor = (resolve: () => AutoUpdater) => {
   return ElectronUpdater.of({
-    setFeedURL: (options) =>
-      Effect.suspend(() => {
+    setFeedURL: Effect.fn("ElectronUpdater.setFeedURL")(function (options) {
+      return Effect.suspend(() => {
         resolve().setFeedURL(options);
         return Effect.void;
-      }),
-    setAutoDownload: (value) =>
-      Effect.suspend(() => {
+      });
+    }),
+    setAutoDownload: Effect.fn("ElectronUpdater.setAutoDownload")(function (value) {
+      return Effect.suspend(() => {
         resolve().autoDownload = value;
         return Effect.void;
-      }),
-    setAutoInstallOnAppQuit: (value) =>
-      Effect.suspend(() => {
+      });
+    }),
+    setAutoInstallOnAppQuit: Effect.fn("ElectronUpdater.setAutoInstallOnAppQuit")(function (value) {
+      return Effect.suspend(() => {
         resolve().autoInstallOnAppQuit = value;
         return Effect.void;
-      }),
-    setChannel: (channel) =>
-      Effect.suspend(() => {
+      });
+    }),
+    setChannel: Effect.fn("ElectronUpdater.setChannel")(function (channel) {
+      return Effect.suspend(() => {
         resolve().channel = channel;
         return Effect.void;
-      }),
-    setAllowPrerelease: (value) =>
-      Effect.suspend(() => {
+      });
+    }),
+    setAllowPrerelease: Effect.fn("ElectronUpdater.setAllowPrerelease")(function (value) {
+      return Effect.suspend(() => {
         resolve().allowPrerelease = value;
         return Effect.void;
-      }),
+      });
+    }),
     allowDowngrade: Effect.sync(() => resolve().allowDowngrade),
-    setAllowDowngrade: (value) =>
-      Effect.suspend(() => {
+    setAllowDowngrade: Effect.fn("ElectronUpdater.setAllowDowngrade")(function (value) {
+      return Effect.suspend(() => {
         resolve().allowDowngrade = value;
         return Effect.void;
-      }),
-    setFullChangelog: (value) =>
-      Effect.suspend(() => {
+      });
+    }),
+    setFullChangelog: Effect.fn("ElectronUpdater.setFullChangelog")(function (value) {
+      return Effect.suspend(() => {
         resolve().fullChangelog = value;
         return Effect.void;
-      }),
-    setDisableDifferentialDownload: (value) =>
-      Effect.suspend(() => {
-        resolve().disableDifferentialDownload = value;
-        return Effect.void;
-      }),
+      });
+    }),
+    setDisableDifferentialDownload: Effect.fn("ElectronUpdater.setDisableDifferentialDownload")(
+      function (value) {
+        return Effect.suspend(() => {
+          resolve().disableDifferentialDownload = value;
+          return Effect.void;
+        });
+      },
+    ),
     checkForUpdates: Effect.suspend(() => {
       const channel = resolve().channel;
       return Effect.tryPromise({
@@ -140,8 +150,11 @@ export const makeFor = (resolve: () => AutoUpdater) => {
         catch: (cause) => new ElectronUpdaterDownloadUpdateError({ channel, cause }),
       }).pipe(Effect.asVoid);
     }),
-    quitAndInstall: ({ isSilent, isForceRunAfter }) =>
-      Effect.suspend(() => {
+    quitAndInstall: Effect.fn("ElectronUpdater.quitAndInstall")(function ({
+      isSilent,
+      isForceRunAfter,
+    }) {
+      return Effect.suspend(() => {
         const channel = resolve().channel;
         return Effect.try({
           try: () => resolve().quitAndInstall(isSilent, isForceRunAfter),
@@ -153,8 +166,9 @@ export const makeFor = (resolve: () => AutoUpdater) => {
               cause,
             }),
         });
-      }),
-    on: (eventName, listener) => {
+      });
+    }),
+    on: Effect.fn("ElectronUpdater.on")(function (eventName, listener) {
       const eventTarget = resolve() as unknown as {
         on: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
         removeListener: (eventName: string, listener: (...args: Array<unknown>) => void) => void;
@@ -169,6 +183,6 @@ export const makeFor = (resolve: () => AutoUpdater) => {
             eventTarget.removeListener(eventName, untypedListener);
           }),
       ).pipe(Effect.asVoid);
-    },
+    }),
   });
 };

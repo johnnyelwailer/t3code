@@ -35,6 +35,7 @@ export function MyWorkLoadingAnimation({
   /** Laid out but not shown: the reveal delay of t3team-myWorkFirstLoadReveal.ts. */
   hidden?: boolean;
 }) {
+  // oxlint-disable-next-line react/purity -- the greeting follows the wall clock at mount; one render per mount, remounting re-reads it.
   const greeting = greetingForHour(new Date().getHours());
   return (
     <div

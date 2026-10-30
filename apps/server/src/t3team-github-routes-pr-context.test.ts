@@ -160,6 +160,7 @@ function pullRequestServiceLayer(
   const service = PullRequestService.PullRequestService.of({
     list: () => Effect.die("not used"),
     listStats: () => Effect.die("not used"),
+    filterOptions: () => Effect.die("not used"),
     checks: () => Effect.die("not used"),
     changeBreakdown: () => Effect.die("not used"),
     watchFingerprint: () => Effect.die("not used"),

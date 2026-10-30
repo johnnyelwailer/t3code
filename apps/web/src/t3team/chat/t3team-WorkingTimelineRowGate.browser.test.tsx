@@ -22,6 +22,10 @@ vi.mock("~/components/chat/TimelineWorkGroupRows", () => ({
 const { T3TeamWorkingTimelineRow } = await import("./t3team-WorkingTimelineRowGate");
 
 const context: TimelineRowSharedState = {
+  pendingApprovals: new Map(),
+  respondingRequestIds: [],
+  canOperateThread: true,
+  onRespondToApproval: undefined,
   citationRequest: null,
   listRef: { current: null },
   timestampFormat: "locale",
@@ -40,11 +44,13 @@ const context: TimelineRowSharedState = {
   onRunShellCommand: undefined,
   findActive: false,
   onImageExpand: vi.fn(),
+  onOpenToolDiff: undefined,
   onOpenTurnDiff: vi.fn(),
+  renderHtmlRender: undefined,
+  turnItemSource: undefined,
   onOpenThread: vi.fn(),
   workflowOpening: null,
   onForkFromRun: async () => {},
-  onRollbackCheckpoint: vi.fn(),
   onToggleTurnFold: vi.fn(),
   onToggleAttemptFold: vi.fn(),
   onFileOpen: vi.fn(),

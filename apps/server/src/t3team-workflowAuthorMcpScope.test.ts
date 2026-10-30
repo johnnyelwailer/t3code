@@ -1,6 +1,6 @@
 /**
  * The hidden author's MCP credential under V2: resolved with NO capabilities (so every upstream
- * toolkit — delegate_task, create_threads, t3_project_*, t3_pending_request_respond, worktree,
+ * toolkit — delegate_task, create_threads, t3_project_*, t3_pending_request, worktree,
  * preview, devices — refuses it), and admitted by the t3team toolkit only for its own tools.
  */
 import * as NodeServices from "@effect/platform-node/NodeServices";

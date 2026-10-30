@@ -3,7 +3,7 @@ import type { EnvironmentAppearance } from "@t3tools/contracts";
 import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL } from "~/branding";
 import { formatAppDisplayName } from "~/branding.logic";
 
-import { useT3TeamPackAppearance } from "./t3team-packAppearance";
+import { readT3TeamPackAppearance, useT3TeamPackAppearance } from "./t3team-packAppearance";
 
 /**
  * Product name from the active pack appearance. `labels.appName` is the chrome
@@ -34,4 +34,9 @@ export function useT3TeamAppBaseName(): string {
 
 export function useT3TeamAppDisplayName(): string {
   return t3teamAppDisplayName(useT3TeamPackAppearance());
+}
+
+/** Non-reactive twin of `useT3TeamAppBaseName` for event handlers. */
+export function readT3TeamAppBaseName(): string {
+  return t3teamPackProductName(readT3TeamPackAppearance()) ?? APP_BASE_NAME;
 }

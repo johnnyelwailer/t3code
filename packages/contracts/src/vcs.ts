@@ -139,7 +139,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
     context: VcsProcessErrorContext,
     error: VcsProcessExitFailure,
     failureKind: VcsProcessExitFailureKind,
-    retryable?: boolean,
+    options?: { readonly retryable?: boolean; readonly notFoundDetail?: string },
   ) {
     const detail =
       failureKind === "authentication"
@@ -147,11 +147,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
         : failureKind === "rate-limited"
           ? "API rate limit exceeded."
           : failureKind === "not-found"
-            ? context.command === "glab"
-              ? "Merge request not found."
-              : context.command === "gh" || context.command === "az"
-                ? "Pull request not found."
-                : "VCS resource not found."
+            ? (options?.notFoundDetail ?? "VCS resource not found.")
             : "Process exited with a non-zero status.";
 
     const trimmedStderr = error.stderr.trim();
@@ -161,7 +157,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
       detail,
       failureKind,
       ...(trimmedStderr.length > 0 ? { stderr: truncateVcsProcessStderr(trimmedStderr) } : {}),
-      ...(retryable === true ? { retryable: true } : {}),
+      ...(options?.retryable === true ? { retryable: true } : {}),
       stderrLength: error.originalStderrLength,
       stderrTruncated: error.stderrTruncated || trimmedStderr.length > VCS_PROCESS_STDERR_CAP,
     });
@@ -254,14 +250,6 @@ export class VcsProcessMissingExitCodeError extends Schema.TaggedError<VcsProces
     return `VCS process completed without an exit code in ${this.operation}: ${this.command} (${this.cwd})`;
   }
 }
-
-export const VcsOutputDecodeError = Schema.Union([
-  VcsProcessStdinWriteError,
-  VcsProcessOutputReadError,
-  VcsProcessOutputLimitError,
-  VcsProcessMissingExitCodeError,
-]);
-export type VcsOutputDecodeError = typeof VcsOutputDecodeError.Type;
 
 export class VcsRepositoryDetectionError extends Schema.TaggedError<VcsRepositoryDetectionError>()(
   "VcsRepositoryDetectionError",

@@ -1,4 +1,3 @@
-import { resolveInitialPrimaryEnvironmentDescriptor } from "~/environments/primary";
 import { readPrimaryServerConfig } from "~/t3team/t3team-serverState";
 import type { BackendApi, BackendState } from "./t3team-types";
 import {
@@ -27,12 +26,15 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
   async function connect() {
     try {
       resolveWsUrl(wsBaseUrl);
-      await resolveInitialPrimaryEnvironmentDescriptor();
-
+      // Upstream deleted the one-shot primary descriptor fetch (it was unreferenced): the primary
+      // environment connects through the environment catalog, and `useBackendState` sources
+      // connection status, server config and providers from those atoms. This snapshot only
+      // seeds `backend.state`, so it reads what the catalog has by now instead of awaiting it.
+      const serverConfig = readPrimaryServerConfig();
       const nextState = state as Writable<BackendState>;
-      nextState.connectionStatus = "connected";
-      nextState.serverConfig = readPrimaryServerConfig();
-      nextState.providers = readPrimaryServerConfig()?.providers ?? [];
+      nextState.connectionStatus = serverConfig === null ? "connecting" : "connected";
+      nextState.serverConfig = serverConfig;
+      nextState.providers = serverConfig?.providers ?? [];
       nextState.error = null;
     } catch (error) {
       const nextState = state as Writable<BackendState>;

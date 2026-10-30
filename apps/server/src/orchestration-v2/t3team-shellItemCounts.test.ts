@@ -163,21 +163,29 @@ it.layer(layerTest)("shell item counts", (it) => {
       const snapshot = yield* projectionStore.getShellSnapshot().pipe(Effect.withTracer(tracer));
       assert.equal(snapshot.threads.find((thread) => thread.id === threadId)?.itemCount, 3);
 
+      // Upstream reads the counts in their own statements (selectShellItemCounts and
+      // selectShellRunItemCounts) instead of aliases inside the thread statement, so each
+      // statement is planned on its own.
+      const explain = (statement: string) =>
+        sql
+          .unsafe<{ readonly detail: string }>(`EXPLAIN QUERY PLAN ${statement}`)
+          .pipe(Effect.map((rows) => rows.map((row) => row.detail)));
+
+      const countStatement = statements.find((statement) =>
+        statement.includes("FROM orchestration_v2_projection_thread_item_counts counts"),
+      );
+      assert.isDefined(countStatement);
+      const countPlan = yield* explain(countStatement!);
+      assert.include(countPlan, "SEARCH counts USING PRIMARY KEY (thread_id=?)");
+      assert.isFalse(countPlan.some((detail) => detail.includes("projection_turn_items")));
+
       const shellStatement = statements.find((statement) =>
         statement.includes("forked_from_run_source_thread_id"),
       );
       assert.isDefined(shellStatement);
-      const plan = (yield* sql.unsafe<{ readonly detail: string }>(
-        `EXPLAIN QUERY PLAN ${shellStatement}`,
-      )).map((row) => row.detail);
-      assert.notInclude(
-        plan,
-        "SEARCH i USING COVERING INDEX orchestration_v2_projection_turn_items_thread_run_idx (thread_id=?)",
-      );
-      assert.include(plan, "SEARCH per_run USING PRIMARY KEY (thread_id=?)");
-      assert.include(plan, "SEARCH runless USING PRIMARY KEY (thread_id=? AND run_key=?)");
+      const shellPlan = yield* explain(shellStatement!);
       assert.include(
-        plan,
+        shellPlan,
         "SEARCH message USING INDEX orchestration_v2_projection_messages_latest_user_authored_idx (thread_id=?)",
       );
     }),

@@ -11,6 +11,16 @@
  */
 const MULTI_SELECT_SEPARATOR = " • ";
 
+/** Id prefix of the runtime requests `t3_ask_user` records (t3team-askUserWriter). */
+export const T3TEAM_ASK_USER_REQUEST_ID_PREFIX = "t3team-ask:";
+
+/**
+ * Separator for a multi-select answer in the follow-up message. `t3_ask_user` requests use
+ * " • "; provider-originated questions keep upstream's ", ".
+ */
+export const t3teamMultiSelectSeparator = (requestId: string): string =>
+  requestId.startsWith(T3TEAM_ASK_USER_REQUEST_ID_PREFIX) ? MULTI_SELECT_SEPARATOR : ", ";
+
 export const t3teamUserInputAnswerText = (answer: unknown): string | null => {
   if (typeof answer === "string") {
     const trimmed = answer.trim();

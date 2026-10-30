@@ -123,7 +123,6 @@ export function useProviderRetryBannerItem(input: {
     return {
       id: model.id,
       variant: "warning",
-      priority: "urgent",
       icon: model.kind === "retrying" ? <RefreshCwIcon /> : <AlertTriangleIcon />,
       title: bannerTitle(model),
       description: model.description,

@@ -16,10 +16,8 @@ import {
   type AppModelOption,
 } from "~/modelSelection";
 import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
   NO_PROVIDER_MODEL_SELECTION,
-  sortProviderInstanceEntries,
+  providerInstanceEntriesFor,
   type ProviderInstanceEntry,
 } from "~/providerInstances";
 
@@ -57,14 +55,7 @@ export function useT3TeamKickoffProviderSelection(input: {
 }) {
   const { providers, projectId, settings } = input;
   const providerInstanceEntries = useMemo(
-    () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(
-          deriveProviderInstanceEntries(providers),
-          settings,
-          projectId,
-        ),
-      ),
+    () => providerInstanceEntriesFor(providers, settings, projectId),
     [projectId, providers, settings],
   );
   const projectDefault = useMemo(

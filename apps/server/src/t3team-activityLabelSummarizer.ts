@@ -11,7 +11,6 @@ import {
   type ActivityLabelSummarizerRuntime,
   type PendingLabel,
   runActivityLabelGeneration,
-  scheduleLabelTtl,
 } from "./t3team-activityLabelSummarizerCore.ts";
 
 /**

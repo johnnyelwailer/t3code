@@ -31,10 +31,6 @@ const mockProvider = new MockIntegrationProvider();
 const fixtureProviders = new Map<string, T3TeamFixtureIntegrationProvider>();
 let envRegistrationDone = false;
 
-function isT3TeamFixtureAccountId(accountId: string | null | undefined): boolean {
-  return typeof accountId === "string" && accountId.startsWith(T3TEAM_FIXTURE_ACCOUNT_PREFIX);
-}
-
 export function buildT3TeamFixtureAccountId(name: string): string {
   return `${T3TEAM_FIXTURE_ACCOUNT_PREFIX}${name}`;
 }

@@ -40,6 +40,7 @@ import * as Stream from "effect/Stream";
 
 import * as ServerSettings from "../serverSettings.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
+import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -169,6 +170,7 @@ const runScenario = (threadId: string, makeEvents: (ids: Ids) => ProviderAdapter
           }),
           ServerSettings.layerTest(),
           McpAppModelContext.layerEmpty,
+          PreviewAgentActivity.layer,
         ),
       ),
     );
@@ -176,7 +178,10 @@ const runScenario = (threadId: string, makeEvents: (ids: Ids) => ProviderAdapter
       const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
       yield* runExecution.startRootRun({
         commandId: CommandId.make(`command:${threadId}`),
-        appThread: { id: ids.threadId } as OrchestrationV2AppThread,
+        appThread: {
+          id: ids.threadId,
+          lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: ids.threadId },
+        } as OrchestrationV2AppThread,
         providerSessionId: ProviderSessionId.make(`session:${threadId}`),
         session: {
           events: Stream.empty,
@@ -246,7 +251,7 @@ it.effect(
         "req-fetch=decline",
         "req-permission=decline",
       ]);
-      // Nothing a person or another agent (t3_pending_request_respond) could answer.
+      // Nothing a person or another agent (t3_pending_request respond) could answer.
       assert.deepStrictEqual(result.ingested, []);
     }),
 );

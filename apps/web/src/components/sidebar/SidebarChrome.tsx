@@ -46,7 +46,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
-    environmentIdentificationMode === "artwork",
+    environmentIdentificationMode,
     // A packaged distribution's stage label is its channel ("Alpha"), so pack art is selected by
     // theme id — without this the nexplore art only ever appeared in dev/nightly builds.
     packAppearance?.themeId,
@@ -202,7 +202,7 @@ function SidebarUtilityItem({
   );
 }
 
-export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -265,7 +265,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             {pullRequestsSupported ? (
               <SidebarUtilityItem
                 icon={<PullRequestGlyph.pullRequest />}
-                label="Pull Requests"
+                label="Pull requests"
                 onClick={handlePullRequestsClick}
               />
             ) : null}
@@ -276,6 +276,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             />
           </>
         )}
+        <SidebarThreadUndoNotice />
         <SidebarUpdatePill />
       </SidebarMenu>
     </>
@@ -285,7 +286,6 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarConnectSignInPill />
       <SidebarUpdateArchitectureWarning />

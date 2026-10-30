@@ -4,7 +4,6 @@ import type {
   PullRequestProviderError,
   ProviderChangeRequest,
 } from "@t3tools/source-control-core/server/PullRequestProvider";
-import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import * as Context from "effect/Context";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -19,6 +18,7 @@ import { ChildProcessSpawner } from "effect/process";
 import { ProjectService } from "./ProjectService.ts";
 import * as Discovery from "./t3team-ProjectMachineDiscovery.ts";
 import { PullRequestProviderRegistry } from "../pullRequest/PullRequestProviderRegistry.ts";
+import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import { VcsProcess, type VcsProcessInput } from "../vcs/VcsProcess.ts";
 import {
   HIDDEN_T3TEAM_DIR,
@@ -111,7 +111,7 @@ export const remoteFixture = Effect.fn("remoteFixture")(function* (input: {
     );
   };
   const kind = SourceControlProviderKind.make(
-    detectSourceControlProviderFromRemoteUrl(input.url ?? "https://nexplore.ghe.com/acme/api.git")
+    sourceControlDefinitions.recognizeRemote(input.url ?? "https://nexplore.ghe.com/acme/api.git")
       ?.kind ?? "github",
   );
   const mocked = yield* TestProvider.pipe(
