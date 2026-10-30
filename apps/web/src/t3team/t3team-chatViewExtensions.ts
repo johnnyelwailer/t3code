@@ -2,7 +2,6 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import type { HTMLAttributes, ReactNode } from "react";
 
 import type { ChatMessage } from "~/types";
-import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 
 export type TurnStartOverrideResult = boolean | "resolved-input";
 
@@ -51,11 +50,6 @@ export type ChatViewT3TeamExtensionProps = {
   readonly composerContextAttachmentSlot?: ReactNode;
   readonly composerContainerProps?: HTMLAttributes<HTMLDivElement>;
   readonly composerContainerOverlay?: ReactNode;
-  readonly composerContextAttachments?: ReadonlyArray<T3TeamContextAttachment>;
-  readonly prepareComposerContextAttachments?: () => Promise<
-    ReadonlyArray<T3TeamContextAttachment>
-  >;
-  readonly onComposerContextAttachmentsConsumed?: () => void;
   readonly onSubmitRecipeCardAction?: (action: {
     readonly cardId: string;
     readonly actionId: string;

@@ -1,17 +1,14 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadProjection, useThreadShell } from "~/state/entities";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { prepareThreadContextAttachments } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
 import { isThreadWaitingForRecipeInput } from "~/t3team/chat/t3team-recipeAwaitingInput";
 import { useT3TeamOpenSenderThread } from "~/t3team/chat/t3team-useOpenSenderThread";
 import { useAddToChatComposerDropTarget } from "~/t3team/hooks/t3team-useAddToChatComposerDropTarget";
 import { useThreadStagedComposerAction } from "~/t3team/chat/t3team-useThreadStagedComposerAction";
 import { useT3TeamOutboxSend } from "~/t3team/outbox/t3team-useOutboxSend";
-import { useT3TeamAddToChatStore } from "~/t3team/t3team-addToChatStore";
-import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 import { syncThreadToolContextCached } from "./t3team-useThreadChatComposerState-turnContext";
@@ -19,8 +16,6 @@ import {
   dispatchTurnStart,
   type DispatchTurnStartInput,
 } from "./t3team-useThreadChatComposerState-turnStart";
-
-const EMPTY_ATTACHMENTS: T3TeamContextAttachment[] = [];
 
 export function useThreadChatComposerState(input: {
   backend: BackendApi | null | undefined;
@@ -47,28 +42,6 @@ export function useThreadChatComposerState(input: {
     ...(input.ticketId ? { ticketId: input.ticketId } : {}),
   });
 
-  const pendingProjectContextCount = useT3TeamAddToChatStore(
-    (state) => (state.pendingByProjectId[input.projectId] ?? []).length,
-  );
-
-  useEffect(() => {
-    if (pendingProjectContextCount === 0) return;
-    const pending = useT3TeamAddToChatStore.getState().drainProject(input.projectId);
-    if (pending.length === 0) return;
-    for (const item of pending) {
-      useT3TeamAddToChatStore.getState().enqueueThreadAttachment(input.threadId, item.attachment);
-    }
-  }, [input.projectId, input.threadId, pendingProjectContextCount]);
-
-  const contextAttachmentsOrUndefined = useT3TeamAddToChatStore(
-    (state) => state.threadAttachmentsByThreadId[input.threadId],
-  );
-  const contextAttachments: T3TeamContextAttachment[] =
-    contextAttachmentsOrUndefined ?? EMPTY_ATTACHMENTS;
-  const removeThreadAttachment = useT3TeamAddToChatStore((state) => state.removeThreadAttachment);
-  const clearThreadAttachmentState = useT3TeamAddToChatStore(
-    (state) => state.clearThreadAttachments,
-  );
   const composerDropTarget = useAddToChatComposerDropTarget();
 
   const outboxSend = useT3TeamOutboxSend({
@@ -80,19 +53,6 @@ export function useThreadChatComposerState(input: {
     serverThreadExists: threadShell !== null || threadDetail !== null,
     waitingForRecipeInput,
   });
-
-  const removeContextAttachment = useCallback(
-    (attachmentId: string) => removeThreadAttachment(input.threadId, attachmentId),
-    [input.threadId, removeThreadAttachment],
-  );
-  const clearThreadAttachments = useCallback(
-    () => clearThreadAttachmentState(input.threadId),
-    [clearThreadAttachmentState, input.threadId],
-  );
-  const prepareComposerContextAttachments = useCallback(
-    () => prepareThreadContextAttachments({ threadId: input.threadId, backend: input.backend }),
-    [input.backend, input.threadId],
-  );
 
   const prepareTurnStart = useCallback(async () => {
     if (!input.backend) {
@@ -130,14 +90,10 @@ export function useThreadChatComposerState(input: {
   );
 
   return {
-    clearThreadAttachments,
     composerDropTarget,
-    contextAttachments,
     dispatchTurnStartOverride,
     enqueueOfflineTurnStart: outboxSend.enqueueOfflineTurnStart,
-    prepareComposerContextAttachments,
     prepareTurnStart,
-    removeContextAttachment,
     resolveWorkflowDecision: outboxSend.resolveWorkflowDecision,
     submitRecipeCardAction: outboxSend.submitRecipeCardAction,
     onOpenThread,

@@ -1,16 +1,26 @@
-import { describe, expect, it } from "vite-plus/test";
+import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { addAgentContextToThread } from "~/t3team/t3team-addAgentContextToThread";
 import { buildAddToChatAgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import type { AddToChatRequest } from "~/t3team/t3team-addToChatUtils";
 import { useT3TeamAddToChatStore } from "~/t3team/t3team-addToChatStore";
-import { resolveContextAttachmentRequest } from "~/t3team/t3team-contextAttachmentSync";
+import { retryContextCacheJobs } from "~/t3team/t3team-contextCacheJob";
+import { writeContextCache } from "~/t3team/t3team-contextCacheWrite";
 
+vi.mock("~/t3team/t3team-contextCacheWrite", () => ({ writeContextCache: vi.fn() }));
+
+const writeCache = vi.mocked(writeContextCache);
+const ENVIRONMENT = { sourceEnvironmentId: null, backend: null };
 const WORK_ITEM_TOOL = {
   id: "t3_work_item_get",
   label: "Read work item",
   arguments: { issueKey: "PROJ-9" },
 };
+
+function threadRef(threadId: string): ScopedThreadRef {
+  return { environmentId: "env-remote" as EnvironmentId, threadId: threadId as ThreadId };
+}
 
 function request(overrides: Partial<AddToChatRequest> = {}): AddToChatRequest {
   return {
@@ -20,59 +30,73 @@ function request(overrides: Partial<AddToChatRequest> = {}): AddToChatRequest {
     targetType: "work-item",
     kind: "jira-work-item",
     dedupeKey: "project-1:PROJ-9:work-item",
-    payload: { description: "frozen at drop time" },
+    payload: { description: "full body that must never ride the message" },
     ...overrides,
   };
 }
 
-function queuedFor(threadId: string) {
+function queued(threadId: string) {
   return useT3TeamAddToChatStore.getState().threadAttachmentsByThreadId[threadId] ?? [];
 }
 
 describe("addAgentContextToThread", () => {
-  it("queues a reference, not a snapshot, for an item that exposes a fetch tool", () => {
-    const added = addAgentContextToThread({
+  it("queues a pending pointer at once, with the tool reference and no body", () => {
+    const start = addAgentContextToThread({
       capabilities: buildAddToChatAgentContextCapabilities(request(), { tools: [WORK_ITEM_TOOL] }),
-      threadId: "thread-reference",
-      backend: null,
+      threadRef: threadRef("thread-pointer"),
     });
 
-    const [attachment] = queuedFor("thread-reference");
-    expect(added).toBe(true);
-    expect(attachment).toMatchObject({
-      kind: "jira-work-item",
-      label: "PROJ-9 Prepare release checklist",
-      dedupeKey: "project-1:PROJ-9:work-item",
-    });
-    expect(attachment?.syncStatus).toBeUndefined();
-    expect(attachment?.contextText).toContain("t3_work_item_get");
+    const [attachment] = queued("thread-pointer");
+    expect(start).toBeTypeOf("function");
+    expect(writeCache).not.toHaveBeenCalled();
+    expect(attachment).toMatchObject({ kind: "jira-work-item", syncStatus: "syncing" });
     expect(attachment?.contextText).toContain('{"issueKey":"PROJ-9"}');
-    expect(attachment?.contextText).not.toContain("frozen at drop time");
-    // Nothing is synced at send time for a reference: the agent fetches the live record.
-    expect(resolveContextAttachmentRequest(attachment!.id)).toBeUndefined();
+    expect(attachment?.contextText).toContain("t3_work_item_get");
+    expect(attachment?.contextText).toContain("not written yet");
+    expect(attachment?.contextText).not.toContain("full body");
+    expect(attachment?.syncedAt).toBeDefined();
   });
 
-  it("falls back to the request payload when no tool can fetch the item", () => {
-    const added = addAgentContextToThread({
-      capabilities: buildAddToChatAgentContextCapabilities(request({ targetType: "github" })),
-      threadId: "thread-snapshot",
-      backend: null,
+  it("points at the cached copy once the write lands", async () => {
+    writeCache.mockResolvedValueOnce(".nexi/context/threads/thread-ready/item.json");
+    const start = addAgentContextToThread({
+      capabilities: buildAddToChatAgentContextCapabilities(request(), { tools: [WORK_ITEM_TOOL] }),
+      threadRef: threadRef("thread-ready"),
     });
 
-    const [attachment] = queuedFor("thread-snapshot");
-    expect(added).toBe(true);
-    expect(attachment?.syncStatus).toBe("syncing");
-    expect(resolveContextAttachmentRequest(attachment!.id)).toBeDefined();
+    start!(ENVIRONMENT);
+    await vi.waitFor(() => expect(queued("thread-ready")[0]?.syncStatus).toBe("synced"));
+
+    expect(queued("thread-ready")[0]?.contextText).toContain(
+      "Cached copy: .nexi/context/threads/thread-ready/item.json",
+    );
+  });
+
+  it("keeps the item usable when the write fails, and retries on mount", async () => {
+    writeCache.mockRejectedValueOnce(new Error("environment not connected"));
+    const start = addAgentContextToThread({
+      capabilities: buildAddToChatAgentContextCapabilities(request()),
+      threadRef: threadRef("thread-retry"),
+    });
+
+    start!(ENVIRONMENT);
+    await vi.waitFor(() => expect(queued("thread-retry")[0]?.syncStatus).toBe("error"));
+    expect(queued("thread-retry")[0]?.contextText).toContain(
+      "unavailable (environment not connected)",
+    );
+
+    writeCache.mockResolvedValueOnce(".nexi/context/threads/thread-retry/item.json");
+    retryContextCacheJobs("thread-retry", ENVIRONMENT);
+    await vi.waitFor(() => expect(queued("thread-retry")[0]?.syncStatus).toBe("synced"));
   });
 
   it("adds nothing for a record without an add-to-chat action", () => {
-    const added = addAgentContextToThread({
+    const start = addAgentContextToThread({
       capabilities: { actions: [] },
-      threadId: "thread-none",
-      backend: null,
+      threadRef: threadRef("thread-none"),
     });
 
-    expect(added).toBe(false);
-    expect(queuedFor("thread-none")).toEqual([]);
+    expect(start).toBeNull();
+    expect(queued("thread-none")).toEqual([]);
   });
 });

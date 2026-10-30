@@ -45,6 +45,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { truncate } from "@t3tools/shared/String";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import type { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
+import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import { appendContextAttachmentsToPrompt } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
 import {
   buildContextAttachmentMessageExt,
@@ -268,11 +269,11 @@ interface ComposerSendT3TeamInput {
   readonly cloudSessionComposerGate: ReturnType<typeof useCloudSessionComposerGate>;
   readonly interactionMode: ProviderInteractionMode;
   readonly enqueueOfflineTurnStart: ChatViewT3TeamExtensionProps["enqueueOfflineTurnStart"];
-  readonly composerContextAttachments: ChatViewT3TeamExtensionProps["composerContextAttachments"];
-  readonly prepareComposerContextAttachments: ChatViewT3TeamExtensionProps["prepareComposerContextAttachments"];
+  readonly composerContextAttachments: ReadonlyArray<T3TeamContextAttachment>;
+  readonly prepareComposerContextAttachments: () => Promise<ReadonlyArray<T3TeamContextAttachment>>;
   readonly beforeDispatchTurnStart: ChatViewT3TeamExtensionProps["beforeDispatchTurnStart"];
   readonly dispatchTurnStartOverride: ChatViewT3TeamExtensionProps["dispatchTurnStartOverride"];
-  readonly onComposerContextAttachmentsConsumed: ChatViewT3TeamExtensionProps["onComposerContextAttachmentsConsumed"];
+  readonly onComposerContextAttachmentsConsumed: () => void;
 }
 
 /**

@@ -7,21 +7,46 @@ import {
   normalizeContextAttachmentKind,
 } from "~/t3team/t3team-contextAttachmentPrimitives";
 
+export type ContextPointerState =
+  | { readonly status: "pending" }
+  | { readonly status: "ready"; readonly cachedPath: string }
+  | { readonly status: "error"; readonly reason: string };
+
+const SYNC_STATUS = { pending: "syncing", ready: "synced", error: "error" } as const;
+
+function cachedCopyLine(state: ContextPointerState, hasLiveSource: boolean): string {
+  if (state.status === "ready") return `- Cached copy: ${state.cachedPath}`;
+  const fallback = hasLiveSource ? "use the live source below" : "ask the user to re-add it";
+  return state.status === "pending"
+    ? `- Cached copy: not written yet; ${fallback} until it lands`
+    : `- Cached copy: unavailable (${state.reason}); ${fallback}`;
+}
+
 /**
- * Context for an item the agent can fetch itself: kind, stable id and label, plus the tool call
- * that returns the current record. Unlike `buildPendingContextAttachment` it carries no payload,
- * so nothing is synced or frozen at drop time; the chip keeps the request's display metadata.
+ * The compact pointer an agent gets for a dropped item: kind, id, label, capture time, where the
+ * cached copy lives in the thread's own environment, and the tool call that reads the live record.
+ * The body never rides the message; the agent opens the file or calls the tool when it needs it.
  */
-export function buildReferenceContextAttachment(input: {
+export function buildContextPointerAttachment(input: {
+  id: string;
   request: AddToChatRequest;
-  tool: AgentContextToolDefinition;
+  tool: AgentContextToolDefinition | undefined;
+  addedAt: string;
+  state: ContextPointerState;
 }): T3TeamContextAttachment {
-  const { request, tool } = input;
+  const { request, tool, addedAt, state } = input;
   const kind =
     normalizeContextAttachmentKind(request.kind) ??
     inferContextAttachmentKindFromType(request.targetType);
-  const toolArguments = JSON.stringify(tool.arguments ?? {});
-  const chip = buildContextAttachment({ request });
+  const toolArguments = JSON.stringify(tool?.arguments ?? {});
+  const chip = buildContextAttachment({
+    id: input.id,
+    request,
+    syncStatus: SYNC_STATUS[state.status],
+    syncedAt: addedAt,
+    ...(state.status === "pending" ? { syncPhase: "Caching a copy for this thread" } : {}),
+    ...(state.status === "error" ? { syncError: state.reason } : {}),
+  });
   return {
     ...chip,
     contextText: [
@@ -30,9 +55,14 @@ export function buildReferenceContextAttachment(input: {
       `- Kind: ${kind}`,
       `- Type: ${request.targetType}`,
       `- Project: ${request.projectTitle}`,
-      `- Reference: ${toolArguments}`,
-      "",
-      `This is a reference, not a snapshot. Fetch the current record with the \`${tool.id}\` tool (${toolArguments}) before relying on its contents.`,
+      `- Added at: ${addedAt}`,
+      ...(tool ? [`- Reference: ${toolArguments}`] : []),
+      cachedCopyLine(state, tool !== undefined),
+      ...(tool
+        ? [
+            `- Live source: the \`${tool.id}\` tool (${toolArguments}), when your environment can resolve it. It is fresher than the cached copy; fall back to the copy when it cannot.`,
+          ]
+        : []),
     ].join("\n"),
   };
 }

@@ -20,6 +20,10 @@ import {
 
 const flags = vi.hoisted(() => ({ dropEnabled: true }));
 
+// A cached-copy write that never lands: nothing in these tests may wait for it.
+vi.mock("~/t3team/t3team-contextCacheWrite", () => ({
+  writeContextCache: () => new Promise<string>(() => {}),
+}));
 vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
   useFeatureFlag: () => flags.dropEnabled,
 }));
@@ -74,7 +78,7 @@ function queuedFor(threadId: string) {
 }
 
 describe("sidebar thread row drops", () => {
-  it("opens the thread and queues a work item as a reference without sending", async () => {
+  it("opens the thread and queues a work item as a pointer without sending", async () => {
     setup();
     const { row, onThreadActivate, ref } = rowFor("thread-agent-drop");
 
@@ -91,6 +95,7 @@ describe("sidebar thread row drops", () => {
     expect(onThreadActivate).toHaveBeenCalledExactlyOnceWith(ref);
     const [attachment] = queuedFor("thread-agent-drop");
     expect(attachment?.contextText).toContain("t3_work_item_get");
+    expect(attachment?.contextText).toContain("not written yet");
     expect(attachment?.contextText).not.toContain("frozen at drop time");
   });
 

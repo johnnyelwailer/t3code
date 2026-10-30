@@ -19,6 +19,12 @@ export type AddToChatRequest = {
   jiraIssueTypeIconUrl?: string;
   dedupeKey?: string;
   payload: unknown | ((input?: AddToChatPayloadInput) => Promise<unknown>);
+  /**
+   * What the UI already holds about the item, readable without a fetch. A drop onto another
+   * environment's thread writes it there as the cached copy: that environment's server cannot
+   * resolve `payload` when the full record lives only on this one.
+   */
+  localSnapshot?: unknown;
   summaryItems?: ReadonlyArray<{ label: string; value: string }>;
 };
 

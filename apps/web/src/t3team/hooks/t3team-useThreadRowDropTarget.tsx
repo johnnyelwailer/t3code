@@ -16,7 +16,7 @@ import {
   T3TeamAgentContextDropOverlay,
   useT3TeamAgentContextDropTarget,
 } from "~/t3team/t3team-agentContextDrag";
-import { isTeamShellEnvironment } from "~/t3team/t3team-upstreamRouteBridge";
+import { isSameLogicalProject } from "~/t3team/t3team-isSameLogicalProject";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 const THREAD_CONTEXT_OVER_CLASS_NAME =
@@ -38,26 +38,36 @@ export function useThreadRowDropTarget(input: {
   const { threadRef, projectId, title, layoutKey, onOpenThread } = input;
   const enabled = useFeatureFlag("UI_SIDEBAR_THREAD_DROP");
   const backend = useBackend();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const sourceEnvironmentId = usePrimaryEnvironmentId();
   const dropRef = useRef<HTMLElement | null>(null);
+  // The grouping lookup behind a cross-environment match is not free; one answer per dragged item.
+  const matchRef = useRef<{ recordId: string; accepted: boolean } | null>(null);
 
-  // Only a primary-environment thread opens in the Team thread view that shows queued context;
-  // other environments' threads open on upstream's route, which does not read the queue.
-  const acceptsAgentContext =
-    enabled && isTeamShellEnvironment(threadRef.environmentId, primaryEnvironmentId);
   const { isActive, dropProps } = useT3TeamAgentContextDropTarget({
-    canDrop: (record) =>
-      acceptsAgentContext && readAddToChatRequest(record.capabilities)?.projectId === projectId,
+    canDrop: (record) => {
+      if (!enabled) return false;
+      if (matchRef.current?.recordId === record.id) return matchRef.current.accepted;
+      const requestProjectId = readAddToChatRequest(record.capabilities)?.projectId;
+      const accepted =
+        requestProjectId !== undefined &&
+        isSameLogicalProject({
+          primaryEnvironmentId: sourceEnvironmentId,
+          requestProjectId,
+          rowEnvironmentId: threadRef.environmentId,
+          rowProjectId: projectId,
+        });
+      matchRef.current = { recordId: record.id, accepted };
+      return accepted;
+    },
     onDropRecord: (record) => {
-      if (
-        addAgentContextToThread({
-          capabilities: record.capabilities,
-          threadId: threadRef.threadId,
-          backend,
-        })
-      ) {
-        onOpenThread(threadRef);
-      }
+      const startCacheWrite = addAgentContextToThread({
+        capabilities: record.capabilities,
+        threadRef,
+      });
+      if (!startCacheWrite) return;
+      onOpenThread(threadRef);
+      // After navigation: the write reaches the thread's own environment and must not delay it.
+      startCacheWrite({ sourceEnvironmentId, backend });
     },
     dropEffect: "copy",
   });
