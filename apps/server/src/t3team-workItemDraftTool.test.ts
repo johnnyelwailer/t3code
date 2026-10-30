@@ -74,6 +74,7 @@ const makeCarrier = (pinnedTo: ThreadId = thread) => {
   const artifacts: Array<{ readonly threadId: string; readonly payload: any }> = [];
   const publishDraft = makeT3TeamDraftMutationPublisher({
     threadId: pinnedTo,
+    removeArtifact: () => Effect.void,
     recordArtifact: (artifact) =>
       Effect.sync(() => {
         artifacts.push(artifact as never);

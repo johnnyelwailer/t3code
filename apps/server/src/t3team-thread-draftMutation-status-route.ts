@@ -59,6 +59,10 @@ const setT3TeamDraftMutationStatus = Effect.fn("setT3TeamDraftMutationStatus")(f
         message: "A change set's status must be discarded.",
       });
     }
+    // The body is untyped JSON: a non-string id is a client error, not a defect in `trim()`.
+    if (typeof input.changeSetId !== "string") {
+      return yield* new T3TeamAtlassianError({ message: "changeSetId must be a string." });
+    }
     const artifacts = yield* T3TeamThreadArtifactsStore;
     return yield* discardWorkItemChangeSet({ artifacts, threadId, changeSetId: input.changeSetId });
   }

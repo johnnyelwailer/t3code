@@ -49,6 +49,8 @@ export function makeT3TeamDraftMutationPublisher(input: {
   readonly threadId: string;
   /** Durable artifact write (`T3TeamThreadArtifactsStore.upsert`). */
   readonly recordArtifact: T3TeamThreadArtifactsStore["Service"]["upsert"];
+  /** Withdraws a row of a change set that failed part-way (`T3TeamThreadArtifactsStore.remove`). */
+  readonly removeArtifact: T3TeamThreadArtifactsStore["Service"]["remove"];
 }): T3TeamDraftMutationPublisher {
   return (result) =>
     Effect.gen(function* () {
@@ -81,14 +83,12 @@ export function makeT3TeamDraftMutationPublisher(input: {
  */
 export const makeT3TeamDraftMutationPublisherBinder = Effect.fnUntraced(function* () {
   const artifacts = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamThreadArtifactsStore));
+  const unavailable = (operation: string) => () =>
+    Effect.fail(new T3TeamThreadArtifactsStoreError({ operation, cause: "unavailable" }));
   return (threadId: string): T3TeamDraftMutationPublisher =>
     makeT3TeamDraftMutationPublisher({
       threadId,
-      recordArtifact:
-        artifacts?.upsert ??
-        (() =>
-          Effect.fail(
-            new T3TeamThreadArtifactsStoreError({ operation: "upsert", cause: "unavailable" }),
-          )),
+      recordArtifact: artifacts?.upsert ?? unavailable("upsert"),
+      removeArtifact: artifacts?.remove ?? unavailable("remove"),
     });
 });

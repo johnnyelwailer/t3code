@@ -77,8 +77,10 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
       "user to review. Nothing is written to Jira: the user approves or rejects each operation, " +
       "and only the user commits. `operations` (1 to 25) are the same objects as " +
       "t3team.work_item.draft takes (op, issue_id, ...). All or nothing: if any operation is " +
-      "invalid or names a work item outside this project, nothing is proposed and the answer " +
-      "lists the operations (by index) to fix. Answer: { ok, promptText, changeSet }. Not " +
+      "invalid or names a work item outside this project, nothing is proposed: a malformed " +
+      "operation is rejected by the tool's input schema (one error), and the answer lists the " +
+      "operations (by index) that fail the checks made here (not buildable, or outside this " +
+      "project). Answer: { ok, promptText, changeSet }. Not " +
       "available when no Jira account is connected for this project.",
     capabilities: ["write"],
     kind: "draft-mutation",

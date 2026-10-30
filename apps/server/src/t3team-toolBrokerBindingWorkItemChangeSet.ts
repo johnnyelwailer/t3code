@@ -23,6 +23,9 @@ import { WorkItemChangeSetEnvelope } from "./t3team-workItemChangeSetArgs.ts";
 import { toCanonicalDraftCall, WorkItemDraftToolArgs } from "./t3team-workItemDraftArgs.ts";
 import { WORK_ITEM_CHANGE_SET_TOOL_ID } from "./t3team-workItemReadAvailability.ts";
 
+/** The whole scope check, however many keys: a slow tracker refuses the set, it does not hang it. */
+const SCOPE_CHECK_TIMEOUT = "30 seconds";
+
 const decodeEnvelope = Schema.decodeUnknownExit(WorkItemChangeSetEnvelope);
 const decodeOperation = Schema.decodeUnknownExit(WorkItemDraftToolArgs);
 
@@ -99,7 +102,17 @@ export function callT3TeamWorkItemChangeSetTool<E>(input: {
     const { drafts, errors } = buildDrafts(operations, yield* input.readView());
     // The tracker is asked once per distinct key across the whole set, not once per operation.
     const foreign = new Set(
-      errors.length > 0 ? [] : yield* scope.foreignKeys(drafts.flatMap(keysOf), threadId),
+      errors.length > 0
+        ? []
+        : yield* scope.foreignKeys(drafts.flatMap(keysOf), threadId).pipe(
+            Effect.timeoutOrElse({
+              duration: SCOPE_CHECK_TIMEOUT,
+              orElse: () =>
+                Effect.fail(
+                  "The project scope check timed out; nothing was proposed. Send the whole change set again.",
+                ),
+            }),
+          ),
     );
     drafts.forEach((draft, index) => {
       const hit = keysOf(draft).filter((key) => foreign.has(key));

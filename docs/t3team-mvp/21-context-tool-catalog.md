@@ -440,8 +440,11 @@ artifact the user reviews in the UI; nothing is written to the tracker.
 
 The bulk form is `t3_work_item_change_set` (`t3team.work_item.change_set`, same group, gates and
 write class): a `title` and 1 to 25 `operations`, each exactly a `t3_work_item_draft` argument
-object. All or nothing: one invalid operation or foreign key publishes nothing and the answer lists
-the failing operations by index. See Epic 35 for the artifacts it publishes.
+object. All or nothing: one invalid operation or foreign key publishes nothing. Over `/mcp` a
+structurally malformed operation is rejected by the tool's input schema before the broker (one
+schema error); the per-index list in the answer covers the broker-level failures (an operation
+that does not build, or a work item outside the project). See Epic 35 for the artifacts it
+publishes.
 
 ```text
 t3team.work_item.draft

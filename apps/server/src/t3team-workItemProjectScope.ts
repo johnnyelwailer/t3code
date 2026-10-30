@@ -11,6 +11,9 @@ import { parseIssueKey } from "./t3team-workItemReadQuery.ts";
 import type { WorkItemReadPort } from "./t3team-workItemReadService.ts";
 import type { JiraMirrorBinding } from "./t3team-workflowSignalWorkItemProjectMirror.ts";
 
+/** Live lookups in flight at once: a 25-operation change set names up to 50 distinct keys. */
+const LOOKUP_CONCURRENCY = 4;
+
 export const scoped = (result: JqlScopeResult) =>
   result.ok
     ? Effect.succeed(result.jql)
@@ -35,13 +38,16 @@ export const makeProjectScope = (port: Pick<WorkItemReadPort, "searchLive" | "mi
     binding: JiraMirrorBinding,
     keys: ReadonlyArray<string>,
   ) {
-    const foreign: string[] = [];
-    for (const raw of new Set(keys)) {
-      // Only a parsed key is ever interpolated into JQL; anything else is refused unqueried.
-      const key = parseIssueKey(raw);
-      if (key === null || (yield* findInProject(binding, key)) === null) foreign.push(raw);
-    }
-    return foreign;
+    const checked = yield* Effect.forEach(
+      new Set(keys),
+      Effect.fnUntraced(function* (raw) {
+        // Only a parsed key is ever interpolated into JQL; anything else is refused unqueried.
+        const key = parseIssueKey(raw);
+        return key === null || (yield* findInProject(binding, key)) === null ? raw : null;
+      }),
+      { concurrency: LOOKUP_CONCURRENCY },
+    );
+    return checked.filter((raw): raw is string => raw !== null);
   });
 
   return { findInProject, foreignKeys };

@@ -63,7 +63,7 @@ const publishChangeSet = Effect.gen(function* () {
       get: () => Effect.die("unused"),
     },
     readView: () => Effect.succeed({ state: null }),
-    publishDraft: makeT3TeamDraftMutationPublisher({ threadId, recordArtifact: store.upsert }),
+    publishDraft: makeT3TeamDraftMutationPublisher({ threadId, recordArtifact: store.upsert, removeArtifact: store.remove }),
   });
 });
 
@@ -153,6 +153,9 @@ it("refuses a change set verdict it cannot address or that is not a discard", as
         { threadId, changeSetId: draft.id, status: "discarded" },
         { threadId, changeSetId: set.id, status: "applied" },
         { threadId, changeSetId: set.id, status: "draft" },
+        { threadId, changeSetId: null, status: "discarded" },
+        { threadId, changeSetId: 7, status: "discarded" },
+        { threadId, changeSetId: { id: set.id }, status: "discarded" },
       ]) {
         assert.strictEqual((yield* postStatus(body)).status, 502, JSON.stringify(body));
       }

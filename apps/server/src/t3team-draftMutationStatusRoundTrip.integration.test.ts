@@ -46,7 +46,7 @@ const runTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 /** Publish a draft the way a draft tool result does — the real publisher, not a hand-built row. */
 const publishDraft = Effect.gen(function* () {
   const store = yield* ThreadArtifactsStore.T3TeamThreadArtifactsStore;
-  const publish = makeT3TeamDraftMutationPublisher({ threadId, recordArtifact: store.upsert });
+  const publish = makeT3TeamDraftMutationPublisher({ threadId, recordArtifact: store.upsert, removeArtifact: store.remove });
   yield* publish({
     content: [{ type: "text", text: "{}" }],
     structuredContent: {

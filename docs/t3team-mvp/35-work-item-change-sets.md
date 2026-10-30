@@ -251,14 +251,30 @@ A change set is a thin grouping over the existing drafts; nothing here writes to
   1 to 25 operations, each a `t3_work_item_draft` argument object, and publishes the N
   `draft-mutation` artifacts plus ONE `work-item-change-set` artifact (`jira-changeset:<uuid>`,
   payload `WorkItemChangeSet` in `packages/contracts`). The publish is all or nothing: validation
-  and the project-scope check (once per distinct key) run before any write, and a failing write
-  dismisses the drafts already written.
+  and the project-scope check (once per distinct key, at most 4 live lookups at once, 30 s overall)
+  run before any write. On any non-success exit of the write sequence (failed write, defect,
+  interrupt) the attempted artifacts are removed from the store; if a removal itself fails, the
+  tool result names the draftIds that could not be withdrawn instead of claiming nothing is pending.
+- A structurally malformed operation never reaches the broker over `/mcp`: the tool's input schema
+  rejects it (one schema error, nothing published). The per-index `operationErrors` list covers
+  the broker-level failures: an operation that does not build, or one outside the project.
 - The change set records, per operation, `draftId`, `issueKey`, `field`, `summary` and a
   `payloadHash` (SHA-256 of the canonical JSON of the draft's target, field and patch).
-  `verifyDraftPayloadHash` is what an applying client calls first; a changed operation is invalid.
+  `hashDraftPayload` and `verifyDraftPayloadHash` are synchronous, pure JS (`@noble/hashes`) and
+  live in `@t3tools/shared/t3team-workItemChangeSetHash`, so server and clients (including Hermes
+  and plain-http LAN web, which have no `crypto.subtle`) agree byte for byte. `packages/contracts`
+  keeps the schema and `readWorkItemChangeSetOperationStatuses`.
 - Per-operation status is the member draft's own status; the change set carries only
   `draft | discarded`. Discarding goes through the draft status route (`changeSetId`, status
   `discarded`): it dismisses members still in `draft`, leaves `applied` ones, and is idempotent.
+  Known limits, accepted in 3a: discard is not transactional against a concurrent per-operation
+  apply (a discard can overwrite `applied` with `dismissed` although the Jira write already
+  happened); and after a discard a member can still be flipped back to `draft` through the
+  per-draft status route.
+- Contract for slice 3b: before rendering or applying an operation, verify that its
+  `operations[].draftId` is a `draft-mutation` artifact on the same thread. Apply from the MEMBER
+  draft's payload, after `verifyDraftPayloadHash(draft, operation)` returns true, never from the
+  change set's display copies (`summary`, `issueKey`, `field`).
 - Audit: no draft verdict table exists. The artifacts are the record, plus structured log lines
   `t3team.workItemChangeSet.published` and `.verdict`.
 
