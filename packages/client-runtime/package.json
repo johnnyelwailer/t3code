@@ -59,6 +59,10 @@
       "types": "./src/t3team-runPromptCopy.ts",
       "default": "./src/t3team-runPromptCopy.ts"
     },
+    "./t3team-credentialSourceOptions": {
+      "types": "./src/t3team-credentialSourceOptions.ts",
+      "default": "./src/t3team-credentialSourceOptions.ts"
+    },
     "./secret-request": {
       "types": "./src/secretRequest.ts",
       "default": "./src/secretRequest.ts"

@@ -137,6 +137,7 @@ const make = Effect.gen(function* () {
           reason: item.reason,
           ...(item.placeholder === undefined ? {} : { placeholder: item.placeholder }),
           ...(item.delivery === undefined ? {} : { delivery: item.delivery }),
+          ...(item.source === undefined ? {} : { source: item.source }),
           secretStatus,
         })
         .pipe(

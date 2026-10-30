@@ -188,3 +188,20 @@ it.effect(
       );
     }),
 );
+
+it.effect("write:packages counts as read:packages, repo alone does not", () =>
+  Effect.gen(function* () {
+    const writer = yield* probe(deps({ scopes: "repo, write:packages" }), {
+      host: "github.com",
+      scopes: ["read:packages"],
+    });
+    const wgh = writer.sources.find((source) => source.kind === "gh");
+    assert.deepStrictEqual(wgh?.kind === "gh" ? wgh.missingScopes : undefined, []);
+    const repoOnly = yield* probe(deps({ scopes: "repo" }), {
+      host: "github.com",
+      scopes: ["read:packages"],
+    });
+    const rgh = repoOnly.sources.find((source) => source.kind === "gh");
+    assert.deepStrictEqual(rgh?.kind === "gh" ? rgh.missingScopes : undefined, ["read:packages"]);
+  }),
+);
