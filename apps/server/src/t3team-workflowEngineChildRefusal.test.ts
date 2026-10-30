@@ -17,11 +17,14 @@
  *   4. no turn was started on the host — the child does not exist, so there is nothing to run;
  *   5. the refusal leaves no unhandled rejection behind (the create is fired floating);
  *   6. a CAUGHT refusal does not poison the workflow: the next agent in the same run starts;
- *   7. a CAUGHT refusal is NOT durable across a resume. The refused turn keeps a `sent` entry with
- *      no `resolved` partner, so replay can only read it as an ask still awaiting its reply, and
- *      the sticky suspension latch re-parks the run there, without consuming the
- *      surviving child's delivered answer. The last test characterizes ordinary resume behavior
- *      without an explicit repair or refire target.
+ *   7. a CAUGHT refusal is NOT durable across an ORDINARY resume. The refused turn keeps a `sent`
+ *      entry with no `resolved` partner, so replay can only read it as an ask still awaiting its
+ *      reply, and the sticky suspension latch re-parks the run there, without consuming the
+ *      surviving child's delivered answer;
+ *   8. with the SAME broker, the supported one-shot `refire` target recovers that park: re-sending the
+ *      refused turn makes the broker re-throw the host's ORIGINAL refusal, the body's `catch`
+ *      handles it, the latch never arms, and the run completes on the surviving child's reply —
+ *      while journaling no second intent line for the re-sent ask.
  */
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -222,7 +225,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     expect(resumed.correlationId).toBe(refusedTurn);
     expect(resumed.correlationId).not.toBe(survivingTurn);
 
-    // A second ordinary resume repeats the same park. Explicit repair/refire is not exercised.
+    // A second ordinary resume repeats the same park. The next test exercises the supported escape.
     const again = await resumeWorkflow(runId, caughtRef, {}, options);
     expect("suspended" in again).toBe(true);
     if (!("suspended" in again)) throw new Error("expected the second resume to park");
@@ -247,5 +250,72 @@ describe("a child the host refuses, through the durable engine and the real brok
       `child refused: Workflow suspended awaiting reply for correlationId '${refusedTurn}'`,
     );
     expect(logs[2]).toBe(logs[1]);
+  });
+
+  it("completes with the same broker when the refused turn is an explicit refire target", async () => {
+    const refusal = new Error(MISSING_LAUNCH_CHECKOUT);
+    const { host, attempts, created, turns } = makeRefusingWorkflowHost(refusal);
+    const runId = "run-refusal-caught-refire";
+    const { broker, registry, spawnPips } = makeChildSpawnHarness(host, { runId });
+    const logs: string[] = [];
+    const options: WorkflowRunOptions = {
+      runsRoot,
+      tools: [],
+      broker,
+      launchThreadId: CHILD_SPAWN_LAUNCH_THREAD_ID,
+      onLog: (message) => logs.push(message),
+    };
+    const answer = "Ship behind a flag; roll back on the first error budget burn.";
+
+    const parked = await startWorkflow(caughtRef, {}, { ...options, runId });
+    expect("suspended" in parked).toBe(true);
+    if (!("suspended" in parked)) throw new Error("expected the live run to park");
+    const survivingTurn = parked.correlationId;
+    const refusedTurn = firstUnansweredTurn(readRunJournal(runId));
+    // A stale pending ask for the REFUSED child is already on the registry before any resume.
+    const pendingAfterLive = [...registry.pendingThreadIds()];
+    expect(
+      await appendResolvedEntry({ runsRoot, runId, correlationId: survivingTurn, reply: answer }),
+    ).toBe(true);
+
+    // SUPPORTED RECOVERY: naming the refused turn as the run's one-shot `refire` target re-sends it.
+    // The broker's per-child refusal store is NOT consumed by a throw, so the re-send re-throws the
+    // host's ORIGINAL refusal; the body's `catch` handles that instead of the engine's suspension
+    // signal, the sticky latch never arms, and the replay carries on to the surviving child's
+    // now-journaled reply. Where the ordinary resume above re-parks forever, this COMPLETES.
+    const resumed = await resumeWorkflow(runId, caughtRef, {}, { ...options, refire: refusedTurn });
+    expect("result" in resumed).toBe(true);
+    if (!("result" in resumed)) throw new Error("expected the refire resume to complete");
+    expect(resumed.result).toEqual({ refusal: MISSING_LAUNCH_CHECKOUT, answer });
+
+    // The author's `catch` saw the host's own refusal again — the durable reason that an ordinary
+    // resume replaces with the engine's suspension signal.
+    expect(logs).toEqual([
+      `child refused: ${MISSING_LAUNCH_CHECKOUT}`,
+      `child refused: ${MISSING_LAUNCH_CHECKOUT}`,
+    ]);
+
+    // Pre-fire intent semantics survive the re-send: `refireRecorded` journals NOTHING, so the run
+    // still has exactly its four original `sent` lines — no second intent line for the re-sent ask —
+    // and the refused turn still has no `resolved` partner of its own.
+    const journal = readRunJournal(runId);
+    expect(journal.bySeq.size).toBe(4);
+    expect(journal.byCorrelation.get(refusedTurn)).toBeUndefined();
+    expect([...journal.byCorrelation.keys()]).toEqual([survivingTurn]);
+
+    // The re-send reached the broker and stopped at the refusal: no create was retried, and no turn
+    // was started on the child that does not exist.
+    expect(attempts).toHaveLength(2);
+    expect(created).toHaveLength(1);
+    expect(turns.map((turn) => turn.threadId)).toEqual([created[0]?.threadId]);
+    expect(registry.childThreadsForRun(runId)).toEqual([created[0]?.threadId]);
+    expect(spawnPips().map((step) => step.threadId)).toEqual([created[0]?.threadId]);
+
+    // This harness does not invoke the production controller's settlement cleanup. Its pending
+    // entries remain after the engine returns; this does not establish their production lifetime.
+    // A fresh broker also loses the cached refusal, so restart recovery needs separate coverage.
+    expect(pendingAfterLive).toEqual([`${runId}:1`, `${runId}:3`]);
+    expect(registry.pendingThreadIds()).toEqual(pendingAfterLive);
+    expect(registry.peekPending(`${runId}:1`)?.correlationId).toBe(refusedTurn);
   });
 });
