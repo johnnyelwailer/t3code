@@ -7,7 +7,7 @@
  *
  * @module t3team-projectMachineSourceSetting
  */
-import type { ProjectMachineSourceSetting } from "@t3tools/contracts";
+import { type ProjectMachineSourceSetting, hasInvisibleFormat } from "@t3tools/contracts";
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -30,7 +30,10 @@ const SHORTHAND = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 const FORBIDDEN_BRANCH = /[\u0000- \u007f~^:?*[\\]|\.\.|@\{|\/\/|\.lock(\/|$)|^[-/]|[/.]$/;
 
 const isValidBranchName = (branch: string): boolean =>
-  branch.length > 0 && branch !== "@" && !FORBIDDEN_BRANCH.test(branch);
+  branch.length > 0 &&
+  branch !== "@" &&
+  !FORBIDDEN_BRANCH.test(branch) &&
+  !hasInvisibleFormat(branch);
 
 /** `owner/repo` shorthand resolves on the host of `ownUrl`; anything else must be an https URL. */
 export function normalizeMachineSource(

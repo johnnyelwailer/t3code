@@ -206,6 +206,50 @@ it.effect("shows the agent's words as plain text, never as markdown", () => {
   });
 });
 
+it.effect("defuses www. links and e-mail addresses in the agent's words", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  return Effect.gen(function* () {
+    yield* callTool(
+      {
+        ...ARGS,
+        why: "Mail ada@evil.example or visit www.evil.example",
+        author: "www.ada.example",
+      },
+      { proposal: proposalLayer(() => Effect.succeed(verifiedTools)), asked },
+    );
+    const text = asked[0]?.questions[0]?.question ?? "";
+    expect(text).not.toContain("www.evil");
+    expect(text).not.toContain("www.ada");
+    expect(text).not.toMatch(/(?<!\\)@/);
+  });
+});
+
+it.effect("drops bidi and zero-width characters from the agent's words", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  return Effect.gen(function* () {
+    yield* callTool(
+      { ...ARGS, why: "Looks\u202E fine\u200B here", author: "a\u2066da" },
+      { proposal: proposalLayer(() => Effect.succeed(verifiedTools)), asked },
+    );
+    const text = asked[0]?.questions[0]?.question ?? "";
+    expect(text).not.toMatch(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/);
+    expect(text).toContain("Looks fine here");
+  });
+});
+
+it.effect("shows the host in the first line and no warning when the project has no host", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  return Effect.gen(function* () {
+    yield* callTool(ARGS, {
+      proposal: proposalLayer(() => Effect.succeed({ ...verifiedTools, ownHost: null })),
+      asked,
+    });
+    const text = asked[0]?.questions[0]?.question ?? "";
+    expect(text.split("\n\n")[0]).toContain("nexplore.ghe.com/acme/tools");
+    expect(text).not.toContain("Warning");
+  });
+});
+
 it.effect("returns the proposal check's named reason as a tool error and asks nothing", () => {
   const asked: Array<T3TeamAskUserAskInput> = [];
   const proposal = proposalLayer(() =>

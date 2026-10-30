@@ -13,6 +13,7 @@ import {
   encodeMachineSourceQuestionId,
   escapeMarkdownText,
   machineSourceQuestionLine,
+  stripInvisibleFormat,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -28,7 +29,7 @@ const NOTE =
   "Nothing is saved until the user accepts; the answer arrives as the user's next message.";
 
 const refuse = (message: string) => new T3TeamMcpToolError({ message });
-const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+const oneLine = (text: string) => stripInvisibleFormat(text).replace(/\s+/g, " ").trim();
 
 /** The handler, with the proposal check resolved once when the toolkit layer is built (the server
  * always has it; a toolkit test layer without it gets a clear refusal). */

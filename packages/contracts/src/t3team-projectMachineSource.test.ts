@@ -9,8 +9,10 @@ import {
   decodeMachineSourceQuestionId,
   encodeMachineSourceQuestionId,
   escapeMarkdownText,
+  hasInvisibleFormat,
   machineSourceAcceptedFrom,
   machineSourceQuestionLine,
+  stripInvisibleFormat,
 } from "./t3team-projectMachineSource.ts";
 
 const URL_OF_TOOLS = "https://nexplore.ghe.com/acme/tools.git";
@@ -92,7 +94,30 @@ describe("machineSourceQuestionLine", () => {
   });
 });
 
+describe("invisible format characters", () => {
+  it("are detected and stripped", () => {
+    expect(hasInvisibleFormat("a\u202Eb")).toBe(true);
+    expect(hasInvisibleFormat("plain")).toBe(false);
+    expect(stripInvisibleFormat("a\u200Bb\u202Ec\uFEFF")).toBe("abc");
+  });
+
+  it("make a forged id with such a branch decode to nothing", () => {
+    expect(
+      decodeMachineSourceQuestionId(
+        encodeMachineSourceQuestionId({ repository: URL_OF_TOOLS, branch: "set\u202Eup" }),
+      ),
+    ).toBeNull();
+  });
+});
+
 describe("escapeMarkdownText", () => {
+  it("defuses www. autolinks and e-mail addresses", () => {
+    const escaped = escapeMarkdownText("see www.evil.example or ada@evil.example");
+    expect(escaped).not.toContain("www.");
+    expect(escaped).not.toMatch(/(?<!\\)@/);
+    expect(escaped).toContain("www\\.evil");
+  });
+
   it("defuses links, code spans and auto-linked URLs", () => {
     const escaped = escapeMarkdownText("[acme/tools](https://evil) `x` https://evil.example");
     expect(escaped).not.toMatch(/(?<!\\)\]\(/);

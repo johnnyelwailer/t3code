@@ -71,7 +71,19 @@ const parseUrl = (text: string): URL | null => {
  * agent wrote (or a branch name) must not restyle it, link elsewhere or auto-link a URL.
  */
 export const escapeMarkdownText = (text: string): string =>
-  text.replace(/[\\`*_{}[\]()#+!|<>~:]/g, "\\$&");
+  text
+    // `:` keeps `https://` from auto-linking, `@` an e-mail address, and `www.` links without either.
+    .replace(/[\\`*_{}[\]()#+!|<>~:@]/g, "\\$&")
+    .replace(/www\./gi, (match) => `${match.slice(0, -1)}\\.`);
+
+/** Bidi controls and zero-width or format characters: they reorder or hide text on a card. */
+const INVISIBLE_FORMAT = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/;
+
+export const hasInvisibleFormat = (text: string): boolean => INVISIBLE_FORMAT.test(text);
+
+/** Drops them from text an agent wrote, so a card shows what it says. */
+export const stripInvisibleFormat = (text: string): string =>
+  text.replace(new RegExp(INVISIBLE_FORMAT.source, "g"), "");
 
 /** The card's header: part of what the client requires before it applies an accepted answer. */
 export const MACHINE_SOURCE_QUESTION_HEADER = "Machine source";
@@ -102,6 +114,7 @@ export function decodeMachineSourceQuestionId(id: string): ProjectMachineSourceS
   if (setting._tag !== "Some") return null;
   const { repository, branch } = setting.value;
   if (repository === undefined && branch === undefined) return null;
+  if (branch !== undefined && hasInvisibleFormat(branch)) return null;
   if (repository !== undefined) {
     const url = parseUrl(repository);
     if (
