@@ -53,7 +53,7 @@ it.layer(NodeServices.layer)("remote cloud machines", (it) => {
       );
     }),
   );
-  // A linked repository's machine is reported but never used (#681), so the pool that survives HEAD
+  // A linked repository's machine is reported but never used, so the pool that survives HEAD
   // expiry is the project's own repository's, even when a linked repository also has a pointer.
   it.effect("keeps the own pointer pool after HEAD expiry and ignores a linked pointer", () =>
     Effect.gen(function* () {
