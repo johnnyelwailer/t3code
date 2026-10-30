@@ -1,19 +1,7 @@
 /**
- * The advertised `tools/list` text is minimal: a bullet list per tool and a short note on a field
- * only where its name is not self-evident. The original description and field docs are kept
- * as registered, and `t3_tool_help` returns them on demand.
- *
- * Models rarely ask for what was cut (8 of 182 gateway runs), so the rule is: enum values, op
- * and mode names, companion arguments and the short meaning of each value stay (`placement:
- * side=compact|main=grouped|footer=collapsed`); only prose, examples and rationale go.
- *
- * A tool with an entry in the tables gets its description replaced and every schema field
- * description dropped except the ones the entry names. A tool without one is advertised as
- * registered; `AgentContextBudget.test.ts` fails when a fork tool exceeds a cap.
+ * Fork tools advertise minimal text and `t3_tool_help` returns the registered text. Enum values, op
+ * names, companion args and each value's meaning stay; only prose and examples go.
  */
-import * as Effect from "effect/Effect";
-import { McpSchema, McpServer } from "effect/ai";
-
 import { FORK_TOOL_DOCS } from "./t3team-toolDocs-fork.ts";
 import { dropNonFiniteNumberSpellings } from "./t3team-toolSchemaCompact.ts";
 
@@ -110,20 +98,3 @@ export function advertiseToolDocs<
         ) as T["inputSchema"],
       };
 }
-
-/** Registers every tool added inside `registration` with the minimal text its entry asks for. */
-export const withMinimalToolDocs = Effect.fnUntraced(function* <A, E, R>(
-  registration: Effect.Effect<A, E, R>,
-) {
-  const server = yield* McpServer.McpServer;
-  const minimalServer = McpServer.McpServer.of({
-    ...server,
-    addTool: Effect.fn("McpServer.addTool")(function (options) {
-      return server.addTool({
-        ...options,
-        tool: new McpSchema.Tool({ ...options.tool, ...advertiseToolDocs(options.tool) }),
-      });
-    }),
-  });
-  return yield* registration.pipe(Effect.provideService(McpServer.McpServer, minimalServer));
-});
