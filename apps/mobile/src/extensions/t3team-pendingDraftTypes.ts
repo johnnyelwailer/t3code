@@ -24,15 +24,16 @@ export interface PendingDraft {
   readonly tone: PendingDraftTone;
   /** Why Send is disabled for now; null once the draft can be sent (or queued). */
   readonly sendBlockedReason: string | null;
-  /** Status card shown above the composer controls of the draft screen. */
-  readonly Card: ComponentType<{ readonly draftKey: string }> | null;
+  /** Status card above the composer controls; it explains why Send is blocked, so it is required. */
+  readonly Card: ComponentType<{ readonly draftKey: string }>;
 }
 
 /**
  * Drafts that wait for an environment that is not in the catalog yet, by draft key. The hook may
  * subscribe to the distribution's own store and must not throw. Keep a draft in the map (with
  * `sendBlockedReason: null` once it is ready) until the catalog lists its project: a draft
- * whose project is neither in the catalog nor in the map returns to the project picker.
+ * whose project is neither in the catalog nor in the map returns to the project picker. To swap in
+ * a real project, call `retargetPendingDraft` once the catalog lists it, then drop the map entry.
  */
 export interface PendingDraftSlot {
   readonly usePendingDrafts: () => ReadonlyMap<string, PendingDraft>;

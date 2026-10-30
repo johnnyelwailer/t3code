@@ -5,7 +5,7 @@ import type { QueuedThreadCreation, QueuedThreadMessage } from "./thread-outbox-
 import { isNewTaskDraftKey } from "./new-task-draft-key";
 import type { ComposerDraft } from "./use-composer-drafts";
 import { resolveNewTaskDraftWorkspace } from "../features/threads/new-task-context-presentation";
-import { draftRowTitle, listsDraft } from "../extensions/t3team-pendingDraft";
+import { draftRowTitle, listsDraft, pendingDraftHolding } from "../extensions/t3team-pendingDraft";
 import type { PendingDraft } from "../extensions/t3team-pendingDraftTypes";
 
 export type PendingNewTask = PendingQueuedTask | PendingDraftTask;
@@ -114,7 +114,8 @@ export function buildPendingNewTasks(input: {
   }
   for (const [draftKey, draft] of Object.entries(input.drafts)) {
     const hasUserContent = composerDraftHasUserContent(draft);
-    const pending = input.pendingDrafts?.get(draftKey);
+    const pending =
+      pendingDraftHolding(input.pendingDrafts?.get(draftKey), draft.project) ?? undefined;
     if (!isNewTaskDraftKey(draftKey) || !draft.project || !listsDraft(hasUserContent, pending)) {
       continue;
     }

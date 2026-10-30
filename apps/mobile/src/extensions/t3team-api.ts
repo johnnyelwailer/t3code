@@ -22,6 +22,7 @@ export type {
   PendingDraftSlot,
   PendingDraftTone,
 } from "./t3team-pendingDraftTypes";
+export { retargetPendingDraft } from "./t3team-retargetPendingDraft";
 export { useOpenPendingDraft } from "./t3team-useOpenPendingDraft";
 export type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
 

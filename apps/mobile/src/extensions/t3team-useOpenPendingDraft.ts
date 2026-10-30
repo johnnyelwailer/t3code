@@ -2,6 +2,7 @@ import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 import { useSelectWorkspaceDetail } from "../features/workspace/useSelectWorkspaceDetail";
 import { createNewTaskDraft, waitForComposerDraftsLoaded } from "../state/use-composer-drafts";
+import { openPendingDraft } from "./t3team-openPendingDraft";
 import type { PendingDraftProject } from "./t3team-pendingDraftTypes";
 
 /**
@@ -11,27 +12,29 @@ import type { PendingDraftProject } from "./t3team-pendingDraftTypes";
  */
 export function useOpenPendingDraft() {
   const selectDetail = useSelectWorkspaceDetail();
-  return async (
-    project: PendingDraftProject,
-    onCreated?: (draftKey: string) => void,
-  ): Promise<string> => {
-    await waitForComposerDraftsLoaded();
-    const draftKey = createNewTaskDraft({
-      environmentId: EnvironmentId.make(project.environmentId),
-      projectId: ProjectId.make(project.id),
-    });
-    onCreated?.(draftKey);
-    selectDetail({
-      name: "Thread",
-      params: {
-        draft: {
-          environmentId: project.environmentId,
-          projectId: project.id,
-          title: project.title,
-          draftId: draftKey,
-        },
+  return (project: PendingDraftProject, onCreated?: (draftKey: string) => void) =>
+    openPendingDraft(
+      {
+        waitForDrafts: waitForComposerDraftsLoaded,
+        createDraft: (target) =>
+          createNewTaskDraft({
+            environmentId: EnvironmentId.make(target.environmentId),
+            projectId: ProjectId.make(target.id),
+          }),
+        openDraft: (draftKey, target) =>
+          selectDetail({
+            name: "Thread",
+            params: {
+              draft: {
+                environmentId: target.environmentId,
+                projectId: target.id,
+                title: target.title,
+                draftId: draftKey,
+              },
+            },
+          }),
       },
-    });
-    return draftKey;
-  };
+      project,
+      onCreated,
+    );
 }

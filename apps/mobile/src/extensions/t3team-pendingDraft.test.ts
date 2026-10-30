@@ -6,7 +6,9 @@ import { resolveRouteDraft } from "../features/threads/new-task-flow-state";
 import { newTaskDraftKey } from "../state/new-task-draft-key";
 import {
   draftRowTitle,
+  followDraftStamp,
   listsDraft,
+  pendingDraftHolding,
   pendingDraftSendBlock,
   placeholderProject,
   withPlaceholderProject,
@@ -22,7 +24,7 @@ const pending: PendingDraft = {
   statusLabel: "Starting",
   tone: "working",
   sendBlockedReason: "Waiting for the session to start.",
-  Card: null,
+  Card: () => null,
 };
 
 describe("placeholderProject", () => {
@@ -106,5 +108,54 @@ describe("the pending drafts list", () => {
     expect(draftRowTitle(pending, false, "0 attachments")).toBe("Cloud session");
     expect(draftRowTitle(pending, true, "Fix the bug")).toBe("Fix the bug");
     expect(draftRowTitle(undefined, true, "Fix the bug")).toBe("Fix the bug");
+  });
+});
+
+describe("pendingDraftHolding", () => {
+  const stamp = { environmentId: "cloud-env", projectId: "cloud-project" };
+
+  it("holds while the draft is on the placeholder's project", () => {
+    expect(pendingDraftHolding(pending, stamp)).toBe(pending);
+  });
+
+  it("lets go once the draft is retargeted to another project or environment", () => {
+    expect(pendingDraftHolding(pending, { ...stamp, projectId: "real-project" })).toBeNull();
+    expect(pendingDraftHolding(pending, { ...stamp, environmentId: "real-env" })).toBeNull();
+  });
+
+  it("holds nothing without a pending draft or a project", () => {
+    expect(pendingDraftHolding(undefined, stamp)).toBeNull();
+    expect(pendingDraftHolding(null, stamp)).toBeNull();
+    expect(pendingDraftHolding(pending, null)).toBeNull();
+  });
+});
+
+describe("followDraftStamp", () => {
+  const bound = {
+    environmentId,
+    projectKey: `${environmentId}:${projectId}`,
+    draftKey,
+    submitting: false,
+    expandedProvider: null,
+  };
+  const real = { environmentId: EnvironmentId.make("real-env"), projectId: ProjectId.make("real") };
+
+  it("moves the flow's selection to a restamped route draft", () => {
+    expect(followDraftStamp(bound, draftKey, real)).toEqual({
+      ...bound,
+      environmentId: real.environmentId,
+      projectKey: "real-env:real",
+    });
+  });
+
+  it("returns the flow itself when the stamp already matches, or there is nothing to follow", () => {
+    expect(followDraftStamp(bound, draftKey, { environmentId, projectId })).toBe(bound);
+    expect(followDraftStamp(bound, draftKey, undefined)).toBe(bound);
+    expect(followDraftStamp(bound, undefined, real)).toBe(bound);
+    expect(followDraftStamp({ ...bound, draftKey: null }, draftKey, real)).toEqual({
+      ...bound,
+      draftKey: null,
+    });
+    expect(followDraftStamp(bound, newTaskDraftKey("other"), real)).toBe(bound);
   });
 });

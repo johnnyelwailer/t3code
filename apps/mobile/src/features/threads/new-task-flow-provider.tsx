@@ -109,6 +109,7 @@ import {
 import { useEnvironmentShellReadiness } from "../../state/shell";
 import { useConnectionsReady, useWorkspaceEnvironments } from "../../state/workspace";
 import { usePendingDraftProjects } from "../../extensions/t3team-usePendingDraft";
+import { followDraftStamp, pendingDraftHolding } from "../../extensions/t3team-pendingDraft";
 import type { PendingDraft } from "../../extensions/t3team-pendingDraftTypes";
 
 type WorkspaceMode = "local" | "worktree";
@@ -231,7 +232,10 @@ export function NewTaskFlowProvider(
 ) {
   const catalogProjects = useProjects();
   // A pending draft's project is not in the catalog yet: a placeholder stands in for it.
-  const { projects, pendingDraft } = usePendingDraftProjects(catalogProjects, props.routeDraftId);
+  const { projects, pendingDraft: heldDraft } = usePendingDraftProjects(
+    catalogProjects,
+    props.routeDraftId,
+  );
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const groupingSettings = useMobileProjectGroupingSettings();
@@ -253,9 +257,7 @@ export function NewTaskFlowProvider(
   const draftsLoaded = useAtomValue(composerDraftsLoadedAtom);
   // A draft route opened from a list row, a deep link, or restored state binds
   // its draft here until the flow's first write stores the binding.
-  const routeDraft = useComposerDraft(
-    storedFlowState.draftKey === null ? (props.routeDraftId ?? null) : null,
-  );
+  const routeDraft = useComposerDraft(props.routeDraftId ?? null);
   // Readiness of the environment the route's draft is stamped to; another
   // environment's projects loading first says nothing about it.
   const stampedEnvironmentId = routeDraft.project?.environmentId ?? null;
@@ -286,8 +288,11 @@ export function NewTaskFlowProvider(
       stampedEnvironmentLoading,
     });
   const routeDraftResolution = resolveRoute(storedFlowState, draftsLoaded, routeDraft.project);
-  const flowState =
-    routeDraftResolution.kind === "open" ? routeDraftResolution.flow : storedFlowState;
+  const flowState = followDraftStamp(
+    routeDraftResolution.kind === "open" ? routeDraftResolution.flow : storedFlowState,
+    props.routeDraftId,
+    routeDraft.project,
+  );
   const {
     environmentId: selectedEnvironmentIdOverride,
     projectKey: selectedProjectKey,
@@ -305,7 +310,13 @@ export function NewTaskFlowProvider(
         ? undefined
         : getComposerDraftSnapshot(props.routeDraftId).project,
     );
-    return resolution.kind === "open" ? resolution.flow : stored;
+    return followDraftStamp(
+      resolution.kind === "open" ? resolution.flow : stored,
+      props.routeDraftId,
+      props.routeDraftId === undefined
+        ? undefined
+        : getComposerDraftSnapshot(props.routeDraftId).project,
+    );
   };
   // Every flow write stores the route's draft binding along with it, so the
   // binding outlives the draft's project stamp (submit clears it).
@@ -876,7 +887,13 @@ export function NewTaskFlowProvider(
     expandedProvider,
     environments,
     selectedProject,
-    pendingDraft,
+    pendingDraft: pendingDraftHolding(
+      heldDraft,
+      selectedProject && {
+        environmentId: selectedProject.environmentId,
+        projectId: selectedProject.id,
+      },
+    ),
     linkedEnvironments,
     isScratchDraft,
     modelOptions,

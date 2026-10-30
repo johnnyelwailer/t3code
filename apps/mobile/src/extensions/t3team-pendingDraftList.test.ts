@@ -16,7 +16,7 @@ const pending: PendingDraft = {
   statusLabel: "Starting",
   tone: "working",
   sendBlockedReason: "Waiting for the session to start.",
-  Card: null,
+  Card: () => null,
 };
 
 function draft(text = ""): ComposerDraft {
@@ -60,5 +60,23 @@ describe("buildPendingNewTasks with a distribution's pending drafts", () => {
       pendingDrafts: new Map([[draftKey, pending]]),
     });
     expect(task?.title).toBe("Fix the login bug");
+  });
+
+  it("stops holding a draft that was retargeted to another project", () => {
+    const retargeted: ComposerDraft = {
+      ...draft(),
+      project: {
+        environmentId,
+        projectId: ProjectId.make("real"),
+        createdAt: "2026-10-30T00:00:00.000Z",
+      },
+    };
+    expect(
+      buildPendingNewTasks({
+        queuedMessages: [],
+        drafts: { [draftKey]: retargeted },
+        pendingDrafts: new Map([[draftKey, pending]]),
+      }),
+    ).toEqual([]);
   });
 });

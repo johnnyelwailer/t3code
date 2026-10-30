@@ -1,6 +1,9 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
+import type { NewTaskFlowState } from "../features/threads/new-task-flow-state";
+import { scopedProjectKey } from "../lib/scopedEntities";
+
 import type { PendingDraft, PendingDraftProject } from "./t3team-pendingDraftTypes";
 
 export const NO_PENDING_DRAFTS: ReadonlyMap<string, PendingDraft> = new Map();
@@ -62,4 +65,36 @@ export function draftRowTitle(
   stockTitle: string,
 ): string {
   return hasUserContent || pending === undefined ? stockTitle : pending.project.title;
+}
+
+/**
+ * The pending draft while the project it is stamped on, or selected, is still its placeholder's.
+ * Once the draft is retargeted to a real project the hold no longer applies.
+ */
+export function pendingDraftHolding(
+  pending: PendingDraft | null | undefined,
+  project: { readonly environmentId: string; readonly projectId: string } | null | undefined,
+): PendingDraft | null {
+  if (!pending || !project) return null;
+  const held = pending.project;
+  return held.environmentId === project.environmentId && held.id === project.projectId
+    ? pending
+    : null;
+}
+
+/**
+ * A route draft follows its own stamp: a retarget that restamps the draft without the flow
+ * (a distribution swapping in the real project) must move the flow's selection with it.
+ */
+export function followDraftStamp(
+  flow: NewTaskFlowState,
+  routeDraftId: string | undefined,
+  stamp: { readonly environmentId: EnvironmentId; readonly projectId: ProjectId } | undefined,
+): NewTaskFlowState {
+  if (routeDraftId === undefined || flow.draftKey !== routeDraftId || stamp === undefined) {
+    return flow;
+  }
+  const projectKey = scopedProjectKey(stamp.environmentId, stamp.projectId);
+  if (flow.environmentId === stamp.environmentId && flow.projectKey === projectKey) return flow;
+  return { ...flow, environmentId: stamp.environmentId, projectKey };
 }

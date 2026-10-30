@@ -82,6 +82,7 @@ import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
 import { PendingDraftRowStatus } from "../../extensions/t3team-PendingDraftRowStatus";
+import { pendingDraftHolding } from "../../extensions/t3team-pendingDraft";
 import { usePendingDraft } from "../../extensions/t3team-usePendingDraft";
 
 interface StatusLabel {
@@ -372,7 +373,10 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   const sidebarPane = props.pane === "sidebar";
   const rowAppearance = getThreadListV2RowAppearance(theme, sidebarPane, props.selected ?? false);
   const isDraft = pendingTask.kind === "draft";
-  const pendingDraft = usePendingDraft(isDraft ? pendingTask.draftKey : null);
+  const pendingDraft = pendingDraftHolding(usePendingDraft(isDraft ? pendingTask.draftKey : null), {
+    environmentId: pendingTask.environmentId,
+    projectId: pendingTask.projectId,
+  });
   const deleteLabel = isDraft ? "Discard" : "Delete";
   const handleDelete = useCallback(
     () => onDeletePendingTask(pendingTask),
