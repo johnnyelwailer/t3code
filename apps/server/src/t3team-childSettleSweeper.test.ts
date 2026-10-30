@@ -51,6 +51,17 @@ const pick = (shells: ReadonlyArray<SettleSweepShell>) =>
   );
 
 describe("child settle sweep — candidate selection", () => {
+  it("never nominates a pinned child, on either rule", () => {
+    assert.deepStrictEqual(
+      pick([
+        shell("parent", { parent: null, settledOverride: "settled" }),
+        shell("pinned-child", { pinnedAt: OLD }),
+        shell("plain-child"),
+      ]),
+      ["plain-child:settled-parent"],
+    );
+  });
+
   it("settles a terminal subagent child only after the TTL, never a root or a fork", () => {
     assert.deepStrictEqual(
       pick([

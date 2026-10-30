@@ -35,6 +35,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -4141,6 +4142,57 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
 
       const projection = yield* orchestrator.getThreadProjection(threadId);
       assert.equal(projection.thread.settledOverride, "settled");
+    }),
+  );
+
+  it.effect("does not defer a pinned thread's own-agent settle to the turn end", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+      const threadId = ThreadId.make("runtime-layer-settle-pinned-thread");
+
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-settle-pinned-create"),
+        threadId,
+        projectId: ProjectId.make("runtime-layer-settle-pinned-project"),
+        title: "Settle pinned",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: "/tmp/runtime-layer-settle-pinned",
+      });
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-settle-pinned-message"),
+        threadId,
+        messageId: MessageId.make("runtime-layer-settle-pinned-message"),
+        text: "Work, then settle this thread.",
+        attachments: [],
+        modelSelection,
+        dispatchMode: { type: "start_immediately" },
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("runtime-layer-settle-pinned-pin"),
+        threadId,
+      });
+
+      // The settle guard (fork layer) refuses it now with the pin named; a deferred settle
+      // would answer "ok, at turn end" and then silently fail.
+      const exit = yield* Effect.exit(
+        threadManagement.settleThread({
+          threadId,
+          commandId: CommandId.make("runtime-layer-settle-pinned-settle"),
+          byOwnAgent: true,
+        }),
+      );
+      assert.isFalse(Exit.isSuccess(exit) && "settlesWhenTurnEnds" in exit.value);
     }),
   );
 
