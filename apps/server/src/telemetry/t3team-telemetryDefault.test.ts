@@ -1,4 +1,5 @@
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
@@ -53,55 +54,57 @@ const requestsSentUnder = (env: Record<string, unknown>) =>
     return capturedPaths;
   });
 
-it.effect("usage telemetry is off when nothing is configured", () =>
-  Effect.gen(function* () {
-    assert.equal(yield* resolveEnabled({}), false);
-    assert.deepEqual(yield* requestsSentUnder({}), []);
-  }),
-);
+it.layer(NodeServices.layer)("telemetry default", (it) => {
+  it.effect("usage telemetry is off when nothing is configured", () =>
+    Effect.gen(function* () {
+      assert.equal(yield* resolveEnabled({}), false);
+      assert.deepEqual(yield* requestsSentUnder({}), []);
+    }),
+  );
 
-it.effect("an explicit T3CODE_TELEMETRY_ENABLED=true turns it on", () =>
-  Effect.gen(function* () {
-    assert.equal(yield* resolveEnabled({ T3CODE_TELEMETRY_ENABLED: "true" }), true);
-    const sent = yield* requestsSentUnder({ T3CODE_TELEMETRY_ENABLED: true });
-    assert.equal(sent.length > 0, true);
-  }),
-);
+  it.effect("an explicit T3CODE_TELEMETRY_ENABLED=true turns it on", () =>
+    Effect.gen(function* () {
+      assert.equal(yield* resolveEnabled({ T3CODE_TELEMETRY_ENABLED: "true" }), true);
+      const sent = yield* requestsSentUnder({ T3CODE_TELEMETRY_ENABLED: true });
+      assert.equal(sent.length > 0, true);
+    }),
+  );
 
-it.effect("a deployment-owned T3CODE_POSTHOG_HOST turns it on when the flag is unset", () =>
-  Effect.gen(function* () {
-    assert.equal(
-      yield* resolveEnabled({ T3CODE_POSTHOG_HOST: "https://ingest.example.test" }),
-      true,
-    );
-    const sent = yield* requestsSentUnder({
-      T3CODE_POSTHOG_HOST: "https://ingest.example.test",
-      T3CODE_POSTHOG_KEY: "phc_test_key",
-    });
-    assert.equal(sent.length > 0, true);
-  }),
-);
+  it.effect("a deployment-owned T3CODE_POSTHOG_HOST turns it on when the flag is unset", () =>
+    Effect.gen(function* () {
+      assert.equal(
+        yield* resolveEnabled({ T3CODE_POSTHOG_HOST: "https://ingest.example.test" }),
+        true,
+      );
+      const sent = yield* requestsSentUnder({
+        T3CODE_POSTHOG_HOST: "https://ingest.example.test",
+        T3CODE_POSTHOG_KEY: "phc_test_key",
+      });
+      assert.equal(sent.length > 0, true);
+    }),
+  );
 
-it.effect("an explicit T3CODE_TELEMETRY_ENABLED=false beats a configured host", () =>
-  Effect.gen(function* () {
-    const env = {
-      T3CODE_TELEMETRY_ENABLED: "false",
-      T3CODE_POSTHOG_HOST: "https://ingest.example.test",
-    };
-    assert.equal(yield* resolveEnabled(env), false);
-    assert.deepEqual(yield* requestsSentUnder(env), []);
-  }),
-);
+  it.effect("an explicit T3CODE_TELEMETRY_ENABLED=false beats a configured host", () =>
+    Effect.gen(function* () {
+      const env = {
+        T3CODE_TELEMETRY_ENABLED: "false",
+        T3CODE_POSTHOG_HOST: "https://ingest.example.test",
+      };
+      assert.equal(yield* resolveEnabled(env), false);
+      assert.deepEqual(yield* requestsSentUnder(env), []);
+    }),
+  );
 
-it.effect("a blank T3CODE_POSTHOG_HOST does not count as a configured ingest", () =>
-  Effect.gen(function* () {
-    assert.equal(yield* resolveEnabled({ T3CODE_POSTHOG_HOST: "  " }), false);
-  }),
-);
+  it.effect("a blank T3CODE_POSTHOG_HOST does not count as a configured ingest", () =>
+    Effect.gen(function* () {
+      assert.equal(yield* resolveEnabled({ T3CODE_POSTHOG_HOST: "  " }), false);
+    }),
+  );
 
-it.effect("a malformed T3CODE_TELEMETRY_ENABLED is a config error, not a silent default", () =>
-  Effect.gen(function* () {
-    const result = yield* Effect.exit(resolveEnabled({ T3CODE_TELEMETRY_ENABLED: "maybe" }));
-    assert.equal(result._tag, "Failure");
-  }),
-);
+  it.effect("a malformed T3CODE_TELEMETRY_ENABLED is a config error, not a silent default", () =>
+    Effect.gen(function* () {
+      const result = yield* Effect.exit(resolveEnabled({ T3CODE_TELEMETRY_ENABLED: "maybe" }));
+      assert.equal(result._tag, "Failure");
+    }),
+  );
+});
