@@ -1,5 +1,5 @@
 import { ArrowUpRightIcon } from "lucide-react";
-import type { ProjectSource } from "@t3tools/project-context";
+import type { ChangeSetProjectSource } from "~/t3team/changeset/t3team-changeSetDeps";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { embeddedKickoffInitialUserMessage } from "~/t3team/t3team-embeddedKickoffInitialUserMessage";
@@ -10,7 +10,7 @@ type EmbeddedThreadAsideProps = {
   thread: ProjectThread;
   projectId: string;
   projectTitle: string;
-  projectSource?: Pick<ProjectSource, "provider">;
+  projectSource?: ChangeSetProjectSource;
   projectWorkspaceRoot?: string;
   ticketId?: string;
   onThreadKickoffConsumed: (threadId: string) => void;
