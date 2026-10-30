@@ -283,36 +283,59 @@ handlers), temp-id hierarchy, delete operations, trusted auto-commit, un-discard
 
 ## Implemented: web half, preview and approval card (slice 3b)
 
-`WorkItemChangeSetMount` (`apps/web/src/t3team/changeset/`) renders every `work-item-change-set` artifact
-of a thread above the conversation, inside `ThreadChatView`, so the full thread, the embedded aside
-and the right-panel thread tab all show it. It follows the 3a contract:
+`WorkItemChangeSetMount` (`apps/web/src/t3team/changeset/`) renders every `work-item-change-set`
+artifact of a thread above the conversation, inside `ThreadChatView`, so the full thread, the embedded
+aside and the right-panel thread tab all show it. It follows the 3a contract:
 
 - Each `operations[].draftId` must be a `draft-mutation` artifact on the SAME thread, else the
-  operation reads `missing` and is never sent. Rows render from the member draft, never from the
-  set's display copies.
-- `verifyDraftPayloadHash` runs before every write, in the apply sequencer
-  (`t3team-changeSetApply.ts`, pure, injected `acceptOp`/`record`). A mismatch is refused with
-  "Changed since proposed, not applied". A `changed` operation is never counted as approved.
-- Apply reuses the work item view's field writes (`t3team-workItemFieldWrites.ts`, shared with
-  `useWorkItemFieldMutations` and the strip's link/subtask accept) driven from the member payload.
-  Description and comment drafts are sent as the proposed markdown.
-- Operations are independent: a failure stays on that operation and the run continues, except that a
-  failed write stops the rest of that issue when a later operation targets the same field. Only
-  `draft` operations are sent, so a re-run resumes. A write whose verdict could not be recorded is
-  `unrecorded` and a retry only records it, so it is never written twice.
-- Per-operation approve toggles default to approved. Apply writes the approved operations and records
-  `applied`; toggled-off ones are recorded `dismissed`. "Discard set" calls the 3a `changeSetId` route.
+  operation reads `missing` and is never sent. A `draftId` listed twice is `duplicate` after its first
+  use, and the contract schema rejects such a payload outright. Rows render from the member draft,
+  never from the set's display copies.
+- `verifyDraftPayloadHash` runs before every write, in the apply sequencer (`t3team-changeSetApply.ts`,
+  pure, injected `acceptOp` and `record`). A mismatch is refused with "Changed since proposed, not
+  applied", and a `changed` operation is never counted as approved.
+- What the card may write is decided per operation (`t3team-changeSetPolicy.ts`). Status, assignee,
+  story points, link and subtask are pre-approved, shown with their values, and written through the
+  work item view's own field writes (`t3team-workItemFieldWrites.ts`). A comment shows its full text
+  and is NOT pre-approved: it needs an explicit tick. A description is never written from the card
+  (it has no current text to diff, so an accept would silently overwrite a concurrent Jira edit); it
+  reads "Review and apply from the work item view". An estimate applies only when the draft says
+  `estimateMode: "points"`; hours or an unstated mode is left to the item view.
+- Apply is available only when the thread's project source is Jira (`provider: "atlassian"`) with an
+  account; otherwise the card says why and writes nothing. A draft whose target is not Jira, or whose
+  issue key is outside the bound project key, is refused. A subtask is created in the binding's
+  `externalProjectId`, the id the backlog's subtask form uses; without it the subtask is left to the
+  item view.
+- Operations are independent: a failure stays on that operation and the run continues, except that
+  later operations on the same field of the same issue are blocked. Only `draft` operations are
+  sent, so a re-run resumes.
+- A write that is not repeatable (comment, subtask, link create) whose reply was lost is `uncertain`
+  ("may already be in Jira"), not `failed`, unless the server clearly rejected it (`BackendApiError`).
+  "Retry failed" skips it; each uncertain operation offers Retry anyway, Already applied (records the
+  verdict only) and Dismiss. Repeatable writes (status, assignee, points, link remove) retry normally.
+- Verdicts are recorded with a bounded backoff. A write that landed but could not be recorded is
+  `unrecorded`: the card warns "applied in Jira but could not be recorded", never sends it again, and
+  offers Retry recording. Session outcomes live in a module store (`t3team-changeSetOutcomeStore.ts`)
+  and the apply run is plain async code, so unmounting the card neither stops a run nor loses its
+  results, and a remounted card cannot start a second run for the same set.
+- Per-operation toggles take the policy's default. Apply records `applied` for the approved ones and
+  `dismissed` for those the reviewer rejected ("Apply 3 and dismiss 2"); "Discard set" calls the 3a
+  `changeSetId` route.
 - While a set is `draft`, its members are not ingested into the per-draft review store
-  (`collectT3TeamDraftMutations` `ownedDraftIds`), so they are not offered twice. A discarded set
-  releases them.
+  (`ingestThreadDrafts`), so they are not offered twice. A discarded set, or one the card cannot
+  render, leaves them to the per-draft review.
+
+Residual risks, accepted for now: the session store is memory only, so a hard reload while an
+operation is `unrecorded` or `uncertain` forgets it and the member is `draft` again; check Jira before
+applying again. There is no compare-and-set: two tabs or hosts can apply the same set, and the
+cross-session guard is not built. A draft written to Jira is also not re-read, so the work item view
+shows it after its next fetch.
 
 Not built: delete operations, temp-id hierarchy, a server commit path, trusted auto-commit,
-un-discarding, mobile. Known gaps: an hour-tracked estimate has no accept path anywhere in the web
-client (the item view's strip does not offer one either), so it reads "Apply from the item view" and
-is not written; the card shows proposed values without the current ones, because the thread has no
-loaded work item; the work item view does not reload after a change-set apply until its next fetch;
-the per-draft strip's scalar accepts still do not record their verdict on the carrier, only the
-description diff does.
+un-discarding, mobile. Known gaps: the card shows proposed values without the current ones, because
+the thread has no loaded work item; the per-draft strip's scalar accepts still do not record their
+verdict on the carrier (only the description diff does); and that strip passes the app's project id,
+not the Jira project id, to `createSubtask`.
 
 ## MVP Slice
 

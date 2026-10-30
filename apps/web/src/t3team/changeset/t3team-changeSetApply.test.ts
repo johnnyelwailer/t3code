@@ -1,26 +1,37 @@
-import { describe, expect, it, vi } from "vite-plus/test";
-
 import type { T3TeamDraftMutationPayload } from "@t3tools/contracts";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   applyChangeSetOperations,
   CHANGED_SINCE_PROPOSED,
+  RefusedOperationError,
   UnsupportedOperationError,
 } from "~/t3team/changeset/t3team-changeSetApply";
-import {
-  readThreadChangeSets,
-  resolveChangeSet,
-  type ResolvedOperation,
-} from "~/t3team/changeset/t3team-changeSetModel";
 import {
   changeSetArtifact,
   FIXTURE_THREAD_ID,
   memberArtifact,
   type FixtureMember,
 } from "~/t3team/changeset/t3team-changeSetFixtures";
+import {
+  readThreadChangeSets,
+  resolveChangeSet,
+  type ResolvedOperation,
+} from "~/t3team/changeset/t3team-changeSetModel";
 
-const member = (id: string, issueKey: string, field: FixtureMember["field"], extra = {}) =>
-  ({ id, issueKey, field, patch: { v: id }, ...extra }) as FixtureMember;
+const PATCHES: Record<string, (id: string) => Record<string, unknown>> = {
+  status: (id) => ({ targetStatus: `To ${id}` }),
+  assignee: (id) => ({ assigneeAccountId: id }),
+  comment: (id) => ({ body: `Comment ${id}` }),
+  subtask: (id) => ({ summary: `Subtask ${id}` }),
+};
+
+const member = (
+  id: string,
+  issueKey: string,
+  field: FixtureMember["field"],
+  extra: Partial<FixtureMember> = {},
+): FixtureMember => ({ id, issueKey, field, patch: PATCHES[field]!(id), ...extra });
 
 function ops(members: ReadonlyArray<FixtureMember>): ReadonlyArray<ResolvedOperation> {
   const artifacts = [...members.map(memberArtifact), changeSetArtifact({ title: "t", members })];
@@ -33,11 +44,16 @@ function deps(failing: ReadonlySet<string> = new Set()) {
     acceptOp: vi.fn(async (draft: T3TeamDraftMutationPayload) => {
       if (failing.has(draft.id)) throw new Error(`write failed ${draft.id}`);
     }),
-    record: vi.fn(async () => {}),
+    record: vi.fn<(draftId: string, verdict: "applied" | "dismissed") => Promise<void>>(
+      async () => {},
+    ),
+    sleep: vi.fn(async (_ms: number) => {}),
   };
 }
 
-const run = (approved: ReadonlyArray<ResolvedOperation>, d = deps(), rest = {}) =>
+type RunDeps = Omit<Parameters<typeof applyChangeSetOperations>[0], "approved" | "rejected">;
+
+const run = (approved: ReadonlyArray<ResolvedOperation>, d: RunDeps = deps(), rest = {}) =>
   applyChangeSetOperations({ approved, rejected: [], ...d, ...rest });
 
 describe("applyChangeSetOperations", () => {
@@ -72,19 +88,20 @@ describe("applyChangeSetOperations", () => {
     const all = ops([
       member("d1", "NXAI-1", "status", { status: "applied" }),
       member("d2", "NXAI-1", "assignee", { status: "dismissed" }),
-      member("d3", "NXAI-1", "estimate"),
+      member("d3", "NXAI-1", "comment"),
     ]);
     const d = deps();
-    const outcomes = await run(all, d);
-    expect(outcomes.map((o) => o.status)).toEqual(["skipped", "skipped", "applied"]);
+    expect((await run(all, d)).map((o) => o.status)).toEqual(["skipped", "skipped", "applied"]);
     expect(d.acceptOp).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a payload changed since it was proposed, and writes nothing for it", async () => {
-    const all = ops([member("d1", "NXAI-1", "status", { storedPatch: { v: "tampered" } })]);
+    const all = ops([member("d1", "NXAI-1", "status", { storedPatch: { targetStatus: "Evil" } })]);
     const d = deps();
-    const [outcome] = await run(all, d);
-    expect(outcome).toMatchObject({ status: "refused", message: CHANGED_SINCE_PROPOSED });
+    expect((await run(all, d))[0]).toMatchObject({
+      status: "refused",
+      message: CHANGED_SINCE_PROPOSED,
+    });
     expect(d.acceptOp).not.toHaveBeenCalled();
     expect(d.record).not.toHaveBeenCalled();
   });
@@ -96,39 +113,56 @@ describe("applyChangeSetOperations", () => {
     expect(d.acceptOp).not.toHaveBeenCalled();
   });
 
-  it("continues past a failure, which stays on that operation", async () => {
+  it("sends a draft id listed twice once, and refuses the repeat", async () => {
+    const [first] = ops([member("d1", "NXAI-1", "status")]);
+    const d = deps();
+    const repeat = { ...first!, state: "duplicate" as const };
+    expect((await run([first!, repeat], d)).map((o) => o.status)).toEqual(["applied", "refused"]);
+    expect(d.acceptOp).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses what the accept op refuses, and reports an unsupported kind as such", async () => {
+    const all = ops([member("d1", "NXAI-1", "status"), member("d2", "NXAI-2", "status")]);
+    const d = {
+      acceptOp: vi
+        .fn()
+        .mockRejectedValueOnce(new RefusedOperationError("wrong project"))
+        .mockRejectedValueOnce(new UnsupportedOperationError("from item")),
+      record: vi.fn(),
+    };
+    expect((await run(all, d)).map((o) => o.status)).toEqual(["refused", "unsupported"]);
+    expect(d.record).not.toHaveBeenCalled();
+  });
+
+  it("continues past a failure of a repeatable write, which stays on that operation", async () => {
     const all = ops([member("d1", "NXAI-1", "status"), member("d2", "NXAI-2", "status")]);
     const outcomes = await run(all, deps(new Set(["d1"])));
     expect(outcomes.map((o) => o.status)).toEqual(["failed", "applied"]);
     expect(outcomes[0]?.message).toContain("write failed d1");
   });
 
-  it("stops the rest of an issue when a failed field is written again later on it", async () => {
+  it("blocks only later writes to the same field of the same issue", async () => {
     const all = ops([
       member("d1", "NXAI-1", "status"),
-      member("d2", "NXAI-1", "assignee"),
-      member("d3", "NXAI-1", "status", { patch: { v: "second" } }),
+      member("d2", "nxai-1", "status", { patch: { targetStatus: "Later" } }),
+      member("d3", "NXAI-1", "assignee"),
       member("d4", "NXAI-2", "status"),
     ]);
     const outcomes = await run(all, deps(new Set(["d1"])));
-    expect(outcomes.map((o) => o.status)).toEqual(["failed", "blocked", "blocked", "applied"]);
+    expect(outcomes.map((o) => o.status)).toEqual(["failed", "blocked", "applied", "applied"]);
   });
 
-  it("keeps going on the same issue when no later operation repeats the failed field", async () => {
-    const all = ops([member("d1", "NXAI-1", "status"), member("d2", "NXAI-1", "assignee")]);
-    expect((await run(all, deps(new Set(["d1"])))).map((o) => o.status)).toEqual([
-      "failed",
-      "applied",
-    ]);
+  it("treats a lost reply on a write that is not repeatable as uncertain, not failed", async () => {
+    const all = ops([member("d1", "NXAI-1", "comment"), member("d2", "NXAI-1", "subtask")]);
+    const outcomes = await run(all, deps(new Set(["d1", "d2"])));
+    expect(outcomes.map((o) => o.status)).toEqual(["uncertain", "uncertain"]);
+    expect(outcomes[0]?.message).toContain("May already be in Jira");
   });
 
-  it("reports an operation kind with no accept path as unsupported", async () => {
-    const all = ops([member("d1", "NXAI-1", "estimate")]);
-    const d = {
-      acceptOp: vi.fn().mockRejectedValue(new UnsupportedOperationError("from item")),
-      record: vi.fn(),
-    };
-    expect((await run(all, d))[0]).toMatchObject({ status: "unsupported", message: "from item" });
+  it("calls it failed when the server clearly rejected the write", async () => {
+    const all = ops([member("d1", "NXAI-1", "comment")]);
+    const outcomes = await run(all, deps(new Set(["d1"])), { isClearRejection: () => true });
+    expect(outcomes[0]?.status).toBe("failed");
   });
 
   it("records rejected operations as dismissed, and reports progress", async () => {
@@ -151,24 +185,32 @@ describe("applyChangeSetOperations", () => {
 
   it("is resumable: a re-run over the stored states applies only what is still a draft", async () => {
     const members = [member("d1", "NXAI-1", "status"), member("d2", "NXAI-2", "status")];
-    const failing = deps(new Set(["d2"]));
-    await run(ops(members), failing);
-    // d1's verdict is now stored as applied; d2 failed and is still a draft.
+    await run(ops(members), deps(new Set(["d2"])));
     const second = deps();
     const outcomes = await run(ops([{ ...members[0]!, status: "applied" }, members[1]!]), second);
     expect(outcomes.map((o) => o.status)).toEqual(["skipped", "applied"]);
     expect(second.acceptOp).toHaveBeenCalledTimes(1);
   });
 
-  it("a write whose verdict could not be recorded is only re-recorded on retry", async () => {
+  it("retries a verdict that will not record, with backoff, and recovers", async () => {
     const all = ops([member("d1", "NXAI-1", "status")]);
-    const flaky = {
-      acceptOp: vi.fn(async () => {}),
-      record: vi.fn().mockRejectedValueOnce(new Error("offline")),
-    };
-    expect((await run(all, flaky))[0]?.status).toBe("unrecorded");
-    const retry = await run(all, flaky, { unrecordedDraftIds: new Set(["d1"]) });
-    expect(retry[0]?.status).toBe("applied");
-    expect(flaky.acceptOp).toHaveBeenCalledTimes(1);
+    const d = deps();
+    d.record
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline"));
+    expect((await run(all, d))[0]?.status).toBe("applied");
+    expect(d.record).toHaveBeenCalledTimes(3);
+    expect(d.sleep.mock.calls.map(([ms]) => ms)).toEqual([500, 1500]);
+  });
+
+  it("reports a write whose verdict never records as unrecorded, after a bounded number of tries", async () => {
+    const all = ops([member("d1", "NXAI-1", "status")]);
+    const d = deps();
+    d.record.mockRejectedValue(new Error("offline"));
+    const [outcome] = await run(all, d);
+    expect(outcome).toMatchObject({ status: "unrecorded" });
+    expect(outcome?.message).toContain("do not apply it again");
+    expect(d.record).toHaveBeenCalledTimes(3);
+    expect(d.acceptOp).toHaveBeenCalledTimes(1);
   });
 });

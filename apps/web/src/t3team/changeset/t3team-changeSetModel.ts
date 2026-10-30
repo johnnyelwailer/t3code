@@ -21,7 +21,9 @@ export type ChangeSetOperationState =
   | "changed"
   | "draft"
   | "applied"
-  | "dismissed";
+  | "dismissed"
+  /** A second operation naming a draft already used earlier in the set; never sent. */
+  | "duplicate";
 
 export type ResolvedOperation = {
   readonly operation: WorkItemChangeSetOperation;
@@ -81,28 +83,45 @@ export function resolveChangeSet(
   threadId: string,
 ): ResolvedChangeSet {
   const byId = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  const seen = new Set<string>();
   return {
     changeSet,
-    operations: changeSet.operations.map((operation) =>
-      resolveOperation(operation, byId, threadId),
-    ),
+    operations: changeSet.operations.map((operation): ResolvedOperation => {
+      if (seen.has(operation.draftId)) return { operation, state: "duplicate" };
+      seen.add(operation.draftId);
+      return resolveOperation(operation, byId, threadId);
+    }),
   };
 }
 
-/**
- * Draft ids the change-set card owns, so the per-draft review does not offer them a second time.
- * A discarded set owns nothing: its members surface (or are already dismissed) on their own.
- */
-export function changeSetMemberDraftIds(
+export type ChangeSetView = {
+  readonly resolved: ReadonlyArray<ResolvedChangeSet>;
+  /** Drafts an open change set owns, so the per-draft review does not offer them a second time. */
+  readonly ownedDraftIds: ReadonlySet<string>;
+};
+
+const viewCache = new WeakMap<object, Map<string, ChangeSetView>>();
+
+/** Decodes and hashes once per artifacts snapshot: the stream hands out a new array on a change. */
+export function readChangeSetView(
   artifacts: ReadonlyArray<ArtifactLike>,
   threadId: string,
-): ReadonlySet<string> {
-  const owned = new Set<string>();
-  for (const changeSet of readThreadChangeSets(artifacts, threadId)) {
-    if (changeSet.status !== "draft") continue;
-    for (const { draftId } of changeSet.operations) owned.add(draftId);
-  }
-  return owned;
+): ChangeSetView {
+  const cached = viewCache.get(artifacts)?.get(threadId);
+  if (cached) return cached;
+  const sets = readThreadChangeSets(artifacts, threadId);
+  const view: ChangeSetView = {
+    resolved: sets.map((changeSet) => resolveChangeSet(changeSet, artifacts, threadId)),
+    ownedDraftIds: new Set(
+      sets
+        .filter(({ status }) => status === "draft")
+        .flatMap(({ operations }) => operations.map(({ draftId }) => draftId)),
+    ),
+  };
+  const byThread = viewCache.get(artifacts) ?? new Map<string, ChangeSetView>();
+  byThread.set(threadId, view);
+  viewCache.set(artifacts, byThread);
+  return view;
 }
 
 export type IssueGroup = {
@@ -110,37 +129,20 @@ export type IssueGroup = {
   readonly operations: ReadonlyArray<ResolvedOperation>;
 };
 
+export const normalizeIssueKey = (key: string) => key.trim().toUpperCase();
+
 /** Operations grouped by the issue the MEMBER draft targets, in order of first appearance. */
 export function groupByIssue(
   operations: ReadonlyArray<ResolvedOperation>,
 ): ReadonlyArray<IssueGroup> {
   const groups = new Map<string, ResolvedOperation[]>();
   for (const resolved of operations) {
-    const issueKey = resolved.draft?.target.issueIdOrKey ?? resolved.operation.issueKey;
+    const issueKey = normalizeIssueKey(
+      resolved.draft?.target.issueIdOrKey ?? resolved.operation.issueKey,
+    );
     const group = groups.get(issueKey);
     if (group) group.push(resolved);
     else groups.set(issueKey, [resolved]);
   }
   return [...groups].map(([issueKey, ops]) => ({ issueKey, operations: ops }));
-}
-
-/**
- * Approved = still `draft` and not toggled off. A `changed` operation is never approved (the apply
- * would refuse it), but toggling it off still records a dismissal.
- */
-export function partitionBySelection(
-  operations: ReadonlyArray<ResolvedOperation>,
-  rejectedDraftIds: ReadonlySet<string>,
-): {
-  readonly approved: ReadonlyArray<ResolvedOperation>;
-  readonly rejected: ReadonlyArray<ResolvedOperation>;
-} {
-  const isRejected = ({ operation }: ResolvedOperation) => rejectedDraftIds.has(operation.draftId);
-  return {
-    approved: operations.filter((resolved) => resolved.state === "draft" && !isRejected(resolved)),
-    rejected: operations.filter(
-      (resolved) =>
-        (resolved.state === "draft" || resolved.state === "changed") && isRejected(resolved),
-    ),
-  };
 }

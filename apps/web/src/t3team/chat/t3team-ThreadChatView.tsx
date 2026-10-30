@@ -4,9 +4,9 @@ import {
   type RuntimeMode,
   ThreadId,
 } from "@t3tools/contracts";
-import type { ProjectSource } from "@t3tools/project-context";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { useT3TeamThreadArtifacts } from "~/state/t3team-threadSideStreams";
+import type { ChangeSetProjectSource } from "~/t3team/changeset/t3team-changeSetDeps";
 import { WorkItemChangeSetMount } from "~/t3team/changeset/t3team-WorkItemChangeSetMount";
 import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
 import { useT3TeamDraftMutationIngest } from "~/t3team/chat/t3team-useDraftMutationIngest";
@@ -22,7 +22,7 @@ export interface ThreadChatViewProps {
   threadId: string;
   projectId: string;
   projectTitle: string;
-  projectSource?: Pick<ProjectSource, "provider" | "accountId">;
+  projectSource?: ChangeSetProjectSource;
   projectWorkspaceRoot?: string;
   title: string;
   onBack?: () => void;
@@ -180,8 +180,7 @@ export function ThreadChatView({
       changeSetSlot={
         <WorkItemChangeSetMount
           threadId={threadId}
-          projectId={projectId}
-          accountId={projectSource?.accountId}
+          projectSource={projectSource}
           artifacts={artifacts}
         />
       }

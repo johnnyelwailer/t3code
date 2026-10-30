@@ -1,7 +1,12 @@
 import type { T3TeamDraftMutationPayload } from "@t3tools/contracts";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
-import { UnsupportedOperationError } from "~/t3team/changeset/t3team-changeSetApply";
+import {
+  RefusedOperationError,
+  UnsupportedOperationError,
+} from "~/t3team/changeset/t3team-changeSetApply";
+import { normalizeIssueKey } from "~/t3team/changeset/t3team-changeSetModel";
+import { APPLY_FROM_ITEM, operationPolicy } from "~/t3team/changeset/t3team-changeSetPolicy";
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import {
   readAssigneeDraftPatch,
@@ -13,66 +18,55 @@ import {
 import {
   writeWorkItemAssignee,
   writeWorkItemComment,
-  writeWorkItemDescription,
   writeWorkItemEstimatePoints,
   writeWorkItemLink,
   writeWorkItemStatus,
   writeWorkItemSubtask,
 } from "~/t3team/workitem/t3team-workItemFieldWrites";
 
-const APPLY_FROM_ITEM = "Apply this one from the work item view.";
-
 /**
- * The change-set accept: the same field writes the work item view's Accept uses, driven headless
- * from the member draft's own payload. A patch no write path reads throws instead of guessing.
+ * The change-set accept: the work item view's own field writes, driven from the member draft's payload.
+ * It refuses another provider or project, and anything the card cannot write safely (policy).
  */
 export function createChangeSetAcceptOp(input: {
   readonly backend: AtlassianBackendApi;
   readonly accountId: string;
-  /** Jira project the strip creates subtasks in: the same id `useWorkItemDraftStripScalarAccept` gets. */
-  readonly projectId: string;
+  /** The Jira project id `createSubtask` needs: the backlog's `externalProjectId`, not the app's id. */
+  readonly externalProjectId?: string | undefined;
+  readonly projectKey?: string | undefined;
 }): (draft: T3TeamDraftMutationPayload) => Promise<void> {
   return async (payload) => {
+    const issueKey = payload.target.issueIdOrKey;
+    if (payload.target.provider !== "jira") {
+      throw new RefusedOperationError(`${issueKey} is not a Jira work item.`);
+    }
+    if (
+      input.projectKey &&
+      !normalizeIssueKey(issueKey).startsWith(`${normalizeIssueKey(input.projectKey)}-`)
+    ) {
+      throw new RefusedOperationError(`${issueKey} is outside project ${input.projectKey}.`);
+    }
+    const policy = operationPolicy(payload);
     const draft = normalizeT3TeamDraftMutation({ raw: payload });
-    if (!draft) throw new UnsupportedOperationError(APPLY_FROM_ITEM);
-    const ctx = {
-      backend: input.backend,
-      accountId: input.accountId,
-      issueIdOrKey: draft.target.issueIdOrKey,
-    };
+    if (!policy.applicable || !draft) {
+      throw new UnsupportedOperationError(policy.reason ?? APPLY_FROM_ITEM);
+    }
+    const ctx = { backend: input.backend, accountId: input.accountId, issueIdOrKey: issueKey };
     if ("proposedContent" in draft) {
-      const body = draft.proposedContent.body;
-      return draft.field === "description"
-        ? writeWorkItemDescription(ctx, body)
-        : writeWorkItemComment(ctx, body);
+      return writeWorkItemComment(ctx, draft.proposedContent.body);
     }
     switch (draft.field) {
-      case "status": {
-        const to = readStatusDraftPatch(draft);
-        if (to !== undefined) return writeWorkItemStatus(ctx, to);
-        break;
-      }
-      case "assignee": {
-        const to = readAssigneeDraftPatch(draft);
-        if (to !== undefined) return writeWorkItemAssignee(ctx, to);
-        break;
-      }
-      case "estimate": {
-        const to = readEstimatePointsDraftPatch(draft);
-        if (to !== undefined) return writeWorkItemEstimatePoints(ctx, to);
-        break;
-      }
-      case "link": {
-        const link = readLinkDraftPatch(draft);
-        if (link) return writeWorkItemLink(ctx, link);
-        break;
-      }
-      case "subtask": {
-        const subtask = readSubtaskDraftPatch(draft);
-        if (subtask) return writeWorkItemSubtask(ctx, input.projectId, subtask);
-        break;
-      }
+      case "status":
+        return writeWorkItemStatus(ctx, readStatusDraftPatch(draft)!);
+      case "assignee":
+        return writeWorkItemAssignee(ctx, readAssigneeDraftPatch(draft)!);
+      case "estimate":
+        return writeWorkItemEstimatePoints(ctx, readEstimatePointsDraftPatch(draft)!);
+      case "link":
+        return writeWorkItemLink(ctx, readLinkDraftPatch(draft)!);
+      case "subtask":
+        if (!input.externalProjectId) throw new UnsupportedOperationError(APPLY_FROM_ITEM);
+        return writeWorkItemSubtask(ctx, input.externalProjectId, readSubtaskDraftPatch(draft)!);
     }
-    throw new UnsupportedOperationError(APPLY_FROM_ITEM);
   };
 }

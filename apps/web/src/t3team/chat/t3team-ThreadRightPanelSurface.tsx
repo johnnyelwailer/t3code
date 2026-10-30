@@ -57,7 +57,13 @@ export function T3TeamThreadRightPanelSurface({
             projectSource: {
               provider: projectSourceBinding.provider,
               ...(projectSourceBinding.provider !== "local"
-                ? { accountId: projectSourceBinding.accountId }
+                ? {
+                    accountId: projectSourceBinding.accountId,
+                    externalProjectId: projectSourceBinding.externalProjectId,
+                    ...(projectSourceBinding.externalProjectKey
+                      ? { externalProjectKey: projectSourceBinding.externalProjectKey }
+                      : {}),
+                  }
                 : {}),
             },
           }

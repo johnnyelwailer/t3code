@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { T3TeamThreadArtifact } from "@t3tools/contracts";
 
-import { collectT3TeamDraftMutations } from "./t3team-useDraftMutationIngest";
+import {
+  changeSetArtifact,
+  FIXTURE_THREAD_ID,
+  memberArtifact,
+  type FixtureMember,
+} from "~/t3team/changeset/t3team-changeSetFixtures";
+import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
+
+import { collectT3TeamDraftMutations, ingestThreadDrafts } from "./t3team-useDraftMutationIngest";
 
 type IngestArtifact = Pick<T3TeamThreadArtifact, "kind" | "payload" | "createdAt">;
 
@@ -101,5 +109,49 @@ describe("collectT3TeamDraftMutations", () => {
     });
 
     expect(collected).toEqual([]);
+  });
+});
+
+describe("ingestThreadDrafts with a change set", () => {
+  const member: FixtureMember = {
+    id: "jira-draft:cs1",
+    issueKey: "PROJ-1",
+    field: "status",
+    patch: { targetStatus: "Done" },
+  };
+  const stored = () => useT3TeamDraftMutationStore.getState().drafts.map((draft) => draft.id);
+  const reset = () => useT3TeamDraftMutationStore.setState({ drafts: [] });
+  const ingest = (status?: "draft" | "discarded", withSet = true) =>
+    ingestThreadDrafts({
+      threadId: FIXTURE_THREAD_ID,
+      artifacts: [
+        memberArtifact(member),
+        ...(withSet
+          ? [changeSetArtifact({ title: "t", members: [member], ...(status ? { status } : {}) })]
+          : []),
+      ],
+    });
+
+  it("keeps an open set's members out of the per-draft review", () => {
+    reset();
+    ingest();
+    expect(stored()).toEqual([]);
+  });
+
+  it("removes a member ingested before its set arrived", () => {
+    reset();
+    ingest(undefined, false);
+    expect(stored()).toEqual(["jira-draft:cs1"]);
+    ingest();
+    expect(stored()).toEqual([]);
+  });
+
+  it("offers the members again when the set never arrived, or was discarded", () => {
+    reset();
+    ingest(undefined, false);
+    expect(stored()).toEqual(["jira-draft:cs1"]);
+    reset();
+    ingest("discarded");
+    expect(stored()).toEqual(["jira-draft:cs1"]);
   });
 });

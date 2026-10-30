@@ -2,6 +2,7 @@ import type { T3TeamDraftMutationPayload } from "@t3tools/contracts";
 
 import type { OperationOutcome } from "~/t3team/changeset/t3team-changeSetApply";
 import type { ChangeSetOperationState } from "~/t3team/changeset/t3team-changeSetModel";
+import type { Decision } from "~/t3team/changeset/t3team-changeSetSelection";
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import type { T3TeamScalarDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 import {
@@ -80,10 +81,17 @@ export type OperationBadge = {
   readonly variant: "info" | "success" | "warning" | "error" | "secondary";
 };
 
-/** What the reviewer sees for one operation: this session's outcome wins over the stored state. */
+const REFUSED_LABELS: Partial<Record<ChangeSetOperationState, string>> = {
+  missing: "Missing",
+  changed: "Changed since proposed",
+  duplicate: "Duplicate",
+};
+
+/** What the reviewer sees for one operation: this session's outcome wins, then the decision, then the state. */
 export function operationBadge(
   state: ChangeSetOperationState,
   outcome: OperationOutcome | undefined,
+  decision: Decision,
 ): OperationBadge {
   switch (outcome?.status) {
     case "failed":
@@ -92,12 +100,15 @@ export function operationBadge(
       return { label: "Apply from the item view", variant: "warning" };
     case "blocked":
       return { label: "Not attempted", variant: "warning" };
+    case "uncertain":
+      return { label: "May already be applied", variant: "warning" };
     case "unrecorded":
       return { label: "Applied, not recorded", variant: "warning" };
     case "refused":
-      return state === "missing"
-        ? { label: "Missing", variant: "error" }
-        : { label: "Changed since proposed", variant: "warning" };
+      return { label: REFUSED_LABELS[state] ?? "Refused", variant: "error" };
+  }
+  if (decision === "reject" && (state === "draft" || state === "changed")) {
+    return { label: "Rejected", variant: "secondary" };
   }
   switch (state) {
     case "applied":
@@ -105,9 +116,12 @@ export function operationBadge(
     case "dismissed":
       return { label: "Dismissed", variant: "secondary" };
     case "missing":
-      return { label: "Missing", variant: "error" };
     case "changed":
-      return { label: "Changed since proposed", variant: "warning" };
+    case "duplicate":
+      return {
+        label: REFUSED_LABELS[state] ?? "",
+        variant: state === "changed" ? "warning" : "error",
+      };
     case "draft":
       return { label: "Proposed", variant: "info" };
   }

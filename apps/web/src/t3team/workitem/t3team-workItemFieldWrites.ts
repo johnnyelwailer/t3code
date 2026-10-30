@@ -78,14 +78,6 @@ export async function writeWorkItemSubtask(
   });
 }
 
-/** `description` is markdown, sent as authored; the server converts it. */
-export function writeWorkItemDescription(
-  { backend, accountId, issueIdOrKey }: WorkItemWriteContext,
-  description: string,
-): Promise<void> {
-  return backend.updateIssueDescription({ accountId, issueIdOrKey, description });
-}
-
 export async function writeWorkItemComment(
   { backend, accountId, issueIdOrKey }: WorkItemWriteContext,
   body: string,

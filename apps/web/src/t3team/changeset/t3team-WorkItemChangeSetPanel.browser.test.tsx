@@ -48,7 +48,7 @@ describe("WorkItemChangeSetPanel", () => {
   it("defaults every operation to approved and applies them in order from the member drafts", async () => {
     const { deps, ui } = setup();
     await using screen = await render(ui, { router: false }); // no links or navigation here
-    await screen.getByRole("button", { name: /Apply approved \(3\)/ }).click();
+    await screen.getByRole("button", { name: /Apply 3$/ }).click();
     await vi.waitFor(() => expect(deps.record).toHaveBeenCalledTimes(3));
     expect(deps.acceptOp.mock.calls.map(([draft]) => draft.id)).toEqual([
       "jira-draft:a",
@@ -61,7 +61,7 @@ describe("WorkItemChangeSetPanel", () => {
     const { deps, ui } = setup();
     await using screen = await render(ui, { router: false }); // no links or navigation here
     await screen.getByRole("checkbox", { name: "Approve proposed Points for NXAI-2" }).click();
-    await screen.getByRole("button", { name: /Apply approved \(2\)/ }).click();
+    await screen.getByRole("button", { name: /Apply 2 and dismiss 1/ }).click();
     await vi.waitFor(() =>
       expect(deps.record).toHaveBeenLastCalledWith("jira-draft:c", "dismissed"),
     );
@@ -75,9 +75,30 @@ describe("WorkItemChangeSetPanel", () => {
     ]);
     await using screen = await render(ui, { router: false }); // no links or navigation here
     await expect.element(screen.getByText("Missing")).toBeVisible();
-    await screen.getByRole("button", { name: /Apply approved \(2\)/ }).click();
+    await screen.getByRole("button", { name: /Apply 2$/ }).click();
     await vi.waitFor(() => expect(deps.record).toHaveBeenCalledTimes(2));
     expect(deps.acceptOp).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a comment's text and leaves it unapplied until it is ticked", async () => {
+    const withComment: ReadonlyArray<FixtureMember> = [
+      ...members,
+      {
+        id: "jira-draft:d",
+        issueKey: "NXAI-2",
+        field: "comment",
+        patch: { body: "Ship it on Friday." },
+      },
+    ];
+    const { deps, ui } = setup([
+      ...withComment.map(memberArtifact),
+      changeSetArtifact({ title: "Sprint cleanup", members: withComment }),
+    ]);
+    await using screen = await render(ui, { router: false }); // no links or navigation here
+    await expect.element(screen.getByText("Ship it on Friday.")).toBeVisible();
+    await screen.getByRole("checkbox", { name: "Approve proposed Comment for NXAI-2" }).click();
+    await screen.getByRole("button", { name: /Apply 4$/ }).click();
+    await vi.waitFor(() => expect(deps.acceptOp).toHaveBeenCalledTimes(4));
   });
 
   it("discards the whole set through the change set id", async () => {

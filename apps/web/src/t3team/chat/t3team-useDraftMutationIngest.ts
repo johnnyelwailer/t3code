@@ -22,7 +22,7 @@ import {
   type T3TeamThreadArtifact,
 } from "@t3tools/contracts";
 
-import { changeSetMemberDraftIds } from "~/t3team/changeset/t3team-changeSetModel";
+import { readChangeSetView } from "~/t3team/changeset/t3team-changeSetModel";
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
@@ -85,6 +85,26 @@ export function collectT3TeamDraftMutations(input: {
   return collected;
 }
 
+/** Moves a thread's pending drafts into the review store, leaving out those a change-set card owns. */
+export function ingestThreadDrafts(input: {
+  readonly threadId: string;
+  readonly artifacts: ReadonlyArray<T3TeamThreadArtifact>;
+}): void {
+  const { drafts, upsertDrafts, removeDraft } = useT3TeamDraftMutationStore.getState();
+  const { ownedDraftIds } = readChangeSetView(input.artifacts, input.threadId);
+  // A member ingested before its change set arrived leaves the per-draft review.
+  for (const draft of drafts) {
+    if (ownedDraftIds.has(draft.id)) removeDraft(draft.id);
+  }
+  const collected = collectT3TeamDraftMutations({
+    artifacts: input.artifacts,
+    sourceThreadId: input.threadId,
+    knownDraftIds: new Set(drafts.map((draft) => draft.id)),
+    ownedDraftIds,
+  });
+  if (collected.length > 0) upsertDrafts(collected);
+}
+
 /** Ingests the drafts of one thread, given that thread's live artifacts. */
 export function useT3TeamDraftMutationIngest(input: {
   readonly threadId: string;
@@ -93,19 +113,6 @@ export function useT3TeamDraftMutationIngest(input: {
   const { artifacts, threadId } = input;
   const enabled = useFeatureFlag("WORKITEM_DETAIL_DRAFTS");
   useEffect(() => {
-    if (!enabled) return;
-    const { drafts, upsertDrafts, removeDraft } = useT3TeamDraftMutationStore.getState();
-    const ownedDraftIds = changeSetMemberDraftIds(artifacts, threadId);
-    // A member ingested before its change set arrived leaves the per-draft review.
-    for (const draft of drafts) {
-      if (ownedDraftIds.has(draft.id)) removeDraft(draft.id);
-    }
-    const collected = collectT3TeamDraftMutations({
-      artifacts,
-      sourceThreadId: threadId,
-      knownDraftIds: new Set(drafts.map((draft) => draft.id)),
-      ownedDraftIds,
-    });
-    if (collected.length > 0) upsertDrafts(collected);
+    if (enabled) ingestThreadDrafts({ threadId, artifacts });
   }, [artifacts, enabled, threadId]);
 }

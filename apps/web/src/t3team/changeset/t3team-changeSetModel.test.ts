@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  changeSetMemberDraftIds,
   groupByIssue,
-  partitionBySelection,
+  readChangeSetView,
   readThreadChangeSets,
   resolveChangeSet,
 } from "~/t3team/changeset/t3team-changeSetModel";
@@ -73,12 +72,12 @@ describe("change set membership", () => {
 
   it("owns its members while draft, and releases them once discarded", () => {
     const open = changeSetArtifact({ title: "t", members: [status, estimate] });
-    expect([...changeSetMemberDraftIds([open], FIXTURE_THREAD_ID)]).toEqual([
+    expect([...readChangeSetView([open], FIXTURE_THREAD_ID).ownedDraftIds]).toEqual([
       "jira-draft:a",
       "jira-draft:b",
     ]);
     const discarded = changeSetArtifact({ title: "t", members: [status], status: "discarded" });
-    expect(changeSetMemberDraftIds([discarded], FIXTURE_THREAD_ID).size).toBe(0);
+    expect(readChangeSetView([discarded], FIXTURE_THREAD_ID).ownedDraftIds.size).toBe(0);
   });
 });
 
@@ -102,20 +101,35 @@ describe("grouping and selection", () => {
     ]);
   });
 
-  it("approves every draft by default and splits off the rejected ones", () => {
-    const { resolved } = resolve([
-      status,
-      estimate,
-      { ...estimate, id: "jira-draft:c", status: "applied" },
-    ]);
-    expect(partitionBySelection(resolved.operations, new Set()).approved).toHaveLength(2);
-    const split = partitionBySelection(resolved.operations, new Set(["jira-draft:b"]));
-    expect(split.approved.map((op) => op.operation.draftId)).toEqual(["jira-draft:a"]);
-    expect(split.rejected.map((op) => op.operation.draftId)).toEqual(["jira-draft:b"]);
+  it("groups issue keys that differ only in case or whitespace", () => {
+    const { resolved } = resolve([status, { ...estimate, issueKey: " nxai-1 " }]);
+    expect(groupByIssue(resolved.operations).map((group) => group.issueKey)).toEqual(["NXAI-1"]);
+  });
+});
+
+describe("duplicate draft ids", () => {
+  it("resolves the first use and marks every repeat as a duplicate that is never applied", () => {
+    const { artifacts, resolved } = resolve([status, estimate]);
+    const [a, b] = resolved.changeSet.operations;
+    const repeated = { ...resolved.changeSet, operations: [a!, a!, b!] };
+    const { operations } = resolveChangeSet(repeated, artifacts, FIXTURE_THREAD_ID);
+    expect(operations.map((op) => op.state)).toEqual(["draft", "duplicate", "draft"]);
   });
 
-  it("never approves a changed operation", () => {
-    const { resolved } = resolve([{ ...status, storedPatch: { targetStatus: "x" } }]);
-    expect(partitionBySelection(resolved.operations, new Set()).approved).toEqual([]);
+  it("is not rendered as a set at all when the payload repeats a draft id", () => {
+    const set = changeSetArtifact({ title: "t", members: [status, status] });
+    expect(readThreadChangeSets([set], FIXTURE_THREAD_ID)).toEqual([]);
+  });
+});
+
+describe("readChangeSetView", () => {
+  it("decodes once per artifacts snapshot and again when the snapshot changes", () => {
+    const { artifacts } = resolve([status]);
+    expect(readChangeSetView(artifacts, FIXTURE_THREAD_ID)).toBe(
+      readChangeSetView(artifacts, FIXTURE_THREAD_ID),
+    );
+    expect(readChangeSetView([...artifacts], FIXTURE_THREAD_ID)).not.toBe(
+      readChangeSetView(artifacts, FIXTURE_THREAD_ID),
+    );
   });
 });
