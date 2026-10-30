@@ -10,7 +10,7 @@ let captured = false;
 let frame: FrameRequestCallback | undefined;
 let setItem: ReturnType<typeof vi.spyOn<Storage, "setItem">>;
 
-function Panel() {
+function Panel({ showHandle = true }: { readonly showHandle?: boolean }) {
   const { width, handlers, resizing } = useResizableWidth({
     storageKey: "test-panel-width",
     defaultWidth: 400,
@@ -22,7 +22,7 @@ function Panel() {
     <aside data-testid="host">
       <output>{width}</output>
       <span data-testid="resizing">{String(resizing)}</span>
-      <div data-testid="handle" {...handlers} />
+      {showHandle ? <div data-testid="handle" {...handlers} /> : null}
     </aside>
   );
 }
@@ -101,20 +101,26 @@ describe("panel resize state", () => {
     },
   );
 
-  it("ends a drag whose handle unmounted before release", async () => {
+  it("abandons a drag whose handle unmounted before release", async () => {
     await act(() => {
       pointer("pointerdown");
       pointer("pointermove", 50);
     });
     await act(() => frame?.(0));
     expect(resizing()).toBe(true);
-    // The handle is gone (panel closed/maximized): only the window still sees the release.
+    // The handle goes away (panel closed/maximized) mid-drag: its React handlers never fire
+    // again, so the drag must end on unmount instead of waiting for a release it cannot see.
+    await act(() => root.render(<Panel showHandle={false} />));
+    expect(resizing()).toBe(false);
+    expect(document.body.style.cursor).toBe("");
+    // The width is not committed from a half-finished drag.
+    expect(shownWidth()).toBe(400);
+    expect(setItem).not.toHaveBeenCalled();
+    // A late window release is ignored, and a later grab starts a fresh drag instead of
+    // being swallowed by the stale one.
     await act(() => windowPointerUp(1, 25));
     expect(resizing()).toBe(false);
-    expect(shownWidth()).toBe(475);
-    expect(setItem).toHaveBeenCalledExactlyOnceWith("test-panel-width", "475");
-    expect(document.body.style.cursor).toBe("");
-    // A later grab starts a fresh drag instead of being swallowed by the stale one.
+    await act(() => root.render(<Panel />));
     await act(() => pointer("pointerdown"));
     expect(resizing()).toBe(true);
   });

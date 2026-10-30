@@ -381,7 +381,7 @@ describe("full-bleed widget row width in the timeline", () => {
     const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
     // Every other row keeps upstream's capped content lane (`.chat-content-lane`).
     const narrowWrapper =
-      '<div class="@container/chat-lane chat-content-lane overflow-x-clip" data-timeline-root="true">';
+      '<div class="chat-content-lane overflow-x-clip" data-timeline-root="true">';
 
     // Exactly one full-width (no cap, no clip) row wrapper — the widget row's.
     const firstFull = markup.indexOf(fullWidthWrapper);
@@ -409,7 +409,7 @@ describe("full-bleed widget row width in the timeline", () => {
 
     const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
     const narrowWrapper =
-      '<div class="@container/chat-lane chat-content-lane overflow-x-clip" data-timeline-root="true">';
+      '<div class="chat-content-lane overflow-x-clip" data-timeline-root="true">';
     expect(markup.indexOf(fullWidthWrapper)).toBe(-1);
     expect(markup.indexOf(narrowWrapper)).toBeGreaterThan(-1);
   }, 10000);

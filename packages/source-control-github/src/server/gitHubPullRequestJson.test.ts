@@ -525,10 +525,14 @@ describe("pull request detail decoding", () => {
     expect(
       read({ baseRefOid: " b4se ", authorAssociation: "FIRST_TIME_CONTRIBUTOR" }),
     ).toMatchObject({ baseSha: "b4se", authorAssociation: "FIRST_TIME_CONTRIBUTOR" });
-    expect(read({ baseRefOid: null, authorAssociation: "" })).toMatchObject({
-      baseSha: null,
-      authorAssociation: null,
-    });
+    // GitHub's schema makes both non-null, so the typed decoder rejects a null or an unknown value
+    // instead of reading it as "not said"; only an absent key (the fork fields not requested) is.
+    expect(Result.isFailure(decodePullRequestCoreJson(coreJson([], { baseRefOid: null })))).toBe(
+      true,
+    );
+    expect(
+      Result.isFailure(decodePullRequestCoreJson(coreJson([], { authorAssociation: "" }))),
+    ).toBe(true);
   });
 
   it("shows a re-running check once, as the run that is happening now", () => {

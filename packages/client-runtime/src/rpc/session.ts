@@ -171,13 +171,14 @@ export const make = Effect.fn("RpcSessionFactory.make")(function* (
     ...(options.environmentThemes === true ? { environmentThemes: true } : {}),
     ...(options.usageLimitSources === true ? { usageLimitSources: true } : {}),
     ...(options.usageLimitsCommand === true ? { usageLimitsCommand: true } : {}),
-    // t3team: this client's projection handles `featureFlagsUpdated`.
-    featureFlags: true,
   };
   // Config state merges the snapshots it fetches back in, so no subscriber needs them broadcast.
   const onDemandSnapshots = (input: ServerConfigSubscriptionInput) => ({
     ...input,
     workspaceSnapshotsOnDemand: true,
+    // t3team: this client's projection handles `featureFlagsUpdated`. Kept out of
+    // `serverConfigInput`, which subscribers are compared against to share the replayed stream.
+    featureFlags: true,
   });
 
   const connect = Effect.fnUntraced(function* (connection: PreparedConnection) {

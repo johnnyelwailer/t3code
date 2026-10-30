@@ -771,7 +771,8 @@
     "packages/integrations-atlassian/src/adf/markdownToAdf.test.ts",
     "packages/runbook-core/src/checkpointWindow.test.ts",
     "scripts/lib/cached-tests.ts",
-    "scripts/test-cached.ts"
+    "scripts/test-cached.ts",
+    "apps/web/src/components/settings/ProjectSettingsPanel.browser.test.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

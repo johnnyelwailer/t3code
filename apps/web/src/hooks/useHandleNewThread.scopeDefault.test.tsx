@@ -36,6 +36,8 @@ vi.mock("../state/environments", () => ({
   useEnvironments: () => ({ environments: harness.environments }),
   usePrimaryEnvironmentId: () => "env-local",
 }));
+vi.mock("../state/olderSettledShelf", () => ({ readUnloadedThreadCount: () => 0 }));
+vi.mock("../state/presentation", () => ({ environmentSummaries: {} }));
 vi.mock("../state/server", () => ({ environmentServerConfigsAtom: {} }));
 vi.mock("../uiStateStore", () => ({
   legacyProjectCwdPreferenceKey: (root: string) => root,
@@ -48,7 +50,10 @@ vi.mock("@t3tools/client-runtime/state/project-grouping", async (importOriginal)
   selectProjectGroupingSettings: () => ({}),
 }));
 vi.mock("../lib/t3ProjectFileDefaults", () => ({ readT3ProjectFile: async () => null }));
-vi.mock("./useSettings", () => ({ useClientSettings: () => ({}) }));
+vi.mock("./useSettings", () => ({
+  getClientSettings: () => ({}),
+  useClientSettings: () => ({}),
+}));
 
 import { useT3TeamSidebarProjectScope } from "../t3team/t3team-sidebarProjectScopeStore";
 import { useHandleNewThread } from "./useHandleNewThread";

@@ -69,7 +69,7 @@ vi.mock(import("@t3tools/client-runtime/state/session"), async (original) => {
 });
 vi.mock(import("~/state/environments"), async (original) => ({
   ...(await original()),
-  useEnvironments: (() => ({ environments })) as never,
+  useEnvironments: (() => ({ environments, presentationById: new Map() })) as never,
   usePrimaryEnvironmentId: () => primaryId,
 }));
 vi.mock(import("~/state/entities"), async (original) => ({
@@ -119,6 +119,11 @@ vi.mock(import("./ProjectDefaultsSettings"), async (original) => ({
 vi.mock(import("./ProjectActionsSettings"), async (original) => ({
   ...(await original()),
   ProjectActionsSettings: (() => null) as never,
+}));
+// t3team: the cloud machine source is read and written through the cloud RPC, not these atoms.
+vi.mock(import("./t3team-ProjectMachineSourceSection"), async (original) => ({
+  ...(await original()),
+  T3TeamProjectMachineSourceSection: (() => null) as never,
 }));
 
 vi.mock(import("../files/projectFilesQueryState"), async (original) => ({
