@@ -215,6 +215,7 @@ export function NewTaskEnvironmentPickerRouteScreen() {
           <EnvironmentPickerTopSlot
             close={() => navigation.goBack()}
             selectedProjectTitle={flow.selectedProject?.title ?? null}
+            selectedProject={flow.selectedProject}
             hostingEnvironmentIds={flow.environments.map((environment) =>
               String(environment.environmentId),
             )}

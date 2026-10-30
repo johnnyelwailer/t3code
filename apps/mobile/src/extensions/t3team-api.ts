@@ -13,6 +13,7 @@ export type {
   EnvironmentPickerTopProps,
   HomeFiltersProps,
   MobileExtensions,
+  SelectedProjectFacts,
   UrlPolicy,
   WorkspaceExtraTab,
 } from "./t3team-extensionTypes";
