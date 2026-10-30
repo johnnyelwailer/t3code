@@ -54,6 +54,12 @@ import {
 import { ThreadToolkit } from "../../apps/server/src/mcp/toolkits/thread/tools.ts";
 import { WorktreeToolkit } from "../../apps/server/src/mcp/toolkits/worktree/tools.ts";
 import {
+  advertisedToolText,
+  forkToolDefault,
+  forkToolkit,
+  listedInEval,
+} from "./t3team-forkTools.ts";
+import {
   CLAUDE_PROVIDER,
   makeClaudeQueryOptions,
 } from "../../apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts";
@@ -364,12 +370,22 @@ const t3SourceTools: ReadonlyArray<Tool.Any> = [
   PreviewToolkit,
   DeviceToolkit,
   HtmlToolkit,
-].flatMap((toolkit): ReadonlyArray<Tool.Any> => Object.values(toolkit.tools));
-const t3Tools: ReadonlyArray<ApiTool> = t3SourceTools.map((tool) => ({
-  name: `${T3_PREFIX}${tool.name}`,
-  description: Tool.getDescription(tool) ?? "",
-  input_schema: advertisedJsonSchema(tool),
-}));
+  forkToolkit,
+]
+  .flatMap((toolkit): ReadonlyArray<Tool.Any> => Object.values(toolkit.tools))
+  .filter((tool) => listedInEval(tool.name));
+const t3Tools: ReadonlyArray<ApiTool> = t3SourceTools.map((tool) => {
+  const advertised = advertisedToolText({
+    name: tool.name,
+    description: Tool.getDescription(tool) ?? "",
+    inputSchema: advertisedJsonSchema(tool),
+  });
+  return {
+    name: `${T3_PREFIX}${tool.name}`,
+    description: advertised.description,
+    input_schema: advertised.inputSchema,
+  };
+});
 const enabledWhen = (predicate: () => boolean) =>
   new Set(
     t3SourceTools
@@ -937,6 +953,8 @@ const pullRequest = (repo: string, input: Readonly<Record<string, unknown>>) => 
 
 /** A believable T3 result for a tool the case does not mock. */
 const t3Default = (sample: Sample, name: string, input: Readonly<Record<string, unknown>>) => {
+  const fork = forkToolDefault(name, input);
+  if (fork !== undefined) return fork;
   const pr = () => pullRequest(sample.repo, input);
   switch (name) {
     case "orchestrator_capabilities":
