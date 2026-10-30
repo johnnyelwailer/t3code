@@ -8,7 +8,6 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import { Atom, AtomRegistry } from "effect/reactivity";
 
 import type { EnvironmentConnectionPhase } from "../connection/presentation.ts";
@@ -102,7 +101,7 @@ describe("local override command", () => {
       const saved: OrchestrationV2ShellSnapshot[] = [];
       const removed: ThreadId[] = [];
       const h = makeHarness({
-        loadShell: () => Effect.succeed(Option.some(SNAPSHOT)),
+        loadShell: () => Effect.succeedSome(SNAPSHOT),
         saveShell: (_environmentId, snapshot) => Effect.sync(() => void saved.push(snapshot)),
         removeThread: (_environmentId, threadId) => Effect.sync(() => void removed.push(threadId)),
       });
