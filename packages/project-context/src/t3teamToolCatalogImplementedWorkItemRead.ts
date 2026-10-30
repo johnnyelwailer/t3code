@@ -17,14 +17,12 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_READ_TOOL_CATALOG = {
     label: "Search work items",
     title: "Search the project's work items",
     description:
-      "Search the work items (tickets) of this thread's project. Filter by status, assignee, " +
-      "labels, type, sprint and free text, and/or pass extra JQL; the filters and the JQL are " +
-      "ANDed and the result can only ever hold work items of this project, so a JQL that names " +
-      "another project simply matches nothing. Filters alone are answered from the host's synced " +
-      "copy of the project; a JQL (or a project not yet synced) asks the tracker live. " +
+      "Search work items (tickets) of this thread's project by status, assignee, labels, type, " +
+      "sprint, free text and/or extra JQL. Filters and JQL are ANDed and results only ever hold " +
+      "this project's work items. Filters alone read the host's synced copy; a JQL (or an " +
+      "unsynced project) asks the tracker live. " +
       `Answer: { ok, source: 'mirror'|'live', items: [...], nextCursor? } where ${WORK_ITEM_SUMMARY_ANSWER}. ` +
-      "Pass nextCursor back as cursor for the next page. Read-only. Not available when no " +
-      "Jira account is connected for this project.",
+      "Pass nextCursor back as cursor for the next page. Read-only.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["work-item"],
@@ -57,15 +55,13 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_READ_TOOL_CATALOG = {
     label: "Read work item",
     title: "Read one work item of the project",
     description:
-      "Read one work item (ticket) of this thread's project by its key: its fields, description, " +
+      "Read one work item (ticket) of this thread's project by key: fields, description, " +
       "comments, links and child work items. A key of another project is refused. " +
-      `Answer: { ok, item: ${WORK_ITEM_SUMMARY_ANSWER} + description?, ` +
-      "comments: [{ id, author?, body, created? }] (the newest 50, oldest first), " +
+      "Answer: { ok, item: a work item as t3team.work_item.search returns, plus description?, " +
+      "comments: [{ id, author?, body, created? }] (newest 50, oldest first), " +
       "commentsTruncated: true when older comments were left out, links: [{ relation, issueKey }], " +
-      "children: [work item] }. Links[].issueKey and item.parentKey may be keys outside this " +
-      "project: they give the key and relation text only, never that item's content; read a key " +
-      "with this tool only if it is in this project. Read-only. Not available when no Jira " +
-      "account is connected for this project.",
+      "children: [work item] }. links[].issueKey and item.parentKey may name other projects: " +
+      "that is the key and relation only, never read such a key. Read-only.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["work-item"],
