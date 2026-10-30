@@ -45,10 +45,18 @@ export const WORK_ITEM_READ_TOOL_IDS: ReadonlySet<string> = new Set([
  */
 export const WORK_ITEM_DRAFT_TOOL_ID = "t3team.work_item.draft";
 
+/** The bulk form of the draft tool: a change set of draft operations, held to the same gates. */
+export const WORK_ITEM_CHANGE_SET_TOOL_ID = "t3team.work_item.change_set";
+
+const WORK_ITEM_DRAFT_TOOL_IDS: ReadonlyArray<string> = [
+  WORK_ITEM_DRAFT_TOOL_ID,
+  WORK_ITEM_CHANGE_SET_TOOL_ID,
+];
+
 /** Every tool that exists only while a usable Jira account is bound to the thread's project. */
 export const JIRA_BOUND_TOOL_IDS: ReadonlySet<string> = new Set([
   ...WORK_ITEM_READ_TOOL_IDS,
-  WORK_ITEM_DRAFT_TOOL_ID,
+  ...WORK_ITEM_DRAFT_TOOL_IDS,
 ]);
 
 export const JIRA_NOT_CONNECTED_MESSAGE =
@@ -105,7 +113,7 @@ export function withWorkItemReadTools(
 }
 
 /**
- * `toolIds` with the draft tool present exactly while Jira is connected AND the drafts flag is on.
+ * `toolIds` with the draft tools (single and change set) present exactly while Jira is connected AND the drafts flag is on.
  * `draftsEnabled` is the live flag read of the caller, never a cached value.
  */
 export function withWorkItemDraftTool(
@@ -113,8 +121,8 @@ export function withWorkItemDraftTool(
   connected: boolean,
   draftsEnabled: boolean,
 ): ReadonlyArray<string> {
-  const rest = toolIds.filter((id) => id !== WORK_ITEM_DRAFT_TOOL_ID);
-  return connected && draftsEnabled ? [...rest, WORK_ITEM_DRAFT_TOOL_ID] : rest;
+  const rest = toolIds.filter((id) => !WORK_ITEM_DRAFT_TOOL_IDS.includes(id));
+  return connected && draftsEnabled ? [...rest, ...WORK_ITEM_DRAFT_TOOL_IDS] : rest;
 }
 
 /** The binding, answering a Jira-bound tool (reads, drafts) with the not-connected text while it is not. */

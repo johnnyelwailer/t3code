@@ -10,17 +10,15 @@
  * `t3team-widgetShowTool.ts`.
  */
 
-import {
-  ThreadId,
-  type T3TeamDraftMutationPayload,
-  type T3TeamMessageDraftMutationAttachment,
-} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND } from "./t3team-draftMutationStatus.ts";
+import { makeDraftArtifactInput } from "./t3team-draftMutationStatus.ts";
 import { errorResult } from "./t3team-toolBrokerHelpers.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
+import {
+  publishWorkItemChangeSet,
+  readWorkItemChangeSetBatch,
+} from "./t3team-workItemChangeSetPublish.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import {
   T3TeamThreadArtifactsStore,
@@ -54,24 +52,16 @@ export function makeT3TeamDraftMutationPublisher(input: {
 }): T3TeamDraftMutationPublisher {
   return (result) =>
     Effect.gen(function* () {
+      // A change-set batch is N drafts plus their grouping, published together or not at all.
+      const batch = readWorkItemChangeSetBatch(result);
+      if (batch) return yield* publishWorkItemChangeSet({ ...input, batch });
       const draftMutation = readT3TeamDraftMutation(result);
       if (!draftMutation) return result;
 
       // The draft id IS the artifact id, so the reviewer's verdict addresses the same row and a
       // re-read never resurrects an accepted or dismissed draft as a fresh proposal.
-      const draftId = `jira-draft:${t3teamRandomUUID()}`;
-      const attachment: T3TeamMessageDraftMutationAttachment = {
-        kind: "draft-mutation",
-        draft: { ...draftMutation, id: draftId } as unknown as T3TeamDraftMutationPayload,
-      };
       const recorded = yield* input
-        .recordArtifact({
-          id: draftId,
-          threadId: ThreadId.make(input.threadId),
-          messageId: null,
-          kind: T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND,
-          payload: attachment,
-        })
+        .recordArtifact(makeDraftArtifactInput(input.threadId, draftMutation))
         .pipe(Effect.result);
 
       // A draft the reviewer will never see is not a proposal. Fail loudly rather than telling the

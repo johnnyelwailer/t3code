@@ -9,6 +9,7 @@ import { Tool } from "effect/ai";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
+import { WorkItemChangeSetToolArgs } from "../../../t3team-workItemChangeSetArgs.ts";
 import { WorkItemDraftToolArgs } from "../../../t3team-workItemDraftArgs.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
@@ -20,6 +21,19 @@ export const T3TeamWorkItemDraftTool = Tool.make("t3_work_item_draft", {
   success: Schema.Unknown,
   failure: Schema.Union([T3TeamMcpToolError, OrchestratorMcpFailure]),
   // `McpToolAccess.actsAsCaller` refuses with `OrchestratorMcpFailure`, which needs ThreadManagementService.
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    T3TeamToolBroker,
+    ThreadManagementService.ThreadManagementService,
+  ],
+});
+
+/** The bulk form: a titled set of the same operations, proposed all together or not at all. */
+export const T3TeamWorkItemChangeSetTool = Tool.make("t3_work_item_change_set", {
+  description: mcpDescriptionOf("t3team.work_item.change_set"),
+  parameters: WorkItemChangeSetToolArgs,
+  success: Schema.Unknown,
+  failure: Schema.Union([T3TeamMcpToolError, OrchestratorMcpFailure]),
   dependencies: [
     McpInvocationContext.McpInvocationContext,
     T3TeamToolBroker,

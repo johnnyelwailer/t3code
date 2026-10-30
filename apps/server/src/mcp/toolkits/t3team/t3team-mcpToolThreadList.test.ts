@@ -174,11 +174,17 @@ it.effect("drops it when the thread has no binding or the credential has no thre
 );
 
 /** The work-item read tools are listed only while the caller's binding holds them (Jira connected). */
-const WORK_ITEM_MCP = ["t3_work_item_search", "t3_work_item_get", "t3_work_item_draft"];
+const WORK_ITEM_MCP = [
+  "t3_work_item_search",
+  "t3_work_item_get",
+  "t3_work_item_draft",
+  "t3_work_item_change_set",
+];
 const WORK_ITEM_TOOLS = [
   "t3team.work_item.search",
   "t3team.work_item.get",
   "t3team.work_item.draft",
+  "t3team.work_item.change_set",
 ];
 
 it.effect("lists the work-item read and draft tools for a thread whose binding holds them", () =>
@@ -272,6 +278,7 @@ describe("through the real broker on the production /mcp bind path", () => {
       replaceFeatureFlagPresetValues(new Map([["AGENTS_CHANGE_REQUEST_PUBLISH", true]]));
       const names = yield* listed();
       expect(names).not.toContain("t3_work_item_draft");
+      expect(names).not.toContain("t3_work_item_change_set");
       expect(names).toContain("t3_work_item_search");
       expect(names).toContain("t3_work_item_get");
     }),

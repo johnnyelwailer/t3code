@@ -33,7 +33,11 @@ import {
   type T3TeamWorkItemReadToolHandlers,
 } from "./t3team-toolBrokerBindingWorkItemRead.ts";
 import { callT3TeamWorkItemDraftTool } from "./t3team-toolBrokerBindingWorkItemDraft.ts";
-import { WORK_ITEM_DRAFT_TOOL_ID } from "./t3team-workItemReadAvailability.ts";
+import { callT3TeamWorkItemChangeSetTool } from "./t3team-toolBrokerBindingWorkItemChangeSet.ts";
+import {
+  WORK_ITEM_CHANGE_SET_TOOL_ID,
+  WORK_ITEM_DRAFT_TOOL_ID,
+} from "./t3team-workItemReadAvailability.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
@@ -123,6 +127,9 @@ export function dispatchT3TeamToolCall(input: {
   }
   if (tool === WORK_ITEM_DRAFT_TOOL_ID) {
     return callT3TeamWorkItemDraftTool(input);
+  }
+  if (tool === WORK_ITEM_CHANGE_SET_TOOL_ID) {
+    return callT3TeamWorkItemChangeSetTool(input);
   }
   const workflowToolCall = tryDispatchWorkflowToolCall({
     tool,
