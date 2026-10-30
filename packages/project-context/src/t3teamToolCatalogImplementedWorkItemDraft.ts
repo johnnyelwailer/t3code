@@ -11,23 +11,20 @@ const WORK_ITEM_DRAFT_ENTRY = {
   title: "Propose a change to a work item of the project",
   description:
     "Propose a change to a work item (ticket) of this thread's project. Nothing is written to " +
-    "Jira: the proposal appears in this thread for the user to review and approve or dismiss, and " +
-    "only the user commits it. Every work item you name must be in this project, and issue_id is " +
-    "required (a key like PROJ-12). One tool; `op` selects the change:\n" +
-    "- description: replace the description (issue_id, body)\n" +
-    "- comment: add a comment (issue_id, body)\n" +
-    "- assignee: assign, or unassign with null (issue_id, assignee_account_id, " +
-    "assignee_display_name?)\n" +
-    "- estimate: set, or clear with null (issue_id, estimate_value, estimate_mode: points|hours)\n" +
-    "- status: move to a state (issue_id, target_status)\n" +
-    "- subtask_create: add a subtask (issue_id = the parent, summary, description?, " +
-    "estimate_hours?)\n" +
-    "- link_add: link two work items (issue_id, other_issue_id, link_type_name, direction: " +
+    "Jira: the user reviews the proposal in this thread and approves or dismisses it; only the " +
+    "user commits. Every work item you name must be in this project. issue_id (a key like " +
+    "PROJ-12) is required on every op; `op` selects the change:\n" +
+    "- description: replace the description (body)\n" +
+    "- comment: add a comment (body)\n" +
+    "- assignee: assign, or unassign with null (assignee_account_id, assignee_display_name?)\n" +
+    "- estimate: set, or clear with null (estimate_value, estimate_mode: points|hours)\n" +
+    "- status: move to a state (target_status)\n" +
+    "- subtask_create: add a subtask under issue_id (summary, description?, estimate_hours?)\n" +
+    "- link_add: link two work items (other_issue_id, link_type_name, direction: " +
     "inward|outward)\n" +
-    "- labels, fix_version: add/remove names (issue_id, add?, remove?)\n" +
-    "- priority: set by name (issue_id, priority)\n" +
-    "Answer: { ok, promptText, draftMutation }. Not available when no Jira account is connected " +
-    "for this project.",
+    "- labels, fix_version: add/remove names (add?, remove?)\n" +
+    "- priority: set by name (priority)\n" +
+    "Answer: { ok, promptText, draftMutation }.",
   capabilities: ["write"],
   kind: "draft-mutation",
   surfaces: ["work-item"],
@@ -82,14 +79,11 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
     title: "Propose a set of changes to work items of the project",
     description:
       "Propose several changes to work items of this thread's project as ONE change set for the " +
-      "user to review. Nothing is written to Jira: the user approves or rejects each operation, " +
-      "and only the user commits. `operations` (1 to 25) are the same objects as " +
-      "t3team.work_item.draft takes (op, issue_id, ...). All or nothing: if any operation is " +
-      "invalid or names a work item outside this project, nothing is proposed: a malformed " +
-      "operation is rejected by the tool's input schema (one error), and the answer lists the " +
-      "operations (by index) that fail the checks made here (not buildable, or outside this " +
-      "project). Answer: { ok, promptText, changeSet }. Not " +
-      "available when no Jira account is connected for this project.",
+      "user to review. Nothing is written to Jira: the user approves or rejects each operation " +
+      "and commits. `operations` (1 to 25) are the objects t3team.work_item.draft takes (op, " +
+      "issue_id, ...). All or nothing: if any operation is invalid or names a work item outside " +
+      "this project, nothing is proposed and the answer lists the failing operations by index. " +
+      "Answer: { ok, promptText, changeSet }.",
     capabilities: ["write"],
     kind: "draft-mutation",
     surfaces: ["work-item"],

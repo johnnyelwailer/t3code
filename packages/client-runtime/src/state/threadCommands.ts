@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 
 import { createOptimisticThreadLifecycle } from "./threadLifecycle.ts";
+import { createLocalThreadOverrides } from "./t3team-localThreadOverrides.ts";
 import * as DateTime from "effect/DateTime";
 
 import {
@@ -365,9 +366,11 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
+  const local = createLocalThreadOverrides(runtime, optimistic.snapshotAtom);
   return {
     ...commands,
-    snapshotAtom: optimistic.snapshotAtom,
+    snapshotAtom: local.snapshotAtom,
+    localOverride: local.command,
     settle: optimistic.wrap(commands.settle, (thread, _input, now, accepted) =>
       !accepted &&
       (thread.pendingRuntimeRequest !== null ||

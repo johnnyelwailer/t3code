@@ -1532,12 +1532,21 @@ export type OrchestrationV2SecretRequestStatus = typeof OrchestrationV2SecretReq
 /** `file`: the value goes to an owner-only file the agent's shell commands can read. */
 export const OrchestrationV2SecretRequestDelivery = Schema.Literal("file");
 
+/** What the credential is for, so the card can offer the user's own sign-in or variable for it. */
+export const OrchestrationV2SecretRequestSource = Schema.Struct({
+  host: Schema.optional(Schema.String),
+  name: Schema.optional(Schema.String),
+  scopes: Schema.optional(Schema.Array(Schema.String)),
+});
+export type OrchestrationV2SecretRequestSource = typeof OrchestrationV2SecretRequestSource.Type;
+
 const OrchestrationV2SecretRequestFields = {
   type: Schema.Literal("secret_request"),
   label: TrimmedNonEmptyString,
   reason: Schema.String,
   placeholder: Schema.optional(Schema.String),
   delivery: Schema.optional(OrchestrationV2SecretRequestDelivery),
+  source: Schema.optional(OrchestrationV2SecretRequestSource),
   secretStatus: OrchestrationV2SecretRequestStatus,
 } as const;
 
@@ -3501,6 +3510,7 @@ const OrchestrationV2InternalCommand = Schema.Union([
     reason: Schema.String,
     placeholder: Schema.optional(Schema.String),
     delivery: Schema.optional(OrchestrationV2SecretRequestDelivery),
+    source: Schema.optional(OrchestrationV2SecretRequestSource),
     secretStatus: OrchestrationV2SecretRequestStatus,
   }),
   /**

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   isEligibleNexiTag,
+  isSupportedNexiRuntime,
   parseNexiUpdateManifest,
   pickNexiUpdate,
   selectNexiPayload,
@@ -158,7 +159,7 @@ describe("selectNexiPayload: the right asset per platform and arch", () => {
       selectNexiPayload(r.assets, "0.1.2", { platform: "win32", arch: "arm64" })?.payload.name,
     ).toMatch(/x64.*\.exe$/u);
   });
-  it("an Intel Mac and Linux get nothing: no such build is published", () => {
+  it("an Intel Mac, and a Linux release without an AppImage, get nothing", () => {
     expect(selectNexiPayload(r.assets, "0.1.2", { platform: "darwin", arch: "x64" })).toBeNull();
     expect(selectNexiPayload(r.assets, "0.1.2", { platform: "linux", arch: "x64" })).toBeNull();
   });
@@ -183,6 +184,89 @@ describe("selectNexiPayload with the names a real build publishes (workflow run 
   it("picks the ZIP on macOS arm64 and the .exe on Windows x64", () => {
     expect(selectNexiPayload(real, "0.1.2-test.1", mac)?.payload.id).toBe(4);
     expect(selectNexiPayload(real, "0.1.2-test.1", win)?.payload.id).toBe(6);
+  });
+});
+
+describe("rc.6 -> rc.7 with the assets of the published desktop-v0.1.2-rc.6 release", () => {
+  // The asset names of GHE release desktop-v0.1.2-rc.6 (a pre-release); rc.7 comes from the same workflow.
+  const assetsOf = (version: string, mac: string, win: string) => [
+    asset(1, `Nexi-Work-${version}-arm64-${mac}.dmg`),
+    asset(2, `Nexi-Work-${version}-arm64-${mac}.dmg.sha256`),
+    asset(3, `Nexi-Work-${version}-arm64-${mac}.dmg.verification.txt`),
+    asset(4, `Nexi-Work-${version}-arm64-${mac}.zip`),
+    asset(5, `Nexi-Work-${version}-arm64-${mac}.zip.sha256`),
+    asset(6, `Nexi-Work-${version}-x64-${win}.exe`),
+    asset(7, `Nexi-Work-${version}-x64-${win}.exe.sha256`),
+    asset(8, `Nexi-Work-${version}-x64-${win}.exe.verification.txt`),
+    asset(9, "latest-mac.yml"),
+    asset(10, "latest.yml"),
+  ];
+  const rc6 = release("0.1.2-rc.6", {
+    assets: assetsOf("0.1.2-rc.6", "20261030-0644", "20261030-0550"),
+  });
+  const rc7 = release("0.1.2-rc.7", {
+    assets: assetsOf("0.1.2-rc.7", "20261030-1030", "20261030-0950"),
+  });
+
+  it("an rc.6 build is offered rc.7 on macOS and on Windows although every desktop release is a pre-release", () => {
+    expect(rc7.prerelease).toBe(true);
+    const mac6 = pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.2-rc.6", ...mac });
+    expect(mac6?.version).toBe("0.1.2-rc.7");
+    expect(mac6?.payload.name).toBe("Nexi-Work-0.1.2-rc.7-arm64-20261030-1030.zip");
+    const win6 = pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.2-rc.6", ...win });
+    expect(win6?.payload.name).toBe("Nexi-Work-0.1.2-rc.7-x64-20261030-0950.exe");
+  });
+
+  it("an rc.7 build has nothing newer, and a stable build still ignores both pre-releases", () => {
+    expect(
+      pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.2-rc.7", ...mac }),
+    ).toBeNull();
+    expect(pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.1", ...mac })).toBeNull();
+  });
+
+  it("takes no track: the pick depends only on the build's version, the release list and the machine", () => {
+    // pickNexiUpdate has no channel input, so no track setting can make an rc build skip an rc release.
+    expect(pickNexiUpdate.length).toBe(1);
+  });
+});
+
+describe("Linux: the x64 AppImage and latest-linux.yml", () => {
+  const linux = { platform: "linux", arch: "x64" } as const;
+  const assets = [
+    asset(1, "Nexi-Work-0.1.2-rc.7-x86_64-20261030-1030.AppImage", 281_430_515),
+    asset(2, "Nexi-Work-0.1.2-rc.7-x86_64-20261030-1030.AppImage.sha256", 119),
+    asset(3, "latest-linux.yml"),
+    asset(4, "latest.yml"),
+    asset(5, "latest-mac.yml"),
+  ];
+  it("takes the AppImage electron-builder names x86_64 (and an x64 one), never its .sha256", () => {
+    expect(selectNexiPayload(assets, "0.1.2-rc.7", linux)?.payload.id).toBe(1);
+    expect(selectNexiPayload(assets, "0.1.2-rc.7", linux)?.manifest.name).toBe("latest-linux.yml");
+    const x64Named = [
+      asset(1, "Nexi-Work-0.1.2-rc.7-x64-20261030-1030.AppImage"),
+      asset(3, "latest-linux.yml"),
+    ];
+    expect(selectNexiPayload(x64Named, "0.1.2-rc.7", linux)?.payload.id).toBe(1);
+  });
+  it("needs its own manifest and an arch it is built for", () => {
+    expect(
+      selectNexiPayload(
+        assets.filter((a) => a.name !== "latest-linux.yml"),
+        "0.1.2-rc.7",
+        linux,
+      ),
+    ).toBeNull();
+    expect(
+      selectNexiPayload(assets, "0.1.2-rc.7", { platform: "linux", arch: "arm64" }),
+    ).toBeNull();
+    expect(selectNexiPayload(assets, "0.1.2-rc.8", linux)).toBeNull();
+  });
+  it("is a supported runtime, and an rc.6 Linux build is offered rc.7 as a pre-release", () => {
+    expect(isSupportedNexiRuntime(linux)).toBe(true);
+    const rc7 = release("0.1.2-rc.7", { assets });
+    expect(
+      pickNexiUpdate({ releases: [rc7], currentVersion: "0.1.2-rc.6", ...linux })?.payload.name,
+    ).toMatch(/\.AppImage$/u);
   });
 });
 

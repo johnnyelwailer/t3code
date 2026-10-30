@@ -200,6 +200,7 @@ t3team.project.list_linked_repositories
 t3team.project.sync_linked_repository
 t3team.machine.find_definitions
 t3team.machine.set_source
+t3team.desktop_route.request
 t3team.project.open_dashboard_mode
 t3team.project.open_linked_repository_manager
 t3team.project.refresh_integrations
@@ -227,6 +228,13 @@ Notes:
   default". Its question id is `machine-source:v1:<base64url JSON of the setting>`. The tool never
   saves: the setting lives on the user's own environment, so the web client saves it there when
   the user accepts, and the answer reaches the agent as the user's next message.
+- `t3team.desktop_route.request` is implemented (MCP `request_desktop_route`), opt-in behind the
+  `AGENTS_DESKTOP_ROUTE` flag. A cloud-session agent whose connection to one host failed asks the
+  user to let that host be reached through their own computer. The tool checks the target is one
+  plain token and posts ONE `t3_ask_user` question: once, for this session, always for this host, or
+  not. Its question id is `desktop-route:v1:<base64url JSON of the proposal>` and the first line is
+  derived from it alone. The tool never grants: the user's desktop web client makes the grant on
+  its own host service when they accept, and the answer reaches the agent as the user's next message.
 - `create_context_bound_thread` creates a thread under the current project or view.
 - `t3team.project.refresh_context_bundle` is implemented. It rebuilds the lightweight
   project context bundle (`work-items/index.json` plus summary JSON) from the current backlog

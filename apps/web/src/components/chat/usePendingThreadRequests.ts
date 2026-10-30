@@ -22,7 +22,7 @@ import {
 import { create } from "zustand";
 import { useRef, useState, type RefObject, type SetStateAction } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useApplyMachineSourceAnswer } from "../../cloud/t3team-useApplyMachineSourceAnswer";
+import { useApplyAnswers as useApplyMachineSourceAnswer } from "../../cloud/t3team-useApplyAnswers";
 import { type DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { getUploadedAttachments, useAttachmentUploadStore } from "../../lib/attachmentUploadQueue";

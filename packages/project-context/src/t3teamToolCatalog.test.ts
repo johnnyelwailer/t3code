@@ -72,6 +72,7 @@ describe("t3teamToolCatalog", () => {
       "t3team.work_item.change_set",
       "t3team.machine.find_definitions",
       "t3team.machine.set_source",
+      "t3team.desktop_route.request",
     ]);
   });
 

@@ -31,6 +31,7 @@ import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { orchestrationEnvironment } from "../state/orchestration";
 import { projectEnvironment } from "../state/projects";
 import { threadEnvironment } from "../state/threads";
+import { readEnvironmentUnreachable } from "../state/t3team-localThreadActions";
 import { vcsEnvironment } from "../state/vcs";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { refreshArchivedThreadsForEnvironment } from "../lib/archivedThreadsState";
@@ -269,6 +270,9 @@ export function useThreadActions() {
   const settleThreadMutation = useOrchestrationCommand(threadEnvironment.settle, {
     reportFailure: false,
   });
+  const localThreadOverride = useAtomCommand(threadEnvironment.localOverride, {
+    reportFailure: false,
+  });
   const unsettleThreadMutation = useOrchestrationCommand(threadEnvironment.unsettle, {
     reportFailure: false,
   });
@@ -413,18 +417,28 @@ export function useThreadActions() {
     return archiveResult;
   };
 
+  const deleteThreadLocally = (target: ScopedThreadRef) =>
+    localThreadOverride({
+      environmentId: target.environmentId,
+      input: { threadId: target.threadId, override: "removed" },
+    });
+
   const deleteThread = async (
     target: ScopedThreadRef,
     opts: { deletedThreadKeys?: ReadonlySet<string> } = {},
   ) => {
-    const permissionFailure = threadOperationFailure(target);
+    // An environment that cannot answer (an ended cloud session) is skipped: delete is local.
+    const unreachable = readEnvironmentUnreachable(target.environmentId);
+    const permissionFailure = unreachable ? null : threadOperationFailure(target);
     if (permissionFailure) return permissionFailure;
     const resolved = resolveThreadTarget(target);
     if (!resolved) {
-      const result = await deleteThreadMutation({
-        environmentId: target.environmentId,
-        input: { threadId: target.threadId },
-      });
+      const result = unreachable
+        ? await deleteThreadLocally(target)
+        : await deleteThreadMutation({
+            environmentId: target.environmentId,
+            input: { threadId: target.threadId },
+          });
       if (result._tag === "Success") {
         refreshArchivedThreadsForEnvironment(target.environmentId);
         clearThreadPreviewState(target);
@@ -456,10 +470,9 @@ export function useThreadActions() {
     const environmentConfig = appAtomRegistry
       .get(environmentServerConfigsAtom)
       .get(threadRef.environmentId);
-    let orphanedWorktreePath = getOrphanedWorktreePathForThread(
-      survivingThreads,
-      threadRef.threadId,
-    );
+    let orphanedWorktreePath = unreachable
+      ? null
+      : getOrphanedWorktreePathForThread(survivingThreads, threadRef.threadId);
     // A shell that leaves idle subagent children out cannot prove nobody else uses the worktree,
     // so the server's list decides. A failed read keeps the worktree.
     if (orphanedWorktreePath !== null && environmentConfig?.shellThreadFamilies === true) {
@@ -517,7 +530,7 @@ export function useThreadActions() {
       shouldDeleteWorktree = confirmationResult.value;
     }
 
-    if (thread.runtime !== null) {
+    if (thread.runtime !== null && !unreachable) {
       await stopThreadSession({
         environmentId: threadRef.environmentId,
         input: { threadId: threadRef.threadId },
@@ -535,10 +548,12 @@ export function useThreadActions() {
       deletedThreadIds,
       sortOrder: sidebarThreadSortOrder,
     });
-    const deleteResult = await deleteThreadMutation({
-      environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId },
-    });
+    const deleteResult = unreachable
+      ? await deleteThreadLocally(threadRef)
+      : await deleteThreadMutation({
+          environmentId: threadRef.environmentId,
+          input: { threadId: threadRef.threadId },
+        });
     if (deleteResult._tag === "Failure") {
       return deleteResult;
     }
@@ -722,7 +737,9 @@ export function useThreadActions() {
   };
 
   const settleThread = async (target: ScopedThreadRef) => {
-    if (!readEnvironmentServerConfigLoaded(target.environmentId)) {
+    // Like delete, settle stays on this device when the environment cannot answer.
+    const unreachable = readEnvironmentUnreachable(target.environmentId);
+    if (!unreachable && !readEnvironmentServerConfigLoaded(target.environmentId)) {
       return AsyncResult.failure(
         Cause.fail(
           new ThreadSettlementUnsupportedError({
@@ -742,16 +759,26 @@ export function useThreadActions() {
     ThreadUndo.invalidate("pin", scopedThreadKey(target));
     ThreadUndo.invalidate("snooze", scopedThreadKey(target));
     const action = ThreadUndo.begin("settle", scopedThreadKey(target));
-    const result = await settleThreadMutation({
-      environmentId: target.environmentId,
-      input: { threadId: target.threadId },
-    });
+    const result = unreachable
+      ? await localThreadOverride({
+          environmentId: target.environmentId,
+          input: { threadId: target.threadId, override: "settled" },
+        })
+      : await settleThreadMutation({
+          environmentId: target.environmentId,
+          input: { threadId: target.threadId },
+        });
     if (result._tag !== "Success") {
       action.finish();
       return result;
     }
     if (wokeAt !== null) {
       markThreadVisited(scopedThreadKey(target), wokeAt);
+    }
+    if (unreachable) {
+      // Undo would ask the environment that cannot answer.
+      action.finish();
+      return result;
     }
     showThreadUndoNotice({
       action: "Settled",
@@ -900,7 +927,9 @@ export function useThreadActions() {
     );
 
   const confirmAndDeleteThread = async (target: ScopedThreadRef) => {
-    const permissionFailure = threadOperationFailure(target);
+    const permissionFailure = readEnvironmentUnreachable(target.environmentId)
+      ? null
+      : threadOperationFailure(target);
     if (permissionFailure) return permissionFailure;
     const localApi = readLocalApi();
     const resolved = resolveThreadTarget(target);

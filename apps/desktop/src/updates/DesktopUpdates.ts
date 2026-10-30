@@ -369,16 +369,22 @@ export const make = Effect.gen(function* () {
   // through such a switch, and never below that release: version order alone cannot tell whether
   // a Stable knows a Nightly's migrations.
   const releaseFloorRef = yield* Ref.make(Option.none<string>());
+  // The interim GHE feed has one track: its server already chose the newest release this build
+  // follows, so the upstream channel rules (which would drop an rc under "nightly" and then
+  // report a fake "up to date") do not apply to it.
+  let nexiFeedActive = false;
   const offerable = (version: string, state: DesktopUpdateState) =>
-    Ref.get(releaseFloorRef).pipe(
-      Effect.map(
-        (floor) =>
-          desktopUpdateChannelOf(version) === state.channel &&
-          (Option.isSome(floor)
-            ? compareSemverVersions(version, floor.value) >= 0
-            : desktopUpdateChannelOf(environment.appVersion) === state.channel),
-      ),
-    );
+    nexiFeedActive
+      ? Effect.succeed(true)
+      : Ref.get(releaseFloorRef).pipe(
+          Effect.map(
+            (floor) =>
+              desktopUpdateChannelOf(version) === state.channel &&
+              (Option.isSome(floor)
+                ? compareSemverVersions(version, floor.value) >= 0
+                : desktopUpdateChannelOf(environment.appVersion) === state.channel),
+          ),
+        );
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
     createInitialDesktopUpdateState(
       environment.appVersion,
@@ -389,7 +395,6 @@ export const make = Effect.gen(function* () {
 
   // The named reason behind the current error, shown only while the state is in error.
   const updateIssueRef = yield* Ref.make<DesktopUpdateIssue | null>(null);
-  let nexiFeedActive = false;
   const stateChanges = yield* PubSub.sliding<DesktopUpdateState>(16);
   // Serialize writes and publishes against subscription so snapshots cannot overlap the first change.
   const stateMutex = yield* Semaphore.make(1);
