@@ -768,6 +768,63 @@ describe("CloudSessionService.create over the Nexi broker", () => {
     }),
   );
 
+  it.effect(
+    "a plain session is started for the SELECTED project, never another one the user has",
+    () =>
+      Effect.gen(function* () {
+        const checkoutOf = (name: string, commit: string): CloudSessionPlainProject => ({
+          kind: "checkout",
+          checkout: {
+            repository: {
+              url: `https://nexplore.ghe.com/acme/${name}.git`,
+              host: "nexplore.ghe.com",
+              owner: "acme",
+              name,
+            },
+            commit: commit.repeat(40),
+            token: "ghp_plain",
+            author: { name: "Pj", email: "pj@example.test" },
+          },
+        });
+        const projects = new Map<string, CloudSessionPlainProject>([
+          ["p1", checkoutOf("api", "a")],
+          ["p2", checkoutOf("polassist", "b")],
+          ["p3", { kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }],
+        ]);
+        const asked: string[] = [];
+        const machines = Layer.mock(CloudSessionMachines)({
+          resolve: () => Effect.succeed(null),
+          resolveSetup: () => Effect.die("not a setup"),
+          poolKeyOf: () => Effect.succeed(null),
+          resolvePlain: (projectId) =>
+            Effect.sync(() => {
+              asked.push(projectId);
+              const plain = projects.get(projectId);
+              if (plain === undefined) throw new Error(`unknown project ${projectId}`);
+              return plain;
+            }),
+        });
+        const dispatchFor = (projectId: string) =>
+          Effect.gen(function* () {
+            const { calls, rest, graphql } = makeGithubMock();
+            const broker = brokerMock(() => Effect.succeed("g"));
+            yield* runPastDiscoveryPoll(
+              create(providersWith(rest, graphql, broker, machines), ProjectId.make(projectId)),
+            );
+            return calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
+          });
+
+        const second = yield* dispatchFor("p2");
+        assert.include(second, '"project_repository":"https://nexplore.ghe.com/acme/polassist.git"');
+        assert.include(second, `"project_commit":"${"b".repeat(40)}"`);
+        assert.notInclude(second, "acme/api");
+        const third = yield* dispatchFor("p3");
+        assert.include(third, '"project_name":"IES NG-781a8188"');
+        assert.notInclude(third, "project_repository");
+        assert.deepEqual(asked, ["p2", "p3"]);
+      }),
+  );
+
   const machineFailure = new CloudSessionFailedError({
     reason: "machine_unavailable",
     message: "Push this project's branch so a cloud session can build its machine.",

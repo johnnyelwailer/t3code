@@ -1,4 +1,5 @@
 import type { BrokerEnvironmentGateway } from "@t3tools/client-runtime/connection";
+import type { RepositoryIdentity } from "@t3tools/contracts";
 import type * as Stream from "effect/Stream";
 import type { ComponentType } from "react";
 import type { PlatformOSType } from "react-native";
@@ -85,11 +86,23 @@ export interface UrlPolicy {
   readonly documentBaseUrl?: (httpBase: string) => string | undefined;
 }
 
+/** The project a new thread is for, as the stock picker knows it: what a slot needs to act on THIS project. */
+export interface SelectedProjectFacts {
+  readonly id: string;
+  readonly environmentId: string;
+  readonly title: string;
+  readonly workspaceRoot: string;
+  /** Null for a project with no repository (no remote). */
+  readonly repositoryIdentity: RepositoryIdentity | null;
+}
+
 export interface EnvironmentPickerTopProps {
   /** Leaves the picker. */
   readonly close: () => void;
   /** Title of the project the new thread is for; null when none is selected (scratch or empty). */
   readonly selectedProjectTitle?: string | null;
+  /** The selected project itself (id, repository identity); null when none is selected. */
+  readonly selectedProject?: SelectedProjectFacts | null;
   /** Ids of the environments that host the selected project, by the stock picker's own rule. */
   readonly hostingEnvironmentIds?: ReadonlyArray<string>;
 }
