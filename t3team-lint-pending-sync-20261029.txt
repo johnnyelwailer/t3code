@@ -3,7 +3,7 @@
 # The 2026-10-29 upstream sync turned on t3code/no-low-value-comments, no-unreasoned-state-sync,
 # no-em-dash-copy, no-inline-schema-compile, no-polling-loop-in-tests and react/no-array-index-key.
 # The files below carry violations that came in with fork-side code and cannot be reworded or
-# restructured inside a sync PR. vite.config.ts turns exactly those rules off for exactly these files
+# restructured inside a sync PR. vite.config.ts lowers exactly those rules to warnings for exactly these files
 # (a separate list from t3team-lint-pending.txt so the older exemptions do not widen to these files),
 # so any NEW or changed file is still held to them. Files that carry upstream's own
 # oxlint-disable directives for no-unreasoned-state-sync stay at "warn" for that rule, see vite.config.ts.
@@ -18,6 +18,10 @@ apps/desktop/src/backend/DesktopBackendConfiguration.ts
 apps/desktop/src/backend/t3team-backendHealthWatchdog.ts
 apps/desktop/src/backend/t3team-backendLiveness.ts
 apps/desktop/src/settings/t3team-settingsFileReplace.ts
+apps/desktop/src/updates/t3team-nexiElectronUpdater.ts
+apps/desktop/src/updates/t3team-nexiMacUpdater.ts
+apps/desktop/src/updates/t3team-nexiUpdateFeed.ts
+apps/desktop/src/updates/t3team-nexiUpdateProvider.ts
 apps/desktop/src/voice/t3team-voiceActivityGate.ts
 apps/desktop/src/voice/t3team-voiceLanguageLock.ts
 apps/desktop/src/voice/t3team-voiceNearFieldGate.ts
@@ -110,6 +114,8 @@ apps/server/src/mcp/toolkits/t3team/t3team-askUserQuestion.ts
 apps/server/src/mcp/toolkits/t3team/t3team-askUserWriter.ts
 apps/server/src/mcp/toolkits/t3team/t3team-linkedRepositoryTools.ts
 apps/server/src/mcp/toolkits/t3team/t3team-machineDefinitionTools.ts
+apps/server/src/mcp/toolkits/t3team/t3team-machineSourceHandler.ts
+apps/server/src/mcp/toolkits/t3team/t3team-machineSourceTools.ts
 apps/server/src/mcp/toolkits/t3team/t3team-mcpToolAliases.ts
 apps/server/src/mcp/toolkits/t3team/t3team-mcpToolInputSchema.test.ts
 apps/server/src/mcp/toolkits/t3team/t3team-mcpToolThreadList.test.ts
@@ -198,6 +204,7 @@ apps/server/src/process/t3team-offThreadSpawnWorker.ts
 apps/server/src/process/t3team-pacedChildProcessSpawner.ts
 apps/server/src/project/RepositoryIdentityResolver.test.ts
 apps/server/src/project/t3team-MachineDefinitionFinder.ts
+apps/server/src/project/t3team-MachineSourceProposal.ts
 apps/server/src/project/t3team-ProjectMachineDiscovery.ts
 apps/server/src/project/t3team-machineDefinitionRefPlan.ts
 apps/server/src/project/t3team-machineDefinitionRefs.ts
@@ -806,6 +813,8 @@ apps/web/src/cloud/t3team-cloudThreadProjectTitle.ts
 apps/web/src/cloud/t3team-endedCloudSessionEnvironments.ts
 apps/web/src/cloud/t3team-endedSessionAction.ts
 apps/web/src/cloud/t3team-environmentLiveState.ts
+apps/web/src/cloud/t3team-machineSourceTarget.ts
+apps/web/src/cloud/t3team-useApplyMachineSourceAnswer.ts
 apps/web/src/cloud/t3team-useCloudBrokerStatus.ts
 apps/web/src/cloud/t3team-useCloudProjectWaitNow.ts
 apps/web/src/cloud/t3team-useCloudQueuedSendOptimisticMessage.ts
@@ -898,6 +907,7 @@ apps/web/src/routes/_chat.tsx
 apps/web/src/routes/t3team-detached.$kind.tsx
 apps/web/src/session-logic.ts
 apps/web/src/state/t3team-cloudSessions.ts
+apps/web/src/state/t3team-lastSeenVersion.ts
 apps/web/src/state/t3team-toolauth.ts
 apps/web/src/t3team-providerInstanceReadiness.ts
 apps/web/src/t3team-readyProviderPreference.ts
@@ -1609,6 +1619,7 @@ packages/integrations-atlassian/src/t3team-issueDescriptionWrite.test.ts
 packages/integrations-atlassian/src/t3team-jqlProjectScope.ts
 packages/integrations-atlassian/src/t3team-mirrorWalkContext.ts
 packages/project-context/src/queryableLazy.ts
+packages/project-context/src/t3team-toolCatalogImplementedMachine.ts
 packages/project-context/src/t3teamFeatureFlags.ts
 packages/project-context/src/t3teamProjectStateDir.ts
 packages/project-context/src/t3teamToolCatalog.test.ts

@@ -698,15 +698,16 @@ export default defineConfig({
       },
       {
         // t3team: TEMPORARY exemption for the rules the 2026-10-29 sync turned on (see
-        // t3team-lint-pending-sync-20261029.txt). Must stay after the blocks that enable them.
+        // t3team-lint-pending-sync-20261029.txt). Must stay after the blocks that enable them. "warn", not
+        // "off": upstream's own oxlint-disable directives in these files must keep suppressing something.
         files: [...T3TEAM_SYNC_20261029_PENDING_FILES],
         rules: {
-          "react/no-array-index-key": "off",
-          "t3code/no-em-dash-copy": "off",
-          "t3code/no-inline-schema-compile": "off",
-          "t3code/no-low-value-comments": "off",
-          "t3code/no-polling-loop-in-tests": "off",
-          "t3code/no-unreasoned-state-sync": "off",
+          "react/no-array-index-key": "warn",
+          "t3code/no-em-dash-copy": "warn",
+          "t3code/no-inline-schema-compile": "warn",
+          "t3code/no-low-value-comments": "warn",
+          "t3code/no-polling-loop-in-tests": "warn",
+          "t3code/no-unreasoned-state-sync": "warn",
         },
       },
       {
