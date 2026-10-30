@@ -552,6 +552,7 @@ apps/server/src/t3team-toolBrokerChildrenLive.ts
 apps/server/src/t3team-toolBrokerChildrenPorts.ts
 apps/server/src/t3team-toolBrokerChildrenSweep.ts
 apps/server/src/t3team-toolBrokerChildrenTypes.ts
+apps/server/src/t3team-toolBrokerChildrenUsage.ts
 apps/server/src/t3team-toolBrokerChildrenWatch.ts
 apps/server/src/t3team-toolBrokerLegacyToolIds.ts
 apps/server/src/t3team-toolBrokerLive.ts
@@ -1832,6 +1833,7 @@ packages/t3team-sdk/src/t3team-sdk.workflowGlobals.ts
 packages/t3team-sdk/src/t3team-sdk.workflowHost.ts
 packages/t3team-sdk/src/t3team-sdk.workflowHostOffer.test.ts
 packages/t3team-sdk/src/t3team-sdk.workflowHostTypes.ts
+packages/t3team-sdk/src/t3team-sdk.workflowReference.generated.ts
 packages/t3team-sdk/src/t3team-sdk.workflowReference.test.ts
 packages/t3team-sdk/src/t3team-sdk.workflowReferenceExamples.ts
 packages/t3team-sdk/src/t3team-sdk.workflowReferenceGenerate.ts
