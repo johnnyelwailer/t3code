@@ -497,11 +497,18 @@ const layerSourceControlProviderRegistry = SourceControlProviderRegistry.layer.p
   // t3team: the fork's GitHub facade (GitHubApi, GitHubRest, quota, credentials) is read by the
   // websocket routes, the inbox and the cloud-session layers. Upstream's GitHub driver builds its own
   // transport inside the driver, so the facade must be the outermost provider: it is built first and
-  // the driver's forked memo map reuses it, giving one quota/credential/coalescer state. Its host and
-  // rate-limit requirements are the same layer references the built-in drivers use, so they share too.
+  // the driver's forked memo map reuses it, giving one quota/credential/coalescer state. Its host,
+  // rate-limit and VCS requirements are the same layer references the chain uses, so they share too.
   Layer.provideMerge(
     GitHubApi.layerWithDependencies.pipe(
-      Layer.provide(Layer.mergeAll(ServerSourceControlHost.layer, SourceControlRateLimit.layer)),
+      Layer.provide(
+        Layer.mergeAll(
+          ServerSourceControlHost.layer,
+          SourceControlRateLimit.layer,
+          GitVcsDriver.layer,
+          layerVcsDriverRegistry,
+        ),
+      ),
     ),
   ),
 );
