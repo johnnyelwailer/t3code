@@ -1,4 +1,5 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import { useMemo } from "react";
 
 import { ExtensionBoundary } from "./t3team-ExtensionBoundary";
 import { mobileExtensions } from "./t3team-extensions";
@@ -13,9 +14,20 @@ export function EnvironmentPickerTopSlot(
 ) {
   const EnvironmentPickerTop = mobileExtensions.environmentPickerTop;
   const { selectedProject, ...rest } = props;
+  // One object per selection, so a slot may use it as a dependency.
+  const facts = useMemo(
+    () => selectedProjectFacts(selectedProject),
+    [
+      selectedProject?.id,
+      selectedProject?.environmentId,
+      selectedProject?.title,
+      selectedProject?.workspaceRoot,
+      selectedProject?.repositoryIdentity,
+    ],
+  );
   return EnvironmentPickerTop ? (
     <ExtensionBoundary>
-      <EnvironmentPickerTop {...rest} selectedProject={selectedProjectFacts(selectedProject)} />
+      <EnvironmentPickerTop {...rest} selectedProject={facts} />
     </ExtensionBoundary>
   ) : null;
 }
