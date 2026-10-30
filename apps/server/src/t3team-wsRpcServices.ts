@@ -69,6 +69,7 @@ import type * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.t
 import type * as ReviewService from "./review/ReviewService.ts";
 import type * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import type * as SecretRequests from "./secrets/SecretRequests.ts";
+import type * as GitHubRest from "@t3tools/source-control-github/server/GitHubRest";
 import type * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import type * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import type * as ServerSettings from "./serverSettings.ts";
@@ -169,6 +170,7 @@ export type WsRpcHandlerServices =
   | ReviewService.ReviewService
   | ScheduledTasks.ScheduledTaskService
   | SecretRequests.SecretRequests
+  | GitHubRest.GitHubRest
   | ServerConfig.ServerConfig
   | ServerEnvironment.ServerEnvironment
   | ServerLifecycleEvents.ServerLifecycleEvents

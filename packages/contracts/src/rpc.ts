@@ -396,6 +396,13 @@ import {
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import {
+  CredentialSourcesError,
+  CredentialSourcesProbeInput,
+  CredentialSourcesProbeResult,
+  CredentialSourcesReadInput,
+  CredentialSourcesReadResult,
+} from "./t3team-credentialSources.ts";
+import {
   ProjectCloneActionInput,
   ProjectCloneActionResult,
   ProjectCloneListEvent,
@@ -610,6 +617,8 @@ export const WS_METHODS = {
   scheduledTasksRunNow: "scheduledTasks.runNow",
   scheduledTasksRotateWebhookToken: "scheduledTasks.rotateWebhookToken",
   secretsAnswerRequest: "secrets.answerRequest",
+  credentialSourcesProbe: "credentialSources.probe",
+  credentialSourcesRead: "credentialSources.read",
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
@@ -2176,6 +2185,18 @@ const WsSecretsAnswerRequestRpc = Rpc.make(WS_METHODS.secretsAnswerRequest, {
   error: Schema.Union([SecretRequestError, EnvironmentAuthorizationError]),
 });
 
+const WsCredentialSourcesProbeRpc = Rpc.make(WS_METHODS.credentialSourcesProbe, {
+  payload: CredentialSourcesProbeInput,
+  success: CredentialSourcesProbeResult,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsCredentialSourcesReadRpc = Rpc.make(WS_METHODS.credentialSourcesRead, {
+  payload: CredentialSourcesReadInput,
+  success: CredentialSourcesReadResult,
+  error: Schema.Union([CredentialSourcesError, EnvironmentAuthorizationError]),
+});
+
 const WsScheduledTasksListWebhookDeliveriesRpc = Rpc.make(
   WS_METHODS.scheduledTasksListWebhookDeliveries,
   {
@@ -2282,6 +2303,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsScheduledTasksRunNowRpc,
   WsScheduledTasksRotateWebhookTokenRpc,
   WsSecretsAnswerRequestRpc,
+  WsCredentialSourcesProbeRpc,
+  WsCredentialSourcesReadRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
   WsServerReportClientActivityRpc,

@@ -1554,6 +1554,15 @@ export function createServerEnvironmentAtoms<R, E>(
     }),
     // Off the config lane: answering a card must not queue behind settings
     // edits. One answer per card at a time.
+    // t3team: credential sources on the user's own machine (their gh, a named variable); `read` returns a value.
+    probeCredentialSources: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:credential-sources:probe",
+      tag: WS_METHODS.credentialSourcesProbe,
+    }),
+    readCredentialSource: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:credential-sources:read",
+      tag: WS_METHODS.credentialSourcesRead,
+    }),
     answerSecretRequest: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:secrets:answer-request",
       tag: WS_METHODS.secretsAnswerRequest,
