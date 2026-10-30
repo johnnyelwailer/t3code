@@ -1,0 +1,26 @@
+# TEMPORARY (upstream sync 2026-10-29): print only the error-level lint diagnostics. Deleted before the PR is ready.
+name: zz-sync-lint-errors
+on:
+  push:
+    branches: ["nexi/sync-upstream-*"]
+permissions:
+  contents: read
+jobs:
+  lint-errors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+      - uses: ./.github/actions/setup-ci-deps
+      - name: Error-level diagnostics
+        shell: bash
+        run: |
+          set +e
+          vp lint --report-unused-disable-directives -f unix > /tmp/lint.unix 2>&1
+          grep -E "\[Error" /tmp/lint.unix | cut -c1-400 | head -60
+          tail -2 /tmp/lint.unix
