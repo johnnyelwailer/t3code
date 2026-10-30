@@ -3,7 +3,11 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { AuthMcpClientAccess } from "./auth.ts";
-import { CredentialHost, CredentialScope, CredentialVariableName } from "./t3team-credentialSources.ts";
+import {
+  CredentialHost,
+  CredentialScope,
+  CredentialVariableName,
+} from "./t3team-credentialSources.ts";
 import {
   ContextTransferId,
   EnvironmentId,

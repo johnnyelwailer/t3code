@@ -135,7 +135,8 @@ export function T3TeamCredentialSourcesPicker(props: {
           )}
           {option.hint === undefined ? null : (
             <p className="text-xs text-muted-foreground">
-              This sign-in lacks a requested scope. To add it, run <code className="font-mono">{option.hint}</code>, then ask again.
+              This sign-in lacks a requested scope. To add it, run{" "}
+              <code className="font-mono">{option.hint}</code>, then ask again.
             </p>
           )}
           {option.warning === undefined ? null : (
