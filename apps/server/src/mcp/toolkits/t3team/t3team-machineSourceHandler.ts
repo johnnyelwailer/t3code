@@ -9,7 +9,10 @@
 import {
   MACHINE_SOURCE_ACCEPT_LABEL,
   MACHINE_SOURCE_DECLINE_LABEL,
+  MACHINE_SOURCE_QUESTION_HEADER,
   encodeMachineSourceQuestionId,
+  escapeMarkdownText,
+  machineSourceQuestionLine,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -57,14 +60,25 @@ export const makeMachineSetSourceHandler = Effect.gen(function* () {
         ...(branch === undefined || branch.length === 0 ? {} : { branch }),
       })
       .pipe(Effect.mapError((error) => refuse(error.message)));
-    const where = verified.branch === null ? "" : ` on branch ${verified.branch}`;
     const asked = yield* t3TeamAskUser(
       {
-        header: "Machine source",
+        header: MACHINE_SOURCE_QUESTION_HEADER,
+        // The first line is built from the proposal alone (the client requires it before it
+        // applies an accepted answer); the agent's words are shown as plain text, never markdown.
         question: [
-          `Use ${verified.repository}${where} for this project's cloud machine?`,
-          ...(author.length === 0 ? [] : [`Definition by: ${author}`]),
-          `Why: ${why}`,
+          machineSourceQuestionLine(verified.setting),
+          ...(verified.commit === null
+            ? []
+            : [`Pinned at commit ${escapeMarkdownText(verified.commit.slice(0, 7))}.`]),
+          ...(verified.ownHost === null || verified.ownHost === verified.host
+            ? []
+            : [
+                escapeMarkdownText(
+                  `Warning: ${verified.host} is not this project's repository host (${verified.ownHost}). Check it is the host you expect.`,
+                ),
+              ]),
+          ...(author.length === 0 ? [] : [`Definition by: ${escapeMarkdownText(author)}`]),
+          `Why: ${escapeMarkdownText(why)}`,
         ].join("\n\n"),
         options: [
           {

@@ -62,6 +62,8 @@ it.layer(NodeServices.layer)("machine source proposal", (it) => {
         repository: "acme/tools",
         branch: "setup",
         commit: branchTip,
+        host: "nexplore.ghe.com",
+        ownHost: "nexplore.ghe.com",
       });
       expect(fixture.reads.every((read) => read.revision === branchTip)).toBe(true);
       // The id the question carries decodes to exactly the normalized setting.

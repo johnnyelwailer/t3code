@@ -27,6 +27,7 @@ import { VcsProcess } from "../vcs/VcsProcess.ts";
 import { ProjectService } from "./ProjectService.ts";
 import { OWN_REPOSITORY } from "./t3team-projectMachineOwnership.ts";
 import { machineRepositories } from "./t3team-projectMachineRepositories.ts";
+import { machineRepositoryFromRemote } from "../cloud/t3team-cloudSessionMachineNames.ts";
 import { scanSelectedSource } from "./t3team-projectMachineSourceScan.ts";
 import { normalizeMachineSource } from "./t3team-projectMachineSourceSetting.ts";
 import { makeRemoteMachineCache } from "./t3team-remoteMachineCache.ts";
@@ -39,6 +40,9 @@ export interface VerifiedMachineSource {
   readonly repository: string;
   readonly branch: string | null;
   readonly commit: string | null;
+  /** The proposed repository's host, and the project's own repository's host when it has one. */
+  readonly host: string;
+  readonly ownHost: string | null;
 }
 
 export class MachineSourceProposal extends Context.Service<
@@ -114,6 +118,8 @@ const make = Effect.gen(function* () {
       repository: readout.repository,
       branch: readout.branch,
       commit: readout.commit,
+      host: readout.host,
+      ownHost: own?.url === undefined ? null : (machineRepositoryFromRemote(own.url)?.host ?? null),
     } satisfies VerifiedMachineSource;
   });
 

@@ -202,7 +202,7 @@ describe("createT3TeamTurnToolContext", () => {
         {
           id: "t3team.machine.set_source",
           label: "Propose machine source",
-          capabilities: ["read"],
+          capabilities: ["write"],
         },
       ],
       state: {

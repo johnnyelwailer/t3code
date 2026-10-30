@@ -54,7 +54,7 @@ export const IMPLEMENTED_T3TEAM_MACHINE_TOOL_CATALOG = {
       "it. Explain WHY in 'why' (one or two sentences the user reads, for instance who wrote " +
       "the definition and what it sets up). Returns {asked, requestId, questionId, " +
       "repository, branch, note}. One question can be pending per thread.",
-    capabilities: ["read"],
+    capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread", "project"],
     status: "implemented",

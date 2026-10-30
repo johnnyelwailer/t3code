@@ -2,7 +2,9 @@ import {
   EnvironmentId,
   MACHINE_SOURCE_ACCEPT_LABEL,
   ProjectId,
+  MACHINE_SOURCE_QUESTION_HEADER,
   encodeMachineSourceQuestionId,
+  machineSourceQuestionLine,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -23,10 +25,13 @@ const project = (environmentId: EnvironmentId, id: string, title: string, key: s
   repositoryIdentity: identity(key),
 });
 
-const questionId = encodeMachineSourceQuestionId({
-  repository: "https://nexplore.ghe.com/acme/tools.git",
-  branch: "setup",
-});
+const setting = { repository: "https://nexplore.ghe.com/acme/tools.git", branch: "setup" };
+const questionId = encodeMachineSourceQuestionId(setting);
+const question = {
+  id: questionId,
+  header: MACHINE_SOURCE_QUESTION_HEADER,
+  question: machineSourceQuestionLine(setting),
+};
 const answers = { [questionId]: MACHINE_SOURCE_ACCEPT_LABEL };
 const projects = [
   project(LOCAL, "api-local", "API", "nexplore.ghe.com/acme/api"),
@@ -36,7 +41,7 @@ const projects = [
 ];
 const capture = (projectId: string) =>
   captureMachineSourceApply({
-    questions: [{ id: questionId }],
+    questions: [question],
     answers,
     thread: { environmentId: CLOUD, projectId: ProjectId.make(projectId) },
     primaryEnvironmentId: LOCAL,
@@ -63,7 +68,7 @@ describe("captureMachineSourceApply", () => {
   it("is null when the answer is not an accepted proposal", () => {
     expect(
       captureMachineSourceApply({
-        questions: [{ id: questionId }],
+        questions: [question],
         answers: { [questionId]: "Keep the default" },
         thread: { environmentId: CLOUD, projectId: ProjectId.make("api-cloud") },
         primaryEnvironmentId: LOCAL,

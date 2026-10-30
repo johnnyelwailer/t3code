@@ -9,6 +9,7 @@ import {
   RuntimeRequestId,
   ThreadId,
   decodeMachineSourceQuestionId,
+  machineSourceQuestionLine,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -58,6 +59,8 @@ const verifiedTools = {
   repository: "acme/tools",
   branch: "setup",
   commit: "b".repeat(40),
+  host: "nexplore.ghe.com",
+  ownHost: "nexplore.ghe.com",
 };
 
 const proposalLayer = (verify: MachineSourceProposal["Service"]["verify"]) =>
@@ -143,9 +146,12 @@ it.effect("posts one question whose id carries the proposal and answers asked", 
     const [question] = asked[0]?.questions ?? [];
     expect(decodeMachineSourceQuestionId(question?.id ?? "")).toEqual(verifiedTools.setting);
     expect(question?.header).toBe("Machine source");
-    expect(question?.question).toContain(
-      "Use acme/tools on branch setup for this project's cloud machine?",
+    // The first line is built from the proposal alone and names the host.
+    expect(question?.question?.startsWith(machineSourceQuestionLine(verifiedTools.setting))).toBe(
+      true,
     );
+    expect(question?.question).toContain("nexplore.ghe.com/acme/tools");
+    expect(question?.question).toContain("Pinned at commit bbbbbbb");
     expect(question?.question).toContain("Ada wrote a devcontainer");
     expect(question?.question).toContain("ada");
     expect(question?.options.map((option) => option.label)).toEqual([
@@ -163,6 +169,40 @@ it.effect("posts one question whose id carries the proposal and answers asked", 
     });
     // Only owner/repo is shown back; the clone URL stays in the question id.
     expect(JSON.stringify(result.content)).not.toContain("https://");
+  });
+});
+
+it.effect("warns when the host is not the project's repository host", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  const evil = {
+    ...verifiedTools,
+    setting: { repository: "https://evil.example/acme/tools.git", branch: "setup" },
+    host: "evil.example",
+  };
+  return Effect.gen(function* () {
+    yield* callTool(ARGS, { proposal: proposalLayer(() => Effect.succeed(evil)), asked });
+    const [question] = asked[0]?.questions ?? [];
+    expect(question?.question).toContain("evil.example/acme/tools");
+    expect(question?.question).toContain("not this project's repository host");
+  });
+});
+
+it.effect("shows the agent's words as plain text, never as markdown", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  return Effect.gen(function* () {
+    yield* callTool(
+      {
+        ...ARGS,
+        why: "See [acme/tools](https://evil.example) and `rm` here",
+        author: "**ada**",
+      },
+      { proposal: proposalLayer(() => Effect.succeed(verifiedTools)), asked },
+    );
+    const text = asked[0]?.questions[0]?.question ?? "";
+    expect(text).not.toMatch(/(?<!\\)\]\(/);
+    expect(text).not.toContain("`rm`");
+    expect(text).not.toContain("**ada**");
+    expect(text).not.toContain("https://evil.example");
   });
 });
 
