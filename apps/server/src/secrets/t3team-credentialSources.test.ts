@@ -133,3 +133,58 @@ it.effect("read returns the gh token or the named variable, and refuses what is 
     assert.strictEqual(signedOut.reason, "not_available");
   }),
 );
+
+it.effect("a registry host is answered by its forge's sign-in, and any other host is refused", () =>
+  Effect.gen(function* () {
+    const d = deps({ scopes: "repo, read:packages" });
+    const mapped = yield* probe(d, { host: "npm.pkg.github.com", scopes: ["read:packages"] });
+    const gh = mapped.sources.find((source) => source.kind === "gh");
+    assert.strictEqual(gh?.kind === "gh" ? gh.host : undefined, "github.com");
+    assert.deepStrictEqual(d.calls, [{ host: "github.com", path: "/user" }]);
+
+    const elsewhere = deps({ scopes: "repo" });
+    const refused = yield* probe(elsewhere, { host: "evil.example" });
+    assert.deepStrictEqual(refused.sources, [{ kind: "manual" }]);
+    assert.deepStrictEqual(
+      elsewhere.calls,
+      [],
+      "no request is made to a host the server does not know",
+    );
+    const read = yield* makeCredentialSources(elsewhere.value)
+      .read({ source: "gh", host: "evil.example" })
+      .pipe(Effect.flip);
+    assert.strictEqual(read.reason, "not_available");
+
+    const configured = deps({ scopes: "repo", environment: { GH_HOST: "git.corp.example" } });
+    const own = yield* probe(configured, { host: "git.corp.example" });
+    assert.strictEqual(
+      own.sources.some((source) => source.kind === "gh"),
+      true,
+    );
+  }),
+);
+
+it.effect(
+  "scopes compare case-insensitively, repo covers what it implies, requests are de-duplicated",
+  () =>
+    Effect.gen(function* () {
+      const d = deps({ scopes: "REPO, Read:Org" });
+      const result = yield* probe(d, {
+        host: "github.com",
+        scopes: [
+          "public_repo",
+          "repo:status",
+          "read:org",
+          "READ:ORG",
+          "read:packages",
+          "read:packages",
+        ],
+      });
+      const gh = result.sources.find((source) => source.kind === "gh");
+      assert.deepStrictEqual(gh?.kind === "gh" ? gh.missingScopes : undefined, ["read:packages"]);
+      assert.strictEqual(
+        gh?.kind === "gh" ? gh.refreshCommand : undefined,
+        "gh auth refresh -h github.com -s read:packages",
+      );
+    }),
+);

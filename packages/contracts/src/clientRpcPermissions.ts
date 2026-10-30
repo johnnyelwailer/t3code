@@ -20,6 +20,9 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.previewStopLocalServer]: AuthTerminalOperateScope,
   [WS_METHODS.serverRunStorageCleanup]: AuthSettingsWriteScope,
   [WS_METHODS.serverCheckOtlpEndpoint]: AuthSettingsWriteScope,
+  // Both read this machine's own sign-in and environment: owner-level, like saving a token in Settings.
+  [WS_METHODS.credentialSourcesProbe]: AuthSettingsWriteScope,
+  [WS_METHODS.credentialSourcesRead]: AuthSettingsWriteScope,
   [WS_METHODS.serverSetFeatureFlag]: AuthSettingsWriteScope,
   [WS_METHODS.projectMachineSetSource]: AuthSettingsWriteScope,
   [WS_METHODS.pullRequestsRunAction]: AuthSourceControlWriteScope,

@@ -16,6 +16,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
+import { forgeHostFor } from "./t3team-credentialHosts.ts";
 import { grantedScopes, missingScopes, refreshCommand } from "./t3team-credentialScopes.ts";
 import { expectedShape, looksLikeAnotherSecret } from "./t3team-credentialShape.ts";
 
@@ -78,8 +79,10 @@ export function makeCredentialSources(deps: CredentialSourcesDeps) {
     input: CredentialSourcesProbeInput,
   ): Effect.fn.Return<CredentialSourcesProbeResult> {
     const sources: CredentialSource[] = [];
-    if (input.host !== undefined) {
-      const gh = yield* ghSource(input.host, input.scopes ?? []);
+    const forge =
+      input.host === undefined ? undefined : forgeHostFor(input.host, deps.environment.GH_HOST);
+    if (forge !== undefined) {
+      const gh = yield* ghSource(forge, input.scopes ?? []);
       if (gh !== undefined) sources.push(gh);
     }
     const value = envValue(deps, input.name);
@@ -100,8 +103,11 @@ export function makeCredentialSources(deps: CredentialSourcesDeps) {
     if (input.source === "gh") {
       if (input.host === undefined)
         return yield* new CredentialSourcesError({ reason: "invalid_request" });
+      const forge = forgeHostFor(input.host, deps.environment.GH_HOST);
+      if (forge === undefined)
+        return yield* new CredentialSourcesError({ reason: "not_available" });
       const token = yield* deps
-        .credential(input.host)
+        .credential(forge)
         .pipe(Effect.mapError(() => new CredentialSourcesError({ reason: "not_available" })));
       return { value: Redacted.value(token) };
     }
