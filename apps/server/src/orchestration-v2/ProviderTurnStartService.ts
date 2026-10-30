@@ -1198,12 +1198,13 @@ export const layer: Layer.Layer<
             providerThread: { ...resumed.success, id: providerThread.id },
             budget: context.budget,
             deferInline: isCompactionCommandMessage(message) || goalCommand,
+            // t3team: a fit probe; the real delivery below middle-truncates instead of failing.
+            failOnBudgetOverflow: true,
             alreadyDeliveredItemIds: context.deliveredItemIds,
             persist: () => Effect.void,
           }).pipe(
-            // The fork's deliverContextHandoffs falls back to middle-truncate recall instead of
-            // failing with ContextHandoffBudgetError, so there is no budget failure to catch here.
             Effect.as(true),
+            Effect.catchTags({ ContextHandoffBudgetError: () => Effect.succeed(false) }),
           );
           if (fits) return resumed.success;
           const freshThread = { ...resumed.success, nativeThreadRef: null };
@@ -1213,12 +1214,12 @@ export const layer: Layer.Layer<
             handoffs: withRecoveryHandoff(handoff),
             providerThread: freshThread,
             budget: freshContext.budget,
+            failOnBudgetOverflow: true,
             alreadyDeliveredItemIds: freshContext.deliveredItemIds,
             persist: () => Effect.void,
           }).pipe(
-            // The fork's deliverContextHandoffs falls back to middle-truncate recall instead of
-            // failing with ContextHandoffBudgetError, so there is no budget failure to catch here.
             Effect.as(true),
+            Effect.catchTags({ ContextHandoffBudgetError: () => Effect.succeed(false) }),
           );
           if (!fitsFresh) return resumed.success;
           const hasPendingWork = yield* (

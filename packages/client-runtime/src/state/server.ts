@@ -483,7 +483,8 @@ export const makeEnvironmentServerConfigState = Effect.fn("EnvironmentServerConf
       ...(subscription.environmentThemes === true ? { environmentThemes: true } : {}),
       ...(subscription.usageLimitSources === true ? { usageLimitSources: true } : {}),
       ...(subscription.usageLimitsCommand === true ? { usageLimitsCommand: true } : {}),
-      featureFlags: true,
+      // t3team: `featureFlags: true` is added by `RpcSession` (onDemandSnapshots). It must not be
+      // in this input: the session shares its replayed stream only for an input equal to its own.
     }).pipe(
       Stream.runForEach((event) =>
         Effect.gen(function* () {

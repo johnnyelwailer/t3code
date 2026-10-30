@@ -178,7 +178,10 @@ const runScenario = (threadId: string, makeEvents: (ids: Ids) => ProviderAdapter
       const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
       yield* runExecution.startRootRun({
         commandId: CommandId.make(`command:${threadId}`),
-        appThread: { id: ids.threadId } as OrchestrationV2AppThread,
+        appThread: {
+          id: ids.threadId,
+          lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: ids.threadId },
+        } as OrchestrationV2AppThread,
         providerSessionId: ProviderSessionId.make(`session:${threadId}`),
         session: {
           events: Stream.empty,

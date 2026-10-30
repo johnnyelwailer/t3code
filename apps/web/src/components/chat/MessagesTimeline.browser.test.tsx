@@ -203,7 +203,9 @@ describe("MessagesTimeline messages", () => {
       expect(props.listRef.current!.getState().sizeAtIndex(0)).toBeGreaterThan(0);
     });
     expect(maxNestedCommits).toBeLessThan(20);
-  });
+    // t3team: the fork's CI runner takes 12-19 s for this heavy layout (81 long rows, first test
+    // of the file) against the 15 s default; the nested-commit bound above is the real assertion.
+  }, 30_000);
 
   it("keeps the first and last message headings reachable from either end", async () => {
     setup();

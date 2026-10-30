@@ -3,6 +3,7 @@ import type {
   OrchestrationV2ProviderThread,
 } from "@t3tools/contracts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
+import { ContextHandoffBudgetError } from "@t3tools/provider-core/server/failure";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
@@ -19,6 +20,12 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
     readonly providerThread: OrchestrationV2ProviderThread;
     readonly budget: number | Effect.Effect<number, BudgetError>;
     readonly deferInline?: boolean;
+    /**
+     * t3team: probe mode. An overflow fails with `ContextHandoffBudgetError` instead of
+     * middle-truncating, so a caller deciding whether a native thread can take the handoff
+     * (upstream's exhausted-target recovery) still sees "does not fit".
+     */
+    readonly failOnBudgetOverflow?: boolean;
     readonly alreadyDeliveredItemIds: ReadonlySet<string>;
     readonly inject?: (
       history: ProviderAdapter.ProviderAdapterV2HistoricalContext,
@@ -76,9 +83,11 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
       budget,
     });
     // Upstream hard-fails when the selected pack still exceeds the budget. Only then
-    // fall back to middle-truncate + search/read recall (not on every handoff).
+    // fall back to middle-truncate + search/read recall (not on every handoff), unless the
+    // caller is probing whether the handoff fits.
     if (historyCost(selected.messages, selected.context) > budget) {
       if (input.deferInline) return { context: "", delivered: Effect.void, unsent: Effect.void };
+      if (input.failOnBudgetOverflow === true) return yield* new ContextHandoffBudgetError();
       selected = fitHistoryWithMiddleTruncate({
         messages,
         omittedItems,

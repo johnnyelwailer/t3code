@@ -849,7 +849,15 @@ describe("orchestration v2 provider switching", () => {
             scenario.includes("target-background") ||
             scenario.includes("target-subagent")
           ) {
-            assert.equal(projection.runs.at(-1)?.status, "failed");
+            // t3team: a target that cannot take the handoff even in a fresh native session keeps
+            // its session and middle-truncates the handoff instead of failing the turn (upstream
+            // fails the turn here); a target refused for background work still fails.
+            assert.equal(
+              projection.runs.at(-1)?.status,
+              scenario.includes("target-background") || scenario.includes("target-subagent")
+                ? "failed"
+                : "completed",
+            );
             assert.equal(yield* Ref.get(generation), 1);
             assert.equal(projection.messages.at(-1)!.text, current);
             assert.deepEqual(projection.messages.at(-1)!.attachments, screenshots);
