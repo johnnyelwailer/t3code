@@ -152,26 +152,27 @@ it.effect("agent context matches the committed budget", () =>
   }).pipe(Effect.provide(toolsLayer)),
 );
 
-// The advertised text of every tool stays minimal; the full text is behind t3_tool_help.
-it.effect("every advertised tool description and field note is within the cap", () =>
+// The fork's own tools advertise minimal text; the full text is behind t3_tool_help.
+it.effect("every fork tool description and field note is within the cap", () =>
   Effect.gen(function* () {
     const mcp = yield* McpServer.McpServer;
+    const forkNames = new Set(Object.keys(T3TeamToolkit.tools));
     const tools = mcp.tools.map(({ tool }) => tool);
-    const over = tools.flatMap((tool) => [
-      ...(utf8Bytes(tool.description ?? "") > TOOL_DESCRIPTION_CAP_BYTES
-        ? [`${tool.name}: description ${utf8Bytes(tool.description ?? "")} B`]
-        : []),
-      ...collectFieldDescriptions(tool.inputSchema)
-        .filter((text) => utf8Bytes(text) > FIELD_DESCRIPTION_CAP_BYTES)
-        .map((text) => `${tool.name}: field note ${utf8Bytes(text)} B "${text.slice(0, 40)}"`),
-    ]);
-    const unknown = Object.keys(MINIMAL_TOOL_DOCS).filter(
-      (name) => !tools.some((tool) => tool.name === name),
-    );
+    const over = tools
+      .filter((tool) => forkNames.has(tool.name))
+      .flatMap((tool) => [
+        ...(utf8Bytes(tool.description ?? "") > TOOL_DESCRIPTION_CAP_BYTES
+          ? [`${tool.name}: description ${utf8Bytes(tool.description ?? "")} B`]
+          : []),
+        ...collectFieldDescriptions(tool.inputSchema)
+          .filter((text) => utf8Bytes(text) > FIELD_DESCRIPTION_CAP_BYTES)
+          .map((text) => `${tool.name}: field note ${utf8Bytes(text)} B "${text.slice(0, 40)}"`),
+      ]);
+    const notFork = Object.keys(MINIMAL_TOOL_DOCS).filter((name) => !forkNames.has(name));
     expect(
-      { over, unknown },
-      `Add a minimal entry to t3team-toolDocs-*.ts: at most ${TOOL_DESCRIPTION_CAP_BYTES} B a description, ${FIELD_DESCRIPTION_CAP_BYTES} B a field note. The long text stays registered and t3_tool_help returns it.`,
-    ).toEqual({ over: [], unknown: [] });
+      { over, notFork },
+      `Add a minimal entry to t3team-toolDocs-fork.ts: at most ${TOOL_DESCRIPTION_CAP_BYTES} B a description, ${FIELD_DESCRIPTION_CAP_BYTES} B a field note. The long text stays registered and t3_tool_help returns it. Upstream tools are not trimmed.`,
+    ).toEqual({ over: [], notFork: [] });
   }).pipe(Effect.provide(toolsLayer)),
 );
 

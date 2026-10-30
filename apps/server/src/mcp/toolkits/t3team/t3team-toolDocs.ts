@@ -11,7 +11,6 @@ import * as Effect from "effect/Effect";
 import { McpSchema, McpServer } from "effect/ai";
 
 import { FORK_TOOL_DOCS } from "./t3team-toolDocs-fork.ts";
-import { UPSTREAM_TOOL_DOCS } from "./t3team-toolDocs-upstream.ts";
 
 export interface MinimalToolDocs {
   readonly description: string;
@@ -24,7 +23,8 @@ export type ToolDocsTable = Readonly<Record<string, MinimalToolDocs>>;
 export const TOOL_DESCRIPTION_CAP_BYTES = 250;
 export const FIELD_DESCRIPTION_CAP_BYTES = 60;
 
-export const MINIMAL_TOOL_DOCS: ToolDocsTable = { ...FORK_TOOL_DOCS, ...UPSTREAM_TOOL_DOCS };
+/** Only the fork's own tools: upstream tool text is advertised as registered. */
+export const MINIMAL_TOOL_DOCS: ToolDocsTable = FORK_TOOL_DOCS;
 
 export interface ToolDocs {
   readonly description?: string | undefined;
@@ -59,7 +59,7 @@ export function fieldDescriptionsByName(schema: unknown): Record<string, string>
 }
 
 /** `schema` without field descriptions, except the notes in `keep`, which replace them. */
-export function withFieldNotes(schema: unknown, keep: Readonly<Record<string, string>>): unknown {
+function withFieldNotes(schema: unknown, keep: Readonly<Record<string, string>>): unknown {
   if (Array.isArray(schema)) return schema.map((item) => withFieldNotes(item, keep));
   if (!isObject(schema)) return schema;
   const result: Record<string, unknown> = {};
@@ -121,5 +121,3 @@ export const withMinimalToolDocs = Effect.fnUntraced(function* <A, E, R>(
   });
   return yield* registration.pipe(Effect.provideService(McpServer.McpServer, minimalServer));
 });
-
-export const stripFieldDescriptions = (schema: unknown) => withFieldNotes(schema, {});
