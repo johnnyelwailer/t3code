@@ -151,7 +151,7 @@ describe("buildBranchNamePrompt", () => {
 });
 
 describe("buildThreadTitlePrompt", () => {
-  it("includes the user message and the title guidance rules", () => {
+  it("includes the user message without absent attachment metadata", () => {
     const result = buildThreadTitlePrompt({
       message: "Investigate reconnect regressions after session restore",
     });
@@ -159,6 +159,15 @@ describe("buildThreadTitlePrompt", () => {
     expect(result.prompt).toContain("User message:");
     expect(result.prompt).toContain("Investigate reconnect regressions after session restore");
     expect(result.prompt).not.toContain("Attachment metadata:");
+  });
+
+  it("includes the user message and the title guidance rules", () => {
+    const result = buildThreadTitlePrompt({
+      message: "Investigate reconnect regressions after session restore",
+    });
+
+    expect(result.prompt).toContain("User message:");
+    expect(result.prompt).toContain("Investigate reconnect regressions after session restore");
     expect(result.prompt).toContain(
       "Generate a title that will help the user recognize this T3 Code thread weeks later.",
     );
@@ -216,6 +225,24 @@ describe("buildThreadTitlePrompt", () => {
     );
     expect(result.prompt).toContain("Agent messages:");
     expect(result.prompt).toContain("The remaining issue is stale session state");
+  });
+
+  // Kept from the upstream side of the merge. The section heading was renamed
+  // when the regeneration context became assistant-activity-only (GHE #308):
+  // the builder renders the caller-provided agent-side context under
+  // "Agent messages:".
+  it("regenerates from recent thread contents and identifies the previous title", () => {
+    const result = buildThreadTitlePrompt({
+      message: `ASSISTANT:\nTraced the mobile feed regression to a lazy thread list`,
+      previousTitle: "Investigate reconnect regressions",
+    });
+
+    expect(result.prompt).toContain(
+      "Regenerate the title for an existing T3 Code thread so the user can recognize it weeks later.",
+    );
+    expect(result.prompt).toContain('The previous title was "Investigate reconnect regressions".');
+    expect(result.prompt).toContain("Agent messages:");
+    expect(result.prompt).toContain("Traced the mobile feed regression to a lazy thread list");
   });
 
   it("keeps the latest thread contents when regeneration context is truncated", () => {
