@@ -815,7 +815,10 @@ describe("CloudSessionService.create over the Nexi broker", () => {
           });
 
         const second = yield* dispatchFor("p2");
-        assert.include(second, '"project_repository":"https://nexplore.ghe.com/acme/polassist.git"');
+        assert.include(
+          second,
+          '"project_repository":"https://nexplore.ghe.com/acme/polassist.git"',
+        );
         assert.include(second, `"project_commit":"${"b".repeat(40)}"`);
         assert.notInclude(second, "acme/api");
         const third = yield* dispatchFor("p3");
