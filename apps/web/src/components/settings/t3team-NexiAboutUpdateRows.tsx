@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
+import { useNowMinute } from "~/hooks/useNowMinute";
 import { useDesktopUpdateState } from "~/state/desktopUpdate";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -21,16 +22,6 @@ const fail = (title: string, error: unknown) =>
     }),
   );
 
-/** The current time, refreshed so "5 min ago" does not stay frozen at what it said on first render. */
-function useNow(intervalMs: number) {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
-}
-
 /**
  * About's row for a build that updates from GHE: where updates come from, when GHE was last
  * asked, and what the updater is doing or why it cannot. Upstream's version row above it keeps its
@@ -40,11 +31,11 @@ export function NexiAboutUpdateRow() {
   const state = useDesktopUpdateState();
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
-  const now = useNow(30_000);
+  const nowMinute = Date.parse(useNowMinute());
   const status = getNexiAboutStatus(state);
   if (!status) return null;
 
-  const lastChecked = formatLastChecked(state?.checkedAt ?? null, now);
+  const lastChecked = formatLastChecked(state?.checkedAt ?? null, new Date(nowMinute));
   const run = (work: (bridge: NonNullable<typeof window.desktopBridge>) => Promise<unknown>) => {
     const bridge = window.desktopBridge;
     if (!bridge) return;
