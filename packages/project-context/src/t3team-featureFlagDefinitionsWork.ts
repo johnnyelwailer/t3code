@@ -3,6 +3,14 @@ import type { FeatureFlagDefinition } from "./t3team-featureFlagTypes.ts";
 /** Work surfaces: My Work, work items, integrations and cloud. A new flag's code default is the
  * conservative user-nightly value; dogfood builds turn the rest on through their preset. */
 export const WORK_FEATURE_FLAG_DEFINITIONS = {
+  PR_TREE_REVIEW_CONTROLS: {
+    group: "UI & rendering",
+    label: "File tree review controls",
+    description:
+      "Folder viewed checkboxes and changed-since-viewed markers in the PR Code file tree.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   MYWORK_DIGEST: {
     group: "My Work",
     label: "My Work digest",
