@@ -25,9 +25,9 @@ import { createRuntimeCommand } from "./runtime.ts";
 export type LocalThreadOverride = "settled" | "removed";
 
 /**
- * A local override only speaks for the snapshot it was made against. Once the environment answers
- * again (a new session on the same environment id) its snapshot has a higher sequence, the server
- * is authoritative, and the override ends: the thread is where the server says it is.
+ * An override only speaks for the snapshot it was made against: a newer snapshot (a new session
+ * on the same environment id) is authoritative and ends it. A resumed session at exactly the same
+ * sequence keeps it until its next event.
  */
 interface RecordedOverride {
   readonly override: LocalThreadOverride;
@@ -52,6 +52,11 @@ export function isEnvironmentUnreachable(input: {
   );
 }
 
+/**
+ * Reads whether an environment cannot be asked, from anywhere (menus, handlers). An atom nobody
+ * has mounted only ever answers its initial value, which would hide an ended session, so the set
+ * of unreachable environments is one derived atom that stays mounted for the app's lifetime.
+ */
 export function createEnvironmentUnreachableReader(input: {
   readonly registry: AtomRegistry.AtomRegistry;
   readonly catalogValueAtom: Atom.Atom<EnvironmentCatalogState>;
@@ -59,15 +64,21 @@ export function createEnvironmentUnreachableReader(input: {
     environmentId: EnvironmentId,
   ) => Atom.Atom<AsyncResult.AsyncResult<SupervisorConnectionState, unknown>>;
 }) {
+  const unreachableAtom = Atom.make((get) => {
+    const unreachable = new Set<EnvironmentId>();
+    for (const environmentId of get(input.catalogValueAtom).entries.keys()) {
+      const state = Option.getOrNull(AsyncResult.value(get(input.stateAtom(environmentId))));
+      if (isEnvironmentUnreachable({ inCatalog: true, state })) unreachable.add(environmentId);
+    }
+    return unreachable as ReadonlySet<EnvironmentId>;
+  }).pipe(Atom.withLabel("environment-unreachable-set"));
+  input.registry.mount(unreachableAtom);
   return (environmentId: EnvironmentId): boolean => {
     const catalog = input.registry.get(input.catalogValueAtom);
     if (!catalog.isReady) return false;
-    return isEnvironmentUnreachable({
-      inCatalog: catalog.entries.has(environmentId),
-      state: Option.getOrNull(
-        AsyncResult.value(input.registry.get(input.stateAtom(environmentId))),
-      ),
-    });
+    return (
+      !catalog.entries.has(environmentId) || input.registry.get(unreachableAtom).has(environmentId)
+    );
   };
 }
 

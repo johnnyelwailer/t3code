@@ -8,7 +8,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
 import {
   AVAILABLE_CONNECTION_STATE,
@@ -16,9 +16,11 @@ import {
   type SupervisorConnectionState,
 } from "../connection/model.ts";
 import * as Persistence from "../platform/persistence.ts";
+import type { EnvironmentCatalogState } from "./connections.ts";
 import { v2ShellSnapshot, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 import {
   applyLocalThreadOverrides,
+  createEnvironmentUnreachableReader,
   createLocalThreadOverrides,
   isEnvironmentUnreachable,
 } from "./t3team-localThreadOverrides.ts";
@@ -72,6 +74,48 @@ describe("isEnvironmentUnreachable", () => {
       expect(isEnvironmentUnreachable({ inCatalog: true, state: { ...BASE, phase } })).toBe(false);
     }
     expect(isEnvironmentUnreachable({ inCatalog: true, state: null })).toBe(false);
+  });
+});
+
+describe("createEnvironmentUnreachableReader", () => {
+  const ended = EnvironmentId.make("ended");
+  const live = EnvironmentId.make("live");
+  const make = (isReady: boolean) => {
+    const catalog = Atom.make({
+      isReady,
+      entries: new Map([
+        [ended, {}],
+        [live, {}],
+      ]),
+    } as unknown as EnvironmentCatalogState);
+    const registry = AtomRegistry.make();
+    const read = createEnvironmentUnreachableReader({
+      registry,
+      catalogValueAtom: catalog,
+      stateAtom: (environmentId) =>
+        Atom.make(
+          AsyncResult.success(
+            environmentId === ended
+              ? blocked("configuration", "session_ended")
+              : { ...BASE, phase: "connected" as const },
+          ),
+        ),
+    });
+    return { read };
+  };
+
+  it("reports an ended session unreachable and a live one reachable", () => {
+    const { read } = make(true);
+    expect(read(ended)).toBe(true);
+    expect(read(live)).toBe(false);
+  });
+
+  it("reports an environment missing from the catalog unreachable", () => {
+    expect(make(true).read(EnvironmentId.make("unknown"))).toBe(true);
+  });
+
+  it("answers reachable until the catalog is ready", () => {
+    expect(make(false).read(ended)).toBe(false);
   });
 });
 
