@@ -98,6 +98,8 @@ export type ChangeSetView = {
   readonly resolved: ReadonlyArray<ResolvedChangeSet>;
   /** Drafts an open change set owns, so the per-draft review does not offer them a second time. */
   readonly ownedDraftIds: ReadonlySet<string>;
+  /** Drafts whose verdict the server already holds (or whose set was discarded): session state can go. */
+  readonly settledDraftIds: ReadonlySet<string>;
 };
 
 const viewCache = new WeakMap<object, Map<string, ChangeSetView>>();
@@ -110,8 +112,19 @@ export function readChangeSetView(
   const cached = viewCache.get(artifacts)?.get(threadId);
   if (cached) return cached;
   const sets = readThreadChangeSets(artifacts, threadId);
+  const resolved = sets.map((changeSet) => resolveChangeSet(changeSet, artifacts, threadId));
   const view: ChangeSetView = {
-    resolved: sets.map((changeSet) => resolveChangeSet(changeSet, artifacts, threadId)),
+    resolved,
+    settledDraftIds: new Set(
+      resolved.flatMap(({ changeSet, operations }) =>
+        operations
+          .filter(
+            ({ state }) =>
+              changeSet.status === "discarded" || state === "applied" || state === "dismissed",
+          )
+          .map(({ operation }) => operation.draftId),
+      ),
+    ),
     ownedDraftIds: new Set(
       sets
         .filter(({ status }) => status === "draft")
@@ -130,6 +143,10 @@ export type IssueGroup = {
 };
 
 export const normalizeIssueKey = (key: string) => key.trim().toUpperCase();
+
+/** Two operations with the same slot write the same field of the same issue. */
+export const operationSlot = ({ draft, operation }: ResolvedOperation) =>
+  `${normalizeIssueKey(draft?.target.issueIdOrKey ?? operation.issueKey)}|${draft?.field ?? operation.field}`;
 
 /** Operations grouped by the issue the MEMBER draft targets, in order of first appearance. */
 export function groupByIssue(

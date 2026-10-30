@@ -116,9 +116,10 @@ describe("duplicate draft ids", () => {
     expect(operations.map((op) => op.state)).toEqual(["draft", "duplicate", "draft"]);
   });
 
-  it("is not rendered as a set at all when the payload repeats a draft id", () => {
+  it("still renders a stored set that repeats a draft id, the repeat shown as a duplicate", () => {
     const set = changeSetArtifact({ title: "t", members: [status, status] });
-    expect(readThreadChangeSets([set], FIXTURE_THREAD_ID)).toEqual([]);
+    const [view] = readChangeSetView([memberArtifact(status), set], FIXTURE_THREAD_ID).resolved;
+    expect(view?.operations.map((op) => op.state)).toEqual(["draft", "duplicate"]);
   });
 });
 

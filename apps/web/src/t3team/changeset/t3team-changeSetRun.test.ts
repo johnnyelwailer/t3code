@@ -8,6 +8,7 @@ import {
 } from "~/t3team/changeset/t3team-changeSetFixtures";
 import { readChangeSetView } from "~/t3team/changeset/t3team-changeSetModel";
 import { useChangeSetOutcomeStore } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
+import { RefusedOperationError } from "~/t3team/changeset/t3team-changeSetApply";
 import {
   recordOperationVerdict,
   runChangeSet,
@@ -23,7 +24,9 @@ const [set] = readChangeSetView(
   FIXTURE_THREAD_ID,
 ).resolved;
 
-const reset = () => useChangeSetOutcomeStore.setState({ outcomes: new Map(), running: new Map() });
+const reset = () =>
+  useChangeSetOutcomeStore.setState({ outcomes: new Map(), held: new Map(), running: new Map() });
+const holdOf = (id: string) => useChangeSetOutcomeStore.getState().held.get(id);
 const outcomeOf = (id: string) => useChangeSetOutcomeStore.getState().outcomes.get(id)?.status;
 
 function deps(overrides: Partial<ChangeSetDeps> = {}): ChangeSetDeps {
@@ -81,6 +84,80 @@ describe("runChangeSet", () => {
       rejected: [set!.operations[1]!],
     });
     expect([outcomeOf("a"), outcomeOf("b")]).toEqual(["unsupported", "dismissed"]);
+  });
+});
+
+describe("a held operation", () => {
+  const uncertain = (id: string) =>
+    useChangeSetOutcomeStore.getState().setOutcome({ draftId: id, status: "uncertain" });
+
+  it("stays held when dismissing it fails to record", async () => {
+    reset();
+    uncertain("b");
+    await recordOperationVerdict(
+      deps({ record: vi.fn().mockRejectedValue(new Error("offline")) }),
+      "b",
+      "dismissed",
+    );
+    expect(outcomeOf("b")).toBe("failed");
+    expect(holdOf("b")).toBe("uncertain");
+  });
+
+  it("stays held when a retry anyway is refused or fails again", async () => {
+    reset();
+    uncertain("b");
+    const op = set!.operations[1]!;
+    await runChangeSet({
+      changeSetId: "set-1",
+      deps: deps({
+        acceptOp: vi.fn().mockRejectedValue(new RefusedOperationError("wrong project")),
+      }),
+      approved: [op],
+      rejected: [],
+    });
+    expect([outcomeOf("b"), holdOf("b")]).toEqual(["refused", "uncertain"]);
+    await runChangeSet({
+      changeSetId: "set-1",
+      deps: deps({ acceptOp: vi.fn().mockRejectedValue(new Error("lost again")) }),
+      approved: [op],
+      rejected: [],
+    });
+    expect([outcomeOf("b"), holdOf("b")]).toEqual(["uncertain", "uncertain"]);
+  });
+
+  it("is released by a retry anyway that succeeds, or by a recorded verdict", async () => {
+    reset();
+    uncertain("b");
+    await runChangeSet({
+      changeSetId: "set-1",
+      deps: deps(),
+      approved: [set!.operations[1]!],
+      rejected: [],
+    });
+    expect([outcomeOf("b"), holdOf("b")]).toEqual(["applied", undefined]);
+    uncertain("a");
+    await recordOperationVerdict(deps(), "a", "dismissed");
+    expect(holdOf("a")).toBeUndefined();
+  });
+
+  it("holds a write that landed without a recorded verdict until the verdict records", async () => {
+    reset();
+    await runChangeSet({
+      changeSetId: "set-1",
+      deps: deps({ record: vi.fn().mockRejectedValue(new Error("offline")) }),
+      approved: [set!.operations[0]!],
+      rejected: [],
+    });
+    expect(holdOf("a")).toBe("unrecorded");
+    await recordOperationVerdict(deps(), "a", "applied");
+    expect(holdOf("a")).toBeUndefined();
+  });
+
+  it("is forgotten once the server holds the verdict", () => {
+    reset();
+    uncertain("b");
+    useChangeSetOutcomeStore.getState().prune(new Set(["b"]));
+    expect([outcomeOf("b"), holdOf("b")]).toEqual([undefined, undefined]);
   });
 });
 

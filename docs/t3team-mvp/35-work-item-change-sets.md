@@ -289,30 +289,36 @@ aside and the right-panel thread tab all show it. It follows the 3a contract:
 
 - Each `operations[].draftId` must be a `draft-mutation` artifact on the SAME thread, else the
   operation reads `missing` and is never sent. A `draftId` listed twice is `duplicate` after its first
-  use, and the contract schema rejects such a payload outright. Rows render from the member draft,
-  never from the set's display copies.
+  use: shown, never sent. The contract decodes such a payload leniently, so a stored set is never
+  dropped. Rows render from the member draft, never from the set's display copies.
 - `verifyDraftPayloadHash` runs before every write, in the apply sequencer (`t3team-changeSetApply.ts`,
   pure, injected `acceptOp` and `record`). A mismatch is refused with "Changed since proposed, not
   applied", and a `changed` operation is never counted as approved.
 - What the card may write is decided per operation (`t3team-changeSetPolicy.ts`). Status, assignee,
-  story points, link and subtask are pre-approved, shown with their values, and written through the
-  work item view's own field writes (`t3team-workItemFieldWrites.ts`). A comment shows its full text
-  and is NOT pre-approved: it needs an explicit tick. A description is never written from the card
+  story points and link removal are pre-approved, shown with their values, and written through the
+  work item view's own field writes (`t3team-workItemFieldWrites.ts`). Every write that creates
+  something (comment, subtask, link create) is NOT pre-approved: it needs an explicit tick and shows
+  "Creates a new item; check Jira first if a previous apply was interrupted". A comment also shows
+  its full text. A description is never written from the card
   (it has no current text to diff, so an accept would silently overwrite a concurrent Jira edit); it
   reads "Review and apply from the work item view". An estimate applies only when the draft says
   `estimateMode: "points"`; hours or an unstated mode is left to the item view.
 - Apply is available only when the thread's project source is Jira (`provider: "atlassian"`) with an
   account; otherwise the card says why and writes nothing. A draft whose target is not Jira, or whose
-  issue key is outside the bound project key, is refused. A subtask is created in the binding's
+  issue key is outside the bound project key, is refused; a binding without a Jira key is refused as a
+  whole (fail closed). A subtask is created in the binding's
   `externalProjectId`, the id the backlog's subtask form uses; without it the subtask is left to the
   item view.
 - Operations are independent: a failure stays on that operation and the run continues, except that
   later operations on the same field of the same issue are blocked. Only `draft` operations are
   sent, so a re-run resumes.
 - A write that is not repeatable (comment, subtask, link create) whose reply was lost is `uncertain`
-  ("may already be in Jira"), not `failed`, unless the server clearly rejected it (`BackendApiError`).
-  "Retry failed" skips it; each uncertain operation offers Retry anyway, Already applied (records the
-  verdict only) and Dismiss. Repeatable writes (status, assignee, points, link remove) retry normally.
+  ("may already be in Jira"), not `failed`, unless the server answered with a 4xx status (`BackendApiError.status`). A 5xx, a timeout, a network
+  error or anything unknown may have landed, so it is `uncertain`. "Retry failed" skips it, and so
+  does any later write to the same field of the same issue. Each uncertain operation offers Retry
+  anyway, Already applied (asks to confirm, then records the verdict only) and Dismiss. The hold is
+  separate from the outcome: only a recorded verdict, or a retry that succeeds, releases it; a
+  failed recording, a refusal or another failure keeps it. Repeatable writes (status, assignee, points, link remove) retry normally.
 - Verdicts are recorded with a bounded backoff. A write that landed but could not be recorded is
   `unrecorded`: the card warns "applied in Jira but could not be recorded", never sends it again, and
   offers Retry recording. Session outcomes live in a module store (`t3team-changeSetOutcomeStore.ts`)
@@ -326,8 +332,11 @@ aside and the right-panel thread tab all show it. It follows the 3a contract:
   render, leaves them to the per-draft review.
 
 Residual risks, accepted for now: the session store is memory only, so a hard reload while an
-operation is `unrecorded` or `uncertain` forgets it and the member is `draft` again; check Jira before
-applying again. There is no compare-and-set: two tabs or hosts can apply the same set, and the
+operation is `unrecorded` or `uncertain` forgets it and the member is `draft` again. Writes that
+create something are not pre-ticked for that reason, but a reviewer who ticks one after a reload can
+still create a duplicate; check Jira first. Follow-up: a server-side write-ahead marker (an `applying`
+status on the draft, recorded before the write) would let a reload see an interrupted apply. It
+widens the draft status contract and the status route, so it is not part of this slice. There is no compare-and-set: two tabs or hosts can apply the same set, and the
 cross-session guard is not built. A draft written to Jira is also not re-read, so the work item view
 shows it after its next fetch.
 

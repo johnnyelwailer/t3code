@@ -6,11 +6,14 @@ import {
   memberArtifact,
   type FixtureMember,
 } from "~/t3team/changeset/t3team-changeSetFixtures";
+import type { OperationOutcome } from "~/t3team/changeset/t3team-changeSetApply";
 import { readChangeSetView } from "~/t3team/changeset/t3team-changeSetModel";
+import { operationPolicy } from "~/t3team/changeset/t3team-changeSetPolicy";
 import {
   applyButtonLabel,
   decisionOf,
   partitionBySelection,
+  retryTargets,
   toggledDecision,
   type DecisionOverrides,
 } from "~/t3team/changeset/t3team-changeSetSelection";
@@ -46,6 +49,103 @@ describe("default decisions", () => {
     expect(decisionOf(changed!, none)).toBe("undecided");
     expect(toggledDecision(description!, none)).toBe("reject");
     expect(toggledDecision(changed!, none)).toBe("reject");
+  });
+});
+
+describe("defaults per kind", () => {
+  const kinds: ReadonlyArray<[string, FixtureMember, boolean]> = [
+    [
+      "status",
+      { id: "k1", issueKey: "N-1", field: "status", patch: { targetStatus: "Done" } },
+      true,
+    ],
+    [
+      "assignee",
+      { id: "k2", issueKey: "N-1", field: "assignee", patch: { assigneeAccountId: "u" } },
+      true,
+    ],
+    [
+      "story points",
+      {
+        id: "k3",
+        issueKey: "N-1",
+        field: "estimate",
+        patch: { estimateMode: "points", estimateValue: 3 },
+      },
+      true,
+    ],
+    [
+      "link removal",
+      { id: "k4", issueKey: "N-1", field: "link", patch: { action: "remove", linkId: "L1" } },
+      true,
+    ],
+    [
+      "link creation",
+      {
+        id: "k5",
+        issueKey: "N-1",
+        field: "link",
+        patch: { otherIssueIdOrKey: "N-2", linkTypeName: "Blocks", direction: "outward" },
+      },
+      false,
+    ],
+    [
+      "subtask creation",
+      { id: "k6", issueKey: "N-1", field: "subtask", patch: { summary: "Write tests" } },
+      false,
+    ],
+    ["comment", { id: "k7", issueKey: "N-1", field: "comment", patch: { body: "Hi" } }, false],
+  ];
+
+  it.each(kinds)("%s: pre-approved is %s", (_name, member, approved) => {
+    const [only] = readChangeSetView(
+      [memberArtifact(member), changeSetArtifact({ title: "t", members: [member] })],
+      FIXTURE_THREAD_ID,
+    ).resolved[0]!.operations;
+    expect(decisionOf(only!, none)).toBe(approved ? "approve" : "undecided");
+    expect(operationPolicy(only!.draft).hint !== undefined).toBe(!approved);
+  });
+});
+
+describe("retryTargets", () => {
+  const outcome = (status: OperationOutcome["status"]) => ({ draftId: "", status });
+
+  it("runs only failed and blocked approved operations, and not a failed one outside the selection", () => {
+    const ops = [status!, comment!];
+    const outcomes = new Map([
+      ["s", { ...outcome("failed"), draftId: "s" }],
+      ["c", { ...outcome("failed"), draftId: "c" }],
+    ]);
+    const selection = partitionBySelection(ops, none);
+    const targets = retryTargets(selection, ops, outcomes, new Set());
+    expect(targets.approved.map((op) => op.operation.draftId)).toEqual(["s"]);
+  });
+
+  it("leaves an operation blocked behind a held one on the same field", () => {
+    const sameSlot = readChangeSetView(
+      [
+        ...["h", "b"].map((id) =>
+          memberArtifact({ id, issueKey: "N-1", field: "status", patch: { targetStatus: id } }),
+        ),
+        changeSetArtifact({
+          title: "t",
+          members: ["h", "b"].map((id) => ({
+            id,
+            issueKey: "N-1",
+            field: "status" as const,
+            patch: { targetStatus: id },
+          })),
+        }),
+      ],
+      FIXTURE_THREAD_ID,
+    ).resolved[0]!.operations;
+    const outcomes = new Map<string, OperationOutcome>([
+      ["h", { draftId: "h", status: "uncertain" }],
+      ["b", { draftId: "b", status: "blocked" }],
+    ]);
+    const held = new Set(["h"]);
+    const selection = partitionBySelection(sameSlot, none, held);
+    expect(retryTargets(selection, sameSlot, outcomes, held).approved).toEqual([]);
   });
 });
 

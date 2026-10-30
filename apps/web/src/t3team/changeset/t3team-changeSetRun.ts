@@ -59,6 +59,7 @@ export async function recordOperationVerdict(
     await recordWithRetry(deps, draftId, verdict);
     store().setOutcome({ draftId, status: verdict });
   } catch (cause) {
+    // A held operation stays held: only a recorded verdict releases it (see the outcome store).
     const message = cause instanceof Error ? cause.message : String(cause);
     store().setOutcome(
       verdict === "applied"

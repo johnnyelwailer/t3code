@@ -1,10 +1,7 @@
 import type { T3TeamDraftMutationPayload } from "@t3tools/contracts";
 import { verifyDraftPayloadHash } from "@t3tools/shared/t3team-workItemChangeSetHash";
 
-import {
-  normalizeIssueKey,
-  type ResolvedOperation,
-} from "~/t3team/changeset/t3team-changeSetModel";
+import { operationSlot, type ResolvedOperation } from "~/t3team/changeset/t3team-changeSetModel";
 import { operationPolicy } from "~/t3team/changeset/t3team-changeSetPolicy";
 
 export const CHANGED_SINCE_PROPOSED = "Changed since proposed, not applied.";
@@ -108,7 +105,7 @@ export async function applyChangeSetOperations(
       settle({ draftId, status: "refused", message: CHANGED_SINCE_PROPOSED });
       continue;
     }
-    const slot = `${normalizeIssueKey(draft.target.issueIdOrKey)}|${draft.field}`;
+    const slot = operationSlot(resolved);
     if (stopped.has(slot)) {
       settle({ draftId, status: "blocked", message: "An earlier change to this field failed." });
       continue;

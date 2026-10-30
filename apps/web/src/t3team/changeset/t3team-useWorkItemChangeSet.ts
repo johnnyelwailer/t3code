@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import type { OperationOutcome } from "~/t3team/changeset/t3team-changeSetApply";
 import {
@@ -6,7 +7,10 @@ import {
   type ResolvedChangeSet,
   type ResolvedOperation,
 } from "~/t3team/changeset/t3team-changeSetModel";
-import { useChangeSetOutcomeStore } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
+import {
+  useChangeSetOutcomeStore,
+  type HoldKind,
+} from "~/t3team/changeset/t3team-changeSetOutcomeStore";
 import {
   recordOperationVerdict,
   runChangeSet,
@@ -15,6 +19,7 @@ import {
 import {
   decisionOf,
   partitionBySelection,
+  retryTargets,
   toggledDecision,
   type Decision,
 } from "~/t3team/changeset/t3team-changeSetSelection";
@@ -28,9 +33,21 @@ const isStatus = (
 export function useWorkItemChangeSet(resolved: ResolvedChangeSet, deps: ChangeSetDeps) {
   const [overrides, setOverrides] = useState<ReadonlyMap<string, Decision>>(() => new Map());
   const [discardError, setDiscardError] = useState<string | null>(null);
-  const outcomes = useChangeSetOutcomeStore((state) => state.outcomes);
   const progress = useChangeSetOutcomeStore((state) => state.running.get(resolved.changeSet.id));
   const changeSetId = resolved.changeSet.id;
+  // Only this set's entries are selected, so a result in another card does not re-render this one.
+  const memberIds = resolved.operations.map((op) => op.operation.draftId);
+  const slice = useChangeSetOutcomeStore(
+    useShallow((state) => memberIds.flatMap((id) => [state.outcomes.get(id), state.held.get(id)])),
+  );
+  const outcomes = new Map<string, OperationOutcome>();
+  const held = new Map<string, HoldKind>();
+  memberIds.forEach((id, index) => {
+    const outcome = slice[index * 2] as OperationOutcome | undefined;
+    const hold = slice[index * 2 + 1] as HoldKind | undefined;
+    if (outcome) outcomes.set(id, outcome);
+    if (hold) held.set(id, hold);
+  });
 
   // This session's verdict counts before the artifact stream catches up: nothing is sent twice.
   const operations = resolved.operations.map((op): ResolvedOperation => {
@@ -39,15 +56,8 @@ export function useWorkItemChangeSet(resolved: ResolvedChangeSet, deps: ChangeSe
       ? { ...op, state: outcome?.status === "applied" ? "applied" : "dismissed" }
       : op;
   });
-  const outcomeOf = (op: ResolvedOperation) => outcomes.get(op.operation.draftId);
-  const held = new Set(
-    operations
-      .filter((op) => isStatus(outcomeOf(op), "uncertain", "unrecorded"))
-      .map((op) => op.operation.draftId),
-  );
-  const selection = partitionBySelection(operations, overrides, held);
-  const retryable = operations.filter((op) => isStatus(outcomeOf(op), "failed", "blocked"));
-  const retryIds = new Set(retryable.map((op) => op.operation.draftId));
+  const selection = partitionBySelection(operations, overrides, new Set(held.keys()));
+  const retry = retryTargets(selection, operations, outcomes, new Set(held.keys()));
   const run = (
     approved: ReadonlyArray<ResolvedOperation>,
     rejected: ReadonlyArray<ResolvedOperation>,
@@ -63,9 +73,10 @@ export function useWorkItemChangeSet(resolved: ResolvedChangeSet, deps: ChangeSe
     decisionOf: (op: ResolvedOperation) => decisionOf(op, overrides),
     approvedCount: selection.approved.length,
     dismissCount: selection.rejected.length,
-    failedCount: retryable.length,
-    uncertainCount: operations.filter((op) => isStatus(outcomeOf(op), "uncertain")).length,
-    unrecordedCount: operations.filter((op) => isStatus(outcomeOf(op), "unrecorded")).length,
+    failedCount: retry.approved.length + retry.rejected.length,
+    held,
+    uncertainCount: [...held.values()].filter((kind) => kind === "uncertain").length,
+    unrecordedCount: [...held.values()].filter((kind) => kind === "unrecorded").length,
     unavailableReason: deps.acceptOp ? undefined : deps.unavailableReason,
     discardError,
     toggle: (op: ResolvedOperation) =>
@@ -73,11 +84,7 @@ export function useWorkItemChangeSet(resolved: ResolvedChangeSet, deps: ChangeSe
         new Map(current).set(op.operation.draftId, toggledDecision(op, current)),
       ),
     apply: () => run(selection.approved, selection.rejected),
-    retryFailed: () =>
-      run(
-        selection.approved.filter((op) => retryIds.has(op.operation.draftId)),
-        [],
-      ),
+    retryFailed: () => run(retry.approved, retry.rejected),
     retryAnyway: (draftId: string) => {
       const op = find(draftId);
       return op ? run([op], []) : Promise.resolve();

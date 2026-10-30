@@ -4,6 +4,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import type { OperationOutcome } from "~/t3team/changeset/t3team-changeSetApply";
+import type { HoldKind } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
 import type { ResolvedOperation } from "~/t3team/changeset/t3team-changeSetModel";
 import {
   describeOperation,
@@ -22,6 +23,7 @@ export function WorkItemChangeSetOperationRow({
   resolved,
   decision,
   outcome,
+  hold,
   disabled,
   onToggle,
   onRetryAnyway,
@@ -31,6 +33,7 @@ export function WorkItemChangeSetOperationRow({
   readonly resolved: ResolvedOperation;
   readonly decision: Decision;
   readonly outcome: OperationOutcome | undefined;
+  readonly hold: HoldKind | undefined;
   readonly disabled: boolean;
   readonly onToggle: () => void;
   readonly onRetryAnyway: () => void;
@@ -44,13 +47,14 @@ export function WorkItemChangeSetOperationRow({
     ? describeOperation(draft)
     : { fieldLabel: operation.field, summary: operation.summary };
   const policy = operationPolicy(draft);
-  const held = outcome?.status === "uncertain" || outcome?.status === "unrecorded";
-  const approvable = isApprovable(resolved) && !held;
-  const dismissable = (state === "draft" || state === "changed") && !approvable && !held;
+  const approvable = isApprovable(resolved) && hold === undefined;
+  const dismissable =
+    (state === "draft" || state === "changed") && !approvable && hold === undefined;
   const badge = operationBadge(state, outcome, decision);
   const label = `${view.fieldLabel} for ${draft?.target.issueIdOrKey ?? operation.issueKey}`;
   const note =
-    outcome?.message ?? (state === "draft" && !policy.applicable ? policy.reason : undefined);
+    outcome?.message ??
+    (state === "draft" ? (policy.applicable ? policy.hint : policy.reason) : undefined);
   const { body } = view;
 
   return (
@@ -104,9 +108,9 @@ export function WorkItemChangeSetOperationRow({
             <p className="whitespace-pre-wrap pb-2 pl-18 text-xs text-foreground">{body}</p>
           ) : null}
           {note ? <p className="pb-2 pl-18 text-2xs text-muted-foreground">{note}</p> : null}
-          {outcome ? (
+          {hold ? (
             <WorkItemChangeSetOperationActions
-              status={outcome.status}
+              hold={hold}
               disabled={disabled}
               onRetryAnyway={onRetryAnyway}
               onMarkApplied={onMarkApplied}

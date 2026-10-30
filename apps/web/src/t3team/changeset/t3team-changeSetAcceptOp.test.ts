@@ -24,7 +24,7 @@ const draft = (
     commitPolicy: { requiresUserApproval: true, commitSurface: "t3team-ui" },
   }) as unknown as T3TeamDraftMutationPayload;
 
-function setup(extra: { externalProjectId?: string; projectKey?: string } = {}) {
+function setup(extra: { externalProjectId?: string; projectKey?: string | undefined } = {}) {
   const backend = {
     updateIssueStatus: vi.fn(async () => ({ status: "Done" })),
     updateIssueAssignee: vi.fn(async () => {}),
@@ -120,6 +120,14 @@ describe("createChangeSetAcceptOp", () => {
   it("will not guess at a patch no reader understands", async () => {
     const { backend, accept } = setup();
     await expect(accept(draft("status", {}))).rejects.toBeInstanceOf(UnsupportedOperationError);
+    expect(backend.updateIssueStatus).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the project key is unknown", async () => {
+    const { backend, accept } = setup({ projectKey: undefined });
+    await expect(accept(draft("status", { targetStatus: "Done" }))).rejects.toBeInstanceOf(
+      RefusedOperationError,
+    );
     expect(backend.updateIssueStatus).not.toHaveBeenCalled();
   });
 

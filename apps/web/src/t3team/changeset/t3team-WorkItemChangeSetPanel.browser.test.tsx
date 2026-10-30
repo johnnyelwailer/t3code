@@ -7,9 +7,10 @@ import {
   memberArtifact,
   type FixtureMember,
 } from "~/t3team/changeset/t3team-changeSetFixtures";
+import { useChangeSetOutcomeStore } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
 import { WorkItemChangeSetPanel } from "~/t3team/changeset/t3team-WorkItemChangeSetPanel";
 
-import { render } from "../../../test/render";
+import { act, render } from "../../../test/render";
 
 const members: ReadonlyArray<FixtureMember> = [
   { id: "jira-draft:a", issueKey: "NXAI-1", field: "status", patch: { targetStatus: "Done" } },
@@ -32,7 +33,9 @@ const fullSet = [
   changeSetArtifact({ title: "Sprint cleanup", members }),
 ];
 
+// The outcome store is module state; every test starts from an empty one.
 function setup(artifacts = fullSet) {
+  useChangeSetOutcomeStore.setState({ outcomes: new Map(), held: new Map(), running: new Map() });
   const deps = {
     acceptOp: vi.fn(async (_draft: T3TeamDraftMutationPayload) => {}),
     record: vi.fn(async () => {}),
@@ -55,6 +58,15 @@ describe("WorkItemChangeSetPanel", () => {
       "jira-draft:b",
       "jira-draft:c",
     ]);
+  });
+
+  it("starts every test with an empty outcome store", async () => {
+    const first = setup();
+    await using screen = await render(first.ui, { router: false }); // no links or navigation here
+    await screen.getByRole("button", { name: /Apply 3$/ }).click();
+    await vi.waitFor(() => expect(useChangeSetOutcomeStore.getState().outcomes.size).toBe(3));
+    setup();
+    expect(useChangeSetOutcomeStore.getState().outcomes.size).toBe(0);
   });
 
   it("dismisses a rejected operation instead of applying it", async () => {
@@ -96,7 +108,9 @@ describe("WorkItemChangeSetPanel", () => {
     ]);
     await using screen = await render(ui, { router: false }); // no links or navigation here
     await expect.element(screen.getByText("Ship it on Friday.")).toBeVisible();
-    await screen.getByRole("checkbox", { name: "Approve proposed Comment for NXAI-2" }).click();
+    // Unstyled in this runner, an unchecked box has no size to click: toggle it through the DOM.
+    const tick = screen.getByRole("checkbox", { name: "Approve proposed Comment for NXAI-2" });
+    await act(() => (tick.element() as HTMLElement).click());
     await screen.getByRole("button", { name: /Apply 4$/ }).click();
     await vi.waitFor(() => expect(deps.acceptOp).toHaveBeenCalledTimes(4));
   });

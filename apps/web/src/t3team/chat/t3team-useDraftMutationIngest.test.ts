@@ -7,6 +7,7 @@ import {
   memberArtifact,
   type FixtureMember,
 } from "~/t3team/changeset/t3team-changeSetFixtures";
+import { useChangeSetOutcomeStore } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 
 import { collectT3TeamDraftMutations, ingestThreadDrafts } from "./t3team-useDraftMutationIngest";
@@ -153,5 +154,23 @@ describe("ingestThreadDrafts with a change set", () => {
     reset();
     ingest("discarded");
     expect(stored()).toEqual(["jira-draft:cs1"]);
+  });
+
+  it("forgets session results for operations the server already holds a verdict for", () => {
+    reset();
+    useChangeSetOutcomeStore.setState({
+      outcomes: new Map([["jira-draft:cs1", { draftId: "jira-draft:cs1", status: "uncertain" }]]),
+      held: new Map([["jira-draft:cs1", "uncertain"]]),
+      running: new Map(),
+    });
+    ingestThreadDrafts({
+      threadId: FIXTURE_THREAD_ID,
+      artifacts: [
+        memberArtifact({ ...member, status: "applied" }),
+        changeSetArtifact({ title: "t", members: [member] }),
+      ],
+    });
+    expect(useChangeSetOutcomeStore.getState().held.size).toBe(0);
+    expect(useChangeSetOutcomeStore.getState().outcomes.size).toBe(0);
   });
 });

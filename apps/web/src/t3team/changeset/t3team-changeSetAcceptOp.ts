@@ -40,10 +40,10 @@ export function createChangeSetAcceptOp(input: {
     if (payload.target.provider !== "jira") {
       throw new RefusedOperationError(`${issueKey} is not a Jira work item.`);
     }
-    if (
-      input.projectKey &&
-      !normalizeIssueKey(issueKey).startsWith(`${normalizeIssueKey(input.projectKey)}-`)
-    ) {
+    if (!input.projectKey) {
+      throw new RefusedOperationError("The project key is unknown. Apply from the work item view.");
+    }
+    if (!normalizeIssueKey(issueKey).startsWith(`${normalizeIssueKey(input.projectKey)}-`)) {
       throw new RefusedOperationError(`${issueKey} is outside project ${input.projectKey}.`);
     }
     const policy = operationPolicy(payload);

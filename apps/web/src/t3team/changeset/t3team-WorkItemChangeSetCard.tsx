@@ -77,6 +77,7 @@ export function WorkItemChangeSetCard({
                   resolved={operation}
                   decision={set.decisionOf(operation)}
                   outcome={set.outcomes.get(draftId)}
+                  hold={set.held.get(draftId)}
                   disabled={busy}
                   onToggle={() => set.toggle(operation)}
                   onRetryAnyway={() => void set.retryAnyway(draftId)}

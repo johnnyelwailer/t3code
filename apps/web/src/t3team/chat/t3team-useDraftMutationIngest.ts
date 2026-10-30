@@ -22,6 +22,7 @@ import {
   type T3TeamThreadArtifact,
 } from "@t3tools/contracts";
 
+import { useChangeSetOutcomeStore } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
 import { readChangeSetView } from "~/t3team/changeset/t3team-changeSetModel";
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
@@ -91,7 +92,9 @@ export function ingestThreadDrafts(input: {
   readonly artifacts: ReadonlyArray<T3TeamThreadArtifact>;
 }): void {
   const { drafts, upsertDrafts, removeDraft } = useT3TeamDraftMutationStore.getState();
-  const { ownedDraftIds } = readChangeSetView(input.artifacts, input.threadId);
+  const { ownedDraftIds, settledDraftIds } = readChangeSetView(input.artifacts, input.threadId);
+  // Session results of operations the server now holds a verdict for are no longer needed.
+  useChangeSetOutcomeStore.getState().prune(settledDraftIds);
   // A member ingested before its change set arrived leaves the per-draft review.
   for (const draft of drafts) {
     if (ownedDraftIds.has(draft.id)) removeDraft(draft.id);

@@ -1,4 +1,5 @@
-import type { ResolvedOperation } from "~/t3team/changeset/t3team-changeSetModel";
+import type { OperationOutcome } from "~/t3team/changeset/t3team-changeSetApply";
+import { operationSlot, type ResolvedOperation } from "~/t3team/changeset/t3team-changeSetModel";
 import { operationPolicy } from "~/t3team/changeset/t3team-changeSetPolicy";
 
 export type Decision = "approve" | "reject" | "undecided";
@@ -59,5 +60,29 @@ export function partitionBySelection(
     rejected: free.filter(
       (resolved) => isOpen(resolved) && decisionOf(resolved, overrides) === "reject",
     ),
+  };
+}
+
+/**
+ * What "Retry failed" will actually run: approved operations that failed or were blocked, and
+ * dismissals that failed. A blocked operation behind a held one on the same field stays blocked.
+ */
+export function retryTargets(
+  selection: ReturnType<typeof partitionBySelection>,
+  operations: ReadonlyArray<ResolvedOperation>,
+  outcomes: ReadonlyMap<string, OperationOutcome>,
+  held: ReadonlySet<string>,
+) {
+  const statusOf = ({ operation }: ResolvedOperation) => outcomes.get(operation.draftId)?.status;
+  const heldSlots = new Set(
+    operations.filter(({ operation }) => held.has(operation.draftId)).map(operationSlot),
+  );
+  return {
+    approved: selection.approved.filter(
+      (op) =>
+        statusOf(op) === "failed" ||
+        (statusOf(op) === "blocked" && !heldSlots.has(operationSlot(op))),
+    ),
+    rejected: selection.rejected.filter((op) => statusOf(op) === "failed"),
   };
 }

@@ -35,11 +35,6 @@ export const WorkItemChangeSet = Schema.Struct({
   operations: Schema.Array(WorkItemChangeSetOperation).check(
     Schema.isMinLength(1),
     Schema.isMaxLength(WORK_ITEM_CHANGE_SET_MAX_OPERATIONS),
-    Schema.makeFilter(
-      (operations: ReadonlyArray<WorkItemChangeSetOperation>) =>
-        new Set(operations.map(({ draftId }) => draftId)).size === operations.length ||
-        "Each operation needs its own draftId.",
-    ),
   ),
 });
 export type WorkItemChangeSet = typeof WorkItemChangeSet.Type;

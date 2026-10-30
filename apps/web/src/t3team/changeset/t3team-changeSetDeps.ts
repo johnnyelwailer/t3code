@@ -11,6 +11,16 @@ export type ChangeSetProjectSource = Pick<
   "provider" | "accountId" | "externalProjectId" | "externalProjectKey"
 >;
 
+/**
+ * Only a 4xx answer says the write did not happen. A 5xx (a gateway timing out after Jira stored it),
+ * a network error, an abort or anything unknown may have landed.
+ */
+const isClientRejection = (cause: unknown): boolean =>
+  cause instanceof BackendApiError &&
+  cause.status !== undefined &&
+  cause.status >= 400 &&
+  cause.status < 500;
+
 /** Apply needs a Jira-bound project with a resolvable account; otherwise the reason is shown. */
 function applyAccess(
   source: ChangeSetProjectSource | undefined,
@@ -20,6 +30,12 @@ function applyAccess(
     return {
       ok: false,
       reason: "This thread's project is not connected to Jira, so changes cannot be applied.",
+    } as const;
+  }
+  if (!source.externalProjectKey) {
+    return {
+      ok: false,
+      reason: "This project's Jira key is unknown, so changes cannot be applied from here.",
     } as const;
   }
   if (!source.accountId || !atlassian) {
@@ -56,6 +72,6 @@ export function buildChangeSetDeps(input: {
       : { unavailableReason: access.reason }),
     record: (draftId, status) => post({ draftId, status }),
     recordDiscard: (changeSetId) => post({ changeSetId, status: "discarded" }),
-    isClearRejection: (cause) => cause instanceof BackendApiError,
+    isClearRejection: isClientRejection,
   };
 }

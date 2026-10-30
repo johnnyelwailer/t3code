@@ -11,15 +11,18 @@ import {
 
 export const APPLY_FROM_ITEM = "Apply this one from the work item view.";
 export const REVIEW_IN_ITEM = "Review and apply from the work item view.";
+const NEW_ITEM_HINT = "Creates a new item; check Jira first if a previous apply was interrupted.";
 
 export type OperationPolicy = {
   /** False when the card has no safe way to write it: it only shows it, and can dismiss it. */
   readonly applicable: boolean;
-  /** Pre-ticked. Prose is not: the reader ticks it after reading the text. */
+  /** Pre-ticked. A write that creates something is not: the reader ticks it on purpose. */
   readonly defaultApproved: boolean;
   /** A write whose reply was lost can be sent again without a second effect. */
   readonly repeatable: boolean;
   readonly reason?: string;
+  /** One line shown on an applicable operation that creates a new item. */
+  readonly hint?: string;
 };
 
 const notApplicable = (reason: string): OperationPolicy => ({
@@ -30,7 +33,11 @@ const notApplicable = (reason: string): OperationPolicy => ({
 });
 
 const scalar = (applicable: boolean, repeatable: boolean): OperationPolicy =>
-  applicable ? { applicable, defaultApproved: true, repeatable } : notApplicable(APPLY_FROM_ITEM);
+  !applicable
+    ? notApplicable(APPLY_FROM_ITEM)
+    : repeatable
+      ? { applicable, defaultApproved: true, repeatable }
+      : { applicable, defaultApproved: false, repeatable, hint: NEW_ITEM_HINT };
 
 /** What the card may do with one member draft, read from its own patch. */
 export function operationPolicy(payload: T3TeamDraftMutationPayload | undefined): OperationPolicy {
@@ -40,7 +47,7 @@ export function operationPolicy(payload: T3TeamDraftMutationPayload | undefined)
     case "description":
       return notApplicable(REVIEW_IN_ITEM);
     case "comment":
-      return { applicable: true, defaultApproved: false, repeatable: false };
+      return { applicable: true, defaultApproved: false, repeatable: false, hint: NEW_ITEM_HINT };
     case "status":
       return scalar(readStatusDraftPatch(draft) !== undefined, true);
     case "assignee":

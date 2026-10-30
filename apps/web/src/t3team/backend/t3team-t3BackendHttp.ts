@@ -54,11 +54,14 @@ export const JIRA_SESSION_EXPIRED_CODE = "jira_session_expired";
  */
 export class BackendApiError extends Error {
   readonly code?: string | undefined;
+  /** The HTTP status of the response; absent for errors raised without one. */
+  readonly status?: number | undefined;
 
-  constructor(message: string, code?: string) {
+  constructor(message: string, code?: string, status?: number) {
     super(message);
     this.name = "BackendApiError";
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -141,7 +144,7 @@ async function requestJson<TResponse>(
         : `Request to ${url.pathname} failed with ${response.status}`;
     const code =
       errorPayload && typeof errorPayload.code === "string" ? errorPayload.code : undefined;
-    throw new BackendApiError(errorMessage, code);
+    throw new BackendApiError(errorMessage, code, response.status);
   }
 
   if (!payload) {

@@ -33,8 +33,13 @@ describe("buildChangeSetDeps", () => {
     ["no project source", undefined, /not connected to Jira/],
     [
       "a Jira project without an account",
-      { provider: "atlassian" } as const,
+      { provider: "atlassian", externalProjectKey: "NXAI" } as const,
       /Connect the Atlassian account/,
+    ],
+    [
+      "a Jira project whose key is unknown",
+      { provider: "atlassian", accountId: "acct" } as const,
+      /Jira key is unknown/,
     ],
   ])("cannot apply for %s, and says why", (_name, source, reason) => {
     const deps = build(source);
@@ -52,10 +57,26 @@ describe("buildChangeSetDeps", () => {
     expect(deps.acceptOp).toBeUndefined();
   });
 
-  it("tells a server answer from a lost reply, and will not record without a server", async () => {
-    const deps = build(jira);
-    expect(deps.isClearRejection?.(new BackendApiError("no"))).toBe(true);
-    expect(deps.isClearRejection?.(new Error("Failed to reach backend"))).toBe(false);
-    await expect(deps.record("d", "applied")).rejects.toThrow(/No server connection/);
+  it.each([400, 403, 404, 409, 422])("treats a %i answer as a clear rejection", (status) => {
+    expect(build(jira).isClearRejection?.(new BackendApiError("no", undefined, status))).toBe(true);
+  });
+
+  it.each([500, 502, 503, 504])("treats a %i answer as possibly applied", (status) => {
+    expect(build(jira).isClearRejection?.(new BackendApiError("gateway", undefined, status))).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    ["a timeout", new Error("Backend request timed out after 15000ms")],
+    ["a network error", new TypeError("Failed to fetch")],
+    ["an answer without a status", new BackendApiError("no")],
+    ["something unknown", "boom"],
+  ])("treats %s as possibly applied", (_name, cause) => {
+    expect(build(jira).isClearRejection?.(cause)).toBe(false);
+  });
+
+  it("will not record without a server", async () => {
+    await expect(build(jira).record("d", "applied")).rejects.toThrow(/No server connection/);
   });
 });
