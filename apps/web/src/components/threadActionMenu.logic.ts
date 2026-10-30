@@ -70,6 +70,8 @@ export function buildDraftActionMenuItems(options: {
 
 export interface ThreadActionMenuState {
   readonly canOperate: boolean;
+  /** The environment cannot answer, so settle and delete stay enabled and run on this device. */
+  readonly environmentUnreachable?: boolean;
   readonly canFind?: boolean;
   readonly branch: string | null;
   readonly projectFilter: {
@@ -258,7 +260,8 @@ export function buildThreadActionMenuItems(
   return state.canOperate
     ? items
     : items.map((item) =>
-        threadActionRequiresOperate(item.id)
+        threadActionRequiresOperate(item.id) &&
+        !(state.environmentUnreachable && (item.id === "settle" || item.id === "delete"))
           ? {
               ...item,
               disabled: true,

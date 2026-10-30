@@ -74,4 +74,29 @@ describe("buildThreadActionMenuItems", () => {
     expect(items.find((item) => item.id === "archive")?.disabled).toBe(true);
     expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
   });
+
+  it("keeps settle and delete enabled when the environment cannot be reached (ended cloud session)", () => {
+    const items = buildThreadActionMenuItems({
+      ...baseState,
+      canOperate: false,
+      environmentUnreachable: true,
+    });
+    const enabled = (id: string) => items.find((item) => item.id === id)?.disabled !== true;
+    expect(enabled("settle")).toBe(true);
+    expect(enabled("delete")).toBe(true);
+    // Everything else still needs the remote environment.
+    for (const id of ["pin", "rename", "archive", "auto-settle"]) {
+      expect(enabled(id)).toBe(false);
+    }
+  });
+
+  it("still disables settle and delete without permission on a reachable environment", () => {
+    const items = buildThreadActionMenuItems({
+      ...baseState,
+      canOperate: false,
+      environmentUnreachable: false,
+    });
+    expect(items.find((item) => item.id === "settle")?.disabled).toBe(true);
+    expect(items.find((item) => item.id === "delete")?.disabled).toBe(true);
+  });
 });

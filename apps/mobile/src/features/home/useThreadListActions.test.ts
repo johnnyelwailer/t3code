@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   failedAction: null as string | null,
   archivedRefreshes: [] as string[],
   scopes: new Map<string, Set<string>>(),
+  unreachable: new Set<string>(),
   shells: [] as EnvironmentThreadShell[],
   requests: [] as {
     action: string;
@@ -59,6 +60,9 @@ vi.mock("../archive/useArchivedThreadSnapshots", () => ({
 vi.mock("../../state/session", () => ({
   readEnvironmentScope: (environmentId: string, scope: string) =>
     state.scopes.get(environmentId)?.has(scope) === true,
+}));
+vi.mock("../../state/t3team-localThreadActions", () => ({
+  readEnvironmentUnreachable: (environmentId: string) => state.unreachable.has(environmentId),
 }));
 vi.mock("../../state/server", () => ({
   environmentServerConfigsAtom: "server-configs",
@@ -131,6 +135,7 @@ vi.mock("../../state/threads", () => ({
       "unpin",
       "reorderPin",
       "updateMetadata",
+      "localOverride",
     ].map((action) => [
       action,
       async (request: {
@@ -138,6 +143,7 @@ vi.mock("../../state/threads", () => ({
         input: { threadId: string; orderKey?: string };
       }) => {
         state.requests.push({ action, ...request });
+        if (action === "localOverride") return AsyncResult.success(undefined);
         if (!state.scopes.get(request.environmentId)?.has(AuthOrchestrationOperateScope)) {
           return AsyncResult.failure(Cause.fail(new Error("Thread operation denied")));
         }
@@ -183,6 +189,7 @@ beforeEach(() => {
   state.archivedRefreshes = [];
   state.pendingOrder = null;
   state.dropBusy = false;
+  state.unreachable = new Set();
   state.scopes = new Map([
     [primaryEnvironmentId, new Set([AuthOrchestrationOperateScope])],
     [otherEnvironmentId, new Set<string>()],
@@ -229,6 +236,60 @@ describe("thread list operation permissions", () => {
     state.scopes.get(primaryEnvironmentId)!.clear();
 
     await confirm!();
+
+    expect(state.requests).toEqual([]);
+  });
+});
+
+describe("threads of an environment that cannot be reached (ended cloud session)", () => {
+  const ended = () => makeThread({ environmentId: otherEnvironmentId });
+
+  it("settles locally without permission, the remote command or an undo", async () => {
+    state.unreachable.add(otherEnvironmentId);
+    const thread = ended();
+
+    expect(await useThreadListActions().settleThread(thread)).toBe(true);
+
+    expect(state.requests).toEqual([
+      {
+        action: "localOverride",
+        environmentId: otherEnvironmentId,
+        input: { threadId: thread.id, override: "settled" },
+      },
+    ]);
+    expect(state.alerts).toEqual([]);
+    expect(readThreadUndoNotice()).toBeNull();
+  });
+
+  it("deletes locally without permission or the remote command", async () => {
+    state.unreachable.add(otherEnvironmentId);
+    const thread = ended();
+
+    useThreadListActions().confirmDeleteThread(thread);
+    await state.dialogs[0]!.onConfirm();
+
+    expect(state.requests).toEqual([
+      {
+        action: "localOverride",
+        environmentId: otherEnvironmentId,
+        input: { threadId: thread.id, override: "removed" },
+      },
+    ]);
+    expect(state.alerts).toEqual([]);
+  });
+
+  it("keeps every other action gated", async () => {
+    state.unreachable.add(otherEnvironmentId);
+
+    await useThreadListActions().archiveThread(ended());
+    await useThreadListActions().pinThread(ended());
+
+    expect(state.requests).toEqual([]);
+  });
+
+  it("still refuses settle and delete without permission on a reachable environment", async () => {
+    await useThreadListActions().settleThread(ended());
+    useThreadListActions().confirmDeleteThread(ended());
 
     expect(state.requests).toEqual([]);
   });

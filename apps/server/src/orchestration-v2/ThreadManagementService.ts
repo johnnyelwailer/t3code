@@ -1019,7 +1019,8 @@ const make = Effect.gen(function* () {
     "orchestrationV2.threadManagement.settleThread",
   )(function* (input) {
     const shell = input.byOwnAgent ? yield* orchestrator.getThreadShell(input.threadId) : null;
-    if (shell != null && shell.activeRunId !== null) {
+    // A pinned thread is not deferred: the settle guard refuses it now, with the reason.
+    if (shell != null && shell.activeRunId !== null && shell.pinnedAt == null) {
       yield* settleAfterRun({
         projectId: shell.projectId,
         threadId: shell.id,
