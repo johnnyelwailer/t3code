@@ -40,6 +40,12 @@ import { SourceControlRepositoryService } from "../sourceControl/SourceControlRe
 import { T3TeamAskUserWriter } from "../mcp/toolkits/t3team/t3team-askUserWriter.ts";
 import { T3TeamToolkit } from "../mcp/toolkits/t3team/tools.ts";
 import {
+  FIELD_DESCRIPTION_CAP_BYTES,
+  MINIMAL_TOOL_DOCS,
+  TOOL_DESCRIPTION_CAP_BYTES,
+} from "../mcp/toolkits/t3team/t3team-toolDocs.ts";
+import {
+  collectFieldDescriptions,
   formatToolSizeTable,
   measureToolListSizes,
 } from "../mcp/toolkits/t3team/t3team-toolListSizes.ts";
@@ -143,6 +149,30 @@ it.effect("agent context matches the committed budget", () =>
       measured,
       "Set agentContextBudget.json to the measured values. Before you cut text to fit, run the evals that cover it (evals/README.md).",
     ).toEqual(budget);
+  }).pipe(Effect.provide(toolsLayer)),
+);
+
+// The fork's own tools advertise minimal text; the full text is behind t3_tool_help.
+it.effect("every fork tool description and field note is within the cap", () =>
+  Effect.gen(function* () {
+    const mcp = yield* McpServer.McpServer;
+    const forkNames = new Set(Object.keys(T3TeamToolkit.tools));
+    const tools = mcp.tools.map(({ tool }) => tool);
+    const over = tools
+      .filter((tool) => forkNames.has(tool.name))
+      .flatMap((tool) => [
+        ...(utf8Bytes(tool.description ?? "") > TOOL_DESCRIPTION_CAP_BYTES
+          ? [`${tool.name}: description ${utf8Bytes(tool.description ?? "")} B`]
+          : []),
+        ...collectFieldDescriptions(tool.inputSchema)
+          .filter((text) => utf8Bytes(text) > FIELD_DESCRIPTION_CAP_BYTES)
+          .map((text) => `${tool.name}: field note ${utf8Bytes(text)} B "${text.slice(0, 40)}"`),
+      ]);
+    const notFork = Object.keys(MINIMAL_TOOL_DOCS).filter((name) => !forkNames.has(name));
+    expect(
+      { over, notFork },
+      `Add a minimal entry to t3team-toolDocs-fork.ts: at most ${TOOL_DESCRIPTION_CAP_BYTES} B a description, ${FIELD_DESCRIPTION_CAP_BYTES} B a field note. The long text stays registered and t3_tool_help returns it. Upstream tools are not trimmed.`,
+    ).toEqual({ over: [], notFork: [] });
   }).pipe(Effect.provide(toolsLayer)),
 );
 

@@ -24,7 +24,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Every JSON-Schema `description` string. A property that is itself named "description" is a field, not docs. */
-function collectFieldDescriptions(schema: unknown): ReadonlyArray<string> {
+export function collectFieldDescriptions(schema: unknown): ReadonlyArray<string> {
   const found: Array<string> = [];
   const visit = (node: unknown): void => {
     if (Array.isArray(node)) {
