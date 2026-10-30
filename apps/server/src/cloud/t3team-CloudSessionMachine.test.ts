@@ -102,13 +102,15 @@ const sessionIn = <A, E>(
   root: string,
   token: string,
   use: (machines: CloudSessionMachines["Service"]) => Effect.Effect<A, E>,
+  /** The workspace root of other projects, by id: a user with several projects. */
+  otherRoots: ReadonlyMap<string, string> = new Map(),
 ) => {
   const projects = Layer.mock(ProjectService)({
-    getById: () =>
+    getById: (id) =>
       Effect.succeed(
         Option.some({
-          id: projectId,
-          workspaceRoot: root,
+          id,
+          workspaceRoot: otherRoots.get(id) ?? root,
           title: "IES NG",
           defaultModelSelection: null,
           scripts: [],
@@ -381,6 +383,34 @@ describe("CloudSessionMachines.resolvePlain", () => {
       const error = yield* Effect.flip(plainIn(checkout({ "README.md": "hi" }, { pushed: false })));
       expect(error.reason).toBe("machine_unavailable");
       expect(error.message).toContain("Push");
+    }),
+  );
+
+  it.effect("resolves the project it is asked for, never another one the user has", () =>
+    Effect.gen(function* () {
+      const api = checkout({ "README.md": "api" }, { remote: "git@nexplore.ghe.com:acme/api.git" });
+      const pol = checkout(
+        { "README.md": "pol" },
+        { remote: "git@nexplore.ghe.com:pti/polassist.git" },
+      );
+      const polId = ProjectId.make("project-2");
+      const resolve = (id: ProjectId) =>
+        sessionIn(
+          api,
+          "ghp_user-token",
+          (machines) => machines.resolvePlain(id),
+          new Map([[polId, pol]]),
+        );
+      const first = yield* resolve(projectId);
+      const second = yield* resolve(polId);
+      expect(first.kind === "checkout" ? first.checkout.repository.name : null).toBe("api");
+      expect(second.kind === "checkout" ? second.checkout.repository : null).toMatchObject({
+        owner: "pti",
+        name: "polassist",
+      });
+      expect(second.kind === "checkout" ? second.checkout.commit : null).toBe(
+        git(pol, "rev-parse", "HEAD"),
+      );
     }),
   );
 
