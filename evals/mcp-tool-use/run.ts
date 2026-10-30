@@ -53,7 +53,12 @@ import {
 } from "../../apps/server/src/mcp/toolkits/pullRequests/tools.ts";
 import { ThreadToolkit } from "../../apps/server/src/mcp/toolkits/thread/tools.ts";
 import { WorktreeToolkit } from "../../apps/server/src/mcp/toolkits/worktree/tools.ts";
-import { advertisedToolText, forkToolDefault, forkToolkit } from "./t3team-forkTools.ts";
+import {
+  advertisedToolText,
+  forkToolDefault,
+  forkToolkit,
+  listedInEval,
+} from "./t3team-forkTools.ts";
 import {
   CLAUDE_PROVIDER,
   makeClaudeQueryOptions,
@@ -366,7 +371,9 @@ const t3SourceTools: ReadonlyArray<Tool.Any> = [
   DeviceToolkit,
   HtmlToolkit,
   forkToolkit,
-].flatMap((toolkit): ReadonlyArray<Tool.Any> => Object.values(toolkit.tools));
+]
+  .flatMap((toolkit): ReadonlyArray<Tool.Any> => Object.values(toolkit.tools))
+  .filter((tool) => listedInEval(tool.name));
 const t3Tools: ReadonlyArray<ApiTool> = t3SourceTools.map((tool) => {
   const advertised = advertisedToolText({
     name: tool.name,

@@ -110,7 +110,7 @@ This API replay measures routing and recovery decisions. Screenshots return prod
 
 ## The fork's tools
 
-`t3team-forkTools.ts` adds the t3team toolkit and applies the minimal advertised text (`t3team-toolDocs.ts`) the way the server does, so cases grade what an agent is shown. `T3_EVAL_FULL_TOOL_TEXT=1` skips that layer: run the same cases both ways on one checkout for a before/after. `t3_tool_help` answers from the recorded original text. The case files `cases/t3team-*.ndjson` cover the fork tool families, with negative cases where an upstream tool is the tempting wrong choice.
+`t3team-forkTools.ts` adds the t3team toolkit and applies the minimal advertised text (`t3team-toolDocs.ts`) the way the server does, so cases grade what an agent is shown. `T3_EVAL_FULL_TOOL_TEXT=1` skips that layer: run the same cases both ways on one checkout for a before/after. `t3_tool_help` answers from the recorded original text and is not listed in the full-text arm, so `t3team-widgets-16` only applies to the advertised arm. Every fork tool is listed here; the server hides the ones whose feature flag is off. The case files `cases/t3team-*.ndjson` cover the fork tool families, with negative cases where an upstream tool is the tempting wrong choice.
 
 ```sh
 cd evals
