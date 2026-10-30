@@ -35,6 +35,7 @@ const MCP_TOOL_FEATURE_FLAGS: ReadonlyMap<string, FeatureFlagKey> = new Map([
   ["t3_orchestration_stop", "AGENTS_ORCHESTRATION_TOOLS"],
   ["t3_recipe_list", "ORCHESTRATION_RECIPES"],
   ["t3_recipe_validate", "ORCHESTRATION_RECIPES"],
+  ["t3_work_item_draft", "WORKITEM_DETAIL_DRAFTS"],
 ]);
 
 /** The flag that switches `toolName`, if one does. */

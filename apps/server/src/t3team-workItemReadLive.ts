@@ -24,6 +24,7 @@ import {
   listMirrorChildren,
   searchMirror,
 } from "./t3team-workItemReadMirror.ts";
+import { makeProjectScope } from "./t3team-workItemProjectScope.ts";
 import { makeWorkItemReadService, type WorkItemReadPort } from "./t3team-workItemReadService.ts";
 import type { JiraMirrorBinding } from "./t3team-workflowSignalWorkItemProjectMirror.ts";
 
@@ -95,6 +96,7 @@ export const makeWorkItemReadToolHandlers = Effect.fn("t3team.workItemRead.make"
         ),
     };
     const service = makeWorkItemReadService(port);
+    const projectScope = makeProjectScope(port);
     const usableBinding = makeUsableJiraBindingForThread(input);
     const withBinding =
       <A, Args>(run: (binding: JiraMirrorBinding, args: Args) => Effect.Effect<A, string>) =>
@@ -107,6 +109,7 @@ export const makeWorkItemReadToolHandlers = Effect.fn("t3team.workItemRead.make"
 
     return {
       connected: (threadId) => Effect.map(usableBinding(threadId), (binding) => binding !== null),
+      foreignKeys: (keys, threadId) => withBinding(projectScope.foreignKeys)(keys, threadId),
       search: withBinding(service.search),
       get: withBinding(service.get),
     } satisfies T3TeamWorkItemReadToolHandlers;

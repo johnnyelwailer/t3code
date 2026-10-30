@@ -101,6 +101,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.work_item.read_view_state": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.work_item.search": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.work_item.get": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
+  "t3team.work_item.draft": PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
   "t3team.work_item.attach_context_bundle": PROJECT_RECIPE_ARTIFACT_RW_TOOL_GROUP.id,
   "t3team.work_item.refresh_context_bundle": PROJECT_RECIPE_ARTIFACT_RW_TOOL_GROUP.id,
   "t3team.backlog.item.assignee.draft_update": PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,

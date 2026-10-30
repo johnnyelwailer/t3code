@@ -1,0 +1,73 @@
+import type { T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
+
+/**
+ * The thread-bound entry to the existing work-item draft tools: ONE tool with an `op`
+ * discriminator, so an agent pays for one description. Each op is answered by the canonical
+ * `t3team.work_item.*.draft_*` tool (assignee, estimate, status, description, comment, subtask,
+ * link); this adds no write path. Offered only while a usable Jira account is bound to the thread's
+ * project and the work item drafts feature is on.
+ */
+export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
+  "t3team.work_item.draft": {
+    id: "t3team.work_item.draft",
+    label: "Propose work item change",
+    title: "Propose a change to a work item of the project",
+    description:
+      "Propose a change to a work item (ticket) of this thread's project. Nothing is written to " +
+      "Jira: the proposal appears in this thread for the user to review and approve or dismiss, and " +
+      "only the user commits it. Every work item you name must be in this project, and issue_id is " +
+      "required (a key like PROJ-12). One tool; `op` selects the change:\n" +
+      "- description: replace the description (issue_id, body)\n" +
+      "- comment: add a comment (issue_id, body)\n" +
+      "- assignee: assign, or unassign with null (issue_id, assignee_account_id, " +
+      "assignee_display_name?)\n" +
+      "- estimate: set, or clear with null (issue_id, estimate_value, estimate_mode: points|hours)\n" +
+      "- status: move to a state (issue_id, target_status)\n" +
+      "- subtask_create: add a subtask (issue_id = the parent, summary, description?, " +
+      "estimate_hours?)\n" +
+      "- link_add: link two work items (issue_id, other_issue_id, link_type_name, direction: " +
+      "inward|outward)\n" +
+      "- link_remove: remove a link (issue_id, link_id)\n" +
+      "Answer: { ok, promptText, draftMutation }. Not available when no Jira account is connected " +
+      "for this project.",
+    capabilities: ["write"],
+    kind: "draft-mutation",
+    surfaces: ["work-item"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        op: {
+          type: "string",
+          enum: [
+            "description",
+            "comment",
+            "assignee",
+            "estimate",
+            "status",
+            "subtask_create",
+            "link_add",
+            "link_remove",
+          ],
+        },
+        issue_id: { type: "string", minLength: 1, description: "Work item key, e.g. PROJ-12." },
+        body: { type: "string" },
+        assignee_account_id: { type: ["string", "null"] },
+        assignee_display_name: { type: "string" },
+        estimate_value: { type: ["number", "null"] },
+        estimate_mode: { type: "string", enum: ["points", "hours"] },
+        target_status: { type: "string" },
+        summary: { type: "string" },
+        description: { type: "string" },
+        estimate_hours: { type: "number" },
+        other_issue_id: { type: "string" },
+        link_type_name: { type: "string" },
+        direction: { type: "string", enum: ["inward", "outward"] },
+        link_id: { type: "string" },
+      },
+      required: ["op", "issue_id"],
+    },
+  },
+} as const satisfies Record<string, T3TeamToolCatalogEntry>;

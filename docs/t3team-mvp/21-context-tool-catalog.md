@@ -414,6 +414,22 @@ t3team.work_item.estimate.draft_update
 t3team.work_item.status.draft_update
 ```
 
+Implemented: thread agents reach those draft tools over `/mcp` through ONE tool,
+`t3_work_item_draft` (`t3team.work_item.draft`, group `mutation.draft`), whose `op`
+(description, comment, assignee, estimate, status, subtask_create, link_add, link_remove) selects
+the canonical draft tool; the canonical `*.draft_*` ids stay workflow-body host tools and are not
+on `/mcp` themselves. It adds the gates `/mcp` otherwise lacks: a usable Atlassian account bound to
+the thread's project and the `WORKITEM_DETAIL_DRAFTS` flag (otherwise absent from `tools/list`; a
+stale call is answered by the not-connected or the feature refusal), a recipe's `allowedToolGroups`
+must include `mutation.draft`, `issue_id` is required and must be a work item key, every key the
+draft names (target, link end, subtask parent) must be in the bound project (checked live), and
+`publishDraft` is the calling thread's own. The result is a draft artifact the user reviews in the
+UI; nothing is written to the tracker.
+
+```text
+t3team.work_item.draft
+```
+
 Examples:
 
 ```text

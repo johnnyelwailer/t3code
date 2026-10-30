@@ -6,7 +6,7 @@ import type {
   T3TeamToolBinding,
   T3TeamTurnToolContext,
 } from "./t3team-toolBroker.ts";
-import { withWorkItemReadTools } from "./t3team-workItemReadAvailability.ts";
+import { withWorkItemDraftTool, withWorkItemReadTools } from "./t3team-workItemReadAvailability.ts";
 import { createToolSurface, type CreateBindingInput } from "./t3team-toolBrokerBindingSurface.ts";
 
 export type { CreateBindingInput } from "./t3team-toolBrokerBindingSurface.ts";
@@ -42,9 +42,10 @@ export function createT3TeamPrelaunchToolBinding<TReadError, TBacklogAssigneeFil
     bindingKey: `${input.callerKind}:${input.workspaceRoot}`,
     ...createToolSurface({
       ...input,
-      // No thread, so no project Jira binding: the work-item reads are never available here.
-      availableToolIds: withWorkItemReadTools(
-        Object.keys(PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID),
+      // No thread, so no project Jira binding: the work-item reads and the draft tool are never available here.
+      availableToolIds: withWorkItemDraftTool(
+        withWorkItemReadTools(Object.keys(PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID), false),
+        false,
         false,
       ),
       prelaunchOnly: true,

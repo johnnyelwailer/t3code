@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from "@effect/vitest";
+import { afterEach, assert, beforeEach, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import { listImplementedT3TeamToolCatalogEntries } from "@t3tools/project-context/t3teamToolCatalog";
@@ -35,6 +35,20 @@ it("maps or explicitly policy-excludes every canonical implemented tool", () => 
     .map((tool) => tool.id)
     .filter((id) => !exposed.has(id) && !T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has(id));
   expect(missing).toEqual([]);
+});
+
+it("exposes the work item drafts through the one meta tool, not the canonical draft ids", () => {
+  const mapped: ReadonlySet<string> = new Set(Object.values(T3TEAM_MCP_CANONICAL_TOOL_MAP));
+  assert.strictEqual(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_draft, "t3team.work_item.draft");
+  assert.isFalse(T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has("t3team.work_item.draft"));
+  const drafts = listImplementedT3TeamToolCatalogEntries()
+    .map((tool) => tool.id)
+    .filter((id) => /\.draft_(update|create|remove)$/.test(id));
+  expect(drafts.length).toBeGreaterThan(0);
+  for (const id of drafts) {
+    expect(mapped.has(id), id).toBe(false);
+    expect(T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has(id), id).toBe(true);
+  }
 });
 
 const threadId = ThreadId.make("thread-t3team-mcp-test");

@@ -39,7 +39,7 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /** `undefined` when the result carries no draft (an error result, or a non-draft tool). */
-function readT3TeamDraftMutation(
+export function readT3TeamDraftMutation(
   result: T3TeamToolCallResult,
 ): Record<string, unknown> | undefined {
   if (result.isError) return undefined;

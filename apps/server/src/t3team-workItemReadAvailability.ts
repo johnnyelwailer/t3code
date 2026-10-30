@@ -35,6 +35,18 @@ export const WORK_ITEM_READ_TOOL_IDS: ReadonlySet<string> = new Set([
   "t3team.work_item.get",
 ]);
 
+/**
+ * The thread-bound draft tool (`t3_work_item_draft`). It is offered on the same account state as the
+ * reads and additionally only while `WORKITEM_DETAIL_DRAFTS` is on; see `withWorkItemDraftTool`.
+ */
+export const WORK_ITEM_DRAFT_TOOL_ID = "t3team.work_item.draft";
+
+/** Every tool that exists only while a usable Jira account is bound to the thread's project. */
+export const JIRA_BOUND_TOOL_IDS: ReadonlySet<string> = new Set([
+  ...WORK_ITEM_READ_TOOL_IDS,
+  WORK_ITEM_DRAFT_TOOL_ID,
+]);
+
 export const JIRA_NOT_CONNECTED_MESSAGE =
   "Jira is not connected in this environment. Continue without it.";
 
@@ -88,14 +100,27 @@ export function withWorkItemReadTools(
   return connected ? [...rest, ...WORK_ITEM_READ_TOOL_IDS] : rest;
 }
 
-/** The binding, answering a work-item read tool with the not-connected text while it is not. */
+/**
+ * `toolIds` with the draft tool present exactly while Jira is connected AND the drafts flag is on.
+ * `draftsEnabled` is the live flag read of the caller, never a cached value.
+ */
+export function withWorkItemDraftTool(
+  toolIds: ReadonlyArray<string>,
+  connected: boolean,
+  draftsEnabled: boolean,
+): ReadonlyArray<string> {
+  const rest = toolIds.filter((id) => id !== WORK_ITEM_DRAFT_TOOL_ID);
+  return connected && draftsEnabled ? [...rest, WORK_ITEM_DRAFT_TOOL_ID] : rest;
+}
+
+/** The binding, answering a Jira-bound tool (reads, drafts) with the not-connected text while it is not. */
 export function refuseWorkItemReadUnlessConnected<B extends T3TeamToolBinding | undefined>(
   binding: B,
   connected: boolean,
 ): B {
   if (binding === undefined || connected) return binding;
   const callTool: T3TeamToolBinding["callTool"] = (input) =>
-    WORK_ITEM_READ_TOOL_IDS.has(input.tool)
+    JIRA_BOUND_TOOL_IDS.has(input.tool)
       ? Effect.succeed(errorResult(JIRA_NOT_CONNECTED_MESSAGE))
       : binding.callTool(input);
   return { ...binding, callTool };

@@ -6,7 +6,7 @@
  * binding holds it, which is the same check the call makes.
  *
  * When the broker is not reachable from the list handler, enablement cannot be evaluated: the
- * opt-in tools keep today's behavior (list unchanged), but the work-item read tools are dropped,
+ * opt-in tools keep today's behavior (list unchanged), but the work-item read and draft tools are dropped,
  * because they exist only while a Jira account is verified and that cannot be verified here. A
  * credential with no thread, or a thread with no binding, cannot call the tool and does not see it.
  */
@@ -17,7 +17,7 @@ import type { McpProtocol } from "effect/ai";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
 import { listOptInThreadTools } from "../../../t3team-threadOptInTools.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
-import { WORK_ITEM_READ_TOOL_IDS } from "../../../t3team-workItemReadAvailability.ts";
+import { JIRA_BOUND_TOOL_IDS } from "../../../t3team-workItemReadAvailability.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 interface ListedTool {
@@ -32,22 +32,22 @@ interface ToolListingCore {
 
 /**
  * The MCP tool name → catalog tool id of every tool the MCP surface lists only when the caller's
- * binding holds it: the opt-in tools, and the work-item read tools (held only while Jira is
+ * binding holds it: the opt-in tools, and the work-item read and draft tools (held only while Jira is
  * connected for the thread's project, `t3team-workItemReadAvailability.ts`).
  */
 function optInMcpTools(): ReadonlyMap<string, string> {
   const optIn = new Set([
     ...listOptInThreadTools().map((tool) => tool.toolId),
-    ...WORK_ITEM_READ_TOOL_IDS,
+    ...JIRA_BOUND_TOOL_IDS,
   ]);
   return new Map(
     Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP).filter(([, toolId]) => optIn.has(toolId)),
   );
 }
 
-const WORK_ITEM_READ_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
+const JIRA_BOUND_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
   Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP)
-    .filter(([, toolId]) => WORK_ITEM_READ_TOOL_IDS.has(toolId))
+    .filter(([, toolId]) => JIRA_BOUND_TOOL_IDS.has(toolId))
     .map(([name]) => name),
 );
 
@@ -59,7 +59,7 @@ const filterToolsForCaller = Effect.fn("filterToolsForCaller")(function* <T exte
   if (!tools.some((tool) => optIn.has(tool.name))) return tools;
   const broker = yield* Effect.serviceOption(T3TeamToolBroker);
   if (Option.isNone(broker)) {
-    return tools.filter((tool) => !WORK_ITEM_READ_MCP_TOOL_NAMES.has(tool.name));
+    return tools.filter((tool) => !JIRA_BOUND_MCP_TOOL_NAMES.has(tool.name));
   }
   const invocation = yield* Effect.serviceOption(McpInvocationContext.McpInvocationContext);
   const threadId = Option.getOrUndefined(invocation)?.thread?.threadId;

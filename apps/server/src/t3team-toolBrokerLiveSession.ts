@@ -6,6 +6,7 @@
  *
  * @module t3team-toolBrokerLiveSession
  */
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
 
 import { withPressureLines } from "./t3team-resourcePressureToolLine.ts";
@@ -19,6 +20,7 @@ import { withFlaggedOptInTools } from "./t3team-threadOptInTools.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 import {
   refuseWorkItemReadUnlessConnected,
+  withWorkItemDraftTool,
   withWorkItemReadTools,
 } from "./t3team-workItemReadAvailability.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
@@ -56,11 +58,20 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
       const jiraConnected = deps.workItemReadTools
         ? yield* deps.workItemReadTools.connected(threadId)
         : false;
-      const toolIds = withWorkItemReadTools(
-        Array.from(
-          new Set([...resolvedToolContext.tools.map((tool) => tool.id), ...(grantedToolIds ?? [])]),
+      // The draft tool is held to the same account state and additionally to the drafts flag,
+      // read live here and again by the draft path on every call.
+      const toolIds = withWorkItemDraftTool(
+        withWorkItemReadTools(
+          Array.from(
+            new Set([
+              ...resolvedToolContext.tools.map((tool) => tool.id),
+              ...(grantedToolIds ?? []),
+            ]),
+          ),
+          jiraConnected,
         ),
         jiraConnected,
+        readFeatureFlag("WORKITEM_DETAIL_DRAFTS"),
       );
       if (toolIds.length === 0) {
         return undefined;
