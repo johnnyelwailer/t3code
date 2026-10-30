@@ -5,11 +5,9 @@ import { createNewTaskDraft, waitForComposerDraftsLoaded } from "../state/use-co
 import type { PendingDraftProject } from "./t3team-pendingDraftTypes";
 
 /**
- * Creates an empty new-task draft for a project that is not in the catalog yet and opens it the way
- * the Chats list opens a draft row. `onCreated` runs with the draft key after the draft exists and
- * before it opens, so the distribution can register the key in its `usePendingDrafts` map first
- * (a draft that is in neither the catalog nor that map returns to the project picker). Resolves
- * with the draft key. An empty draft lives in memory only: it does not survive an app restart.
+ * Creates an empty draft for a project that is not in the catalog yet and opens it. `onCreated` runs
+ * with the draft key before the draft opens, so register the key in `usePendingDrafts` first or the
+ * draft returns to the project picker. The empty draft is in memory only.
  */
 export function useOpenPendingDraft() {
   const selectDetail = useSelectWorkspaceDetail();
