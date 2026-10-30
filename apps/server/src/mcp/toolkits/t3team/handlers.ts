@@ -249,7 +249,6 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
     t3team_thread_skill_metadata: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3team_thread_skill_metadata", (input) => threadSkillMetadata(input)),
     ),
-    // Documentation only, so any client that can list the tools may read it.
-    t3_tool_help: McpToolAccess.reads(t3ToolHelpHandler),
+    t3_tool_help: McpToolAccess.readsAsCaller(t3ToolHelpHandler),
   })) satisfies Effect.Effect<McpToolAccess.Handlers<typeof T3TeamToolkit.tools>>,
 );

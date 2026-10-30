@@ -38,23 +38,22 @@ const originals = new Map<string, ToolDocs>();
 
 export const originalToolDocs = (name: string): ToolDocs | undefined => originals.get(name);
 
-/** Every field description of a schema, by property name (the first one wins for a repeated name). */
-export function fieldDescriptionsByName(schema: unknown): Record<string, string> {
+/** Every description in a schema by its path, e.g. `schedule.filters[]`; the top level is `(input)`. */
+export function fieldDescriptionsByPath(schema: unknown): Record<string, string> {
   const found: Record<string, string> = {};
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) return node.forEach(visit);
+  const visit = (node: unknown, path: string): void => {
+    if (Array.isArray(node)) return node.forEach((item) => visit(item, path));
     if (!isObject(node)) return;
+    if (typeof node.description === "string") found[path || "(input)"] ??= node.description;
     for (const [key, value] of Object.entries(node)) {
       if (key === "properties" && isObject(value)) {
-        for (const [name, property] of Object.entries(value)) {
-          if (isObject(property) && typeof property.description === "string")
-            found[name] ??= property.description;
-          visit(property);
-        }
-      } else visit(value);
+        for (const [name, property] of Object.entries(value))
+          visit(property, path === "" ? name : `${path}.${name}`);
+      } else if (key === "items") visit(value, `${path}[]`);
+      else if (key !== "description") visit(value, path);
     }
   };
-  visit(schema);
+  visit(schema, "");
   return found;
 }
 

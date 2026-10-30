@@ -3,7 +3,7 @@ import type { ToolDocsTable } from "./t3team-toolDocs.ts";
 export const FORK_TOOL_DOCS: ToolDocsTable = {
   t3_show_widget: {
     description:
-      "- Show widget inline in thread chat\n- Give intent OR widget_code (code needed for deterministic replay)\n- format: html|svg\n- Theme vars only; no network\n- Bridge tools via capabilities.tools",
+      "- Show widget inline in thread chat\n- intent OR widget_code (code needed for replay)\n- format: html|svg; no network\n- theme vars, icons, size rules: t3_tool_help\n- bridge tools: capabilities.tools",
     fields: {
       title: "snake_case artifact name",
       widget_code: "raw SVG or HTML fragment, no html/body tags",
@@ -12,7 +12,7 @@ export const FORK_TOOL_DOCS: ToolDocsTable = {
   },
   t3_mywork_arrange: {
     description:
-      "- Store My Work layout (writes)\n- Call t3_mywork_digest first; use only its ids\n- plan or reset:true, not both; max 12 sections\n- kind: items|reviews|graph\n- placement: side|main|footer\n- graph needs widget",
+      "- Store My Work layout (writes)\n- call t3_mywork_digest first; use only its ids\n- plan or reset:true; max 12 sections\n- kind: items|reviews|graph (items[] required)\n- placement: side|main|footer; graph needs widget",
     fields: {
       widget: "my-work.tickets|reviews|yesterday",
       why: "one short line",
@@ -49,7 +49,7 @@ export const FORK_TOOL_DOCS: ToolDocsTable = {
   },
   t3_work_item_draft: {
     description:
-      "- Propose work item change; not written until user approves\n- issue_id key (PROJ-12) in this project\n- op: description|comment|assignee|estimate|status|subtask_create|link_add",
+      "- Propose change; user approves first\n- op: description|comment(body) assignee(assignee_account_id) estimate(estimate_value,estimate_mode) status(target_status) subtask_create(summary) link_add(other_issue_id,link_type_name,direction)",
     fields: {
       body: "description or comment text",
       assignee_account_id: "null unassigns",
@@ -62,7 +62,7 @@ export const FORK_TOOL_DOCS: ToolDocsTable = {
   },
   t3_work_item_change_set: {
     description:
-      "- Propose up to 25 work item changes as one set\n- Nothing written until user approves\n- All or nothing; failures listed by index\n- operations: t3_work_item_draft objects",
+      "- Propose up to 25 work item changes as one set\n- nothing written until user approves; all or nothing\n- operations: t3_work_item_draft objects (same op/args), failures listed by index",
     fields: {
       body: "description or comment text",
       assignee_account_id: "null unassigns",

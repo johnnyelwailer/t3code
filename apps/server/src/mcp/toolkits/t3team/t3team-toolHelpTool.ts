@@ -7,8 +7,10 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Tool } from "effect/ai";
 
+import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
-import { fieldDescriptionsByName, originalToolDocs } from "./t3team-toolDocs.ts";
+import { isMcpToolEnabled } from "./t3team-mcpToolFeatureGate.ts";
+import { fieldDescriptionsByPath, originalToolDocs } from "./t3team-toolDocs.ts";
 
 export const T3TeamToolHelpTool = Tool.make("t3_tool_help", {
   description:
@@ -20,19 +22,19 @@ export const T3TeamToolHelpTool = Tool.make("t3_tool_help", {
     fields: Schema.Record(Schema.String, Schema.String),
   }),
   failure: Schema.Union([T3TeamMcpToolError, OrchestratorMcpFailure]),
-  dependencies: [],
+  dependencies: [McpInvocationContext.McpInvocationContext],
 });
 
 export const t3ToolHelpHandler = Effect.fn("T3TeamMcpToolkit.toolHelp")(function* (input: {
   readonly tool: string;
 }) {
   const docs = originalToolDocs(input.tool);
-  if (docs === undefined) {
+  if (docs === undefined || !isMcpToolEnabled(input.tool)) {
     return yield* new T3TeamMcpToolError({ message: `No T3 tool named ${input.tool}.` });
   }
   return {
     tool: input.tool,
     description: docs.description ?? "",
-    fields: fieldDescriptionsByName(docs.inputSchema),
+    fields: fieldDescriptionsByPath(docs.inputSchema),
   };
 });

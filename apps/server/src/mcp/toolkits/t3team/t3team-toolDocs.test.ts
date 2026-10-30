@@ -1,7 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
-import { advertiseToolDocs, fieldDescriptionsByName } from "./t3team-toolDocs.ts";
+import { advertiseToolDocs, fieldDescriptionsByPath } from "./t3team-toolDocs.ts";
 import { t3ToolHelpHandler } from "./t3team-toolHelpTool.ts";
 
 const schema = {
@@ -14,6 +14,7 @@ const schema = {
       type: "object",
       properties: { mode: { type: "string", description: "nested mode" } },
     },
+    list: { type: "array", items: { type: "string", description: "item note" } },
   },
 };
 
@@ -29,6 +30,7 @@ it("a listed tool is advertised with its minimal text and the notes its entry ke
       mode: { type: "string", description: "a|b" },
       description: { type: "string" },
       nested: { type: "object", properties: { mode: { type: "string", description: "a|b" } } },
+      list: { type: "array", items: { type: "string" } },
     },
   });
 });
@@ -51,10 +53,13 @@ it.effect("t3_tool_help returns the registered text, not the minimal one", () =>
     const help = yield* t3ToolHelpHandler({ tool: "helped_tool" });
     expect(help.description).toBe("Original long text.");
     expect(help.fields).toEqual({
+      "(input)": "whole input",
       mode: "long mode explanation",
       description: "free text",
+      "nested.mode": "nested mode",
+      "list[]": "item note",
     });
-    expect(fieldDescriptionsByName(schema).mode).toBe("long mode explanation");
+    expect(fieldDescriptionsByPath(schema)["nested.mode"]).toBe("nested mode");
     const unknown = yield* Effect.flip(t3ToolHelpHandler({ tool: "no_such_tool" }));
     expect(unknown.message).toContain("no_such_tool");
   }),
