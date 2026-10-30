@@ -15,7 +15,7 @@ export const credentialSourceDeps = Effect.gen(function* () {
       github.rest({ host: input.host, operation: input.operation, path: input.path }),
     credential: (host) =>
       github
-        .credential(host)
+        .credential(host, { personal: true })
         .pipe(Effect.map((credential) => Redacted.make(Redacted.value(credential.token)))),
   } satisfies CredentialSourcesDeps;
 });

@@ -21,7 +21,7 @@ export const CredentialVariableName = ProjectMachineSecret.fields.name;
 
 export const CredentialScope = TrimmedNonEmptyString.check(
   Schema.isMaxLength(64),
-  Schema.isPattern(/^[A-Za-z0-9:_.-]+$/),
+  Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9:_.-]*$/),
 );
 
 export const CredentialSourcesProbeInput = Schema.Struct({
