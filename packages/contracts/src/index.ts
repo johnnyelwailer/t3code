@@ -70,6 +70,7 @@ export * from "./t3team-prWatch.ts";
 export * from "./t3team-threadFacts.ts";
 export * from "./t3team-recipeFacts.ts";
 export * from "./t3team-threadArtifacts.ts";
+export * from "./t3team-workItemChangeSet.ts";
 export * from "./t3team-packDocuments.ts";
 export * from "./t3team-environmentCapabilities.ts";
 export * from "./t3team-threadStopCascade.ts";

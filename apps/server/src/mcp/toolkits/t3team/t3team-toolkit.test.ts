@@ -40,6 +40,10 @@ it("maps or explicitly policy-excludes every canonical implemented tool", () => 
 it("exposes the work item drafts through the one meta tool, not the canonical draft ids", () => {
   const mapped: ReadonlySet<string> = new Set(Object.values(T3TEAM_MCP_CANONICAL_TOOL_MAP));
   assert.strictEqual(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_draft, "t3team.work_item.draft");
+  assert.strictEqual(
+    T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_change_set,
+    "t3team.work_item.change_set",
+  );
   assert.isFalse(T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has("t3team.work_item.draft"));
   const drafts = listImplementedT3TeamToolCatalogEntries()
     .map((tool) => tool.id)
@@ -249,7 +253,7 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
   );
 });
 
-it.effect("refuses t3_work_item_draft to a read-only client before it reaches the broker", () => {
+it.effect("refuses the work item draft tools to a read-only client before the broker", () => {
   replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFTS", true]]));
   const bound: Array<unknown> = [];
   const broker = T3TeamToolBroker.of({
@@ -271,12 +275,15 @@ it.effect("refuses t3_work_item_draft to a read-only client before it reaches th
 
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
-    const result = yield* server.callTool({
-      name: "t3_work_item_draft",
-      arguments: { op: "comment", issue_id: "IES-1", body: "x" },
-    });
-    expect(result.isError).toBe(true);
-    expect(JSON.stringify(result.content)).toContain("read-only access");
+    const comment = { op: "comment", issue_id: "IES-1", body: "x" };
+    for (const [name, args] of [
+      ["t3_work_item_draft", comment],
+      ["t3_work_item_change_set", { title: "T", operations: [comment] }],
+    ] as const) {
+      const result = yield* server.callTool({ name, arguments: args });
+      expect(result.isError, name).toBe(true);
+      expect(JSON.stringify(result.content)).toContain("read-only access");
+    }
     expect(bound).toEqual([]);
   }).pipe(
     Effect.provideService(McpInvocationContext.McpInvocationContext, readOnly),

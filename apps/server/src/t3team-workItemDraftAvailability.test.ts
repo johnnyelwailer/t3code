@@ -9,6 +9,7 @@ import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
 import {
   JIRA_NOT_CONNECTED_MESSAGE,
+  WORK_ITEM_CHANGE_SET_TOOL_ID,
   WORK_ITEM_DRAFT_TOOL_ID,
 } from "./t3team-workItemReadAvailability.ts";
 
@@ -140,4 +141,32 @@ it.effect(
       }
       assert.isTrue(offered(yield* bind({ allowedToolGroups: ["mutation.draft"] })));
     }),
+);
+
+it.effect("the change set tool is offered, filtered and refused exactly like the draft tool", () =>
+  Effect.gen(function* () {
+    const listed = (binding: Binding) =>
+      Object.keys(binding?.listServers()[0]?.tools ?? {}).includes(WORK_ITEM_CHANGE_SET_TOOL_ID);
+    const callSet = (binding: Binding) =>
+      binding!.callTool({
+        server: "t3team",
+        tool: WORK_ITEM_CHANGE_SET_TOOL_ID,
+        arguments: { title: "T", operations: [{ op: "comment", issue_id: "IES-1", body: "x" }] },
+      });
+    signIn();
+    const connected = yield* bind({});
+    assert.isTrue(listed(connected));
+    // Group filter: a binding carrying allowedToolGroups needs mutation.draft.
+    assert.isFalse(listed(yield* bind({ allowedToolGroups: ["integration.read"] })));
+    assert.isTrue(listed(yield* bind({ allowedToolGroups: ["mutation.draft"] })));
+    // Flag off: dropped from the list and refused at a stale call.
+    draftsFlag(false);
+    assert.isFalse(listed(yield* bind({})));
+    assert.include(text(yield* callSet(connected)), "Work item detail and drafts is turned off");
+    // Signed out: dropped, and a stale call gets the not-connected text.
+    draftsFlag(true);
+    atlassianAuths.clear();
+    assert.isFalse(listed(yield* bind({})));
+    assert.strictEqual(text(yield* callSet(connected)), JIRA_NOT_CONNECTED_MESSAGE);
+  }),
 );

@@ -20,7 +20,10 @@ import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
 import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
-import { T3TeamWorkItemDraftTool } from "./t3team-workItemDraftTools.ts";
+import {
+  T3TeamWorkItemChangeSetTool,
+  T3TeamWorkItemDraftTool,
+} from "./t3team-workItemDraftTools.ts";
 import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workItemReadTools.ts";
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
@@ -521,6 +524,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamWorkItemSearchTool,
   T3TeamWorkItemGetTool,
   T3TeamWorkItemDraftTool,
+  T3TeamWorkItemChangeSetTool,
   T3TeamChangeRequestPublishTool,
   T3TeamLinkedRepositorySyncTool,
   T3TeamMachineFindDefinitionsTool,

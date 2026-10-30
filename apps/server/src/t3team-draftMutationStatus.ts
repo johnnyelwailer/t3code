@@ -10,16 +10,36 @@
  * This module is the pure part: id normalisation and the payload update.
  */
 
-import type {
-  T3TeamDraftMutationStatus,
-  T3TeamMessageDraftMutationAttachment,
+import {
+  ThreadId,
+  type T3TeamDraftMutationPayload,
+  type T3TeamDraftMutationStatus,
+  type T3TeamMessageDraftMutationAttachment,
 } from "@t3tools/contracts";
+
+import { t3teamRandomUUID } from "./t3team-random.ts";
 
 /** Artifact kind of a draft carrier in the thread artifacts store. */
 export const T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND = "draft-mutation";
 
 /** The prefix every draft id (= artifact id) carries. */
 const DRAFT_ID_PREFIX = "jira-draft:";
+
+/** The artifact a built draft is published as; its id is the draft id the verdict addresses. */
+export function makeDraftArtifactInput(threadId: string, draftMutation: Record<string, unknown>) {
+  const draftId = `${DRAFT_ID_PREFIX}${t3teamRandomUUID()}`;
+  const payload: T3TeamMessageDraftMutationAttachment = {
+    kind: "draft-mutation",
+    draft: { ...draftMutation, id: draftId } as unknown as T3TeamDraftMutationPayload,
+  };
+  return {
+    id: draftId,
+    threadId: ThreadId.make(threadId),
+    messageId: null,
+    kind: T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND,
+    payload,
+  } as const;
+}
 
 /**
  * The artifact id a client-supplied draft reference addresses. Accepts the draft id

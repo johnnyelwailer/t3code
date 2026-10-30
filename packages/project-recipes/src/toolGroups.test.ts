@@ -15,4 +15,7 @@ it("classifies every implemented draft tool in mutation.draft", () => {
     (id) => getProjectRecipeToolGroupForToolId(id) !== PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
   );
   expect(unclassified).toEqual([]);
+  expect(getProjectRecipeToolGroupForToolId("t3team.work_item.change_set")).toBe(
+    PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
+  );
 });
