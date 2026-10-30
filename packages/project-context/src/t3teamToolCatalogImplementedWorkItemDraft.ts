@@ -1,11 +1,9 @@
 import type { T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
 
 /**
- * The thread-bound entry to the existing work-item draft tools: ONE tool with an `op`
- * discriminator, so an agent pays for one description. Each op is answered by the canonical
- * `t3team.work_item.*.draft_*` tool (assignee, estimate, status, description, comment, subtask,
- * link add); this adds no write path. Offered only while a usable Jira account is bound to the thread's
- * project and the work item drafts feature is on.
+ * Thread-bound entry to the existing work-item draft tools: ONE tool with an `op` discriminator,
+ * answered by the canonical `t3team.work_item.*.draft_*` tools. Adds no write path; offered only
+ * while Jira is bound to the thread's project and the drafts feature is on.
  */
 export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
   "t3team.work_item.draft": {

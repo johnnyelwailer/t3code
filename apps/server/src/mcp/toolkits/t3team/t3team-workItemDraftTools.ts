@@ -1,11 +1,7 @@
 /**
- * MCP wrapper for the thread-bound draft tool `t3_work_item_draft`: ONE tool with an `op`
- * discriminator (like `t3_task_ops`) so an agent pays for one description. Behavior and scoping live
- * in the broker (`t3team-toolBrokerBindingWorkItemDraft.ts`); the description is the catalog's.
- *
- * Listed only while a usable Jira account is bound to the calling thread's project AND
- * `WORKITEM_DETAIL_DRAFTS` is on (`t3team-mcpToolThreadList.ts`, `t3team-mcpToolFeatureGate.ts`).
- * A stale call is answered by the flag refusal or the broker's not-connected refusal.
+ * MCP wrapper for `t3_work_item_draft`: ONE tool with an `op` discriminator (like `t3_task_ops`).
+ * Behavior and scoping live in the broker. Listed only while Jira is bound to the thread's project
+ * and `WORKITEM_DETAIL_DRAFTS` is on; a stale call gets the flag or not-connected refusal.
  */
 import * as Schema from "effect/Schema";
 import { Tool } from "effect/ai";

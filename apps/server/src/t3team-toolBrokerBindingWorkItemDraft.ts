@@ -1,13 +1,7 @@
 /**
- * Dispatch glue for `t3team.work_item.draft`: the thread-bound entry to the existing draft tools.
- *
- * It adds scope and nothing else. The draft is built and published by the same broker path a
- * workflow body uses (`callT3TeamDraftMutationToolEffect`, which refuses while
- * `WORKITEM_DETAIL_DRAFTS` is off, read per call), and `publishDraft` is the one bound to the
- * CALLING thread, so a draft can only ever land on the thread that proposed it. What this adds is
- * the project scope: every work item the built draft names must be in the thread's bound project
- * (checked live, see `t3team-workItemProjectScope.ts`) before anything is published. Nothing here
- * commits: the result is a draft artifact for the user to review.
+ * Dispatch glue for `t3team.work_item.draft`. The draft is built and published by the workflow-body
+ * broker path, with `publishDraft` bound to the CALLING thread. This adds the project scope: every
+ * work item the draft names must be in the bound project (live check) before anything is published.
  */
 import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";

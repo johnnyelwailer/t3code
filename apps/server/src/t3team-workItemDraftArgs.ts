@@ -1,16 +1,7 @@
 /**
- * The argument contract of the single draft tool (`t3team.work_item.draft`, `t3_work_item_draft`
- * over /mcp) and its mapping onto the existing canonical draft tools. The op table is the whole
- * mapping: no op has an implementation of its own, each is answered by the canonical
- * `*.draft_*` tool through the same broker path a workflow body uses.
- *
- * There is no `link_remove` op: the project scope check can only vouch for work item keys, and a
- * removal names a link id, which no provider read the thread can use returns (the normalized
- * `links` of `t3team.work_item.get` carry `{ relation, issueKey }`, outward only). Removing a link
- * stays a workflow-body draft tool (`t3team.work_item.link.draft_remove`).
- *
- * `issue_id` is REQUIRED and must be a work item key: unlike a workflow body, an /mcp thread has no
- * open view to fall back on, and a key is the only shape the project scope check can verify.
+ * Argument contract of `t3team.work_item.draft` (`t3_work_item_draft` over /mcp): the op table maps
+ * each op onto the canonical `*.draft_*` tool. No `link_remove`: removal names a link id no thread
+ * read returns, so the scope check cannot vouch for it. `issue_id` is a required work item key.
  */
 import * as Schema from "effect/Schema";
 
