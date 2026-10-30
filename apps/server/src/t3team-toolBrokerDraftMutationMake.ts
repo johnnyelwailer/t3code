@@ -8,7 +8,10 @@ export type DraftField =
   | "description"
   | "comment"
   | "subtask"
-  | "link";
+  | "link"
+  | "labels"
+  | "priority"
+  | "fix_version";
 
 /** Shared by every `*Draft` builder — split out so both the main dispatcher and the link-draft
  * helpers can depend on it without a circular import between them. */

@@ -424,10 +424,18 @@ t3team.work_item.status.draft_update
 
 Implemented: thread agents reach those draft tools over `/mcp` through ONE tool,
 `t3_work_item_draft` (`t3team.work_item.draft`, group `mutation.draft`), whose `op`
-(description, comment, assignee, estimate, status, subtask_create, link_add) selects the canonical
-draft tool; the canonical `*.draft_*` ids stay workflow-body host tools and are not on `/mcp`
+(description, comment, assignee, estimate, status, subtask_create, link_add, labels, priority,
+fix_version) selects the canonical draft tool; the canonical `*.draft_*` ids stay workflow-body host tools and are not on `/mcp`
 themselves. Link removal has no op: a removal names a link id, which no thread-readable provider
 result carries, so the project scope cannot be checked; it stays a workflow-body tool.
+
+Field breadth (built): `labels` and `fix_version` take `add` / `remove` name lists, `priority` a
+name. The commit is one allowlisted provider write (`updateIssueFields`, `PUT /issue/{key}` with
+`update` add/remove ops and `fields.priority`; `POST /api/t3team/atlassian/issue/update-fields`),
+gated on the issue's edit screen per field. All three are idempotent, so the change-set card
+pre-approves them and may repeat them. `t3team.work_item.{labels,priority,fix_version}.draft_update`
+are implemented draft tools (workflow-body host tools too); `attachment.draft_add` is still declared
+only.
 
 It adds the gates that can hold on `/mcp`: a usable Atlassian account bound to the thread's project
 and the `WORKITEM_DETAIL_DRAFTS` flag (otherwise absent from `tools/list`; a stale call is answered
@@ -532,8 +540,9 @@ t3team.work_item.comment.draft_create
 t3team.work_item.status.draft_update
 t3team.work_item.assignee.draft_update
 t3team.work_item.estimate.draft_update
-t3team.work_item.priority.draft_update
-t3team.work_item.labels.draft_update
+t3team.work_item.priority.draft_update    (implemented)
+t3team.work_item.labels.draft_update      (implemented)
+t3team.work_item.fix_version.draft_update (implemented)
 t3team.work_item.link.draft_create
 t3team.work_item.link.draft_remove
 t3team.work_item.subtask.draft_create

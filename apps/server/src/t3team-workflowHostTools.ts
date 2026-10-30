@@ -59,7 +59,7 @@ const T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP = defineToolGroup({
   id: "mutation.draft",
   label: "Propose work-item drafts",
   description:
-    "Prepare reviewable work-item drafts (description, comment, assignee, estimate, status, subtask, links). A human accepts the draft before anything is written to the tracker.",
+    "Prepare reviewable work-item drafts (description, comment, assignee, estimate, status, subtask, links, labels, priority, fix version). A human accepts the draft before anything is written to the tracker.",
 });
 
 /** Same id as `PROJECT_RECIPE_MUTATION_CHANGE_REQUEST_TOOL_GROUP`. */
@@ -79,6 +79,9 @@ const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS = [
   "t3team.work_item.subtask.draft_create",
   "t3team.work_item.link.draft_create",
   "t3team.work_item.link.draft_remove",
+  "t3team.work_item.labels.draft_update",
+  "t3team.work_item.priority.draft_update",
+  "t3team.work_item.fix_version.draft_update",
 ] as const;
 
 /** The exact broker tools reachable from a workflow body, each with the group a body must declare

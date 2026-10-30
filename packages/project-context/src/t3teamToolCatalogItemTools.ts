@@ -38,8 +38,6 @@ const PLANNED_WORK_ITEM_GITHUB_THREAD_TOOL_ENTRIES = [
     ids: [
       "t3team.work_item.description.draft_update",
       "t3team.work_item.comment.draft_create",
-      "t3team.work_item.priority.draft_update",
-      "t3team.work_item.labels.draft_update",
       "t3team.work_item.link.draft_create",
       "t3team.work_item.attachment.draft_add",
     ],

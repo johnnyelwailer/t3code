@@ -30,6 +30,9 @@ const DRAFT_FIELDS: ReadonlySet<string> = new Set([
   "comment",
   "subtask",
   "link",
+  "labels",
+  "priority",
+  "fix_version",
 ]);
 
 const readString = (record: Record<string, unknown>, key: string): string | undefined => {

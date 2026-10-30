@@ -61,3 +61,19 @@ describe("updateIssueDescription", () => {
     ).rejects.toThrow("not editable");
   });
 });
+
+describe("updateIssueFields", () => {
+  it("posts the labels / priority / fix-version change to the update-fields route as given", async () => {
+    const post = vi.fn().mockResolvedValue({ ok: true });
+    const input = {
+      accountId: "account-1",
+      issueIdOrKey: "NXAI-6",
+      labels: { add: ["bug"], remove: ["wontfix"] },
+      priority: "High",
+    };
+
+    await createAtlassianIssueOpsApi(post as never).updateIssueFields(input);
+
+    expect(post).toHaveBeenCalledWith("/api/t3team/atlassian/issue/update-fields", input);
+  });
+});

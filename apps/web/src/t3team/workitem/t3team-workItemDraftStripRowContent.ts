@@ -4,11 +4,12 @@ import {
   readEstimatePointsDraftPatch,
   readStatusDraftPatch,
 } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
+import { fieldDraftValueText } from "~/t3team/workitem/t3team-workItemFieldDraftDisplay";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
 
 /**
  * Turns one scalar draft into the strip row's "from → to" line, for the fields this view has a
- * current value for (status/assignee/estimate). A field the strip doesn't know how to diff this way
+ * current value for (status/assignee/estimate/labels/priority/fix version). A field the strip doesn't know how to diff this way
  * (link, subtask, or anything added later) reads `undefined` — the row falls back to `draft.summary`
  * rather than a switch statement growing every time a new field kind lands.
  */
@@ -39,6 +40,16 @@ export function scalarDraftChangeLine(
     };
   }
 
+  if (draft.field === "labels" || draft.field === "fix_version") {
+    const to = fieldDraftValueText(draft);
+    return to !== undefined ? { from: "", to } : undefined;
+  }
+
+  if (draft.field === "priority") {
+    const to = fieldDraftValueText(draft);
+    return to !== undefined ? { from: model.priority ?? "No priority", to } : undefined;
+  }
+
   return undefined;
 }
 
@@ -48,6 +59,9 @@ const FIELD_LABELS: Partial<Record<T3TeamScalarDraftMutation["field"], string>> 
   estimate: "Points",
   link: "Link",
   subtask: "Subtask",
+  labels: "Labels",
+  priority: "Priority",
+  fix_version: "Fix version",
 };
 
 /** Falls back to the raw field name, capitalized, for a field kind this view doesn't label yet. */

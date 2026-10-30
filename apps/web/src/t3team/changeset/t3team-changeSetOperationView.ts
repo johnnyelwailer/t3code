@@ -15,6 +15,7 @@ import {
   documentFieldLabel,
   scalarFieldLabel,
 } from "~/t3team/workitem/t3team-workItemDraftStripRowContent";
+import { fieldDraftSummary } from "~/t3team/workitem/t3team-workItemFieldDraftDisplay";
 import { readString } from "~/t3team/workitem/t3team-workItemFieldReaders";
 
 export type OperationView = {
@@ -50,6 +51,10 @@ function scalarSummary(draft: T3TeamScalarDraftMutation): string {
         ? "Remove link"
         : `${link.linkTypeName} ${link.otherIssueIdOrKey}`;
     }
+    case "labels":
+    case "priority":
+    case "fix_version":
+      return fieldDraftSummary(draft) ?? `Change ${scalarFieldLabel(draft.field).toLowerCase()}`;
     case "subtask":
       return readSubtaskDraftPatch(draft)?.summary ?? "New subtask";
   }

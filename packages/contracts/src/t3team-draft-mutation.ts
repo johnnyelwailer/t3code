@@ -21,6 +21,9 @@ export const T3TeamDraftMutationField = Schema.Literals([
   "comment",
   "subtask",
   "link",
+  "labels",
+  "priority",
+  "fix_version",
 ]);
 export type T3TeamDraftMutationField = typeof T3TeamDraftMutationField.Type;
 

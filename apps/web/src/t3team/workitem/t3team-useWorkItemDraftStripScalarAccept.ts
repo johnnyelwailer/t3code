@@ -6,14 +6,36 @@ import type { WorkItemFieldMutations } from "~/t3team/workitem/t3team-useWorkIte
 import {
   readAssigneeDraftPatch,
   readEstimatePointsDraftPatch,
+  readAddRemoveDraftPatch,
+  type WorkItemAddRemoveDraftPatch,
   readLinkDraftPatch,
+  readPriorityDraftPatch,
   readStatusDraftPatch,
   readSubtaskDraftPatch,
 } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
 import {
+  writeWorkItemFixVersions,
+  writeWorkItemLabels,
   writeWorkItemLink,
+  writeWorkItemPriority,
   writeWorkItemSubtask,
+  type WorkItemWriteContext,
 } from "~/t3team/workitem/t3team-workItemFieldWrites";
+
+const writePriority = (ctx: WorkItemWriteContext, priority: string | undefined) =>
+  priority === undefined ? undefined : () => writeWorkItemPriority(ctx, priority);
+
+const writeAddRemove = (
+  ctx: WorkItemWriteContext,
+  field: "labels" | "fix_version",
+  change: WorkItemAddRemoveDraftPatch | undefined,
+) =>
+  change === undefined
+    ? undefined
+    : () =>
+        field === "labels"
+          ? writeWorkItemLabels(ctx, change)
+          : writeWorkItemFixVersions(ctx, change);
 
 /**
  * Builds one "resolve this scalar draft" dispatcher for the strip, covering every field kind this
@@ -61,6 +83,23 @@ export function useWorkItemDraftStripScalarAccept(input: {
       return () =>
         acceptAction(draft, async () => {
           await writeWorkItemLink({ backend, accountId, issueIdOrKey }, link);
+          onReload();
+        });
+    }
+    if (
+      (draft.field === "labels" || draft.field === "priority" || draft.field === "fix_version") &&
+      backend &&
+      accountId
+    ) {
+      const ctx = { backend, accountId, issueIdOrKey };
+      const write =
+        draft.field === "priority"
+          ? writePriority(ctx, readPriorityDraftPatch(draft))
+          : writeAddRemove(ctx, draft.field, readAddRemoveDraftPatch(draft));
+      if (!write) return undefined;
+      return () =>
+        acceptAction(draft, async () => {
+          await write();
           onReload();
         });
     }

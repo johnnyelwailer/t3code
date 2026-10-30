@@ -172,3 +172,39 @@ export const LINK_REMOVE_DRAFT_INPUT_SCHEMA = {
   },
   required: ["link_id"],
 } as const;
+
+const NAME_LIST_PROPERTY = {
+  type: "array",
+  items: { type: "string", minLength: 1 },
+  maxItems: 25,
+} as const;
+
+export const LABELS_DRAFT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    issue_id: ISSUE_ID_PROPERTY,
+    add: { ...NAME_LIST_PROPERTY, description: "Labels to add (no spaces)." },
+    remove: { ...NAME_LIST_PROPERTY, description: "Labels to remove." },
+  },
+} as const;
+
+export const PRIORITY_DRAFT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    issue_id: ISSUE_ID_PROPERTY,
+    priority: { type: "string", minLength: 1, description: "Priority name, e.g. High." },
+  },
+  required: ["priority"],
+} as const;
+
+export const FIX_VERSION_DRAFT_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    issue_id: ISSUE_ID_PROPERTY,
+    add: { ...NAME_LIST_PROPERTY, description: "Fix version names to add." },
+    remove: { ...NAME_LIST_PROPERTY, description: "Fix version names to remove." },
+  },
+} as const;

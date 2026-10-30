@@ -95,6 +95,21 @@ describe("defaults per kind", () => {
       false,
     ],
     ["comment", { id: "k7", issueKey: "N-1", field: "comment", patch: { body: "Hi" } }, false],
+    [
+      "labels",
+      { id: "k8", issueKey: "N-1", field: "labels", patch: { add: ["bug"], remove: [] } },
+      true,
+    ],
+    [
+      "priority",
+      { id: "k9", issueKey: "N-1", field: "priority", patch: { priority: "High" } },
+      true,
+    ],
+    [
+      "fix version",
+      { id: "k10", issueKey: "N-1", field: "fix_version", patch: { add: [], remove: ["2.3.0"] } },
+      true,
+    ],
   ];
 
   it.each(kinds)("%s: pre-approved is %s", (_name, member, approved) => {

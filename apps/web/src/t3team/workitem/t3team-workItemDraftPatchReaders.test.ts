@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  readAddRemoveDraftPatch,
   readEstimatePointsDraftPatch,
   readLinkDraftPatch,
+  readPriorityDraftPatch,
   readSubtaskDraftPatch,
 } from "./t3team-workItemDraftPatchReaders";
 import type { T3TeamScalarDraftMutation } from "~/t3team/t3team-draftMutationTypes";
@@ -102,5 +104,31 @@ describe("readSubtaskDraftPatch", () => {
 
   it("is undefined without a summary", () => {
     expect(readSubtaskDraftPatch(subtaskDraft({ description: "no summary" }))).toBeUndefined();
+  });
+});
+
+describe("readAddRemoveDraftPatch / readPriorityDraftPatch", () => {
+  const field = (patch: Record<string, unknown>) =>
+    ({ patch, field: "labels" }) as unknown as T3TeamScalarDraftMutation;
+
+  it("reads labels / fix-version names and a priority name", () => {
+    expect(readAddRemoveDraftPatch(field({ add: ["bug"], remove: ["wontfix"] }))).toEqual({
+      add: ["bug"],
+      remove: ["wontfix"],
+    });
+    expect(readPriorityDraftPatch(field({ priority: "High" }))).toBe("High");
+  });
+
+  it.each([
+    ["an empty change", { add: [], remove: [] }],
+    ["a missing list", { add: ["bug"] }],
+    ["a non-string name", { add: [1], remove: [] }],
+    ["a blank name", { add: [" "], remove: [] }],
+  ])("is undefined for %s", (_name, patch) => {
+    expect(readAddRemoveDraftPatch(field(patch))).toBeUndefined();
+  });
+
+  it("is undefined for a blank priority", () => {
+    expect(readPriorityDraftPatch(field({ priority: " " }))).toBeUndefined();
   });
 });

@@ -194,6 +194,40 @@ describe("useWorkItemDraftStripScalarAccept", () => {
     ]);
   });
 
+  it.each([
+    [
+      "labels",
+      { add: ["bug"], remove: ["wontfix"] },
+      { labels: { add: ["bug"], remove: ["wontfix"] } },
+    ],
+    ["priority", { priority: "High" }, { priority: "High" }],
+    [
+      "fix_version",
+      { add: ["2.4.0"], remove: [] },
+      { fixVersions: { add: ["2.4.0"], remove: [] } },
+    ],
+  ] as const)("resolves a %s draft to updateIssueFields", async (field, patch, expected) => {
+    const calls: unknown[] = [];
+    const latest = mount({ updateIssueFields: async (input) => void calls.push(input) });
+    const d = draft(field, patch);
+    useT3TeamDraftMutationStore.setState({ drafts: [d] });
+
+    await act(async () => {
+      latest.resolve!(d)!();
+      await Promise.resolve();
+    });
+    expect(calls).toEqual([{ accountId: "acct-1", issueIdOrKey: "ALPHA-1", ...expected }]);
+    expect(useT3TeamDraftMutationStore.getState().drafts[0]?.status).toBe("applied");
+  });
+
+  it.each([
+    ["labels", {}],
+    ["priority", { priority: "" }],
+    ["fix_version", { add: [], remove: [] }],
+  ] as const)("offers no accept for an unreadable %s patch", (field, patch) => {
+    expect(mount({}).resolve!(draft(field, patch))).toBeUndefined();
+  });
+
   it("offers no accept for a patch it cannot parse", () => {
     const latest = mount({});
     const d = draft("link", { action: "create" }); // missing required fields

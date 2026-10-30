@@ -1,3 +1,4 @@
+import type { WorkItemFieldUpdateInput } from "@t3tools/contracts";
 import type {
   ExternalProject,
   IntegrationAccount,
@@ -145,6 +146,8 @@ export interface AtlassianBackendApi
     readonly issueIdOrKey: string;
     readonly description: string;
   }) => Promise<void>;
+  /** Labels / priority / fix versions in one allowlisted write; add/remove are idempotent. */
+  readonly updateIssueFields: (input: WorkItemFieldUpdateInput) => Promise<void>;
   readonly createSubtask: (input: {
     readonly accountId: string;
     readonly projectId: string;

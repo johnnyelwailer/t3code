@@ -296,7 +296,9 @@ aside and the right-panel thread tab all show it. It follows the 3a contract:
   applied", and a `changed` operation is never counted as approved.
 - What the card may write is decided per operation (`t3team-changeSetPolicy.ts`). Status, assignee,
   story points and link removal are pre-approved, shown with their values, and written through the
-  work item view's own field writes (`t3team-workItemFieldWrites.ts`). Every write that creates
+  work item view's own field writes (`t3team-workItemFieldWrites.ts`). Labels, priority and fix
+  versions (add/remove by name, set by name) are idempotent and handled the same way, shown as
+  "+bug, -wontfix", "Priority: High", "Fix version: +2.4.0". Every write that creates
   something (comment, subtask, link create) is NOT pre-approved: it needs an explicit tick and shows
   "Creates a new item; check Jira first if a previous apply was interrupted". A comment also shows
   its full text. A description is never written from the card
@@ -318,7 +320,7 @@ aside and the right-panel thread tab all show it. It follows the 3a contract:
   does any later write to the same field of the same issue. Each uncertain operation offers Retry
   anyway, Already applied (asks to confirm, then records the verdict only) and Dismiss. The hold is
   separate from the outcome: only a recorded verdict, or a retry that succeeds, releases it; a
-  failed recording, a refusal or another failure keeps it. Repeatable writes (status, assignee, points, link remove) retry normally.
+  failed recording, a refusal or another failure keeps it. Repeatable writes (status, assignee, points, link remove, labels, priority, fix versions) retry normally.
 - Verdicts are recorded with a bounded backoff. A write that landed but could not be recorded is
   `unrecorded`: the card warns "applied in Jira but could not be recorded", never sends it again, and
   offers Retry recording. Session outcomes live in a module store (`t3team-changeSetOutcomeStore.ts`)

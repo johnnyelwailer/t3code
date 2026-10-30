@@ -89,3 +89,25 @@ export function readSubtaskDraftPatch(
     ...(estimateHours !== undefined ? { estimateHours } : {}),
   };
 }
+
+export type WorkItemAddRemoveDraftPatch = {
+  readonly add: ReadonlyArray<string>;
+  readonly remove: ReadonlyArray<string>;
+};
+
+/** Labels and fix-version drafts share `{ add, remove }`; an all-empty or malformed patch is unreadable. */
+export function readAddRemoveDraftPatch(
+  draft: T3TeamScalarDraftMutation,
+): WorkItemAddRemoveDraftPatch | undefined {
+  const names = (value: unknown): ReadonlyArray<string> | undefined =>
+    Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim() !== "")
+      ? value
+      : undefined;
+  const add = names(draft.patch.add);
+  const remove = names(draft.patch.remove);
+  return add && remove && add.length + remove.length > 0 ? { add, remove } : undefined;
+}
+
+export function readPriorityDraftPatch(draft: T3TeamScalarDraftMutation): string | undefined {
+  return readString(draft.patch.priority);
+}

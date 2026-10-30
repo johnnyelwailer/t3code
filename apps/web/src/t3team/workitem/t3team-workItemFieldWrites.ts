@@ -1,5 +1,6 @@
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
 import type {
+  WorkItemAddRemoveDraftPatch,
   WorkItemLinkDraftPatch,
   WorkItemSubtaskDraftPatch,
 } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
@@ -83,4 +84,25 @@ export async function writeWorkItemComment(
   body: string,
 ): Promise<void> {
   await backend.addIssueComment({ accountId, issueIdOrKey, body });
+}
+
+export async function writeWorkItemLabels(
+  { backend, accountId, issueIdOrKey }: WorkItemWriteContext,
+  labels: WorkItemAddRemoveDraftPatch,
+): Promise<void> {
+  await backend.updateIssueFields({ accountId, issueIdOrKey, labels });
+}
+
+export async function writeWorkItemPriority(
+  { backend, accountId, issueIdOrKey }: WorkItemWriteContext,
+  priority: string,
+): Promise<void> {
+  await backend.updateIssueFields({ accountId, issueIdOrKey, priority });
+}
+
+export async function writeWorkItemFixVersions(
+  { backend, accountId, issueIdOrKey }: WorkItemWriteContext,
+  fixVersions: WorkItemAddRemoveDraftPatch,
+): Promise<void> {
+  await backend.updateIssueFields({ accountId, issueIdOrKey, fixVersions });
 }

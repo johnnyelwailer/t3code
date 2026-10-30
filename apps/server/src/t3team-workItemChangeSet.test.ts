@@ -144,6 +144,9 @@ const OPS = [
     link_type_name: "Blocks",
     direction: "outward",
   },
+  { op: "labels", issue_id: "IES-1", add: ["bug"], remove: ["wontfix"] },
+  { op: "priority", issue_id: "IES-2", priority: "High" },
+  { op: "fix_version", issue_id: "IES-2", add: ["2.4.0"] },
 ];
 
 it.effect(
@@ -171,7 +174,7 @@ it.effect(
       );
       assert.deepEqual(
         changeSet.operations.map((operation) => operation.field),
-        ["comment", "status", "subtask", "link"],
+        ["comment", "status", "subtask", "link", "labels", "priority", "fix_version"],
       );
       for (const operation of changeSet.operations) {
         const { draft } = carrier.rows.get(operation.draftId)!.payload;

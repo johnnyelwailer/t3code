@@ -24,6 +24,9 @@ const WORK_ITEM_DRAFT_ENTRY = {
     "estimate_hours?)\n" +
     "- link_add: link two work items (issue_id, other_issue_id, link_type_name, direction: " +
     "inward|outward)\n" +
+    "- labels: add/remove labels, no spaces (issue_id, add?, remove?)\n" +
+    "- priority: set by name (issue_id, priority)\n" +
+    "- fix_version: add/remove fix versions by name (issue_id, add?, remove?)\n" +
     "Answer: { ok, promptText, draftMutation }. Not available when no Jira account is connected " +
     "for this project.",
   capabilities: ["write"],
@@ -45,6 +48,9 @@ const WORK_ITEM_DRAFT_ENTRY = {
           "status",
           "subtask_create",
           "link_add",
+          "labels",
+          "priority",
+          "fix_version",
         ],
       },
       issue_id: { type: "string", minLength: 1, description: "Work item key, e.g. PROJ-12." },
@@ -60,6 +66,9 @@ const WORK_ITEM_DRAFT_ENTRY = {
       other_issue_id: { type: "string" },
       link_type_name: { type: "string" },
       direction: { type: "string", enum: ["inward", "outward"] },
+      add: { type: "array", items: { type: "string" }, maxItems: 25 },
+      remove: { type: "array", items: { type: "string" }, maxItems: 25 },
+      priority: { type: "string" },
     },
     required: ["op", "issue_id"],
   },

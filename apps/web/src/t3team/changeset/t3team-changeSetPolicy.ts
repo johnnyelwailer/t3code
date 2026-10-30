@@ -3,8 +3,10 @@ import type { T3TeamDraftMutationPayload } from "@t3tools/contracts";
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import {
   readAssigneeDraftPatch,
+  readAddRemoveDraftPatch,
   readEstimatePointsDraftPatch,
   readLinkDraftPatch,
+  readPriorityDraftPatch,
   readStatusDraftPatch,
   readSubtaskDraftPatch,
 } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
@@ -58,6 +60,11 @@ export function operationPolicy(payload: T3TeamDraftMutationPayload | undefined)
       const link = readLinkDraftPatch(draft);
       return scalar(link !== undefined, link?.action === "remove");
     }
+    case "labels":
+    case "fix_version":
+      return scalar(readAddRemoveDraftPatch(draft) !== undefined, true);
+    case "priority":
+      return scalar(readPriorityDraftPatch(draft) !== undefined, true);
     case "subtask":
       return scalar(readSubtaskDraftPatch(draft) !== undefined, false);
   }

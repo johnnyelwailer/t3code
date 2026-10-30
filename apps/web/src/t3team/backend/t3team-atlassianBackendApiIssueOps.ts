@@ -1,3 +1,4 @@
+import type { WorkItemFieldUpdateInput } from "@t3tools/contracts";
 import type { ResourcePage } from "@t3tools/project-context";
 
 import type {
@@ -19,6 +20,7 @@ type AtlassianIssueOpsApi = Pick<
   | "updateIssueEstimate"
   | "updateIssueStatus"
   | "updateIssueDescription"
+  | "updateIssueFields"
   | "createSubtask"
   | "listChildIssueTypes"
   | "downloadAsset"
@@ -85,6 +87,10 @@ export function createAtlassianIssueOpsApi(post: PostJson): AtlassianIssueOpsApi
         "/api/t3team/atlassian/issue/update-description",
         input,
       );
+    },
+
+    async updateIssueFields(input: WorkItemFieldUpdateInput): Promise<void> {
+      await post<typeof input, { ok: true }>("/api/t3team/atlassian/issue/update-fields", input);
     },
 
     async createSubtask(input: {

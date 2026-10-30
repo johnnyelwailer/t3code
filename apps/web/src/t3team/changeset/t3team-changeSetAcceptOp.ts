@@ -9,9 +9,11 @@ import { normalizeIssueKey } from "~/t3team/changeset/t3team-changeSetModel";
 import { APPLY_FROM_ITEM, operationPolicy } from "~/t3team/changeset/t3team-changeSetPolicy";
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import {
+  readAddRemoveDraftPatch,
   readAssigneeDraftPatch,
   readEstimatePointsDraftPatch,
   readLinkDraftPatch,
+  readPriorityDraftPatch,
   readStatusDraftPatch,
   readSubtaskDraftPatch,
 } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
@@ -19,7 +21,10 @@ import {
   writeWorkItemAssignee,
   writeWorkItemComment,
   writeWorkItemEstimatePoints,
+  writeWorkItemFixVersions,
+  writeWorkItemLabels,
   writeWorkItemLink,
+  writeWorkItemPriority,
   writeWorkItemStatus,
   writeWorkItemSubtask,
 } from "~/t3team/workitem/t3team-workItemFieldWrites";
@@ -64,6 +69,12 @@ export function createChangeSetAcceptOp(input: {
         return writeWorkItemEstimatePoints(ctx, readEstimatePointsDraftPatch(draft)!);
       case "link":
         return writeWorkItemLink(ctx, readLinkDraftPatch(draft)!);
+      case "labels":
+        return writeWorkItemLabels(ctx, readAddRemoveDraftPatch(draft)!);
+      case "fix_version":
+        return writeWorkItemFixVersions(ctx, readAddRemoveDraftPatch(draft)!);
+      case "priority":
+        return writeWorkItemPriority(ctx, readPriorityDraftPatch(draft)!);
       case "subtask":
         if (!input.externalProjectId) throw new UnsupportedOperationError(APPLY_FROM_ITEM);
         return writeWorkItemSubtask(ctx, input.externalProjectId, readSubtaskDraftPatch(draft)!);

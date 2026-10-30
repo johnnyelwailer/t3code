@@ -91,6 +91,9 @@ export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = n
   "t3team.work_item.subtask.draft_create",
   "t3team.work_item.link.draft_create",
   "t3team.work_item.link.draft_remove",
+  "t3team.work_item.labels.draft_update",
+  "t3team.work_item.priority.draft_update",
+  "t3team.work_item.fix_version.draft_update",
 ]);
 
 export { T3TeamMcpToolError };

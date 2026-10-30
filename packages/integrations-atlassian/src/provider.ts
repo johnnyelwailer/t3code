@@ -48,6 +48,11 @@ import {
   type JiraSprintField,
   findJiraSprintField,
 } from "./planning.ts";
+import {
+  buildIssueFieldUpdateBody,
+  issueFieldUpdateTargets,
+  type IssueFieldUpdate,
+} from "./t3team-issueFieldUpdate.ts";
 import { resolveMirrorWalkContext } from "./t3team-mirrorWalkContext.ts";
 
 export type AtlassianBacklogBoard = {
@@ -1513,6 +1518,27 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     await entry.client.updateIssue(issueIdOrKey, {
       description: markdownToAdf(bodyMarkdown),
     });
+  }
+
+  /**
+   * Labels / priority / fix versions in ONE allowlisted `PUT`: `update` add/remove ops (idempotent) and
+   * `fields.priority`. Each touched field is gated on the issue's edit screen first, like the
+   * sibling writes, so a missing field fails with that sentence instead of a bare Jira 400.
+   */
+  async updateIssueFields(
+    accountId: string,
+    issueIdOrKey: string,
+    update: IssueFieldUpdate,
+  ): Promise<void> {
+    const entry = this.getClientForAccount(accountId) ?? this.getDefaultClient();
+    if (!entry) {
+      throw new Error("No Jira client available");
+    }
+    const body = buildIssueFieldUpdateBody(update);
+    for (const target of issueFieldUpdateTargets(update)) {
+      await this.ensureIssueFieldEditable(entry.client, issueIdOrKey, target.id, target.label);
+    }
+    await entry.client.updateIssueFields(issueIdOrKey, body);
   }
 
   async transitionIssueStatus(

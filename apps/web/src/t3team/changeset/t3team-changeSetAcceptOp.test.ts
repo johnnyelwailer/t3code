@@ -33,6 +33,7 @@ function setup(extra: { externalProjectId?: string; projectKey?: string | undefi
     addIssueComment: vi.fn(async () => ({ id: "c" })),
     createIssueLink: vi.fn(async () => {}),
     deleteIssueLink: vi.fn(async () => {}),
+    updateIssueFields: vi.fn(async () => {}),
     createSubtask: vi.fn(async () => ({ id: "1", key: "NXAI-8" })),
   };
   const accept = createChangeSetAcceptOp({
@@ -66,6 +67,24 @@ describe("createChangeSetAcceptOp", () => {
       { otherIssueIdOrKey: "NXAI-9", linkTypeName: "Blocks", direction: "outward" },
       "createIssueLink",
       { otherIssueIdOrKey: "NXAI-9" },
+    ],
+    [
+      "labels",
+      { add: ["bug"], remove: ["wontfix"] },
+      "updateIssueFields",
+      { issueIdOrKey: "NXAI-7", labels: { add: ["bug"], remove: ["wontfix"] } },
+    ],
+    [
+      "priority",
+      { priority: "High" },
+      "updateIssueFields",
+      { issueIdOrKey: "NXAI-7", priority: "High" },
+    ],
+    [
+      "fix_version",
+      { add: ["2.4.0"], remove: [] },
+      "updateIssueFields",
+      { issueIdOrKey: "NXAI-7", fixVersions: { add: ["2.4.0"], remove: [] } },
     ],
   ] as const)(
     "writes a %s draft through the shared field write",
@@ -115,6 +134,16 @@ describe("createChangeSetAcceptOp", () => {
       UnsupportedOperationError,
     );
     expect(backend.updateIssueEstimate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["labels", { add: [], remove: [] }],
+    ["priority", {}],
+    ["fix_version", { add: "2.4.0" }],
+  ])("will not write an unreadable %s patch", async (field, patch) => {
+    const { backend, accept } = setup();
+    await expect(accept(draft(field, patch))).rejects.toBeInstanceOf(UnsupportedOperationError);
+    expect(backend.updateIssueFields).not.toHaveBeenCalled();
   });
 
   it("will not guess at a patch no reader understands", async () => {

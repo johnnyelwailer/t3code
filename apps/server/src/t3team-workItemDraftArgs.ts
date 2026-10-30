@@ -15,6 +15,9 @@ const WORK_ITEM_DRAFT_OPS = [
   "status",
   "subtask_create",
   "link_add",
+  "labels",
+  "priority",
+  "fix_version",
 ] as const;
 type WorkItemDraftOp = (typeof WORK_ITEM_DRAFT_OPS)[number];
 
@@ -34,6 +37,9 @@ export const WorkItemDraftToolArgs = Schema.Struct({
   other_issue_id: Schema.optional(Schema.String),
   link_type_name: Schema.optional(Schema.String),
   direction: Schema.optional(Schema.Literals(["inward", "outward"])),
+  add: Schema.optional(Schema.Array(Schema.String)),
+  remove: Schema.optional(Schema.Array(Schema.String)),
+  priority: Schema.optional(Schema.String),
 });
 type WorkItemDraftToolArgs = typeof WorkItemDraftToolArgs.Type;
 
@@ -62,6 +68,9 @@ const OPS: Readonly<
     tool: "t3team.work_item.link.draft_create",
     fields: ["other_issue_id", "link_type_name", "direction"],
   },
+  labels: { tool: "t3team.work_item.labels.draft_update", fields: ["add", "remove"] },
+  priority: { tool: "t3team.work_item.priority.draft_update", fields: ["priority"] },
+  fix_version: { tool: "t3team.work_item.fix_version.draft_update", fields: ["add", "remove"] },
 };
 
 /** The canonical draft tool and the arguments it is called with, or the reason the call is refused. */

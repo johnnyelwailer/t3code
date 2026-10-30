@@ -10,6 +10,11 @@ import {
   readRecord,
   readTrimmedString,
 } from "./t3team-toolBrokerDraftMutationInputs.ts";
+import {
+  fixVersionDraft,
+  labelsDraft,
+  priorityDraft,
+} from "./t3team-toolBrokerDraftMutationsFields.ts";
 import { linkDraft, linkRemoveDraft } from "./t3team-toolBrokerDraftMutationsLinks.ts";
 
 const draftToolIds = new Set([
@@ -24,6 +29,9 @@ const draftToolIds = new Set([
   "t3team.work_item.subtask.draft_create",
   "t3team.work_item.link.draft_create",
   "t3team.work_item.link.draft_remove",
+  "t3team.work_item.labels.draft_update",
+  "t3team.work_item.priority.draft_update",
+  "t3team.work_item.fix_version.draft_update",
 ]);
 
 function assigneeDraft(tool: string, args: Record<string, unknown>, context: DraftToolContext) {
@@ -159,6 +167,15 @@ export function callT3TeamDraftMutationTool(input: {
   }
   if (input.tool.endsWith(".link.draft_remove")) {
     return linkRemoveDraft(input.tool, args, input.context);
+  }
+  if (input.tool.endsWith(".labels.draft_update")) {
+    return labelsDraft(input.tool, args, input.context);
+  }
+  if (input.tool.endsWith(".priority.draft_update")) {
+    return priorityDraft(input.tool, args, input.context);
+  }
+  if (input.tool.endsWith(".fix_version.draft_update")) {
+    return fixVersionDraft(input.tool, args, input.context);
   }
   return errorResult(`Tool '${input.tool}' is not implemented in this runtime.`);
 }

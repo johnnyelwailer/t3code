@@ -5,4 +5,5 @@ export * from "./normalize.ts";
 export * from "./oauth.ts";
 export * from "./oauthPopup.ts";
 export * from "./provider.ts";
+export * from "./t3team-issueFieldUpdate.ts";
 export * from "./t3team-jqlProjectScope.ts";

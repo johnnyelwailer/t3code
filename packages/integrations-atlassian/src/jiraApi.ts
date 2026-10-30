@@ -1,3 +1,4 @@
+import type { IssueFieldUpdateBody } from "./t3team-issueFieldUpdate.ts";
 import type { AtlassianOAuthConfig, TokenExchangeResult } from "./oauth.ts";
 import { listAccessibleResources } from "./oauth.ts";
 import {
@@ -579,6 +580,15 @@ export class JiraApiClient {
         accept: "application/json",
         contentType: "application/json",
       },
+    );
+  }
+
+  /** `PUT /issue/{key}` with a prebuilt `fields` / `update` body (see `buildIssueFieldUpdateBody`). */
+  async updateIssueFields(issueIdOrKey: string, body: IssueFieldUpdateBody): Promise<void> {
+    await this.fetchResponse(
+      `/rest/api/3/issue/${issueIdOrKey}`,
+      { method: "PUT", body: JSON.stringify(body) },
+      { accept: "application/json", contentType: "application/json" },
     );
   }
 

@@ -151,6 +151,21 @@ const OPS: ReadonlyArray<{
     tool: "t3team.work_item.link.draft_create",
     field: "link",
   },
+  {
+    args: { op: "labels", issue_id: "IES-1", add: ["bug"], remove: ["wontfix"] },
+    tool: "t3team.work_item.labels.draft_update",
+    field: "labels",
+  },
+  {
+    args: { op: "priority", issue_id: "IES-1", priority: "High" },
+    tool: "t3team.work_item.priority.draft_update",
+    field: "priority",
+  },
+  {
+    args: { op: "fix_version", issue_id: "IES-1", add: ["2.4.0"] },
+    tool: "t3team.work_item.fix_version.draft_update",
+    field: "fix_version",
+  },
 ];
 
 it.effect("every op creates exactly one draft artifact on the calling thread", () =>
@@ -166,6 +181,45 @@ it.effect("every op creates exactly one draft artifact on the calling thread", (
       assert.strictEqual(artifact?.payload.draft.field, op.field);
       assert.strictEqual(artifact?.payload.draft.target.issueIdOrKey, "IES-1");
       assert.strictEqual(artifact?.payload.draft.status, "draft");
+    }
+  }),
+);
+
+it.effect("labels, priority and fix_version drafts carry exactly the proposed change", () =>
+  Effect.gen(function* () {
+    const patchOf = (args: Record<string, unknown>) =>
+      run({ toolArgs: args }).pipe(
+        Effect.map(({ carrier }) => carrier.artifacts[0]?.payload.draft.patch),
+      );
+    assert.deepEqual(
+      yield* patchOf({ op: "labels", issue_id: "IES-1", add: [" bug ", "bug", "ui"] }),
+      { add: ["bug", "ui"], remove: [] },
+    );
+    assert.deepEqual(yield* patchOf({ op: "priority", issue_id: "IES-1", priority: " High " }), {
+      priority: "High",
+    });
+    assert.deepEqual(
+      yield* patchOf({ op: "fix_version", issue_id: "IES-1", add: ["2.4.0"], remove: ["2.3.0"] }),
+      { add: ["2.4.0"], remove: ["2.3.0"] },
+    );
+  }),
+);
+
+it.effect("refuses an empty, contradictory or malformed field change, publishing nothing", () =>
+  Effect.gen(function* () {
+    for (const toolArgs of [
+      { op: "labels", issue_id: "IES-1" },
+      { op: "labels", issue_id: "IES-1", add: [], remove: [" "] },
+      { op: "labels", issue_id: "IES-1", add: ["a"], remove: ["a"] },
+      { op: "labels", issue_id: "IES-1", add: ["two words"] },
+      { op: "fix_version", issue_id: "IES-1", remove: [] },
+      { op: "fix_version", issue_id: "IES-1", add: ["2.4.0"], remove: ["2.4.0"] },
+      { op: "priority", issue_id: "IES-1", priority: "  " },
+      { op: "priority", issue_id: "IES-1" },
+    ]) {
+      const { result, carrier } = yield* run({ toolArgs });
+      assert.isTrue(result.isError, JSON.stringify(toolArgs));
+      assert.lengthOf(carrier.artifacts, 0);
     }
   }),
 );
@@ -280,11 +334,13 @@ it.effect(
   () =>
     Effect.gen(function* () {
       replaceFeatureFlagPresetValues(new Map());
-      const { result, provider, carrier } = yield* run({ toolArgs: OPS[0]!.args });
-      assert.isTrue(result.isError);
-      assert.include(text(result), FEATURE_OFF);
-      assert.lengthOf(carrier.artifacts, 0);
-      assert.deepEqual(provider.reads, []);
+      for (const op of OPS) {
+        const { result, provider, carrier } = yield* run({ toolArgs: op.args });
+        assert.isTrue(result.isError, String(op.args.op));
+        assert.include(text(result), FEATURE_OFF);
+        assert.lengthOf(carrier.artifacts, 0);
+        assert.deepEqual(provider.reads, []);
+      }
     }),
 );
 

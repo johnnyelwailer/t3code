@@ -16,6 +16,7 @@ import {
   type T3TeamAtlassianIssueLinkDeleteInput,
   type T3TeamAtlassianIssueLinkTypesInput,
 } from "./t3team-atlassian-issue-content.ts";
+import { updateT3TeamAtlassianIssueFields } from "./t3team-atlassian-issueFields.ts";
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 
 const t3teamAtlassianIssueCommentCreateRouteLayer = HttpRouter.add(
@@ -78,6 +79,15 @@ const t3teamAtlassianIssueLinkTypesRouteLayer = HttpRouter.add(
   }).pipe(Effect.catch(errorResponse)),
 );
 
+const t3teamAtlassianIssueFieldsRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/t3team/atlassian/issue/update-fields",
+  Effect.gen(function* () {
+    yield* updateT3TeamAtlassianIssueFields(yield* readJsonBody<unknown>());
+    return okJson({ ok: true });
+  }).pipe(Effect.catch(errorResponse)),
+);
+
 export const t3teamAtlassianIssueContentRouteLayer = Layer.mergeAll(
   t3teamAtlassianIssueCommentCreateRouteLayer,
   t3teamAtlassianIssueCommentUpdateRouteLayer,
@@ -85,4 +95,5 @@ export const t3teamAtlassianIssueContentRouteLayer = Layer.mergeAll(
   t3teamAtlassianIssueLinkCreateRouteLayer,
   t3teamAtlassianIssueLinkDeleteRouteLayer,
   t3teamAtlassianIssueLinkTypesRouteLayer,
+  t3teamAtlassianIssueFieldsRouteLayer,
 );

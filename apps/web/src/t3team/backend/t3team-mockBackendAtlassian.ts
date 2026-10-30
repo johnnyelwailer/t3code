@@ -154,6 +154,7 @@ export function createMockAtlassianBackendApi(input: {
       label: request.estimateMode === "hours" ? "Hours" : "Story Points",
     }),
     updateIssueDescription: async () => undefined,
+    updateIssueFields: async () => undefined,
     updateIssueStatus: async (request) => ({
       status: request.targetStatus.trim() || "No status",
     }),
