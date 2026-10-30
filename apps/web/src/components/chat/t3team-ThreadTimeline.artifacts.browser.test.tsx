@@ -165,7 +165,6 @@ function timeline() {
       emptyPlaceholderInset={0}
       liveFollowEnabled
       onIsAtEndChange={() => {}}
-      onManualNavigation={() => {}}
     />
   );
 }

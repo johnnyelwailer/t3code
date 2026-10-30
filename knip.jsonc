@@ -142,6 +142,9 @@
         "src/claude-history-worker.ts!",
         "src/t3team-hostEffect.ts!",
         "src/t3team-hostSdk.ts!",
+        // Fork main imported this into t3team-workflowEngineBrokerAsk.ts but never called it; the sync
+        // lint pass removed the unused import. Kept until the retry is wired in or the file is deleted.
+        "src/t3team-workflowEngineTurnStartBusyRetry.ts",
         "src/t3team-stallProfiler.fixture.mjs",
         // Bundled recipe bodies, read as raw text (`?raw`) and scaffolded into workspaces, where
         // the recipe loader requires their top-level `export const meta`.

@@ -49,7 +49,6 @@ function baseProps() {
     emptyPlaceholderInset: 0,
     liveFollowEnabled: true,
     onIsAtEndChange: () => {},
-    onManualNavigation: () => {},
   } satisfies Omit<TimelineProps, "timelineEntries">;
 }
 
