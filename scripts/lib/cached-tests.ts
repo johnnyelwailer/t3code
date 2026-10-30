@@ -2,6 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
+import { foldedTestProject } from "./t3team-foldedTests.ts";
 
 interface CachedTestTask {
   command: string;
@@ -60,7 +61,11 @@ export function cachedTestTasks(
   const sorted = [...new Set(files)].sort();
   const packages = new Map<string, Array<string>>();
   for (const file of sorted) {
-    let directory = NodePath.dirname(NodePath.join(root, file));
+    const folded = foldedTestProject(file);
+    let directory =
+      folded === undefined
+        ? NodePath.dirname(NodePath.join(root, file))
+        : NodePath.join(root, folded);
     while (directory !== root && !NodeFS.existsSync(NodePath.join(directory, "package.json"))) {
       directory = NodePath.dirname(directory);
     }

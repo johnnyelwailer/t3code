@@ -7,6 +7,7 @@ import * as NodeUtil from "node:util";
 
 import { matchesTestPath } from "./lib/cached-tests.ts";
 import { shardedTestFiles } from "./lib/sharded-tests.ts";
+import { foldedTestRoots } from "./lib/t3team-foldedTests.ts";
 
 const root = NodePath.resolve(import.meta.dirname, "..");
 const { values, positionals } = NodeUtil.parseArgs({
@@ -48,7 +49,10 @@ const candidates = values.shard
       ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
       { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
     ).split("\0");
-const filters = positionals.map((path) => NodePath.relative(root, NodePath.resolve(path)));
+const filters = positionals.flatMap((path) => {
+  const project = NodePath.relative(root, NodePath.resolve(path));
+  return values.shard ? [project, ...foldedTestRoots(project)] : [project];
+});
 const isSelectable = (file: string) =>
   /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file) &&
   !file.startsWith(".repos/") &&
