@@ -123,6 +123,12 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
         input,
       );
     },
+    readWorkItemRecord(input: {
+      readonly projectId: string;
+      readonly issueKey: string;
+    }): Promise<unknown> {
+      return postJson<typeof input, unknown>(httpBaseUrl, "/api/t3team/work-item/record", input);
+    },
     refreshWorkItemContext(input: {
       readonly workspaceRoot: string;
       readonly projectId: string;

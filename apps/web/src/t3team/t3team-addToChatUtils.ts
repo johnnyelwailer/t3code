@@ -20,11 +20,11 @@ export type AddToChatRequest = {
   dedupeKey?: string;
   payload: unknown | ((input?: AddToChatPayloadInput) => Promise<unknown>);
   /**
-   * What the UI already holds about the item, readable without a fetch. A drop onto another
-   * environment's thread writes it there as the cached copy: that environment's server cannot
-   * resolve `payload` when the full record lives only on this one.
+   * Fetches the item's complete record from the environment the drag started in. A drop onto
+   * another environment's thread writes it there as the cached copy: that environment's server
+   * cannot resolve `payload` when it holds no account for the source.
    */
-  localSnapshot?: unknown;
+  fullRecord?: () => Promise<unknown>;
   summaryItems?: ReadonlyArray<{ label: string; value: string }>;
 };
 

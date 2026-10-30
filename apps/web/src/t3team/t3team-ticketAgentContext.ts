@@ -43,7 +43,11 @@ export function buildTicketAgentContextCapabilities(
         : {}),
       summaryItems: jiraSummary.summaryItems,
       payload: buildWorkItemAddToChatPayload({ backend, project, ticket }),
-      localSnapshot: { ticket },
+      fullRecord: () =>
+        backend.projectWorkspace.readWorkItemRecord({
+          projectId: project.id,
+          issueKey: ticket.ref.displayId,
+        }),
     },
     {
       ...(options?.sidebarPin ? { sidebarPin: options.sidebarPin } : {}),

@@ -67,8 +67,8 @@ async function writeInSourceEnvironment(
 /**
  * Another environment's thread: its agent cannot read this machine's files and its server may
  * lack the credentials to resolve the item, so the copy travels as bytes and is written through
- * that environment's own server. The UI-held snapshot is the floor; a payload that already
- * carries its files is written as is.
+ * that environment's own server. The full record comes from the dragged-from environment; a
+ * payload that already carries its files is written as is.
  */
 async function writeInOtherEnvironment(
   request: AddToChatRequest,
@@ -76,7 +76,10 @@ async function writeInOtherEnvironment(
   addedAt: string,
 ): Promise<string> {
   const workspaceRoot = destinationWorkspaceRoot(threadRef);
-  if (request.localSnapshot !== undefined) {
+  if (request.fullRecord !== undefined) {
+    // Fetched from the dragged-from environment; a failure leaves the chip unavailable and the
+    // write retries on mount, never a thinner copy standing in for the record.
+    const record = await request.fullRecord();
     const relativePath = snapshotPath(request, threadRef);
     const contents = compactJson({
       capturedAt: addedAt,
@@ -84,7 +87,7 @@ async function writeInOtherEnvironment(
       label: request.targetLabel,
       project: request.projectTitle,
       summary: request.summaryItems ?? [],
-      snapshot: request.localSnapshot,
+      record,
     });
     await writeToEnvironment(threadRef.environmentId, workspaceRoot, [{ relativePath, contents }]);
     return relativePath;

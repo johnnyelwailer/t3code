@@ -4,7 +4,7 @@
  * the broker is built, so a runtime without the mirror gets no work-item tools (fail-closed: the
  * tools are absent, never half-working).
  */
-import type { ThreadId } from "@t3tools/contracts";
+import type { OrchestrationProjectShell, ThreadId } from "@t3tools/contracts";
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -17,6 +17,7 @@ import type { T3TeamThreadProject } from "./t3team-toolBrokerThreadReads.ts";
 import {
   JIRA_NOT_CONNECTED_MESSAGE,
   makeUsableJiraBindingForThread,
+  usableJiraBindingOfProject,
 } from "./t3team-workItemReadAvailability.ts";
 import {
   getMirrorItem,
@@ -32,71 +33,81 @@ type ProviderServices = Effect.Services<ReturnType<typeof providerForAccount>>;
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+/**
+ * The one live work-item read service. The thread tool and the project record route both take
+ * `get` from here, so what an agent reads and what a drop carries to another environment are
+ * assembled by the same code.
+ */
+const makeLiveWorkItemReadService = Effect.fn("t3team.workItemRead.makeService")(function* () {
+  const sql = Option.getOrUndefined(yield* Effect.serviceOption(SqlClient.SqlClient));
+  if (sql === undefined) return undefined;
+  const ambient = yield* Effect.context<never>();
+  const provide = <A, E>(effect: Effect.Effect<A, E, ProviderServices | SqlClient.SqlClient>) =>
+    effect.pipe(
+      Effect.provideService(SqlClient.SqlClient, sql),
+      Effect.provideContext(ambient as Context.Context<ProviderServices>),
+      Effect.mapError(message),
+    );
+  const provider = (binding: JiraMirrorBinding) =>
+    provide(providerForAccount(binding.accountId)).pipe(
+      Effect.flatMap((candidate) =>
+        candidate instanceof AtlassianIntegrationProvider
+          ? Effect.succeed(candidate)
+          : Effect.fail(JIRA_NOT_CONNECTED_MESSAGE),
+      ),
+    );
+
+  const port: WorkItemReadPort = {
+    mirrorReady: (binding) => provide(isMirrorReady(binding)),
+    mirrorSearch: (binding, filters, limit, offset) =>
+      provide(searchMirror(binding, filters, limit, offset)),
+    mirrorGet: (binding, key) => provide(getMirrorItem(binding, key)),
+    mirrorChildren: (binding, parentKey, limit) =>
+      provide(listMirrorChildren(binding, parentKey, limit)),
+    searchLive: (binding, jql, limit, cursor) =>
+      provider(binding).pipe(
+        Effect.flatMap((jira) =>
+          Effect.tryPromise({
+            try: () =>
+              jira.searchIssuesByJql({
+                accountId: binding.accountId,
+                jql,
+                limit,
+                ...(cursor === undefined ? {} : { cursor }),
+              }),
+            catch: message,
+          }),
+        ),
+        Effect.map((page) => ({
+          items: page.items as ReadonlyArray<Record<string, unknown>>,
+          nextCursor: page.nextCursor,
+        })),
+      ),
+    comments: (binding, issueKey, limit) =>
+      provider(binding).pipe(
+        Effect.flatMap((jira) =>
+          Effect.tryPromise({
+            try: () =>
+              jira.listIssueComments({
+                accountId: binding.accountId,
+                issueIdOrKey: issueKey,
+                limit,
+              }),
+            catch: message,
+          }),
+        ),
+      ),
+  };
+  return { service: makeWorkItemReadService(port), projectScope: makeProjectScope(port) };
+});
+
 export const makeWorkItemReadToolHandlers = Effect.fn("t3team.workItemRead.make")(
   function* (input: {
     readonly loadThreadProject: (threadId: ThreadId) => Effect.Effect<T3TeamThreadProject, string>;
   }) {
-    const sql = Option.getOrUndefined(yield* Effect.serviceOption(SqlClient.SqlClient));
-    if (sql === undefined) return undefined;
-    const ambient = yield* Effect.context<never>();
-    const provide = <A, E>(effect: Effect.Effect<A, E, ProviderServices | SqlClient.SqlClient>) =>
-      effect.pipe(
-        Effect.provideService(SqlClient.SqlClient, sql),
-        Effect.provideContext(ambient as Context.Context<ProviderServices>),
-        Effect.mapError(message),
-      );
-    const provider = (binding: JiraMirrorBinding) =>
-      provide(providerForAccount(binding.accountId)).pipe(
-        Effect.flatMap((candidate) =>
-          candidate instanceof AtlassianIntegrationProvider
-            ? Effect.succeed(candidate)
-            : Effect.fail(JIRA_NOT_CONNECTED_MESSAGE),
-        ),
-      );
-
-    const port: WorkItemReadPort = {
-      mirrorReady: (binding) => provide(isMirrorReady(binding)),
-      mirrorSearch: (binding, filters, limit, offset) =>
-        provide(searchMirror(binding, filters, limit, offset)),
-      mirrorGet: (binding, key) => provide(getMirrorItem(binding, key)),
-      mirrorChildren: (binding, parentKey, limit) =>
-        provide(listMirrorChildren(binding, parentKey, limit)),
-      searchLive: (binding, jql, limit, cursor) =>
-        provider(binding).pipe(
-          Effect.flatMap((jira) =>
-            Effect.tryPromise({
-              try: () =>
-                jira.searchIssuesByJql({
-                  accountId: binding.accountId,
-                  jql,
-                  limit,
-                  ...(cursor === undefined ? {} : { cursor }),
-                }),
-              catch: message,
-            }),
-          ),
-          Effect.map((page) => ({
-            items: page.items as ReadonlyArray<Record<string, unknown>>,
-            nextCursor: page.nextCursor,
-          })),
-        ),
-      comments: (binding, issueKey, limit) =>
-        provider(binding).pipe(
-          Effect.flatMap((jira) =>
-            Effect.tryPromise({
-              try: () =>
-                jira.listIssueComments({
-                  accountId: binding.accountId,
-                  issueIdOrKey: issueKey,
-                  limit,
-                }),
-              catch: message,
-            }),
-          ),
-        ),
-    };
-    const service = makeWorkItemReadService(port);
-    const projectScope = makeProjectScope(port);
+    const live = yield* makeLiveWorkItemReadService();
+    if (live === undefined) return undefined;
+    const { service, projectScope } = live;
     const usableBinding = makeUsableJiraBindingForThread(input);
     const withBinding =
       <A, Args>(run: (binding: JiraMirrorBinding, args: Args) => Effect.Effect<A, string>) =>
@@ -113,5 +124,24 @@ export const makeWorkItemReadToolHandlers = Effect.fn("t3team.workItemRead.make"
       search: withBinding(service.search),
       get: withBinding(service.get),
     } satisfies T3TeamWorkItemReadToolHandlers;
+  },
+);
+
+/**
+ * The full record of one work item of a project, for a client moving it to another environment.
+ * Same `get` as `t3_work_item_get`, addressed by project instead of by calling thread, and refused
+ * with the same not-connected text when this environment has no usable account for the project.
+ */
+export const readWorkItemRecordForProject = Effect.fn("t3team.workItemRead.recordForProject")(
+  function* (input: {
+    readonly project: Pick<OrchestrationProjectShell, "source">;
+    readonly issueKey: string;
+  }) {
+    const live = yield* makeLiveWorkItemReadService();
+    const binding = usableJiraBindingOfProject(input.project);
+    if (live === undefined || binding === null) {
+      return yield* Effect.fail(JIRA_NOT_CONNECTED_MESSAGE);
+    }
+    return yield* live.service.get(binding, { issueKey: input.issueKey });
   },
 );

@@ -47,9 +47,14 @@ function threadRef(environmentId: EnvironmentId): ScopedThreadRef {
 }
 
 describe("writeContextCache", () => {
-  it("writes a UI-held snapshot through the destination environment's own server", async () => {
+  it("writes the full record, fetched from the dragged-from environment, through the destination's own server", async () => {
     const path = await writeContextCache({
-      request: request({ localSnapshot: { ticket: { status: "In Progress" } } }),
+      request: request({
+        fullRecord: async () => ({
+          item: { status: "In Progress" },
+          comments: [{ body: "ship it" }],
+        }),
+      }),
       threadRef: threadRef(REMOTE),
       addedAt: "2026-10-30T10:00:00.000Z",
       sourceEnvironmentId: SOURCE,
@@ -65,9 +70,28 @@ describe("writeContextCache", () => {
     const [file] = (body as { files: ReadonlyArray<{ contents: string }> }).files;
     expect(JSON.parse(file!.contents)).toMatchObject({
       capturedAt: "2026-10-30T10:00:00.000Z",
-      snapshot: { ticket: { status: "In Progress" } },
+      record: { item: { status: "In Progress" }, comments: [{ body: "ship it" }] },
     });
     expect(persistContextAttachmentPayload).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing when the read of the full record fails", async () => {
+    vi.mocked(postToEnvironment).mockClear();
+
+    await expect(
+      writeContextCache({
+        request: request({
+          fullRecord: async () => {
+            throw new Error("Jira is not connected in this environment.");
+          },
+        }),
+        threadRef: threadRef(REMOTE),
+        addedAt: "2026-10-30T10:00:00.000Z",
+        sourceEnvironmentId: SOURCE,
+        backend: BACKEND,
+      }),
+    ).rejects.toThrow("Jira is not connected");
+    expect(postToEnvironment).not.toHaveBeenCalled();
   });
 
   it("uses the existing context sync when the thread is on the dragged-from environment", async () => {
