@@ -19,6 +19,12 @@ export type AddToChatRequest = {
   jiraIssueTypeIconUrl?: string;
   dedupeKey?: string;
   payload: unknown | ((input?: AddToChatPayloadInput) => Promise<unknown>);
+  /**
+   * Fetches the item's complete record from the environment the drag started in. A drop onto
+   * another environment's thread writes it there as the cached copy: that environment's server
+   * cannot resolve `payload` when it holds no account for the source.
+   */
+  fullRecord?: () => Promise<unknown>;
   summaryItems?: ReadonlyArray<{ label: string; value: string }>;
 };
 

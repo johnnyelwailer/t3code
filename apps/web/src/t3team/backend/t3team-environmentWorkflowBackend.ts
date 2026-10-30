@@ -54,19 +54,26 @@ function unwrapResponse<TResponse>(path: string, response: EnvironmentJsonPostRe
   return payload as TResponse;
 }
 
+/** POSTs JSON to ANY environment's server with that environment's own credential. */
+export async function postToEnvironment<TResponse>(
+  environmentId: EnvironmentId,
+  path: string,
+  body: unknown,
+): Promise<TResponse> {
+  const prepared = readPreparedConnection(environmentId);
+  if (prepared === null) throw new EnvironmentNotConnectedError();
+  const result = await runAtomCommand(
+    appAtomRegistry,
+    environmentJsonPost,
+    { prepared, path, body },
+    { label: "t3team:environment-json-post", reportFailure: false },
+  );
+  if (result._tag === "Failure") {
+    throw toEnvironmentRequestError(squashAtomCommandFailure(result));
+  }
+  return unwrapResponse(path, result.value);
+}
+
 export function createEnvironmentWorkflowBackend(environmentId: EnvironmentId): ThreadWorkflowApi {
-  return createThreadWorkflowApi(async (path, body) => {
-    const prepared = readPreparedConnection(environmentId);
-    if (prepared === null) throw new EnvironmentNotConnectedError();
-    const result = await runAtomCommand(
-      appAtomRegistry,
-      environmentJsonPost,
-      { prepared, path, body },
-      { label: "t3team:environment-json-post", reportFailure: false },
-    );
-    if (result._tag === "Failure") {
-      throw toEnvironmentRequestError(squashAtomCommandFailure(result));
-    }
-    return unwrapResponse(path, result.value);
-  });
+  return createThreadWorkflowApi((path, body) => postToEnvironment(environmentId, path, body));
 }

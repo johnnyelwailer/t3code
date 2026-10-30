@@ -12,6 +12,9 @@ import type { T3TeamSidebarPinActionState } from "~/t3team/t3team-sidebarPinning
 import { buildWorkItemAddToChatPayload } from "~/t3team/components/t3team-projectSidebarAddToChatRequests";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
+/** The MCP name of `t3team.work_item.get` (`T3TEAM_MCP_CANONICAL_TOOL_MAP` in the server). */
+const WORK_ITEM_GET_MCP_TOOL = "t3_work_item_get";
+
 export function buildTicketAgentContextCapabilities(
   input: {
     backend: BackendApi;
@@ -40,8 +43,22 @@ export function buildTicketAgentContextCapabilities(
         : {}),
       summaryItems: jiraSummary.summaryItems,
       payload: buildWorkItemAddToChatPayload({ backend, project, ticket }),
+      fullRecord: () =>
+        backend.projectWorkspace.readWorkItemRecord({
+          projectId: project.id,
+          issueKey: ticket.ref.displayId,
+        }),
     },
-    ...(options?.sidebarPin ? [{ sidebarPin: options.sidebarPin }] : []),
+    {
+      ...(options?.sidebarPin ? { sidebarPin: options.sidebarPin } : {}),
+      tools: [
+        {
+          id: WORK_ITEM_GET_MCP_TOOL,
+          label: "Read work item",
+          arguments: { issueKey: ticket.ref.displayId },
+        },
+      ],
+    },
   );
 }
 

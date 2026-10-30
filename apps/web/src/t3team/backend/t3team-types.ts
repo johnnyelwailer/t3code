@@ -151,6 +151,11 @@ export interface ProjectWorkspaceBackendApi {
     readonly workspaceRoot: string;
     readonly files: ReadonlyArray<ProjectWorkspaceContextFile>;
   }) => Promise<ProjectWorkspaceWriteContextFilesResult>;
+  /** The full record `t3_work_item_get` returns, for carrying a work item to another environment. */
+  readonly readWorkItemRecord: (input: {
+    readonly projectId: string;
+    readonly issueKey: string;
+  }) => Promise<unknown>;
   readonly refreshWorkItemContext: (input: {
     readonly workspaceRoot: string;
     readonly projectId: string;

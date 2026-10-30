@@ -146,6 +146,7 @@ describe("useProjectBacklog workspace sync", () => {
           includedCount: 0,
           skippedCount: 0,
         })),
+        readWorkItemRecord: vi.fn(async () => ({})),
         refreshWorkItemSliceContext: vi.fn(async (input) => ({
           ok: true,
           status: "already_synced" as const,
