@@ -29,6 +29,7 @@ import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { advertisedJsonSchema } from "./advertisedJsonSchema.ts";
+import { stripFieldDescriptions } from "./toolkits/t3team/t3team-toolDocs.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpToolAccess from "./McpToolAccess.ts";
 import * as McpToolAccessTestkit from "./McpToolAccess.testkit.ts";
@@ -373,7 +374,9 @@ it.effect("advertises the compact input schema for every registered tool", () =>
 
     expect(server.tools.length).toBe(Object.keys(tools).length);
     for (const { tool } of server.tools) {
-      expect(tool.inputSchema, tool.name).toEqual(advertisedJsonSchema(tools[tool.name]!));
+      expect(stripFieldDescriptions(tool.inputSchema), tool.name).toEqual(
+        stripFieldDescriptions(advertisedJsonSchema(tools[tool.name]!)),
+      );
     }
   }).pipe(Effect.provide(layerTest)),
 );
@@ -490,8 +493,8 @@ it.effect(
       const linkTool = server.tools.find(({ tool }) => tool.name === "link_pull_request");
       expect(linkTool?.tool.annotations?.idempotentHint).toBe(true);
       expect(linkTool?.tool.annotations?.openWorldHint).toBe(false);
-      expect(linkTool?.tool.description).toContain("Link a PR to this thread");
-      expect(linkTool?.tool.description).toContain("settles the thread on merge");
+      expect(linkTool?.tool.description).toContain("Link PR to this thread");
+      expect(linkTool?.tool.description).toContain("settles thread on merge");
 
       const denied = yield* server
         .callTool({ name: "list_thread_pull_requests", arguments: {} })

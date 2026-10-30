@@ -81,6 +81,7 @@ import { T3TeamToolkitHandlersLive } from "./toolkits/t3team/handlers.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./toolkits/t3team/t3team-mcpToolAliases.ts";
 import { withToolNameAliases } from "./toolkits/t3team/t3team-mcpToolAliasProtocol.ts";
 import { withFeatureGatedToolList } from "./toolkits/t3team/t3team-mcpToolFeatureGate.ts";
+import { withMinimalToolDocs } from "./toolkits/t3team/t3team-toolDocs.ts";
 import { withThreadScopedToolList } from "./toolkits/t3team/t3team-mcpToolThreadList.ts";
 import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
 
@@ -1052,8 +1053,10 @@ export const toolkitRegistration = <Tools extends Record<string, Tool.Any>, EX, 
   handlers: McpToolAccess.HandlersLayer<Tools, EX, RX>,
 ) => {
   const registration = Layer.effectDiscard(
-    withToolAnalytics(
-      withAdvertisedSchemas(toolkit, McpServer.registerToolkit(decodeAsAdvertised(toolkit))),
+    withMinimalToolDocs(
+      withToolAnalytics(
+        withAdvertisedSchemas(toolkit, McpServer.registerToolkit(decodeAsAdvertised(toolkit))),
+      ),
     ),
   ).pipe(Layer.provide(McpServer.McpServer.layer));
   // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off - the auth middleware provides it per request.
@@ -1069,7 +1072,7 @@ const imageToolRegistration = <Tools extends Record<string, Tool.Any>, A, E, R, 
   register: Effect.Effect<A, E, R>,
   handlers: McpToolAccess.HandlersLayer<Tools, EX, RX>,
 ) =>
-  Layer.effectDiscard(withToolAnalytics(register)).pipe(
+  Layer.effectDiscard(withMinimalToolDocs(withToolAnalytics(register))).pipe(
     Layer.provide(McpToolAccess.HandlersLayer.layer(handlers)),
   );
 

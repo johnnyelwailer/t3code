@@ -12,6 +12,7 @@ import { makeMachineFindDefinitionsHandler } from "./t3team-machineDefinitionToo
 import { makeMachineSetSourceHandler } from "./t3team-machineSourceHandler.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 import { whenMcpToolEnabled } from "./t3team-mcpToolFeatureGate.ts";
+import { t3ToolHelpHandler } from "./t3team-toolHelpTool.ts";
 
 /**
  * The calling credential's scope, gated on the same `orchestration` capability
@@ -248,5 +249,7 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
     t3team_thread_skill_metadata: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3team_thread_skill_metadata", (input) => threadSkillMetadata(input)),
     ),
+    // Documentation only, so any client that can list the tools may read it.
+    t3_tool_help: McpToolAccess.reads(t3ToolHelpHandler),
   })) satisfies Effect.Effect<McpToolAccess.Handlers<typeof T3TeamToolkit.tools>>,
 );
