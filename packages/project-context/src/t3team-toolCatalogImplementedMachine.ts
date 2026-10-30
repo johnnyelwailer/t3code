@@ -3,7 +3,9 @@ import type { T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
 /**
  * Machine tools an agent calls while setting up a project's machine. `find_definitions` is
  * read-only: it looks for definitions that already exist before the agent asks the user where one
- * is. Like `t3team.project.sync_linked_repository` it is served directly by the MCP toolkit.
+ * is. `set_source` proposes one: it proves the proposal and asks the user, and saves nothing (the
+ * setting lives on the user's own environment, where only their answer applies it). Like
+ * `t3team.project.sync_linked_repository` both are served directly by the MCP toolkit.
  */
 export const IMPLEMENTED_T3TEAM_MACHINE_TOOL_CATALOG = {
   "t3team.machine.find_definitions": {
@@ -33,6 +35,54 @@ export const IMPLEMENTED_T3TEAM_MACHINE_TOOL_CATALOG = {
           type: "string",
           minLength: 1,
           description: "The project to search. Default: this thread's project.",
+        },
+      },
+    },
+  },
+  "t3team.machine.set_source": {
+    id: "t3team.machine.set_source",
+    label: "Propose machine source",
+    title: "Propose a repository and branch as this project's machine source",
+    description:
+      "Proposes the repository and branch that hold this project's machine definition. Call " +
+      "t3team.machine.find_definitions first and propose what it found; do not ask the user " +
+      "for a repository you can look up. The proposal is checked before the user sees it: the " +
+      "repository must be readable and the branch must hold a usable machine definition, else " +
+      "the tool fails with the reason so you can correct it. It then asks the user one " +
+      "question (accept or keep the default). Nothing is saved by this tool: never tell the " +
+      "user it was applied. Their accept or decline arrives as their next message; wait for " +
+      "it. Explain WHY in 'why' (one or two sentences the user reads, for instance who wrote " +
+      "the definition and what it sets up). Returns {asked, requestId, questionId, " +
+      "repository, branch, note}. One question can be pending per thread.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread", "project"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["repository", "why"],
+      properties: {
+        repository: {
+          type: "string",
+          minLength: 1,
+          description: "The repository: owner/repo on this project's host, or an https URL.",
+        },
+        branch: {
+          type: "string",
+          minLength: 1,
+          description: "The branch holding the definition. Default: the default branch.",
+        },
+        why: {
+          type: "string",
+          minLength: 1,
+          description: "One or two sentences the user reads: why this source.",
+        },
+        author: {
+          type: "string",
+          minLength: 1,
+          description: "Who wrote the definition, when known.",
         },
       },
     },
