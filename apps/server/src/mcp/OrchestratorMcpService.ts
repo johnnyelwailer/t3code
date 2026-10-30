@@ -1968,6 +1968,14 @@ const make = Effect.gen(function* () {
       const turnItemId = TurnItemId.make(
         `turn-item:secret-request:${stablePart(threadId)}:${stablePart(key)}`,
       );
+      const requestSource =
+        input.host === undefined && input.name === undefined && input.scopes === undefined
+          ? undefined
+          : {
+              ...(input.host === undefined ? {} : { host: input.host }),
+              ...(input.name === undefined ? {} : { name: input.name }),
+              ...(input.scopes === undefined ? {} : { scopes: [...input.scopes] }),
+            };
       const record = (secretStatus: "pending" | "cancelled") =>
         threadManagement
           .dispatch({
@@ -1985,6 +1993,7 @@ const make = Effect.gen(function* () {
             reason: input.reason,
             ...(input.placeholder === undefined ? {} : { placeholder: input.placeholder }),
             ...(input.delivery === "file" ? { delivery: "file" as const } : {}),
+            ...(requestSource === undefined ? {} : { source: requestSource }),
             secretStatus,
           })
           .pipe(
