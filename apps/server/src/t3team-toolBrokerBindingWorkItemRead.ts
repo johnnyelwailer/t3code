@@ -31,6 +31,14 @@ export function isT3TeamWorkItemReadTool(tool: string): boolean {
  */
 export type T3TeamWorkItemReadToolHandlers = {
   readonly connected: (threadId: ThreadId) => Effect.Effect<boolean>;
+  /**
+   * The keys (of `keys`) that are not work items of the thread's own project, checked live; also
+   * what the draft tool scopes by. Fails with the not-connected text without a usable account.
+   */
+  readonly foreignKeys: (
+    keys: ReadonlyArray<string>,
+    threadId: ThreadId,
+  ) => Effect.Effect<ReadonlyArray<string>, string>;
   readonly search: (
     args: typeof SearchWorkItemsToolArgs.Type,
     threadId: ThreadId,

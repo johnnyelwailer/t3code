@@ -20,6 +20,7 @@ import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
 import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
+import { T3TeamWorkItemDraftTool } from "./t3team-workItemDraftTools.ts";
 import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workItemReadTools.ts";
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
@@ -49,12 +50,21 @@ export { mcpDescriptionOf };
  * explicit decision for every implemented catalog tool — mapped above, or listed here.
  *
  * The `draft_*` family is excluded for a structural reason, not convenience: those tools are
- * reachable only from a workflow body's `getTools()` tree (`t3team-workflowHostTools.ts`),
- * and they are gated three ways — the body must declare the group in `meta.capabilities`, the id
- * must be in the thread's tool context, and the recipe's `allowedToolGroups` filters what
- * survives. Their `publishDraft` is also pinned to the launch thread so the draft carrier message
- * lands where the user can review it. Exposing them over `/mcp`, whose invocation scope carries
- * none of that, would bypass all three gates and unpin the target thread.
+ * reachable from a workflow body's `getTools()` tree (`t3team-workflowHostTools.ts`), and they are
+ * gated three ways — the body must declare the group in `meta.capabilities`, the id must be in the
+ * thread's tool context, and the recipe's `allowedToolGroups` filters what survives. Their
+ * `publishDraft` is also pinned to the launch thread so the draft carrier message lands where the
+ * user can review it. Exposing them one by one over `/mcp`, whose invocation scope carries none of
+ * that, would bypass those gates and unpin the target thread.
+ *
+ * Thread agents reach them through ONE tool instead, `t3_work_item_draft` (canonical
+ * `t3team.work_item.draft`, `t3team-toolBrokerBindingWorkItemDraft.ts`), which maps each `op` onto
+ * the canonical draft tool through the same broker path and adds the gates that can hold on `/mcp`:
+ * a usable Jira account bound to the thread's project, `WORKITEM_DETAIL_DRAFTS` on, every named work
+ * item inside the bound project, and `publishDraft` pinned to the calling thread. A recipe's
+ * `allowedToolGroups` (`mutation.draft`) is NOT one of them: `/mcp` binds with no
+ * `allowedToolGroups`, as for every other `/mcp` tool. The canonical draft ids below therefore stay
+ * workflow-body host tools only.
  *
  * The work-item READ tools (`t3_work_item_search` / `_get`) are the opposite case and ARE on `/mcp`:
  * they are read-only and project-scoped, and are offered by account state (a usable Jira account for
@@ -510,6 +520,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamMyWorkArrangeTool,
   T3TeamWorkItemSearchTool,
   T3TeamWorkItemGetTool,
+  T3TeamWorkItemDraftTool,
   T3TeamChangeRequestPublishTool,
   T3TeamLinkedRepositorySyncTool,
   T3TeamMachineFindDefinitionsTool,

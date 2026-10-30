@@ -46,4 +46,19 @@ describe("workflow and recipe MCP tools behind their flags", () => {
       assert.deepEqual(calls, ["recipe-1"]);
     }),
   );
+
+  it.effect(
+    "the work item draft tool is dropped from the list and refused while its flag is off",
+    () =>
+      Effect.gen(function* () {
+        assert.isFalse(isMcpToolEnabled("t3_work_item_draft"));
+        const failure = yield* Effect.flip(
+          whenMcpToolEnabled("t3_work_item_draft", () => Effect.void)(undefined),
+        );
+        assert.include(failure.message, "Work item detail and drafts");
+
+        replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFTS", true]]));
+        assert.isTrue(isMcpToolEnabled("t3_work_item_draft"));
+      }),
+  );
 });

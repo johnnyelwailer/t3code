@@ -10,11 +10,7 @@
  * mirror keeps a row of an issue that was moved out until its pruning pass, and comments are
  * fetched by key (the tracker resolves a moved key), so neither may vouch for membership.
  */
-import {
-  buildWorkItemFilterJql,
-  restrictJqlToProject,
-  type JqlScopeResult,
-} from "@t3tools/integrations-atlassian";
+import { buildWorkItemFilterJql, restrictJqlToProject } from "@t3tools/integrations-atlassian";
 import type {
   GetWorkItemToolArgs,
   GetWorkItemToolResult,
@@ -24,6 +20,7 @@ import type {
 } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
 
+import { makeProjectScope, scoped } from "./t3team-workItemProjectScope.ts";
 import type { MirrorFilters } from "./t3team-workItemReadMirror.ts";
 import {
   decodeCursor,
@@ -87,13 +84,6 @@ export interface WorkItemReadPort {
 const summaries = (resources: ReadonlyArray<WorkItemResource>): WorkItemSummary[] =>
   resources.flatMap((resource) => toWorkItemSummary(resource) ?? []);
 
-const scoped = (result: JqlScopeResult) =>
-  result.ok
-    ? Effect.succeed(result.jql)
-    : Effect.fail(
-        `JQL refused (${result.reason}). Results are always limited to this project, so pass only the conditions you want to add.`,
-      );
-
 export const makeWorkItemReadService = (port: WorkItemReadPort) => {
   const search = Effect.fn("t3team.workItemRead.search")(function* (
     binding: JiraMirrorBinding,
@@ -142,19 +132,7 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
     } satisfies SearchWorkItemsToolResult;
   });
 
-  /**
-   * One work item of the project by key. The tracker decides membership (`key = X` scoped to the
-   * project); the mirror row, when there is one, only supplies the richer synced fields.
-   */
-  const findInProject = Effect.fn("t3team.workItemRead.find")(function* (
-    binding: JiraMirrorBinding,
-    key: string,
-  ) {
-    const jql = yield* scoped(restrictJqlToProject(`key = "${key}"`, binding.externalProjectId));
-    const live = (yield* port.searchLive(binding, jql, 1, undefined)).items[0] ?? null;
-    if (live === null) return null;
-    return (yield* port.mirrorGet(binding, key)) ?? live;
-  });
+  const { findInProject } = makeProjectScope(port);
 
   const get = Effect.fn("t3team.workItemRead.get")(function* (
     binding: JiraMirrorBinding,

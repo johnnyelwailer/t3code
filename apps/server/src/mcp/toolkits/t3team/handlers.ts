@@ -211,6 +211,12 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
     t3_work_item_get: McpToolAccess.readsAsCaller((input) =>
       callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_get, input),
     ),
+    // Writes a draft artifact into the thread, so a read-only client is refused, like the other environment writes.
+    t3_work_item_draft: McpToolAccess.actsAsCaller(
+      whenMcpToolEnabled("t3_work_item_draft", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_draft, input),
+      ),
+    ),
     t3_change_request_publish: McpToolAccess.actsAsCaller(
       whenMcpToolEnabled("t3_change_request_publish", (input) =>
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_change_request_publish, input),
