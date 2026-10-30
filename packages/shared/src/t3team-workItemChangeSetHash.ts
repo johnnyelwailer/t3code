@@ -4,10 +4,7 @@
  * produce the same digest from the same canonical JSON.
  */
 import { sha256 } from "@noble/hashes/sha2";
-import type {
-  T3TeamDraftMutationPayload,
-  WorkItemChangeSetOperation,
-} from "@t3tools/contracts";
+import type { T3TeamDraftMutationPayload, WorkItemChangeSetOperation } from "@t3tools/contracts";
 import * as Hex from "effect/encoding/Hex";
 
 /** What a hash covers: everything an applying client acts on. */

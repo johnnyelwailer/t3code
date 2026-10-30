@@ -63,7 +63,11 @@ const publishChangeSet = Effect.gen(function* () {
       get: () => Effect.die("unused"),
     },
     readView: () => Effect.succeed({ state: null }),
-    publishDraft: makeT3TeamDraftMutationPublisher({ threadId, recordArtifact: store.upsert, removeArtifact: store.remove }),
+    publishDraft: makeT3TeamDraftMutationPublisher({
+      threadId,
+      recordArtifact: store.upsert,
+      removeArtifact: store.remove,
+    }),
   });
 });
 

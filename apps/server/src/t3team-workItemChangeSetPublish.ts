@@ -4,10 +4,7 @@
  * interrupt) the artifacts already attempted are removed, and a removal that fails is reported by
  * id. The change-set tool hands the built drafts over as `structuredContent.changeSetBatch`.
  */
-import {
-  type WorkItemChangeSet,
-  WORK_ITEM_CHANGE_SET_ARTIFACT_KIND,
-} from "@t3tools/contracts";
+import { type WorkItemChangeSet, WORK_ITEM_CHANGE_SET_ARTIFACT_KIND } from "@t3tools/contracts";
 import { hashDraftPayload } from "@t3tools/shared/t3team-workItemChangeSetHash";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";

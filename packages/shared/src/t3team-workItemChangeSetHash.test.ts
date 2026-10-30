@@ -28,7 +28,7 @@ describe("work item change set payload hash", () => {
       },
     ];
     for (const { patch, canonical } of cases) {
-      const target = { provider: "jira", issueIdOrKey: "A-1" };
+      const target = { provider: "jira", issueIdOrKey: "A-1" } as const;
       expect(hashDraftPayload({ target, field: "comment", patch })).toBe(
         nodeSha256(`${canonical}{"issueIdOrKey":"A-1","provider":"jira"}}`),
       );

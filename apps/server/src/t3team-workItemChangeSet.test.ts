@@ -34,7 +34,11 @@ beforeEach(() => replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFT
 afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 /** The Atlassian provider as the broker reaches it: live reads feed the scope, writes are a spy. */
-const makeProvider = (projectKeys: ReadonlyArray<string>) => {
+const makeProvider = (
+  projectKeys: ReadonlyArray<string>,
+  /** Runs inside every live lookup, before it answers. */
+  duringLookup: Effect.Effect<void> = Effect.void,
+) => {
   const reads: string[] = [];
   const writes: string[] = [];
   const port: Pick<WorkItemReadPort, "searchLive" | "mirrorGet"> = {
@@ -48,12 +52,14 @@ const makeProvider = (projectKeys: ReadonlyArray<string>) => {
     searchLive: (_binding, jql) => {
       reads.push(jql);
       const key = /^\(key = "([^"]+)"\)/.exec(jql)?.[1];
-      return Effect.succeed({
-        items:
-          key !== undefined && projectKeys.includes(key)
-            ? [{ provider: "atlassian", displayId: key, id: key, title: key }]
-            : [],
-      });
+      return duringLookup.pipe(
+        Effect.as({
+          items:
+            key !== undefined && projectKeys.includes(key)
+              ? [{ provider: "atlassian", displayId: key, id: key, title: key }]
+              : [],
+        }),
+      );
     },
   };
   return { port, reads, writes };
@@ -253,8 +259,9 @@ it.effect("refuses an empty set, more than 25 operations and a blank title", () 
 it.effect("the recorded hash is the node:crypto SHA-256 of the exact canonical bytes", () =>
   Effect.gen(function* () {
     const { carrier } = yield* run({ toolArgs: { title: "X", operations: [OPS[0]] } });
-    const { draft } = [...carrier.rows.values()].find((row) => row.kind === "draft-mutation")!
-      .payload;
+    const { draft } = [...carrier.rows.values()].find(
+      (row) => row.kind === "draft-mutation",
+    )!.payload;
     const set = decodeChangeSet(
       [...carrier.rows.values()].find((row) => row.kind === "work-item-change-set")!.payload,
     );
@@ -318,19 +325,18 @@ it.effect("an interrupt mid-write still removes what was written", () =>
 
 it.effect("the scope check runs at most 4 lookups at once, one per distinct key", () =>
   Effect.gen(function* () {
-    const provider = makeProvider([]);
     let inFlight = 0;
     let peak = 0;
-    const searchLive = provider.port.searchLive;
-    provider.port.searchLive = (binding, jql, ...rest) =>
+    const provider = makeProvider(
+      [],
       Effect.gen(function* () {
         inFlight += 1;
         peak = Math.max(peak, inFlight);
         yield* Effect.yieldNow;
         yield* Effect.yieldNow;
         inFlight -= 1;
-        return yield* searchLive(binding, jql, ...rest);
-      });
+      }),
+    );
     const operations = Array.from({ length: 25 }, (_, index) => ({
       op: "link_add",
       issue_id: `OTHER-${index}`,
@@ -353,7 +359,10 @@ it.effect("a scope check that never answers refuses the set after 30 seconds", (
       scopeLabel: "for this thread",
       toolArgs: { title: "X", operations: [OPS[0]] },
       threadId: thread,
-      workItemReadTools: { ...makeHandlers(makeProvider(["IES-1"])), foreignKeys: () => Effect.never },
+      workItemReadTools: {
+        ...makeHandlers(makeProvider(["IES-1"])),
+        foreignKeys: () => Effect.never,
+      },
       readView: () => Effect.succeed({ state: null }),
       publishDraft: carrier.publishDraft,
     }).pipe(Effect.forkChild({ startImmediately: true }));
