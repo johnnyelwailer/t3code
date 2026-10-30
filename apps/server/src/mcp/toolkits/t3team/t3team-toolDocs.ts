@@ -11,6 +11,7 @@ import * as Effect from "effect/Effect";
 import { McpSchema, McpServer } from "effect/ai";
 
 import { FORK_TOOL_DOCS } from "./t3team-toolDocs-fork.ts";
+import { dropNonFiniteNumberSpellings } from "./t3team-toolSchemaCompact.ts";
 
 export interface MinimalToolDocs {
   readonly description: string;
@@ -100,7 +101,9 @@ export function advertiseToolDocs<
     : {
         description: docs.description,
         // Only descriptions change, so the schema keeps the tool's own type.
-        inputSchema: withFieldNotes(original.inputSchema, docs.fields ?? {}) as T["inputSchema"],
+        inputSchema: dropNonFiniteNumberSpellings(
+          withFieldNotes(original.inputSchema, docs.fields ?? {}),
+        ) as T["inputSchema"],
       };
 }
 
