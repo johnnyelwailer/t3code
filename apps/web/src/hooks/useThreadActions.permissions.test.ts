@@ -20,6 +20,7 @@ function deferred<T>() {
 
 const state = vi.hoisted(() => ({
   scopes: new Map<string, Set<string>>(),
+  unreachable: new Set<string>(),
   threads: [] as {
     environmentId: EnvironmentId;
     id: ThreadId;
@@ -45,6 +46,9 @@ vi.mock("react", () => ({
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({ state: { matches: [] }, navigate: async () => {} }),
 }));
+vi.mock("../state/t3team-localThreadActions", () => ({
+  readEnvironmentUnreachable: (environmentId: string) => state.unreachable.has(environmentId),
+}));
 vi.mock("../state/session", () => ({
   environmentSession: { sessionStateAtom: "session" },
   readEnvironmentScope: (environmentId: string, scope: string) =>
@@ -55,6 +59,7 @@ vi.mock("../state/use-atom-command", () => ({
     (action: string) =>
     async (request: { environmentId: string; input: { threadId?: string } }) => {
       state.requests.push({ action, ...request });
+      if (action === "localOverride") return AsyncResult.success(undefined);
       const scope =
         action === "removeWorktree" ? AuthSourceControlWriteScope : AuthOrchestrationOperateScope;
       if (!state.scopes.get(request.environmentId)?.has(scope)) {
@@ -88,6 +93,7 @@ vi.mock("../state/threads", () => ({
       "snooze",
       "unsnooze",
       "stopSession",
+      "localOverride",
     ].map((action) => [action, action]),
   ),
 }));
@@ -205,6 +211,7 @@ const operations = [
 ] as const;
 
 beforeEach(() => {
+  state.unreachable = new Set();
   state.scopes = new Map([
     [primary, new Set([AuthOrchestrationOperateScope])],
     [secondary, new Set<string>()],
@@ -333,5 +340,44 @@ describe("thread action permissions", () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+});
+
+describe("threads of an unreachable environment (ended cloud session)", () => {
+  beforeEach(() => {
+    state.unreachable.add(secondary);
+  });
+
+  it("settles locally without a grant or a remote command", async () => {
+    const result = await useThreadActions().settleThread(target);
+    expect(result._tag).toBe("Success");
+    expect(state.requests).toEqual([
+      {
+        action: "localOverride",
+        environmentId: secondary,
+        input: { threadId: target.threadId, override: "settled" },
+      },
+    ]);
+  });
+
+  it("deletes locally, cleans up local state, and never asks the environment", async () => {
+    state.threads[0]!.session = { status: "ready" };
+    const result = await useThreadActions().confirmAndDeleteThread(target);
+    expect(result._tag).toBe("Success");
+    expect(state.requests).toEqual([
+      {
+        action: "localOverride",
+        environmentId: secondary,
+        input: { threadId: target.threadId, override: "removed" },
+      },
+    ]);
+    expect(state.localEffects).toContain("clear-draft");
+    expect(state.toasts).toEqual([]);
+  });
+
+  it("keeps every other action behind the grant", async () => {
+    const result = await useThreadActions().archiveThread(target);
+    expect(result._tag).toBe("Failure");
+    expect(state.requests).toEqual([]);
   });
 });

@@ -1,5 +1,12 @@
 {
   "allowedModifiedFiles": [
+    "apps/web/src/hooks/useThreadActions.permissions.test.ts",
+    "apps/web/src/hooks/useThreadActionMenu.test.ts",
+    "apps/mobile/src/features/home/useThreadListActions.test.ts",
+    "apps/web/src/hooks/useThreadActions.ts",
+    "apps/web/src/hooks/useThreadActionMenu.ts",
+    "apps/web/src/components/chat/useThreadLifecycle.tsx",
+    "apps/mobile/src/features/home/useThreadListActions.ts",
     "apps/mobile/src/features/settings/SettingsRouteScreen.tsx",
     "apps/mobile/src/components/CompactBrandTitle.tsx",
     "apps/mobile/src/components/LoadingScreen.tsx",
