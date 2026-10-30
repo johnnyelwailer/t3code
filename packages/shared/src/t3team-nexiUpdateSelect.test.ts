@@ -227,6 +227,8 @@ describe("rc.6 -> rc.7 with the assets of the published desktop-v0.1.2-rc.6 rele
   it("takes no track: the pick depends only on the build's version, the release list and the machine", () => {
     // pickNexiUpdate has no channel input, so no track setting can make an rc build skip an rc release.
     expect(pickNexiUpdate.length).toBe(1);
+  });
+});
 
 describe("Linux: the x64 AppImage and latest-linux.yml", () => {
   const linux = { platform: "linux", arch: "x64" } as const;
