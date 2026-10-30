@@ -108,6 +108,17 @@ Commands built at run time, external script files and full shell/interpreter sem
 
 This API replay measures routing and recovery decisions. Screenshots return product text and metadata without rendered image blocks, and Codex code cells have no `image` helper, so a cell that calls it fails with `image is not defined`. The shell remains simulated, children are not executed, and `priorTurns` is synthetic context rather than native resume or compaction. It does not test launcher execution, binding, pruning, actual device state, transport failures or resource cleanup, and it models agent-device's session check rather than running it. DEL-02 checks managed recording start/stop and the final filename; it does not inspect video bytes, required flow, transforms, codec or size. Screenshots and final text do not establish delivered artifacts or honesty. Keep local real-harness results separate; their scores and costs are not API-replay results. Offline validation costs $0. Record fresh per-model baseline and candidate costs before using device-case scores as release evidence.
 
+## The fork's tools
+
+`t3team-forkTools.ts` adds the t3team toolkit and applies the minimal advertised text (`t3team-toolDocs.ts`) the way the server does, so cases grade what an agent is shown. `T3_EVAL_FULL_TOOL_TEXT=1` skips that layer: run the same cases both ways on one checkout for a before/after. `t3_tool_help` answers from the recorded original text. The case files `cases/t3team-*.ndjson` cover the fork tool families, with negative cases where an upstream tool is the tempting wrong choice.
+
+```sh
+cd evals
+node mcp-tool-use/run.ts --context                           # size of the text an agent loads
+T3_EVAL_FULL_TOOL_TEXT=1 node mcp-tool-use/run.ts --context  # the same, with the full text
+node mcp-tool-use/run.ts --dry-run --cases mcp-tool-use/cases/t3team-widgets.ndjson --samples 1 --out runs/dry
+```
+
 ## Where T3's text lives
 
 - `packages/provider-core/src/server/runtimeInstructions.ts`
