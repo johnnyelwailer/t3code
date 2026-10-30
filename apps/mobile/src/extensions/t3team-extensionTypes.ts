@@ -4,6 +4,7 @@ import type { ComponentType } from "react";
 import type { PlatformOSType } from "react-native";
 
 import type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
+import type { PendingDraftSlot } from "./t3team-pendingDraftTypes";
 
 /** What the home screen knows about the connections catalog. */
 export interface HomeCatalogState {
@@ -137,6 +138,13 @@ export interface MobileExtensions {
    * a thread on one. `close` leaves the picker. Nothing without one.
    */
   readonly environmentPickerTop?: ComponentType<EnvironmentPickerTopProps>;
+  /**
+   * Drafts that wait for an environment the catalog does not list yet (for example a cloud session
+   * still starting). Such a draft opens with a placeholder project, shows its `Card` above the
+   * composer controls, blocks Send with its reason, and is listed with a live status in the Chats
+   * list even while empty. Nothing without one.
+   */
+  readonly pendingDraft?: PendingDraftSlot;
   /** Replaces the empty home screen shown before any thread exists. */
   readonly homeEmptyState?: HomeEmptyStateSlot;
   /** Replaces the wordmark title of the home header. */

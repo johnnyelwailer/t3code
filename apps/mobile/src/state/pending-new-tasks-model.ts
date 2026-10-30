@@ -5,6 +5,8 @@ import type { QueuedThreadCreation, QueuedThreadMessage } from "./thread-outbox-
 import { isNewTaskDraftKey } from "./new-task-draft-key";
 import type { ComposerDraft } from "./use-composer-drafts";
 import { resolveNewTaskDraftWorkspace } from "../features/threads/new-task-context-presentation";
+import { draftRowTitle, listsDraft } from "../extensions/t3team-pendingDraft";
+import type { PendingDraft } from "../extensions/t3team-pendingDraftTypes";
 
 export type PendingNewTask = PendingQueuedTask | PendingDraftTask;
 
@@ -88,6 +90,8 @@ export function resolvePendingDraftBranch(input: {
 export function buildPendingNewTasks(input: {
   readonly queuedMessages: ReadonlyArray<QueuedThreadMessage>;
   readonly drafts: Readonly<Record<string, ComposerDraft>>;
+  /** A distribution's drafts held for an environment that is not ready: listed even when empty. */
+  readonly pendingDrafts?: ReadonlyMap<string, PendingDraft>;
 }): ReadonlyArray<PendingNewTask> {
   const tasks: PendingNewTask[] = [];
   for (const message of input.queuedMessages) {
@@ -109,7 +113,9 @@ export function buildPendingNewTasks(input: {
     });
   }
   for (const [draftKey, draft] of Object.entries(input.drafts)) {
-    if (!isNewTaskDraftKey(draftKey) || !draft.project || !composerDraftHasUserContent(draft)) {
+    const hasUserContent = composerDraftHasUserContent(draft);
+    const pending = input.pendingDrafts?.get(draftKey);
+    if (!isNewTaskDraftKey(draftKey) || !draft.project || !listsDraft(hasUserContent, pending)) {
       continue;
     }
     tasks.push({
@@ -119,7 +125,7 @@ export function buildPendingNewTasks(input: {
       projectId: draft.project.projectId,
       projectTitle: undefined,
       projectCwd: undefined,
-      title: draftTitle(draft),
+      title: draftRowTitle(pending, hasUserContent, draftTitle(draft)),
       createdAt: draft.project.createdAt,
       draftKey,
       draft,

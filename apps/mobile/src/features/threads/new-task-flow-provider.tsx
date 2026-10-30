@@ -108,6 +108,8 @@ import {
 } from "./new-task-flow-state";
 import { useEnvironmentShellReadiness } from "../../state/shell";
 import { useConnectionsReady, useWorkspaceEnvironments } from "../../state/workspace";
+import { usePendingDraftProjects } from "../../extensions/t3team-usePendingDraft";
+import type { PendingDraft } from "../../extensions/t3team-pendingDraftTypes";
 
 type WorkspaceMode = "local" | "worktree";
 
@@ -163,6 +165,8 @@ type NewTaskFlowContextValue = {
     readonly environmentLabel: string;
   }>;
   readonly selectedProject: EnvironmentProject | null;
+  /** A distribution's hold on the route draft while its environment is not ready, if any. */
+  readonly pendingDraft: PendingDraft | null;
   /** The machines the selected project's environment links to, whose threads it can read. */
   readonly linkedEnvironments: ReadonlyMap<EnvironmentId, string>;
   readonly isScratchDraft: boolean;
@@ -225,7 +229,9 @@ export function NewTaskFlowProvider(
     routeDraftId?: string;
   }>,
 ) {
-  const projects = useProjects();
+  const catalogProjects = useProjects();
+  // A pending draft's project is not in the catalog yet: a placeholder stands in for it.
+  const { projects, pendingDraft } = usePendingDraftProjects(catalogProjects, props.routeDraftId);
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const groupingSettings = useMobileProjectGroupingSettings();
@@ -233,7 +239,7 @@ export function NewTaskFlowProvider(
 
   const projectScopes = sortHomeProjectScopes({
     scopes: buildHomeProjectScopes({
-      projects,
+      projects: catalogProjects,
       environmentId: null,
       projectGroupingMode: groupingSettings.sidebarProjectGroupingMode,
     }),
@@ -870,6 +876,7 @@ export function NewTaskFlowProvider(
     expandedProvider,
     environments,
     selectedProject,
+    pendingDraft,
     linkedEnvironments,
     isScratchDraft,
     modelOptions,

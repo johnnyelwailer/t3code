@@ -81,6 +81,8 @@ import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
+import { PendingDraftRowStatus } from "../../extensions/t3team-PendingDraftRowStatus";
+import { usePendingDraft } from "../../extensions/t3team-usePendingDraft";
 
 interface StatusLabel {
   readonly label: string;
@@ -370,6 +372,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   const sidebarPane = props.pane === "sidebar";
   const rowAppearance = getThreadListV2RowAppearance(theme, sidebarPane, props.selected ?? false);
   const isDraft = pendingTask.kind === "draft";
+  const pendingDraft = usePendingDraft(isDraft ? pendingTask.draftKey : null);
   const deleteLabel = isDraft ? "Discard" : "Delete";
   const handleDelete = useCallback(
     () => onDeletePendingTask(pendingTask),
@@ -385,7 +388,12 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
     }),
     [deleteLabel, handleDelete, pendingTask.title],
   );
-  const projectTitle = props.projectTitle ?? props.project?.title ?? pendingTask.projectTitle ?? "";
+  const projectTitle =
+    props.projectTitle ??
+    props.project?.title ??
+    pendingTask.projectTitle ??
+    pendingDraft?.project.title ??
+    "";
   const projectCwd = props.project?.workspaceRoot || null;
   // Drafts only; the reads are shared per-project atoms, and queued rows skip them.
   const projectDefaults = useNewTaskProjectDefaults(isDraft ? props.project : null);
@@ -439,15 +447,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
           {projectTitle}
         </Text>
         {isDraft ? (
-          <View className="flex-row items-center gap-1">
-            <SymbolView
-              name="square.and.pencil"
-              size={10}
-              tintColorClassName="accent-adaptive-amber-700-300"
-              type="monochrome"
-            />
-            <Text className="text-xs text-adaptive-amber-700-300">Draft</Text>
-          </View>
+          <PendingDraftRowStatus pendingDraft={pendingDraft} />
         ) : (
           <Text
             className={cn(

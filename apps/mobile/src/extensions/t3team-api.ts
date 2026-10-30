@@ -16,6 +16,13 @@ export type {
   UrlPolicy,
   WorkspaceExtraTab,
 } from "./t3team-extensionTypes";
+export type {
+  PendingDraft,
+  PendingDraftProject,
+  PendingDraftSlot,
+  PendingDraftTone,
+} from "./t3team-pendingDraftTypes";
+export { useOpenPendingDraft } from "./t3team-useOpenPendingDraft";
 export type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
 
 // What the Nexi broker sign-in and hosts list use. Add to this list only what a migrated screen needs.
