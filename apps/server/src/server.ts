@@ -68,6 +68,7 @@ import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
+import * as ServerSourceControlHost from "./sourceControl/ServerSourceControlHost.ts";
 import * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import { BUILT_IN_SOURCE_CONTROL_DRIVER_LIST } from "./sourceControl/sourceControlDefinitions.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
@@ -490,15 +491,19 @@ const layerPersistence = Layer.empty.pipe(Layer.provideMerge(SqlitePersistence.l
 const layerVcsDriverRegistry = VcsDriverRegistry.layer.pipe(Layer.provide(VcsProjectConfig.layer));
 
 const layerSourceControlProviderRegistry = SourceControlProviderRegistry.layer.pipe(
-  // t3team: the fork's GitHub facade (GitHubApi, GitHubRest, quota, credentials) is read by the
-  // websocket routes, the inbox and the cloud-session layers. Upstream's GitHub driver now builds
-  // its own transport inside the driver, so the fork's is provided here beside the registry.
-  // Mounted before the built-in drivers so their SourceControlHost / SourceControlRateLimit
-  // (provideMerge'd by SourceControlBuiltInDrivers.layer) satisfy its requirements.
-  Layer.provideMerge(GitHubApi.layerWithDependencies),
   Layer.provideMerge(SourceControlBuiltInDrivers.layer),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(layerVcsDriverRegistry),
+  // t3team: the fork's GitHub facade (GitHubApi, GitHubRest, quota, credentials) is read by the
+  // websocket routes, the inbox and the cloud-session layers. Upstream's GitHub driver builds its own
+  // transport inside the driver, so the facade must be the outermost provider: it is built first and
+  // the driver's forked memo map reuses it, giving one quota/credential/coalescer state. Its host and
+  // rate-limit requirements are the same layer references the built-in drivers use, so they share too.
+  Layer.provideMerge(
+    GitHubApi.layerWithDependencies.pipe(
+      Layer.provide(Layer.mergeAll(ServerSourceControlHost.layer, SourceControlRateLimit.layer)),
+    ),
+  ),
 );
 
 const layerRepositoryIdentityResolver = Layer.effect(
