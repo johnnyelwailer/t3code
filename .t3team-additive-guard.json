@@ -155,6 +155,7 @@
     "apps/server/src/mcp/toolkits/orchestrator/tools.ts",
     "apps/server/src/mcp/toolkits/preview/handlers.ts",
     "apps/server/src/mcp/toolkits/preview/tools.ts",
+    "apps/server/src/mcp/toolkits/thread/tools.ts",
     "apps/server/src/mcp/toolkits/previewControls/handlers.test.ts",
     "apps/server/src/mcp/toolkits/previewControls/handlers.ts",
     "apps/server/src/mcp/toolkits/previewControls/tools.ts",
