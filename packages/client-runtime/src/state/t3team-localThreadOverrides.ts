@@ -1,0 +1,144 @@
+import type {
+  EnvironmentId,
+  OrchestrationV2ShellSnapshot,
+  OrchestrationV2ThreadShell,
+  ThreadId,
+} from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import { Atom } from "effect/reactivity";
+
+import type { EnvironmentConnectionPhase } from "../connection/presentation.ts";
+import * as Persistence from "../platform/persistence.ts";
+import { createRuntimeCommand } from "./runtime.ts";
+
+/**
+ * Settling or deleting a thread must work even when its environment cannot be asked: a cloud
+ * session that ended leaves its threads in the local cache with nobody to answer the command.
+ * These overrides are applied to the local view of the shell (and to the cached shell, so a
+ * restart keeps them) instead of going through the environment's server.
+ */
+export type LocalThreadOverride = "settled" | "removed";
+
+/**
+ * Whether the environment cannot be asked for as long as nothing changes: it is switched off,
+ * its connection is blocked (a cloud session that ended parks it here) or it is not registered
+ * at all. A connecting, reconnecting, offline or unsupported one is expected to answer again, so
+ * it keeps the normal path; local-only changes would otherwise diverge from the server.
+ */
+export function isEnvironmentUnreachable(
+  presentation: { readonly connection: { readonly phase: EnvironmentConnectionPhase } } | null,
+): boolean {
+  if (presentation === null) return true;
+  return presentation.connection.phase === "available" || presentation.connection.phase === "error";
+}
+
+function settledLocally(thread: OrchestrationV2ThreadShell, now: DateTime.Utc) {
+  return {
+    ...thread,
+    pendingRuntimeRequest: null,
+    settledOverride: "settled" as const,
+    settledAt: thread.settledOverride === "settled" ? (thread.settledAt ?? now) : now,
+    unsettledAt: null,
+    activeOrderKey: null,
+    pinnedAt: null,
+    pinOrderKey: null,
+    snoozedAt: null,
+    snoozedUntil: null,
+  };
+}
+
+export function applyLocalThreadOverrides(
+  snapshot: OrchestrationV2ShellSnapshot,
+  overrides: ReadonlyMap<ThreadId, LocalThreadOverride>,
+  now: DateTime.Utc,
+): OrchestrationV2ShellSnapshot {
+  if (overrides.size === 0) return snapshot;
+  const removed = (thread: { readonly id: ThreadId }) => overrides.get(thread.id) === "removed";
+  return {
+    ...snapshot,
+    threads: snapshot.threads
+      .filter((thread) => !removed(thread))
+      .map((thread) =>
+        overrides.get(thread.id) === "settled" ? settledLocally(thread, now) : thread,
+      ),
+    archivedThreads: snapshot.archivedThreads.filter((thread) => !removed(thread)),
+  };
+}
+
+export type LocalThreadOverrideInput = {
+  readonly threadId: ThreadId;
+  readonly override: LocalThreadOverride;
+};
+
+export function createLocalThreadOverrides<R, E>(
+  runtime: Atom.AtomRuntime<R, E>,
+  sourceSnapshotAtom: (
+    environmentId: EnvironmentId,
+  ) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
+) {
+  const overridesAtom = Atom.family((_environmentId: EnvironmentId) =>
+    Atom.make<ReadonlyMap<ThreadId, LocalThreadOverride>>(new Map()).pipe(Atom.keepAlive),
+  );
+  const snapshotAtom = Atom.family((environmentId: EnvironmentId) =>
+    Atom.make((get) => {
+      const snapshot = get(sourceSnapshotAtom(environmentId));
+      const overrides = get(overridesAtom(environmentId));
+      if (snapshot === null || overrides.size === 0) return snapshot;
+      return applyLocalThreadOverrides(snapshot, overrides, DateTime.nowUnsafe());
+    }),
+  );
+
+  /** Never fails: the view changes first, persisting it to the cache is best effort. */
+  const persist = Effect.fn("LocalThreadOverrides.persist")(function* (
+    environmentId: EnvironmentId,
+    input: LocalThreadOverrideInput,
+  ) {
+    const store = yield* Effect.serviceOption(Persistence.EnvironmentCacheStore);
+    if (Option.isNone(store)) return;
+    const cache = store.value;
+    const cached = yield* cache.loadShell(environmentId);
+    if (Option.isSome(cached)) {
+      const { loadPullRequests: _deferred, ...snapshot } = cached.value;
+      yield* cache.saveShell(
+        environmentId,
+        applyLocalThreadOverrides(
+          snapshot,
+          new Map([[input.threadId, input.override]]),
+          DateTime.nowUnsafe(),
+        ),
+      );
+    }
+    if (input.override === "removed") {
+      yield* cache.removeThread(environmentId, input.threadId);
+    }
+  });
+
+  const command = createRuntimeCommand(runtime, {
+    label: "environment-data:commands:thread:local-override",
+    execute: (
+      target: { readonly environmentId: EnvironmentId; readonly input: LocalThreadOverrideInput },
+      registry,
+    ) => {
+      registry.update(overridesAtom(target.environmentId), (current) =>
+        new Map(current).set(target.input.threadId, target.input.override),
+      );
+      return persist(target.environmentId, target.input).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("Could not persist the local thread change.").pipe(
+            Effect.annotateLogs({
+              environmentId: target.environmentId,
+              threadId: target.input.threadId,
+              cause: Cause.pretty(cause),
+            }),
+          ),
+        ),
+        Effect.as({ sequence: 0 }),
+      );
+    },
+  });
+
+  return { snapshotAtom, command };
+}

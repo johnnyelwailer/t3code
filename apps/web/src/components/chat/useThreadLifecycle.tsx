@@ -57,6 +57,7 @@ import { ThreadStatusLine } from "./ThreadStatusLine";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { readEnvironmentScope } from "../../state/session";
+import { readEnvironmentUnreachable } from "../../state/t3team-localThreadActions";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { backgroundWorkNowItem, childInputNowItem, goalNowItem } from "./ThreadActivityBanners";
@@ -571,8 +572,12 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     };
   const shortcuts = {
     "thread.settle": () => {
-      if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;
-      if (!activeThreadShell || !activeThreadRef || !serverConfigLoaded) return;
+      // Settle also works on a thread whose environment cannot be reached (it runs on this device).
+      const unreachable = readEnvironmentUnreachable(environmentId);
+      if (!unreachable && !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) {
+        return false;
+      }
+      if (!activeThreadShell || !activeThreadRef || (!serverConfigLoaded && !unreachable)) return;
       if (activeThreadSettled) {
         void handleUnsettleActiveThread();
         return;

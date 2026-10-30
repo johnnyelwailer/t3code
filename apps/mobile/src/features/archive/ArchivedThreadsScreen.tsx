@@ -27,6 +27,8 @@ import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { relativeTime } from "../../lib/time";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { useServerConfigs } from "../../state/entities";
+import { isEnvironmentUnreachable } from "@t3tools/client-runtime/state/local-thread-overrides";
+import { useEnvironmentPresentation } from "../../state/presentation";
 import { useEnvironmentScope } from "../../state/session";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import type { ArchivedThreadGroup, ArchivedThreadSortOrder } from "./archivedThreadList";
@@ -189,10 +191,11 @@ function ArchivedThreadRow(props: {
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const cardColor = useUniwindTheme()["--color-grouped-card"];
-  const canOperateThread = useEnvironmentScope(
-    props.thread.environmentId,
-    AuthOrchestrationOperateScope,
-  );
+  const { isReady, presentation } = useEnvironmentPresentation(props.thread.environmentId);
+  // Delete also works on an archived thread whose environment cannot be reached.
+  const canOperateThread =
+    useEnvironmentScope(props.thread.environmentId, AuthOrchestrationOperateScope) ||
+    (isReady && isEnvironmentUnreachable(presentation));
   const timestamp = relativeTime(props.thread.archivedAt ?? props.thread.updatedAt);
   const subtitle = [props.environmentLabel, props.thread.branch].filter((part): part is string =>
     Boolean(part),

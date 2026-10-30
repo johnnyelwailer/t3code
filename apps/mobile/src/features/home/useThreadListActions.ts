@@ -16,6 +16,7 @@ import { pinOrderKeyBetween } from "@t3tools/client-runtime/state/thread-sort";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { readEnvironmentScope } from "../../state/session";
+import { readEnvironmentUnreachable } from "../../state/t3team-localThreadActions";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
 import { queuedThreadKeysAtom } from "../../state/use-thread-outbox";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -76,8 +77,21 @@ function actionFailureTitle(action: ThreadListAction): string {
   return "Could not delete thread";
 }
 
-function checkThreadOperationPermission(thread: EnvironmentThreadShell, title: string): boolean {
+// Settle and delete run on this device when the thread's environment cannot be reached (an ended
+// cloud session), so such a thread never stays stuck in the list.
+function runsLocally(action: ThreadListAction, thread: EnvironmentThreadShell): boolean {
+  return (
+    (action === "settle" || action === "delete") && readEnvironmentUnreachable(thread.environmentId)
+  );
+}
+
+function checkThreadOperationPermission(
+  thread: EnvironmentThreadShell,
+  title: string,
+  action?: ThreadListAction,
+): boolean {
   if (readEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope)) return true;
+  if (action !== undefined && runsLocally(action, thread)) return true;
   Dialog.alert(title, "This connection cannot change threads.");
   return false;
 }
@@ -89,6 +103,9 @@ function useThreadActionExecutor(
   const unarchiveMutation = useAtomCommand(threadEnvironment.unarchive, { reportFailure: false });
   const deleteMutation = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
   const settleMutation = useAtomCommand(threadEnvironment.settle, { reportFailure: false });
+  const localOverrideMutation = useAtomCommand(threadEnvironment.localOverride, {
+    reportFailure: false,
+  });
   const unsettleMutation = useAtomCommand(threadEnvironment.unsettle, { reportFailure: false });
   const inFlightThreadKeys = useRef(new Set<string>());
 
@@ -97,7 +114,8 @@ function useThreadActionExecutor(
     thread: EnvironmentThreadShell,
     onStarted?: () => void,
   ) => {
-    if (!checkThreadOperationPermission(thread, actionFailureTitle(action))) return false;
+    if (!checkThreadOperationPermission(thread, actionFailureTitle(action), action)) return false;
+    const local = runsLocally(action, thread);
     const key = scopedThreadKey(thread.environmentId, thread.id);
     if (inFlightThreadKeys.current.has(key)) {
       return false;
@@ -108,6 +126,7 @@ function useThreadActionExecutor(
     const succeeded = await (async () => {
       if (
         (action === "settle" || action === "unsettle") &&
+        !local &&
         !environmentConfigLoaded(thread.environmentId)
       ) {
         Dialog.alert(
@@ -131,25 +150,33 @@ function useThreadActionExecutor(
       const result = await withThreadDismissal(
         key,
         async () =>
-          action === "unsettle"
-            ? // reason "user" pins the thread active: auto-settle stays
-              // suppressed until real activity clears the pin server-side.
-              await unsettleMutation({
+          local
+            ? await localOverrideMutation({
                 environmentId: thread.environmentId,
-                input: { threadId: thread.id, reason: "user" },
+                input: {
+                  threadId: thread.id,
+                  override: action === "delete" ? "removed" : "settled",
+                },
               })
-            : await (
-                action === "settle"
-                  ? settleMutation
-                  : action === "archive"
-                    ? archiveMutation
-                    : action === "unarchive"
-                      ? unarchiveMutation
-                      : deleteMutation
-              )({
-                environmentId: thread.environmentId,
-                input: { threadId: thread.id },
-              }),
+            : action === "unsettle"
+              ? // reason "user" pins the thread active: auto-settle stays
+                // suppressed until real activity clears the pin server-side.
+                await unsettleMutation({
+                  environmentId: thread.environmentId,
+                  input: { threadId: thread.id, reason: "user" },
+                })
+              : await (
+                  action === "settle"
+                    ? settleMutation
+                    : action === "archive"
+                      ? archiveMutation
+                      : action === "unarchive"
+                        ? unarchiveMutation
+                        : deleteMutation
+                )({
+                  environmentId: thread.environmentId,
+                  input: { threadId: thread.id },
+                }),
         (result) => result._tag === "Success",
       );
       if (result._tag === "Failure") {
@@ -174,7 +201,7 @@ function confirmThreadDeletion(
   executeAction: (action: ThreadListAction, thread: EnvironmentThreadShell) => Promise<boolean>,
   thread: EnvironmentThreadShell,
 ) {
-  if (!checkThreadOperationPermission(thread, actionFailureTitle("delete"))) return;
+  if (!checkThreadOperationPermission(thread, actionFailureTitle("delete"), "delete")) return;
   const title = "Delete thread?";
   const message = `“${thread.title}” will be permanently deleted, including its terminal history.`;
   Dialog.confirm({
@@ -284,8 +311,10 @@ export function useThreadListActions(): {
       claim = ThreadUndo.begin("settle", key);
     });
     if (claim) {
-      if (succeeded) offerUndo(thread, "Settled", claim, plan);
-      else claim.finish();
+      // Undo would ask the environment that cannot answer, so a local settle offers none.
+      if (succeeded && !readEnvironmentUnreachable(thread.environmentId)) {
+        offerUndo(thread, "Settled", claim, plan);
+      } else claim.finish();
     }
     return succeeded;
   };
