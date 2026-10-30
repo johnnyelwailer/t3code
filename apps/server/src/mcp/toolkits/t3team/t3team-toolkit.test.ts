@@ -212,9 +212,12 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
       });
     },
   };
+  const bindInputs: Array<unknown> = [];
   const broker = T3TeamToolBroker.of({
-    bindSession: ({ threadId: boundThreadId }) =>
-      Effect.succeed(boundThreadId === threadId ? binding : undefined),
+    bindSession: (input) => {
+      bindInputs.push(input);
+      return Effect.succeed(input.threadId === threadId ? binding : undefined);
+    },
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
@@ -237,8 +240,46 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
       errors: [],
     });
     expect(calls).toEqual([{ threadId, tool: "t3team.recipe.list", args: {} }]);
+    // `/mcp` binds with the thread alone, so no recipe `allowedToolGroups` filter can apply to a tool.
+    expect(bindInputs).toEqual([{ threadId }]);
   }).pipe(
     Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(TestLayer),
+  );
+});
+
+it.effect("refuses t3_work_item_draft to a read-only client before it reaches the broker", () => {
+  replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFTS", true]]));
+  const bound: Array<unknown> = [];
+  const broker = T3TeamToolBroker.of({
+    bindSession: (input) => {
+      bound.push(input);
+      return Effect.succeed(undefined);
+    },
+    bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+  });
+  const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provide(t3TeamRegistrationServices),
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+  );
+  const readOnly: McpInvocationContext.McpInvocationScope = {
+    ...invocation,
+    client: { sessionId: "session", label: "Claude Code", access: "read-only" },
+  };
+
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server.callTool({
+      name: "t3_work_item_draft",
+      arguments: { op: "comment", issue_id: "IES-1", body: "x" },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("read-only access");
+    expect(bound).toEqual([]);
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, readOnly),
     Effect.provideService(McpSchema.McpServerClient, client),
     Effect.provide(TestLayer),
   );

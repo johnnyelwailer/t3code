@@ -4,6 +4,11 @@
  * mapping: no op has an implementation of its own, each is answered by the canonical
  * `*.draft_*` tool through the same broker path a workflow body uses.
  *
+ * There is no `link_remove` op: the project scope check can only vouch for work item keys, and a
+ * removal names a link id, which no provider read the thread can use returns (the normalized
+ * `links` of `t3team.work_item.get` carry `{ relation, issueKey }`, outward only). Removing a link
+ * stays a workflow-body draft tool (`t3team.work_item.link.draft_remove`).
+ *
  * `issue_id` is REQUIRED and must be a work item key: unlike a workflow body, an /mcp thread has no
  * open view to fall back on, and a key is the only shape the project scope check can verify.
  */
@@ -19,7 +24,6 @@ const WORK_ITEM_DRAFT_OPS = [
   "status",
   "subtask_create",
   "link_add",
-  "link_remove",
 ] as const;
 type WorkItemDraftOp = (typeof WORK_ITEM_DRAFT_OPS)[number];
 
@@ -39,7 +43,6 @@ export const WorkItemDraftToolArgs = Schema.Struct({
   other_issue_id: Schema.optional(Schema.String),
   link_type_name: Schema.optional(Schema.String),
   direction: Schema.optional(Schema.Literals(["inward", "outward"])),
-  link_id: Schema.optional(Schema.String),
 });
 type WorkItemDraftToolArgs = typeof WorkItemDraftToolArgs.Type;
 
@@ -68,7 +71,6 @@ const OPS: Readonly<
     tool: "t3team.work_item.link.draft_create",
     fields: ["other_issue_id", "link_type_name", "direction"],
   },
-  link_remove: { tool: "t3team.work_item.link.draft_remove", fields: ["link_id"] },
 };
 
 /** The canonical draft tool and the arguments it is called with, or the reason the call is refused. */

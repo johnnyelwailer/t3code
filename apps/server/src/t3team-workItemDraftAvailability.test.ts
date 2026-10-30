@@ -114,15 +114,30 @@ it.effect("a sign-out after the list is answered at the call, with nothing publi
   }),
 );
 
-it.effect("a recipe whose allowedToolGroups lack mutation.draft does not get it", () =>
+// `/mcp` binds with `bindSession({ threadId })` and nothing else (`callBroker` in
+// `mcp/toolkits/t3team/handlers.ts`, pinned by t3team-toolkit.test.ts), so no recipe group applies.
+it.effect("over /mcp (no allowedToolGroups) it is offered and reaches the draft path", () =>
   Effect.gen(function* () {
     signIn();
-    for (const allowedToolGroups of [["integration.read"], ["view.state"], []]) {
-      const binding = yield* bind({ allowedToolGroups });
-      assert.isFalse(offered(binding), JSON.stringify(allowedToolGroups));
-      const result = yield* call(binding);
-      assert.include(text(result), "requires group 'mutation.draft'");
-    }
-    assert.isTrue(offered(yield* bind({ allowedToolGroups: ["mutation.draft"] })));
+    const binding = yield* bind({});
+    assert.isTrue(offered(binding));
+    const result = yield* call(binding, { op: "comment" });
+    assert.notInclude(text(result), "requires group");
+    assert.include(text(result), "Invalid arguments for t3team.work_item.draft");
   }),
+);
+
+it.effect(
+  "broker group filter: a binding that carries allowedToolGroups without mutation.draft drops it",
+  () =>
+    Effect.gen(function* () {
+      signIn();
+      for (const allowedToolGroups of [["integration.read"], ["view.state"], []]) {
+        const binding = yield* bind({ allowedToolGroups });
+        assert.isFalse(offered(binding), JSON.stringify(allowedToolGroups));
+        const result = yield* call(binding);
+        assert.include(text(result), "requires group 'mutation.draft'");
+      }
+      assert.isTrue(offered(yield* bind({ allowedToolGroups: ["mutation.draft"] })));
+    }),
 );

@@ -150,11 +150,6 @@ const OPS: ReadonlyArray<{
     tool: "t3team.work_item.link.draft_create",
     field: "link",
   },
-  {
-    args: { op: "link_remove", issue_id: "IES-1", link_id: "9001" },
-    tool: "t3team.work_item.link.draft_remove",
-    field: "link",
-  },
 ];
 
 it.effect("every op creates exactly one draft artifact on the calling thread", () =>
@@ -226,6 +221,22 @@ it.effect("refuses a link target outside the bound project", () =>
     assert.isTrue(result.isError);
     assert.include(text(result), "OTHER-7 is not in this project");
     assert.lengthOf(carrier.artifacts, 0);
+  }),
+);
+
+// A removal names only a link id, which the project scope cannot check, so the op does not exist:
+// `link_id` of a link between FOREIGN-1 and FOREIGN-2 must not reach the canonical remove tool.
+it.effect("has no link_remove op: it is refused before anything is queried or published", () =>
+  Effect.gen(function* () {
+    const provider = makeProvider({ projectKeys: ["IES-1"] });
+    const { result, carrier } = yield* run({
+      toolArgs: { op: "link_remove", issue_id: "IES-1", link_id: "9001" },
+      provider,
+    });
+    assert.isTrue(result.isError);
+    assert.include(text(result), "Invalid arguments");
+    assert.lengthOf(carrier.artifacts, 0);
+    assert.deepEqual(provider.reads, []);
   }),
 );
 

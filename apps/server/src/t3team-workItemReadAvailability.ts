@@ -13,10 +13,12 @@
  * OFFERED BY ACCOUNT STATE, NOT BY TOOL CONTEXT. The reads are added to whatever the thread's synced
  * tool context lists, so a thread whose project has a usable Jira account gets them even when its
  * context does not name them. That is deliberate: `/mcp` threads (cloud, headless) carry no synced
- * web tool context at all, and the reads are read-only and project-scoped. Writes and drafts are
- * NOT affected: they still need the tool context (and, for a recipe, `allowedToolGroups`). A
- * recipe-launched binding that carries `allowedToolGroups` without `integration.read` does not get
- * them either. Behavior change to know: because the reads are added before the empty check, a bind
+ * web tool context at all, and the reads are read-only and project-scoped. Writes are NOT
+ * affected: they still need the tool context (and, for a recipe, `allowedToolGroups`). The one
+ * draft tool, `t3_work_item_draft`, is offered by account state too, and by the drafts flag (see
+ * {@link WORK_ITEM_DRAFT_TOOL_ID}). A recipe-launched binding that carries `allowedToolGroups`
+ * without `integration.read` does not get the reads either; `/mcp` binds with no
+ * `allowedToolGroups`, so there the group filter does not apply. Behavior change to know: because the reads are added before the empty check, a bind
  * with an empty tool context returns a binding (holding just the two reads) while Jira is
  * connected, where it used to return no binding.
  */
@@ -38,6 +40,8 @@ export const WORK_ITEM_READ_TOOL_IDS: ReadonlySet<string> = new Set([
 /**
  * The thread-bound draft tool (`t3_work_item_draft`). It is offered on the same account state as the
  * reads and additionally only while `WORKITEM_DETAIL_DRAFTS` is on; see `withWorkItemDraftTool`.
+ * A recipe's `allowedToolGroups` filters it only where a binding carries one (a recipe-launched
+ * workflow body); `/mcp` does not, so no recipe group gate applies to the meta tool there.
  */
 export const WORK_ITEM_DRAFT_TOOL_ID = "t3team.work_item.draft";
 

@@ -59,10 +59,12 @@ export { mcpDescriptionOf };
  *
  * Thread agents reach them through ONE tool instead, `t3_work_item_draft` (canonical
  * `t3team.work_item.draft`, `t3team-toolBrokerBindingWorkItemDraft.ts`), which maps each `op` onto
- * the canonical draft tool through the same broker path and adds the missing gates: a usable Jira
- * account bound to the thread's project, `WORKITEM_DETAIL_DRAFTS` on, the recipe group
- * `mutation.draft`, every named work item inside the bound project, and `publishDraft` pinned to the
- * calling thread. The canonical draft ids below therefore stay workflow-body host tools only.
+ * the canonical draft tool through the same broker path and adds the gates that can hold on `/mcp`:
+ * a usable Jira account bound to the thread's project, `WORKITEM_DETAIL_DRAFTS` on, every named work
+ * item inside the bound project, and `publishDraft` pinned to the calling thread. A recipe's
+ * `allowedToolGroups` (`mutation.draft`) is NOT one of them: `/mcp` binds with no
+ * `allowedToolGroups`, as for every other `/mcp` tool. The canonical draft ids below therefore stay
+ * workflow-body host tools only.
  *
  * The work-item READ tools (`t3_work_item_search` / `_get`) are the opposite case and ARE on `/mcp`:
  * they are read-only and project-scoped, and are offered by account state (a usable Jira account for

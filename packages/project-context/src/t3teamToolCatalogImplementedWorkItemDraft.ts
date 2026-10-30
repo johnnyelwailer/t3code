@@ -4,7 +4,7 @@ import type { T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
  * The thread-bound entry to the existing work-item draft tools: ONE tool with an `op`
  * discriminator, so an agent pays for one description. Each op is answered by the canonical
  * `t3team.work_item.*.draft_*` tool (assignee, estimate, status, description, comment, subtask,
- * link); this adds no write path. Offered only while a usable Jira account is bound to the thread's
+ * link add); this adds no write path. Offered only while a usable Jira account is bound to the thread's
  * project and the work item drafts feature is on.
  */
 export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
@@ -27,7 +27,6 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
       "estimate_hours?)\n" +
       "- link_add: link two work items (issue_id, other_issue_id, link_type_name, direction: " +
       "inward|outward)\n" +
-      "- link_remove: remove a link (issue_id, link_id)\n" +
       "Answer: { ok, promptText, draftMutation }. Not available when no Jira account is connected " +
       "for this project.",
     capabilities: ["write"],
@@ -49,7 +48,6 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
             "status",
             "subtask_create",
             "link_add",
-            "link_remove",
           ],
         },
         issue_id: { type: "string", minLength: 1, description: "Work item key, e.g. PROJ-12." },
@@ -65,7 +63,6 @@ export const IMPLEMENTED_T3TEAM_WORK_ITEM_DRAFT_TOOL_CATALOG = {
         other_issue_id: { type: "string" },
         link_type_name: { type: "string" },
         direction: { type: "string", enum: ["inward", "outward"] },
-        link_id: { type: "string" },
       },
       required: ["op", "issue_id"],
     },

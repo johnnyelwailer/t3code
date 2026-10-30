@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 import { Tool } from "effect/ai";
 
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
+import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { WorkItemDraftToolArgs } from "../../../t3team-workItemDraftArgs.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -22,5 +23,10 @@ export const T3TeamWorkItemDraftTool = Tool.make("t3_work_item_draft", {
   parameters: WorkItemDraftToolArgs,
   success: Schema.Unknown,
   failure: Schema.Union([T3TeamMcpToolError, OrchestratorMcpFailure]),
-  dependencies: [McpInvocationContext.McpInvocationContext, T3TeamToolBroker],
+  // `McpToolAccess.actsAsCaller` refuses with `OrchestratorMcpFailure`, which needs ThreadManagementService.
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    T3TeamToolBroker,
+    ThreadManagementService.ThreadManagementService,
+  ],
 });
