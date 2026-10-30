@@ -10,7 +10,11 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { Atom, AtomRegistry } from "effect/reactivity";
 
-import type { EnvironmentConnectionPhase } from "../connection/presentation.ts";
+import {
+  AVAILABLE_CONNECTION_STATE,
+  ConnectionBlockedError,
+  type SupervisorConnectionState,
+} from "../connection/model.ts";
 import * as Persistence from "../platform/persistence.ts";
 import { v2ShellSnapshot, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 import {
@@ -30,25 +34,44 @@ const SNAPSHOT: OrchestrationV2ShellSnapshot = {
   threads: [thread(KEPT), thread(STUCK)],
   archivedThreads: [thread(ThreadId.make("archived-stuck"))],
 };
-const presentation = (phase: EnvironmentConnectionPhase) => ({ connection: { phase } });
+const BASE = AVAILABLE_CONNECTION_STATE;
+const blocked = (
+  reason: "configuration" | "authentication" | "permission",
+  failureCause?: ConnectionBlockedError["failureCause"],
+): SupervisorConnectionState => ({
+  ...BASE,
+  phase: "blocked",
+  lastFailure: new ConnectionBlockedError({
+    reason,
+    detail: "blocked",
+    ...(failureCause === undefined ? {} : { failureCause }),
+  }),
+});
 
 describe("isEnvironmentUnreachable", () => {
-  it("treats a switched-off, blocked (ended cloud session) or unknown environment as unreachable", () => {
-    expect(isEnvironmentUnreachable(presentation("available"))).toBe(true);
-    expect(isEnvironmentUnreachable(presentation("error"))).toBe(true);
-    expect(isEnvironmentUnreachable(null)).toBe(true);
+  it("treats an ended cloud session, whatever the platform presents, as unreachable", () => {
+    expect(
+      isEnvironmentUnreachable({
+        inCatalog: true,
+        state: blocked("configuration", "session_ended"),
+      }),
+    ).toBe(true);
+  });
+
+  it("treats an environment missing from the catalog as unreachable", () => {
+    expect(isEnvironmentUnreachable({ inCatalog: false, state: null })).toBe(true);
   });
 
   it("keeps environments that are expected to answer on the normal path", () => {
-    for (const phase of [
-      "connecting",
-      "reconnecting",
-      "connected",
-      "offline",
-      "unsupported",
-    ] as const) {
-      expect(isEnvironmentUnreachable(presentation(phase))).toBe(false);
+    // A live server behind an expired sign-in, a reconnect or a switched-off environment.
+    expect(isEnvironmentUnreachable({ inCatalog: true, state: blocked("authentication") })).toBe(
+      false,
+    );
+    expect(isEnvironmentUnreachable({ inCatalog: true, state: blocked("permission") })).toBe(false);
+    for (const phase of ["available", "offline", "connecting", "backoff", "connected"] as const) {
+      expect(isEnvironmentUnreachable({ inCatalog: true, state: { ...BASE, phase } })).toBe(false);
     }
+    expect(isEnvironmentUnreachable({ inCatalog: true, state: null })).toBe(false);
   });
 });
 
@@ -89,11 +112,17 @@ describe("local override command", () => {
         cache as Persistence.EnvironmentCacheStore["Service"],
       ),
     );
-    const source = Atom.family((_environmentId: EnvironmentId) => Atom.make(SNAPSHOT));
+    const sourceAtom = Atom.make(SNAPSHOT);
+    const source = Atom.family((_environmentId: EnvironmentId) => sourceAtom);
     const local = createLocalThreadOverrides(runtime, source);
     const registry = AtomRegistry.make();
     registry.mount(local.snapshotAtom(ENVIRONMENT_ID));
-    return { registry, local, view: () => registry.get(local.snapshotAtom(ENVIRONMENT_ID)) };
+    return {
+      registry,
+      local,
+      sourceAtom,
+      view: () => registry.get(local.snapshotAtom(ENVIRONMENT_ID)),
+    };
   };
 
   it.effect("removes the thread from the view and from the cache, with the environment gone", () =>
@@ -133,6 +162,25 @@ describe("local override command", () => {
       expect(h.view()?.threads.find((entry) => entry.id === STUCK)?.settledOverride).toBe(
         "settled",
       );
+    }),
+  );
+
+  it.effect("ends the override once the environment answers again with a newer snapshot", () =>
+    Effect.gen(function* () {
+      const h = makeHarness({ loadShell: () => Effect.succeedNone });
+      yield* Effect.promise(() =>
+        h.local.command.run(h.registry, {
+          environmentId: ENVIRONMENT_ID,
+          input: { threadId: STUCK, override: "removed" },
+        }),
+      );
+      expect(h.view()?.threads.map((entry) => entry.id)).toEqual([KEPT]);
+      // A new session on the same environment id serves a newer snapshot that still has the thread.
+      h.registry.set(h.sourceAtom, {
+        ...SNAPSHOT,
+        snapshotSequence: SNAPSHOT.snapshotSequence + 1,
+      });
+      expect(h.view()?.threads.map((entry) => entry.id)).toEqual([KEPT, STUCK]);
     }),
   );
 });

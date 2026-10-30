@@ -8,9 +8,11 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { Atom } from "effect/reactivity";
+import { AsyncResult, Atom, type AtomRegistry } from "effect/reactivity";
 
-import type { EnvironmentConnectionPhase } from "../connection/presentation.ts";
+import type { SupervisorConnectionState } from "../connection/model.ts";
+import { isSessionEndedFailure } from "../connection/t3team-brokerConnection.ts";
+import type { EnvironmentCatalogState } from "./connections.ts";
 import * as Persistence from "../platform/persistence.ts";
 import { createRuntimeCommand } from "./runtime.ts";
 
@@ -23,16 +25,50 @@ import { createRuntimeCommand } from "./runtime.ts";
 export type LocalThreadOverride = "settled" | "removed";
 
 /**
- * Whether the environment cannot be asked for as long as nothing changes: it is switched off,
- * its connection is blocked (a cloud session that ended parks it here) or it is not registered
- * at all. A connecting, reconnecting, offline or unsupported one is expected to answer again, so
- * it keeps the normal path; local-only changes would otherwise diverge from the server.
+ * A local override only speaks for the snapshot it was made against. Once the environment answers
+ * again (a new session on the same environment id) its snapshot has a higher sequence, the server
+ * is authoritative, and the override ends: the thread is where the server says it is.
  */
-export function isEnvironmentUnreachable(
-  presentation: { readonly connection: { readonly phase: EnvironmentConnectionPhase } } | null,
-): boolean {
-  if (presentation === null) return true;
-  return presentation.connection.phase === "available" || presentation.connection.phase === "error";
+interface RecordedOverride {
+  readonly override: LocalThreadOverride;
+  readonly snapshotSequence: number;
+}
+
+/**
+ * Whether the environment cannot be asked: its cloud session ended (the connection is parked on
+ * `session_ended`, whatever phase a platform presents it as) or it is not in the catalog at all.
+ * Anything else, such as an expired sign-in, a switched-off or a reconnecting environment, is
+ * expected to answer again and keeps the normal path.
+ */
+export function isEnvironmentUnreachable(input: {
+  readonly inCatalog: boolean;
+  readonly state: SupervisorConnectionState | null;
+}): boolean {
+  if (!input.inCatalog) return true;
+  return (
+    input.state !== null &&
+    input.state.phase === "blocked" &&
+    isSessionEndedFailure(input.state.lastFailure)
+  );
+}
+
+export function createEnvironmentUnreachableReader(input: {
+  readonly registry: AtomRegistry.AtomRegistry;
+  readonly catalogValueAtom: Atom.Atom<EnvironmentCatalogState>;
+  readonly stateAtom: (
+    environmentId: EnvironmentId,
+  ) => Atom.Atom<AsyncResult.AsyncResult<SupervisorConnectionState, unknown>>;
+}) {
+  return (environmentId: EnvironmentId): boolean => {
+    const catalog = input.registry.get(input.catalogValueAtom);
+    if (!catalog.isReady) return false;
+    return isEnvironmentUnreachable({
+      inCatalog: catalog.entries.has(environmentId),
+      state: Option.getOrNull(
+        AsyncResult.value(input.registry.get(input.stateAtom(environmentId))),
+      ),
+    });
+  };
 }
 
 function settledLocally(thread: OrchestrationV2ThreadShell, now: DateTime.Utc) {
@@ -80,14 +116,19 @@ export function createLocalThreadOverrides<R, E>(
   ) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
 ) {
   const overridesAtom = Atom.family((_environmentId: EnvironmentId) =>
-    Atom.make<ReadonlyMap<ThreadId, LocalThreadOverride>>(new Map()).pipe(Atom.keepAlive),
+    Atom.make<ReadonlyMap<ThreadId, RecordedOverride>>(new Map()).pipe(Atom.keepAlive),
   );
   const snapshotAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make((get) => {
       const snapshot = get(sourceSnapshotAtom(environmentId));
-      const overrides = get(overridesAtom(environmentId));
-      if (snapshot === null || overrides.size === 0) return snapshot;
-      return applyLocalThreadOverrides(snapshot, overrides, DateTime.nowUnsafe());
+      const recorded = get(overridesAtom(environmentId));
+      if (snapshot === null || recorded.size === 0) return snapshot;
+      const current = new Map<ThreadId, LocalThreadOverride>();
+      for (const [threadId, entry] of recorded) {
+        if (entry.snapshotSequence >= snapshot.snapshotSequence)
+          current.set(threadId, entry.override);
+      }
+      return applyLocalThreadOverrides(snapshot, current, DateTime.nowUnsafe());
     }),
   );
 
@@ -122,8 +163,13 @@ export function createLocalThreadOverrides<R, E>(
       target: { readonly environmentId: EnvironmentId; readonly input: LocalThreadOverrideInput },
       registry,
     ) => {
+      const snapshotSequence =
+        registry.get(sourceSnapshotAtom(target.environmentId))?.snapshotSequence ?? 0;
       registry.update(overridesAtom(target.environmentId), (current) =>
-        new Map(current).set(target.input.threadId, target.input.override),
+        new Map(current).set(target.input.threadId, {
+          override: target.input.override,
+          snapshotSequence,
+        }),
       );
       return persist(target.environmentId, target.input).pipe(
         Effect.catchCause((cause) =>

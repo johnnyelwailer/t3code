@@ -579,7 +579,8 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       }
       if (!activeThreadShell || !activeThreadRef || (!serverConfigLoaded && !unreachable)) return;
       if (activeThreadSettled) {
-        void handleUnsettleActiveThread();
+        // Un-settling asks the environment, which cannot answer.
+        if (!unreachable) void handleUnsettleActiveThread();
         return;
       }
       if (settleAndAdvance(activeThreadRef)) return;
