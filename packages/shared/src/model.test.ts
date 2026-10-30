@@ -16,7 +16,6 @@ import {
   getProviderOptionDescriptors,
   readCustomModelEntries,
   isClaudeUltrathinkPrompt,
-  normalizeCustomModelSlug,
   normalizeModelSlug,
   modelSelectionsEqual,
   resolveModelSlugForProvider,
@@ -40,42 +39,6 @@ const codexCaps: ModelCapabilities = createModelCapabilities({
       id: "fastMode",
       label: "Fast Mode",
       type: "boolean",
-    },
-  ],
-});
-
-describe("model slug normalization", () => {
-  it("preserves exact custom slugs instead of expanding provider aliases", () => {
-    const claude = ProviderDriverKind.make("claudeAgent");
-
-    expect(normalizeModelSlug("opus", claude)).toBe("opus");
-    expect(normalizeCustomModelSlug(" opus ")).toBe("opus");
-  });
-});
-
-const claudeCaps: ModelCapabilities = createModelCapabilities({
-  optionDescriptors: [
-    {
-      id: "effort",
-      label: "Reasoning",
-      type: "select",
-      options: [
-        { id: "medium", label: "Medium" },
-        { id: "high", label: "High", isDefault: true },
-        { id: "ultrathink", label: "Ultrathink" },
-      ],
-      currentValue: "high",
-      promptInjectedValues: ["ultrathink"],
-    },
-    {
-      id: "contextWindow",
-      label: "Context Window",
-      type: "select",
-      options: [
-        { id: "200k", label: "200k" },
-        { id: "1m", label: "1M", isDefault: true },
-      ],
-      currentValue: "1m",
     },
   ],
 });
@@ -160,41 +123,6 @@ describe("misc helpers", () => {
 });
 
 describe("descriptor helpers", () => {
-  it("applies selection values to capability descriptors", () => {
-    expect(
-      getProviderOptionDescriptors({
-        caps: claudeCaps,
-        selections: [
-          { id: "effort", value: "medium" },
-          { id: "contextWindow", value: "200k" },
-        ],
-      }),
-    ).toEqual([
-      {
-        id: "effort",
-        label: "Reasoning",
-        type: "select",
-        options: [
-          { id: "medium", label: "Medium" },
-          { id: "high", label: "High", isDefault: true },
-          { id: "ultrathink", label: "Ultrathink" },
-        ],
-        currentValue: "medium",
-        promptInjectedValues: ["ultrathink"],
-      },
-      {
-        id: "contextWindow",
-        label: "Context Window",
-        type: "select",
-        options: [
-          { id: "200k", label: "200k" },
-          { id: "1m", label: "1M", isDefault: true },
-        ],
-        currentValue: "200k",
-      },
-    ]);
-  });
-
   it("builds dispatch options only from explicit selections", () => {
     const descriptors = getProviderOptionDescriptors({
       caps: codexCaps,

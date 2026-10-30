@@ -146,7 +146,6 @@ export function TicketKickoffComposerControls({
             showPlanFollowUpPrompt={false}
             promptHasText={text.trim().length > 0}
             isSendBusy={false}
-            isConnecting={false}
             isEnvironmentUnavailable={providerStatusMessage !== null}
             // Upstream (2026-08) made the send-disabled reason explicit so the button can explain
             // itself. The kickoff composer's only blocking condition is an unavailable provider.

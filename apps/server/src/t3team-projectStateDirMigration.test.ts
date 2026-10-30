@@ -60,10 +60,10 @@ function memoryFs(
     },
     remove: (target) =>
       Effect.sync(() => {
-        for (const key of [...files.keys()]) {
+        for (const key of files.keys()) {
           if (key === target || key.startsWith(`${target}/`)) files.delete(key);
         }
-        for (const dir of [...directories]) {
+        for (const dir of directories) {
           if (dir === target || dir.startsWith(`${target}/`)) directories.delete(dir);
         }
       }),

@@ -50,7 +50,7 @@ export function useResourcePressureBannerItem(input: {
         ? {
             id: "resource-pressure",
             variant: paused || level === "critical" ? "warning" : "info",
-            priority: paused ? "urgent" : "notice",
+            group: "environment",
             icon: <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />,
             title: paused
               ? "Paused · memory pressure — resumes automatically once it clears"

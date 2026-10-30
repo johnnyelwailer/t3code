@@ -21,7 +21,7 @@ import { createQueryable } from "@t3tools/project-context";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 import { definePrompt } from "@t3team/sdk";
 import { it as effectIt } from "@effect/vitest";
-import { afterAll, describe, expect, it } from "vite-plus/test";
+import { afterAll, describe, expect } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
 import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";

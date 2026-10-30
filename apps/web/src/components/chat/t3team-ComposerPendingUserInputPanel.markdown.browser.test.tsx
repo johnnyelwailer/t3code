@@ -27,13 +27,6 @@ const prompt: PendingUserInput = {
   dismissible: true,
 };
 
-// Ask-user questions may carry a markdown `context`; the V2 question type does not declare it yet.
-function withQuestionContext(
-  question: PendingUserInput["questions"][number] & { readonly context: string },
-): PendingUserInput["questions"][number] {
-  return question;
-}
-
 let root: Root;
 let container: HTMLDivElement;
 
@@ -116,30 +109,34 @@ describe("ComposerPendingUserInputPanel markdown", () => {
     expect(markup).toMatch(/Smallest change<br>\s*No migration/);
   });
 
-  it("renders a clamped context strip with an expand affordance above the question", async () => {
+  it("renders the context t3_ask_user folds into the question above the question text", async () => {
+    // The server places the ask-user `context` markdown above the question, separated by a blank
+    // line (t3team-askUserQuestion.ts), so the panel only ever sees one question string.
     const markup = await renderPanel({
       ...prompt,
       dismissible: false,
       questions: [
-        withQuestionContext({
+        {
           id: "question-ctx",
           header: "Ship order",
-          question: "Which of these should we ship first?",
-          context: "### Proposed options\n\n1. Ship A — smallest, ships this week",
+          question:
+            "### Proposed options\n\n1. Ship A — smallest, ships this week\n\nWhich of these should we ship first?",
           options: [
             { label: "Ship A", description: "Ships this week" },
             { label: "Ship B", description: "User requested" },
           ],
           multiSelect: false,
-        }),
+        },
       ],
     });
 
-    // Context renders as markdown, is clamped, and carries the expand affordance.
+    // The folded context renders as markdown, not as raw source text.
     expect(markup).toMatch(/<h3[^>]*>Proposed options<\/h3>/);
-    expect(markup).toContain("line-clamp-4");
-    expect(markup).toContain("Show full context");
-    // The strip sits ABOVE the question: context markup precedes the question text.
+    expect(markup).not.toContain("### Proposed options");
+    // It stays full: no separate clamped strip hides part of it behind an expand affordance.
+    expect(markup).not.toContain("line-clamp-4");
+    expect(markup).not.toContain("Show full context");
+    // The context precedes the question text.
     const contextAt = markup.indexOf("Ship A — smallest, ships this week");
     const questionAt = markup.indexOf("Which of these should we ship first?");
     expect(contextAt).toBeGreaterThan(-1);
@@ -147,7 +144,7 @@ describe("ComposerPendingUserInputPanel markdown", () => {
     expect(contextAt).toBeLessThan(questionAt);
   });
 
-  it("omits the context strip entirely when the question carries no context", async () => {
+  it("renders no context strip for a plain question", async () => {
     const markup = await renderPanel();
 
     expect(markup).not.toContain("Show full context");

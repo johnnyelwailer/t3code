@@ -1,20 +1,33 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
+  isProviderWorkspaceSnapshotCurrent,
   PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
   type EnvironmentId,
   type ProviderInstanceId,
   type ServerProvider,
 } from "@t3tools/contracts";
-import {
-  hasCompleteProviderWorkspaceSnapshot,
-  hasCurrentProviderWorkspaceSnapshot,
-} from "@t3tools/client-runtime/providerSkills";
+import { hasCompleteProviderWorkspaceSnapshot } from "@t3tools/client-runtime/providerSkills";
 
 import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useStableCallback } from "./useStableCallback";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
+
+// Upstream un-exported `hasCurrentProviderWorkspaceSnapshot` from client-runtime when it moved the
+// scan into an atom family; this hook keeps its own check on the contracts predicate.
+function hasCurrentProviderWorkspaceSnapshot(
+  provider: ServerProvider | null | undefined,
+  cwd: string | null | undefined,
+  nowMs: number,
+): boolean {
+  const snapshot = cwd ? provider?.workspaceSnapshots?.find((entry) => entry.cwd === cwd) : null;
+  return Boolean(
+    snapshot &&
+    !snapshot.slashCommandsPending &&
+    isProviderWorkspaceSnapshotCurrent(snapshot, nowMs),
+  );
+}
 
 /**
  * Keeps the selected provider's workspace snapshot for one cwd scanned and current, so a

@@ -1,7 +1,7 @@
 /**
  * What the hidden author thread's MCP credential may do. Under orchestration V2 every provider
  * session's `t3-code` server carries upstream's toolkits too — `delegate_task`, `create_threads`,
- * `t3_project_delete`, `t3_pending_request_respond`, worktree, preview (a browser), devices — and
+ * `t3_project_delete`, `t3_pending_request`, worktree, preview (a browser), devices — and
  * Claude pre-approves that whole server. Each of those is gated on a credential capability, so the
  * author's scope is resolved with NO capabilities: every upstream tool refuses it. The t3team
  * toolkit then admits the author only for its own tools (`WORKFLOW_AUTHOR_TOOL_IDS`), on top of the

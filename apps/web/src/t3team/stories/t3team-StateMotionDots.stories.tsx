@@ -71,7 +71,6 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
-        activeTurnInProgress: true,
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
@@ -181,7 +180,6 @@ type StateMotionDotsProps = {
 
 function StateMotionDots({
   threadState,
-  drift,
   activeChildren,
   activeSubagents,
   liveStream,
@@ -467,7 +465,7 @@ function StateMotionDots({
               <div className="mt-2 flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setDriftState((current) => rollDrift(entriesRef.current.length))}
+                  onClick={() => setDriftState(() => rollDrift(entriesRef.current.length))}
                   className="rounded-sm border border-border/70 bg-accent/40 px-2 py-0.5 text-3xs text-muted-foreground hover:text-foreground"
                 >
                   re-roll agent states

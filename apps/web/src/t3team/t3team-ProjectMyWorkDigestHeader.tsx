@@ -14,11 +14,6 @@ import { digestSprintProgress } from "~/t3team/t3team-projectMyWorkDigestSprintP
  */
 export type DigestBurndownVariant = "off" | "chart" | "sparkline";
 
-function formatDay(iso: string): string {
-  const date = new Date(iso);
-  return `${String(date.getUTCDate()).padStart(2, "0")}.${String(date.getUTCMonth() + 1).padStart(2, "0")}.`;
-}
-
 export function ProjectMyWorkDigestHeader({
   graph,
   nowMs,

@@ -17,7 +17,6 @@ import { afterEach } from "vite-plus/test";
 import * as ServerConfig from "./config.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { replaceAtlassianAuths } from "./t3team-atlassian-auth-store.ts";
-import { writeCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cache.ts";
 import {
   replaceT3TeamContextRefreshJobQueue,
   replaceT3TeamContextRefreshJobSeen,
@@ -109,52 +108,6 @@ export function makeContextRefreshIntegrationTestLayer(prefix: string) {
 
 export function makeContextRefreshLiveLayer(prefix = "t3team-broker-context-refresh-") {
   return makeContextRefreshServiceTestLayer(prefix);
-}
-
-function seedContextRefreshBacklogChild(input: {
-  readonly project: ProjectShellProject;
-  readonly parentKey: string;
-  readonly childKey: string;
-  readonly childDisplayId: string;
-}) {
-  const externalProjectId = input.project.source.externalProjectId!;
-  return writeCachedT3TeamAtlassianBacklog({
-    provider: "atlassian",
-    accountId: input.project.source.accountId!,
-    externalProjectId,
-    requestSelection: {},
-    response: {
-      page: {
-        items: [
-          {
-            provider: "atlassian",
-            kind: "issue",
-            id: input.parentKey.toLowerCase(),
-            displayId: input.parentKey,
-            title: "Parent ticket",
-            projectId: externalProjectId,
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-          {
-            provider: "atlassian",
-            kind: "issue",
-            id: input.childKey.toLowerCase(),
-            displayId: input.childDisplayId,
-            title: "Child ticket",
-            parentId: input.parentKey.toLowerCase(),
-            projectId: externalProjectId,
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-        ],
-        totalCount: 2,
-      },
-      capabilities: { canCreateSubtasks: true },
-      boards: [],
-      sprints: [],
-      savedFilters: [],
-      quickFilters: [],
-    },
-  });
 }
 
 export function seedContextRefreshIncompleteJob(input: {

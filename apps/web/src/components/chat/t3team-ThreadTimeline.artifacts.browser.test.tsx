@@ -140,10 +140,7 @@ function timeline() {
       activeThreadKey={`${environmentId}:${threadId}`}
       syncing={false}
       detailLoading
-      readyMarkdownCwd={null}
-      readyWorkspaceRoot={null}
       isWorking={false}
-      activeTurnInProgress={false}
       listRef={createRef<LegendListRef | null>()}
       latestRun={null}
       turnDiffSummaries={[]}
@@ -152,7 +149,6 @@ function timeline() {
       onOpenTurnDiff={() => {}}
       onOpenThread={() => {}}
       onForkFromRun={async () => {}}
-      onRollbackCheckpoint={() => {}}
       supportsConversationRollback={false}
       onRevertToTurnCount={() => {}}
       isRevertingCheckpoint={false}
@@ -169,7 +165,6 @@ function timeline() {
       emptyPlaceholderInset={0}
       liveFollowEnabled
       onIsAtEndChange={() => {}}
-      onManualNavigation={() => {}}
     />
   );
 }

@@ -62,7 +62,11 @@ import {
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
-import { draftToolContext, findDraftArtifact } from "./t3team-workflowHostDraft.fixtures.ts";
+import {
+  draftToolContext,
+  enableWorkItemDraftsFlagForFile,
+  findDraftArtifact,
+} from "./t3team-workflowHostDraft.fixtures.ts";
 import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import {
   makeFakeWorkflowHost,
@@ -71,6 +75,8 @@ import {
 
 const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-grant-"));
 afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
+// The draft tools refuse while WORKITEM_DETAIL_DRAFTS is off (its default).
+enableWorkItemDraftsFlagForFile();
 
 // Parks on askUser first, so every draft call in this file happens after the restart.
 const probeWorkflowPath = NodePath.join(cwd, "grant-probe.workflow.ts");

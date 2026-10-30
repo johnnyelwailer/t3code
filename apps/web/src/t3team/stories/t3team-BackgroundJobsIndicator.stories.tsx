@@ -74,7 +74,6 @@ function makeMockController() {
     "\n✓ built in 8.4s";
   let cursor = 0;
   let settled = false;
-  let cancelled = false;
 
   const controller: ThreadJobsController = async ({
     request,
@@ -96,7 +95,6 @@ function makeMockController() {
     }
     if (request.kind === "cancel") {
       settled = true;
-      cancelled = true;
       return {
         supported: true,
         result: {

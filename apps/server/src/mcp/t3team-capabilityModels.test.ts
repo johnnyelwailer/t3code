@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderDriverKind, type ServerProviderModel } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProviderModel,
+} from "@t3tools/contracts";
 import { listCapabilityModels } from "./t3team-capabilityModels.ts";
 
 const model = (slug: string, extra: Partial<ServerProviderModel> = {}): ServerProviderModel => ({
@@ -17,7 +21,11 @@ const models = [
 ];
 const list = (overrides: Partial<Parameters<typeof listCapabilityModels>[0]> = {}) =>
   listCapabilityModels({
-    provider: { driver: ProviderDriverKind.make("opencode"), models },
+    provider: {
+      instanceId: ProviderInstanceId.make("opencode"),
+      driver: ProviderDriverKind.make("opencode"),
+      models,
+    },
     latestOnly: true,
     preferences: undefined,
     isPinned: (entry) => entry.isCustom,

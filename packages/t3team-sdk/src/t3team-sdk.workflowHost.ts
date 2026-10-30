@@ -166,7 +166,7 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
   const offer: WorkflowRunHost["offer"] = async (decide) => {
     // The wait and the claim below must stay in ONE synchronous segment after the last await, or
     // two offers woken by the same settled drive could both claim the slot.
-    while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
+    while (inFlight.size > 0) await Promise.allSettled(inFlight);
     if (cancelled || registry.getRun(runId) === undefined) return false;
     return await held(async () => {
       const target = await decide();

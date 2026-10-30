@@ -24,6 +24,8 @@ const HeadSchema = Schema.Struct({
 });
 const decodeHead = Schema.decodeUnknownEffect(Schema.fromJsonString(HeadSchema));
 
+class ChecksUnavailable extends Schema.TaggedError<ChecksUnavailable>()("ChecksUnavailable", {}) {}
+
 const WorkflowRunSchema = Schema.Struct({
   id: Schema.Int,
   name: Schema.optional(Schema.NullOr(Schema.String)),
@@ -109,7 +111,7 @@ export const makeChecksRevalidator = Effect.gen(function* () {
                     }),
                   GitHubApiResponseError: (error) =>
                     Effect.sync(() => {
-                      entry.supported = !UNSUPPORTED_STATUSES.has(error.status);
+                      entry.supported &&= !UNSUPPORTED_STATUSES.has(error.status);
                       return null;
                     }),
                 }),
@@ -156,17 +158,28 @@ export const makeChecksRevalidator = Effect.gen(function* () {
             ...(runsEndpoint === null ? [] : [runsEndpoint]),
           ];
           const runPages: Array<string> = [];
-          for (const endpoint of endpoints) {
-            let paged: string | null =
-              `${endpoint}${endpoint.includes("?") ? "&" : "?"}per_page=100`;
-            for (let page = 1; paged !== null; page++) {
-              if (page > 100) return yield* fail(200);
-              const answered: Validator | null = yield* get(paged);
-              if (answered === null) return yield* read;
-              if (endpoint === runsEndpoint) runPages.push(paged);
-              paged = answered.next;
-            }
-          }
+          // Each endpoint has its own cursor; only pages within one endpoint depend on each other.
+          // An unavailable endpoint interrupts the others so the fallback read starts at once.
+          const available = yield* Effect.forEach(
+            endpoints,
+            Effect.fn("gitHubConditionalChecks.revalidateEndpoint")(function* (endpoint) {
+              // Follows the `Link` header's next page rather than counting `page=` numbers.
+              let paged: string | null =
+                `${endpoint}${endpoint.includes("?") ? "&" : "?"}per_page=100`;
+              for (let page = 1; paged !== null; page++) {
+                if (page > 100) return yield* fail(200);
+                const answered: Validator | null = yield* get(paged);
+                if (answered === null) return yield* new ChecksUnavailable();
+                if (endpoint === runsEndpoint) runPages.push(paged);
+                paged = answered.next;
+              }
+            }),
+            { concurrency: 3, discard: true },
+          ).pipe(
+            Effect.as(true),
+            Effect.catchTags({ ChecksUnavailable: () => Effect.succeed(false) }),
+          );
+          if (!available) return yield* read;
           const now = yield* Clock.currentTimeMillis;
           if (entry.value !== null && now - entry.readAt < 5 * 60_000) return entry.value;
           const pages = runPages.map((endpoint) =>

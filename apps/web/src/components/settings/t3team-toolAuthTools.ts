@@ -1,6 +1,12 @@
 import { ProviderDriverKind, type ToolAuthToolId } from "@t3tools/contracts";
 
-import { ClaudeAI, GitHubIcon, OpenAI, type Icon } from "../Icons";
+import type { ElementType } from "react";
+
+import { getSourceControlPresentationForKind } from "../../sourceControlPresentation";
+import { ClaudeAI, OpenAI } from "../Icons";
+
+/** Upstream moved the GitHub mark into the source-control definitions; read it from there. */
+const GitHubIcon = getSourceControlPresentationForKind("github").Icon;
 
 /**
  * Static per-tool metadata for the "Connected tools" card list. Mirrors the
@@ -17,7 +23,7 @@ export interface ToolAuthToolMeta {
   readonly tool: ToolAuthToolId;
   readonly label: string;
   readonly description: string;
-  readonly icon: Icon;
+  readonly icon: ElementType<{ className?: string }>;
 }
 
 export const TOOL_AUTH_TOOLS: ReadonlyArray<ToolAuthToolMeta> = [

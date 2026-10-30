@@ -13,10 +13,6 @@ import {
   T3TEAM_WIDGET_INTENT_DESCRIPTION,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "@t3tools/project-context/t3teamWidgetGuidance";
-import {
-  getT3TeamToolDefinition,
-  type T3TeamImplementedToolId,
-} from "@t3tools/project-context/t3teamToolCatalog";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
@@ -29,6 +25,7 @@ import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workIt
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
 import { T3TeamMachineFindDefinitionsTool } from "./t3team-machineDefinitionTools.ts";
+import { T3TeamMachineSetSourceTool } from "./t3team-machineSourceTools.ts";
 
 /**
  * What every t3team tool fails with. `OrchestratorMcpFailure` is the refusal
@@ -525,5 +522,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamChangeRequestPublishTool,
   T3TeamLinkedRepositorySyncTool,
   T3TeamMachineFindDefinitionsTool,
+  T3TeamMachineSetSourceTool,
   T3TeamThreadSkillMetadataTool,
 );

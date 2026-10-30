@@ -64,7 +64,9 @@ const RUNTIME_TAB_ID = "panel-resize-tab";
 // A desktop-sized device viewport in a narrow panel: fit-to-panel scales it down.
 const VIEWPORT: PreviewViewportSetting = { _tag: "freeform", width: 1440, height: 900 };
 const noop = () => undefined;
+const observeRow = () => noop;
 const handlers: ResizableWidthHandlers = {
+  ref: noop,
   onPointerDown: noop,
   onPointerMove: noop,
   onPointerUp: noop,
@@ -83,12 +85,12 @@ function Surface({
 }) {
   return (
     <>
-      <PreviewPanelShell mode="inline" inlineSize={{ width: 600, handlers, resizing }}>
+      <PreviewPanelShell mode="inline" inlineSize={{ width: 600, handlers, resizing, observeRow }}>
         {null}
       </PreviewPanelShell>
       <PreviewPanelShell
         mode="inline"
-        inlineSize={{ width: 600, handlers, resizing: otherPanelResizing }}
+        inlineSize={{ width: 600, handlers, resizing: otherPanelResizing, observeRow }}
       >
         {null}
       </PreviewPanelShell>

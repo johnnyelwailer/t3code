@@ -1,4 +1,3 @@
-import type { LocalApi } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { BackendProvider } from "~/t3team/backend/t3team-BackendContext";

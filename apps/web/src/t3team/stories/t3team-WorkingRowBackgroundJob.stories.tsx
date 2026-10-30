@@ -44,7 +44,6 @@ function Row({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking,
-        activeTurnInProgress: isWorking,
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,

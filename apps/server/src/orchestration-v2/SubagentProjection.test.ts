@@ -16,6 +16,7 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 import {
   makeSubagentChildThread,
@@ -26,7 +27,8 @@ import {
   endRunlessRootTurns,
 } from "@t3tools/provider-core/server/subagentProjection";
 
-import { emptyProjection } from "./ProjectionStore.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
+import * as ProjectionStore from "./ProjectionStore.ts";
 
 const parentThreadId = ThreadId.make("thread:subagent-snoozed-parent");
 const childThreadId = ThreadId.make("thread:subagent-awake-child");
@@ -117,8 +119,59 @@ it("keeps a subagent child awake when its parent thread is snoozed", () => {
   });
 });
 
+it.effect.each([
+  ["sql", ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemory))],
+] as const)(
+  "%s: a pinned parent's subagent child is born unpinned and is left to the child-settle sweeper",
+  ([, testLayer]) =>
+    Effect.gen(function* () {
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const parentThread = { ...makeParentThread(), pinnedAt: parentCreatedAt, pinOrderKey: "a0" };
+      const childThread = makeSubagentChildThread({
+        parentThread,
+        childThreadId,
+        parentNodeId: NodeId.make("node:subagent-parent"),
+        activeProviderThreadId: null,
+        providerInstanceId: childProviderInstanceId,
+        modelSelection: childModelSelection,
+        title: "Child",
+        now: childCreatedAt,
+        createdBy: "agent",
+        creationSource: "provider",
+      });
+
+      assert.equal(parentThread.pinnedAt, parentCreatedAt);
+      assert.equal(parentThread.pinOrderKey, "a0");
+      assert.isNull(childThread.pinnedAt);
+      assert.isNull(childThread.pinOrderKey);
+
+      for (const thread of [parentThread, childThread]) {
+        yield* store.apply({
+          id: EventId.make(`event:${thread.id}`),
+          type: "thread.created",
+          threadId: thread.id,
+          occurredAt: thread.createdAt,
+          payload: thread,
+        });
+      }
+      const savedParent = yield* store.getThread(parentThreadId);
+      assert.deepEqual(savedParent.pinnedAt, parentCreatedAt);
+      assert.equal(savedParent.pinOrderKey, "a0");
+      const savedChild = yield* store.getThread(childThreadId);
+      assert.isNull(savedChild.pinnedAt);
+      assert.isNull(savedChild.pinOrderKey);
+      // t3team: the automatic sweep never offers a subagent child. The fork's child-settle
+      // sweeper (`t3team-childSettleSweeper`) settles children with their parent instead.
+      const candidates = yield* store.getSettlementCandidates();
+      assert.deepEqual(
+        candidates.map((candidate) => candidate.id),
+        [],
+      );
+    }).pipe(Effect.provide(testLayer)),
+);
+
 function taskFixture() {
-  const projection = emptyProjection({
+  const projection = ProjectionStore.emptyProjection({
     type: "thread.created",
     id: EventId.make("task-fixture"),
     threadId: parentThreadId,
@@ -375,6 +428,7 @@ it.effect("ends a runless root turn's items when its node already ended", () =>
       providerInstanceId: parentProviderInstanceId,
       projection: {
         nodes: [root],
+        providerTurns: [],
         turnItems: [item("turn-item:command"), item("turn-item:reasoning")],
       } as never,
       status: "cancelled",

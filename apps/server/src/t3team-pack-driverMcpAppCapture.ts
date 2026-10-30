@@ -20,7 +20,7 @@ import type {
   ProviderDriverKind,
   ProviderThreadId,
 } from "@t3tools/contracts";
-import { MCP_APP_OUTPUT_KEY, readMcpAppResourceUri } from "@t3tools/shared/mcpApp";
+import { MCP_APP_OUTPUT_KEY } from "@t3tools/shared/mcpApp";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
@@ -30,6 +30,7 @@ import {
   type ProviderAdapterV2Event,
 } from "@t3tools/provider-core/server/ProviderAdapter";
 import type { PackMcpAppSnapshot } from "./t3team-pack-driverMcpApps.ts";
+import { readMcpAppResourceUri } from "./t3team-pack-mcpAppResourceUri.ts";
 
 const CAPTURE_TIMEOUT = "20 seconds";
 

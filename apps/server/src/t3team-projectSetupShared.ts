@@ -7,7 +7,6 @@ import {
   DEFAULT_T3TEAM_PROFILE_ID,
   resolveEnabledSkillPackIds,
   resolveT3TeamProfile,
-  T3TEAM_PROFILES,
   T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
   type T3TeamProfile,
   type T3TeamProfileId,
@@ -46,8 +45,6 @@ export type T3TeamProjectSetupProfileManifest = T3TeamProjectProfileManifest;
 
 export const DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID: T3TeamProjectSetupProfileId =
   DEFAULT_T3TEAM_PROFILE_ID;
-
-const T3TEAM_PROJECT_SETUP_PROFILES = T3TEAM_PROFILES;
 
 export function resolveT3TeamProjectSetupProfileId(
   profileId: string | undefined,

@@ -199,6 +199,7 @@ t3team.project.refresh_context_bundle
 t3team.project.list_linked_repositories
 t3team.project.sync_linked_repository
 t3team.machine.find_definitions
+t3team.machine.set_source
 t3team.project.open_dashboard_mode
 t3team.project.open_linked_repository_manager
 t3team.project.refresh_integrations
@@ -219,6 +220,13 @@ Notes:
   requests) so a machine-setup agent proposes an existing one instead of asking for a repository
   and branch. It is a direct MCP tool like `t3_linked_repository_sync`, not a broker tool, and
   honors `CLOUD_PROJECT_MACHINE`.
+- `t3team.machine.set_source` is implemented (MCP `t3_machine_set_source`). The machine-setup agent
+  proposes the repository and branch that `find_definitions` found. The tool proves the proposal
+  (the repository is readable and the branch holds a usable definition, read like a cloud session
+  reads it) and posts ONE `t3_ask_user` question: "Use this machine definition" or "Keep the
+  default". Its question id is `machine-source:v1:<base64url JSON of the setting>`. The tool never
+  saves: the setting lives on the user's own environment, so the web client saves it there when
+  the user accepts, and the answer reaches the agent as the user's next message.
 - `create_context_bound_thread` creates a thread under the current project or view.
 - `t3team.project.refresh_context_bundle` is implemented. It rebuilds the lightweight
   project context bundle (`work-items/index.json` plus summary JSON) from the current backlog

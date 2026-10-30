@@ -1,4 +1,3 @@
-/* oxlint-disable react/no-object-type-as-default-prop -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useMemo, type MouseEvent } from "react";
 

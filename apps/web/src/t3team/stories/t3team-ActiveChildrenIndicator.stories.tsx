@@ -151,7 +151,6 @@ function RealWorkingRow({
       <TimelineRowActivityCtx.Provider
         value={{
           isWorking: !mainThreadIdle,
-          activeTurnInProgress: !mainThreadIdle,
           isPreparingWorktree: false,
           isCompacting: false,
           isRevertingCheckpoint: false,

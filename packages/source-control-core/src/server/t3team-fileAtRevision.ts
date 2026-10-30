@@ -63,7 +63,6 @@ export const isRevisionSha = (value: string): boolean =>
 export function isSafeRepositoryPath(path: string): boolean {
   if (path.length === 0 || path.length > 1024) return false;
   if (path.startsWith("/") || path.includes("\\")) return false;
-  // oxlint-disable-next-line no-control-regex -- control characters are exactly what is refused
   if (/[\u0000-\u001f\u007f]/.test(path)) return false;
   return path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }

@@ -1,11 +1,14 @@
 import type { ToolAuthState } from "@t3tools/contracts";
 
-import { GitHubIcon } from "~/components/Icons";
+import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
 import { PullRequestCopyableCode } from "~/components/pullRequest/PullRequestCopyableCode";
 import { AwaitingOpenPhase } from "~/components/settings/t3team-ToolAuthCardPhases";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { isGitHubSignInRunning, useGitHubSignIn } from "~/t3team/hooks/t3team-useGitHubSignIn";
+
+/** Upstream moved the GitHub mark into the source-control definitions; read it from there. */
+const GitHubIcon = getSourceControlPresentationForKind("github").Icon;
 
 function gitHubSignInCommand(host: string): string {
   return `gh auth login --hostname ${host}`;

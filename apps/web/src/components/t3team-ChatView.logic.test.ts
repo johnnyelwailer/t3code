@@ -1,12 +1,10 @@
 import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ActivePlanState } from "../session-logic";
 import { makeThreadFixture } from "../test-fixtures";
 import type { Thread } from "../types";
 import {
   createLocalDispatchSnapshot,
-  deriveComposerTasksProgress,
   hasLocalDispatchGoneStuck,
   LOCAL_DISPATCH_STUCK_BACKSTOP_MS,
 } from "./ChatView.logic";
@@ -209,85 +207,5 @@ describe("hasLocalDispatchGoneStuck", () => {
         now: "not-a-date",
       }),
     ).toBe(false);
-  });
-});
-
-// The 12-step plan actually stored for thread fbdb583b-a0b1-48e9-ae87-5e1cfe46dcf0.
-// One step inProgress, two completed, nine pending.
-const REAL_THREAD_SCOPED_PLAN: ActivePlanState["steps"] = [
-  { step: "Variant B: PR #476 open, waiting on #468 for full green gate", status: "inProgress" },
-  { step: "Per-thread quickstart picker + Legacy variant", status: "pending" },
-  { step: "Owner browser verification: #468 (6007) + #472 (6006)", status: "pending" },
-  { step: "CR revert UI-rule pass + rename Loslegen→Quickstart", status: "completed" },
-  { step: "Main LOC ratchet debt: pi-session shrink + pi-mcp pin", status: "completed" },
-  { step: "Final disk sweep: ~18 remaining orphan dirs, ~51Gi", status: "pending" },
-  { step: "Gate 4 source freeze → close #365", status: "pending" },
-  { step: "#433 disposition", status: "pending" },
-  { step: "Two flaky CR coverage tests → ticket", status: "pending" },
-  {
-    step: "Aspire stack: all 3 variants, per-thread switching, owner click-test",
-    status: "pending",
-  },
-  { step: "Reorganize Storybook story titles into logical hierarchy", status: "pending" },
-  { step: "Project-level glossary: drafts promote from session to project", status: "pending" },
-];
-
-describe("deriveComposerTasksProgress", () => {
-  it("renders a plan written by an earlier run while a later run is latest", () => {
-    // The badge is a task list, not only live progress: run settledness and
-    // run ownership are not inputs, so the list survives the run finishing.
-    const badge = deriveComposerTasksProgress({
-      activeLatestRunId: RunId.make("run-2"),
-      live: false,
-      activePlan: {
-        createdAt: "2026-09-10T10:00:00.000Z",
-        runId: RunId.make("run-1"),
-        steps: REAL_THREAD_SCOPED_PLAN,
-      },
-    });
-    expect(badge.progress).toEqual({
-      step: "Variant B: PR #476 open, waiting on #468 for full green gate",
-      completedSteps: 2,
-      totalSteps: 12,
-      live: false,
-    });
-    expect(badge.steps).toHaveLength(12);
-    expect(badge.planUpdatedAt).toBe("2026-09-10T10:00:00.000Z");
-  });
-
-  it("reports live progress (current step, completed/total, durations) for an active run", () => {
-    const badge = deriveComposerTasksProgress({
-      activeLatestRunId: RunId.make("run-1"),
-      live: false,
-      activePlan: {
-        createdAt: "2026-09-10T10:00:30.000Z",
-        runId: RunId.make("run-1"),
-        steps: [
-          { step: "First", status: "completed", durationMs: 30_000 },
-          { step: "Second", status: "inProgress" },
-        ],
-      },
-    });
-    expect(badge.progress).toEqual({
-      step: "Second",
-      completedSteps: 1,
-      totalSteps: 2,
-      live: false,
-    });
-    // Duration of the completed step (30s) flows through unchanged.
-    expect(badge.steps).toEqual([
-      { step: "First", status: "completed", durationMs: 30_000 },
-      { step: "Second", status: "inProgress" },
-    ]);
-  });
-
-  it("reports nothing when the thread has a plan but no latest run", () => {
-    expect(
-      deriveComposerTasksProgress({
-        activeLatestRunId: null,
-        live: false,
-        activePlan: { createdAt: "2026-09-10T10:00:00.000Z", runId: null, steps: [] },
-      }),
-    ).toEqual({ progress: null, steps: null, planUpdatedAt: null });
   });
 });

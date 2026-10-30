@@ -156,7 +156,7 @@ export const SessionEndingBanner: Story = {
             {
               id: "cloud-session-ending:story",
               variant: "warning",
-              priority: "notice",
+              group: "environment",
               icon: <ClockIcon aria-hidden="true" />,
               title: notice?.title ?? "",
               description: notice?.description,

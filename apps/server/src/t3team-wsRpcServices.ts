@@ -25,10 +25,13 @@ import type * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import type * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import type * as EnvironmentTheme from "./environmentTheme.ts";
 import type * as GitWorkflowService from "./git/GitWorkflowService.ts";
+import type * as GuestShareService from "./guest/GuestShareService.ts";
 import type * as Keybindings from "./keybindings.ts";
 import type * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import type * as OtlpEndpointCheck from "./observability/OtlpEndpointCheck.ts";
 import type * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
+import type * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
+import type * as PeerLinks from "./peer/PeerLinks.ts";
 import type * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import type * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import type * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
@@ -47,11 +50,13 @@ import type * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import type * as ProjectEnrichmentService from "./project/ProjectEnrichmentService.ts";
 import type * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
 import type * as ProjectService from "./project/ProjectService.ts";
+import type * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
 import type * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import type * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import type * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
 import type * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
 import type * as CodexInstallation from "./provider/CodexInstallation.ts";
+import type * as DocumentText from "./provider/DocumentText.ts";
 import type * as ModelManifest from "./provider/ModelManifest.ts";
 import type * as ProviderAuthService from "./provider/ProviderAuthService.ts";
 import type * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
@@ -69,8 +74,10 @@ import type * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import type * as ServerSettings from "./serverSettings.ts";
 import type * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import type * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
+import type * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import type * as StorageCleanup from "./storageCleanup.ts";
 import type * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+import type * as TriageService from "./triage/TriageService.ts";
 import type * as TerminalManager from "./terminal/Manager.ts";
 import type * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import type * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
@@ -111,12 +118,18 @@ export type WsRpcHandlerServices =
   | Crypto.Crypto
   | DatabaseStorage.DatabaseStorage
   | DeviceService.DeviceService
+  | DocumentText.DocumentText
+  | PeerLinkRequests.PeerLinkRequests
+  | PeerLinks.PeerLinks
+  | ScratchThreadPromotion.ScratchThreadPromotion
+  | SourceControlSignIn.SourceControlSignIn
   | DirectEndpoints.DirectEndpoints
   | EnvironmentAuth.EnvironmentAuth
   | EnvironmentTheme.EnvironmentThemeService
   | ExternalLauncher.ExternalLauncher
   | FileSystem.FileSystem
   | GitWorkflowService.GitWorkflowService
+  | GuestShareService.GuestShareService
   | HostResources.HostResources
   | Keybindings.Keybindings
   | ManagedProjectFolders.ManagedProjectFolders
@@ -174,6 +187,7 @@ export type WsRpcHandlerServices =
   | ThreadSearch.ThreadSearch
   | ToolAuthService.ToolAuthService
   | TraceDiagnostics.TraceDiagnostics
+  | TriageService.TriageService
   | UsageLimitSources.UsageLimitSources
   | UsageService.UsageService
   | VcsProvisioningService.VcsProvisioningService

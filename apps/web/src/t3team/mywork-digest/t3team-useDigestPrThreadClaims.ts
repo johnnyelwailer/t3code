@@ -1,4 +1,4 @@
-import { threadPullRequestKeysEqual } from "@t3tools/shared/threadPullRequests";
+import { threadPullRequestKeysEqual } from "@t3tools/client-runtime/thread-pull-requests";
 import { useMemo } from "react";
 
 import { useThreadShells } from "~/state/entities";

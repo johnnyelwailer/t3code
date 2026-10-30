@@ -36,6 +36,7 @@ const runServerLifetime = (start: ReturnType<typeof recordingProfiler>["start"])
 
 it.effect("starts no profiler while OPS_STALL_PROFILER is off", () =>
   Effect.gen(function* () {
+    replaceFeatureFlagPresetValues(new Map([["OPS_STALL_PROFILER", false]]));
     const profiler = recordingProfiler();
     yield* runServerLifetime(profiler.start);
     assert.lengthOf(profiler.started, 0);

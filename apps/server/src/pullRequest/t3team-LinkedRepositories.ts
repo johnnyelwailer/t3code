@@ -2,16 +2,11 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import {
-  pullRequestHostOf,
-  type OrchestrationProjectShell,
-  type SourceControlProviderKind,
-} from "@t3tools/contracts";
+import { type OrchestrationProjectShell, type SourceControlProviderKind } from "@t3tools/contracts";
 import { T3TEAM_PROJECT_CONTEXT_ROOT } from "@t3tools/project-context/t3teamContextPaths";
-import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 
+import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import { WorkspacePaths } from "../workspace/WorkspacePaths.ts";
-import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 
 /**
  * One of a project's linked repositories, resolved the same way the project's own remote is:
@@ -68,16 +63,16 @@ export function parseLinkedRepositoryUrls(
   for (const url of urls) {
     const trimmed = url.trim();
     if (trimmed.length === 0) continue;
-    const provider = detectSourceControlProviderFromRemoteUrl(trimmed);
+    const provider = sourceControlDefinitions.recognizeRemote(trimmed);
     const split = splitRemoteUrl(trimmed);
     if (provider === null || split === null) continue;
-    const host = pullRequestHostOf(
+    const host = sourceControlDefinitions.changeRequestHost(
       { canonicalKey: `${split.host}/${split.repository}` },
       provider.kind,
     );
     // The same identity a recorded remote carries, so Azure DevOps' `_git` path and the
     // owner/name fallback resolve exactly the way the project's own repository does.
-    const repository = sourceControlRepositorySelector({
+    const repository = sourceControlDefinitions.repositorySelector({
       displayName: split.repository,
       provider: provider.kind,
     });

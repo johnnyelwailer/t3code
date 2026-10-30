@@ -22,7 +22,11 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261022` → the 2026-10-22 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261029` → the 2026-10-29 upstream sync merge commit
+  `862e690b2c` (906 upstream commits absorbed, `60b35a1ee0..52f4ec6f9`, on top of fork main
+  `81f7e41d0e`). Grandfathered: upstream's tree plus the conflict resolutions that port the fork
+  features into it (208 conflicted files). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261022` → the 2026-10-22 upstream sync merge commit
   `08997b085a` (203 upstream commits absorbed, `4f651cb10d..60b35a1ee0`, on top of
   `t3team/fork-baseline-20261021`). Grandfathered: upstream's tree (ChatView/ChatComposer/
   MessagesTimeline/Sidebar split into hooks and row files, pnpm 12) plus the conflict resolutions
@@ -621,3 +625,8 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 
 - `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx` — renders the distribution's `newTaskTop` slot (isolated, nothing without one) first in the New task project list: one import and one line, so a distribution can offer another way to start a thread (a cloud session) next to the stock ones.
 - `apps/mobile/src/features/threads/NewTaskContextPickerScreens.tsx` — renders the `environmentPickerTop` slot above the stock rows of the New task Environment picker: one import and one line, so a distribution can list an environment the stock list does not offer (a running cloud session) and start a thread on it.
+
+## Accepted machine source is saved on the user's own environment (2026-10-29, #791)
+
+- `apps/web/src/components/chat/usePendingThreadRequests.ts` — when the user submits an answer, `useApplyMachineSourceAnswer` (`apps/web/src/cloud/t3team-useApplyMachineSourceAnswer.ts`) captures the accepted machine-source proposal and its target project (so switching threads before the answer lands cannot move it), and the saved result runs once the response succeeds: one hook call, one capture line, one call. The machine-setup agent (in a cloud session) proposes a machine source through `t3_machine_set_source`, a `t3_ask_user` question whose id carries the proposal; the setting lives on the primary environment, so the web client saves it there when the answer is the accept label. Any other question or answer is a no-op.
+- `apps/mobile/src/state/use-selected-thread-requests.ts` — after a user-input response succeeds, `noticeMachineSourceNotSaved` (`t3team-machineSourceNotice.ts`) tells the user an accepted machine-source proposal was not saved by the app (the setting lives on the desktop environment, which mobile cannot reach) and what to set there: one import, one call. Any other question or answer is a no-op.

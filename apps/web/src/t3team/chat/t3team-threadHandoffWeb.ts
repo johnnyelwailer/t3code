@@ -9,12 +9,7 @@ import type {
   ThreadHandoffOutcome,
   ThreadHandoffWorkspace,
 } from "@t3tools/client-runtime/state/thread-handoff";
-import type {
-  EnvironmentId,
-  ProjectId,
-  T3TeamThreadHandoffCapture,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { ProjectId, T3TeamThreadHandoffCapture, ThreadId } from "@t3tools/contracts";
 
 import { toastManager } from "~/components/ui/toast";
 import { newMessageId } from "~/lib/utils";

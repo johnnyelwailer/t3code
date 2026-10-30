@@ -15,6 +15,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http";
+import { normalizeHost } from "@t3tools/source-control-core/server/pullRequestUtils";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 
 import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
@@ -163,7 +164,7 @@ export const make = Effect.gen(function* () {
 
   const graphql: GitHubApi["Service"]["graphql"] = Effect.fn("GitHubApi.graphql")(
     function* (input) {
-      const host = GitHubRequestPolicy.normalizeHost(input.host);
+      const host = normalizeHost(input.host);
       const allowReserve = input.allowReserve ?? (yield* SourceControlRateLimit.Interactive);
       const maxBytes = input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
       // The document, never its variables: user text (bodies, search terms) travels as variables.

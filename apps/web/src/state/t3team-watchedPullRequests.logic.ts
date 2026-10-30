@@ -19,7 +19,7 @@ import {
 import {
   threadPullRequestKeyOf,
   visibleThreadPullRequests,
-} from "@t3tools/shared/threadPullRequests";
+} from "@t3tools/client-runtime/thread-pull-requests";
 
 /** Needs-you outranks attention (approval or parked), which outranks a fix in progress. */
 export type WatchedPullRequestTone = "quiet" | "working" | "attention" | "needs-you";

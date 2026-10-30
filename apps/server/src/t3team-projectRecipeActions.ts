@@ -162,15 +162,3 @@ export function resolveRecipeActionPath(input: {
   }
   return resolveWorkflowRefPath(input.pathService, input.recipePath, action);
 }
-
-/** Whether `workflowPath` is one of the recipe's declared action workflows (identity, not directory). */
-function isDeclaredRecipeWorkflow(input: {
-  readonly pathService: Path.Path;
-  readonly recipePath: string;
-  readonly ref: AnyRecipeRef;
-  readonly workflowPath: string;
-}): boolean {
-  return resolveRecipeActions(input.pathService, input.recipePath, input.ref).some(
-    (action) => action.workflowPath === input.workflowPath,
-  );
-}

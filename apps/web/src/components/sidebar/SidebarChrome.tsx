@@ -31,6 +31,7 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarConnectSignInPill } from "./t3team-SidebarConnectSignInPill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
+import { NexiUpdateNotice } from "./t3team-NexiUpdateNotice";
 import { T3TeamSidebarWorkNavItems } from "~/t3team/components/t3team-SidebarWorkNav";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
@@ -45,7 +46,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
-    environmentIdentificationMode === "artwork",
+    environmentIdentificationMode,
     // A packaged distribution's stage label is its channel ("Alpha"), so pack art is selected by
     // theme id — without this the nexplore art only ever appeared in dev/nightly builds.
     packAppearance?.themeId,
@@ -201,7 +202,7 @@ function SidebarUtilityItem({
   );
 }
 
-export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -264,7 +265,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             {pullRequestsSupported ? (
               <SidebarUtilityItem
                 icon={<PullRequestGlyph.pullRequest />}
-                label="Pull Requests"
+                label="Pull requests"
                 onClick={handlePullRequestsClick}
               />
             ) : null}
@@ -275,6 +276,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             />
           </>
         )}
+        <SidebarThreadUndoNotice />
         <SidebarUpdatePill />
       </SidebarMenu>
     </>
@@ -284,10 +286,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarConnectSignInPill />
       <SidebarUpdateArchitectureWarning />
+      <NexiUpdateNotice />
       {/* The fork's t3team work-nav items (My work, Backlog) sit inline in
           SidebarUtilityMenu's icon row so they stay visible on every route. */}
       <SidebarUtilityMenu />
