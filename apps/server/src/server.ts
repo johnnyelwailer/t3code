@@ -235,6 +235,7 @@ import {
   t3teamAtlassianOAuthCallbackRouteLayer,
 } from "./t3team-atlassian-oauth-flowRoutes.ts";
 import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
+import { t3teamNexiUpdateRouteLayer } from "./t3team-nexiUpdate-routes.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
 import { startHostServices, withHostServices } from "./t3team-hostServices.ts";
@@ -1103,6 +1104,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamAtlassianProjectsRouteLayer,
     t3teamAtlassianResourceRouteLayer,
     t3teamAtlassianResourcesRouteLayer,
+    t3teamNexiUpdateRouteLayer,
     t3teamTempoRouteLayer,
   ).pipe(Layer.provide(t3teamRouteAuthLayer)),
   Layer.mergeAll(

@@ -96,6 +96,13 @@ export type DesktopUpdateStatus =
   | "downloaded"
   | "error";
 
+/** Why an update check or download ended in error, when the app can say what to do about it. */
+export type DesktopUpdateIssue =
+  | "signed-out"
+  | "unreachable"
+  | "unsupported"
+  | "verification-failed";
+
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
 export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
@@ -303,6 +310,9 @@ export interface DesktopUpdateState {
   errorContext: "check" | "download" | "install" | null;
   canRetry: boolean;
   notAppliedVersion?: string;
+  issue?: DesktopUpdateIssue;
+  /** Set when updates come from the interim Nexi Work GHE releases feed. */
+  feed?: "nexi-ghe";
 }
 
 export interface DesktopUpdateReleaseNote {
@@ -335,6 +345,10 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   errorContext: Schema.NullOr(Schema.Literals(["check", "download", "install"])),
   canRetry: Schema.Boolean,
   notAppliedVersion: Schema.optionalKey(Schema.String),
+  issue: Schema.optionalKey(
+    Schema.Literals(["signed-out", "unreachable", "unsupported", "verification-failed"]),
+  ),
+  feed: Schema.optionalKey(Schema.Literal("nexi-ghe")),
 });
 
 export const DesktopCliCommandStateSchema = Schema.Struct({

@@ -19,6 +19,14 @@
       "types": "./src/orchestrationV2ThreadError.ts",
       "import": "./src/orchestrationV2ThreadError.ts"
     },
+    "./t3team-nexiUpdateSelect": {
+      "types": "./src/t3team-nexiUpdateSelect.ts",
+      "import": "./src/t3team-nexiUpdateSelect.ts"
+    },
+    "./t3team-nexiUpdateWire": {
+      "types": "./src/t3team-nexiUpdateWire.ts",
+      "import": "./src/t3team-nexiUpdateWire.ts"
+    },
     "./t3team-manualContinuation": {
       "types": "./src/t3team-manualContinuation.ts",
       "import": "./src/t3team-manualContinuation.ts"
