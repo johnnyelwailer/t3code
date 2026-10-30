@@ -29,7 +29,6 @@ import {
 
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
-import { resolveAutoSettlementAt } from "./ThreadSettlementService.ts";
 
 const parentThreadId = ThreadId.make("thread:subagent-snoozed-parent");
 const childThreadId = ThreadId.make("thread:subagent-awake-child");
@@ -123,7 +122,7 @@ it("keeps a subagent child awake when its parent thread is snoozed", () => {
 it.effect.each([
   ["sql", ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemory))],
 ] as const)(
-  "%s: a pinned parent's subagent child is born unpinned and settles once idle",
+  "%s: a pinned parent's subagent child is born unpinned and is left to the child-settle sweeper",
   ([, testLayer]) =>
     Effect.gen(function* () {
       const store = yield* ProjectionStore.ProjectionStoreV2;
@@ -158,19 +157,16 @@ it.effect.each([
       const savedParent = yield* store.getThread(parentThreadId);
       assert.deepEqual(savedParent.pinnedAt, parentCreatedAt);
       assert.equal(savedParent.pinOrderKey, "a0");
+      const savedChild = yield* store.getThread(childThreadId);
+      assert.isNull(savedChild.pinnedAt);
+      assert.isNull(savedChild.pinOrderKey);
+      // t3team: the automatic sweep never offers a subagent child. The fork's child-settle
+      // sweeper (`t3team-childSettleSweeper`) settles children with their parent instead.
       const candidates = yield* store.getSettlementCandidates();
       assert.deepEqual(
         candidates.map((candidate) => candidate.id),
-        [childThreadId],
+        [],
       );
-      const settledAt = resolveAutoSettlementAt({
-        thread: candidates[0]!,
-        pullRequest: null,
-        nowMs: DateTime.toEpochMillis(DateTime.add(childCreatedAt, { days: 4 })),
-        autoSettleAfterDays: 3,
-        autoSettleOnMerge: false,
-      });
-      assert.equal(settledAt && DateTime.formatIso(settledAt), DateTime.formatIso(childCreatedAt));
     }).pipe(Effect.provide(testLayer)),
 );
 

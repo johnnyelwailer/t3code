@@ -1,10 +1,6 @@
 /**
- * Test files that live outside the project whose vitest config runs them.
- *
- * `@t3team/sdk` is a path-aliased source package with no package.json of its own, so
- * apps/server/vite.config.ts includes its tests in the server run (`../../packages/t3team-sdk/...`).
- * The cached/sharded runner must therefore accept those files in the server shards and run them from
- * the server project directory.
+ * apps/server/vite.config.ts also runs the package-less @t3team/sdk tests, so the sharded runner
+ * must accept them in the server shards and run them from apps/server.
  */
 const FOLDED_TEST_PROJECTS: ReadonlyArray<readonly [string, string]> = [
   ["packages/t3team-sdk", "apps/server"],

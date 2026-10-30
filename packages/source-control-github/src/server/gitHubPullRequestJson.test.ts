@@ -525,14 +525,16 @@ describe("pull request detail decoding", () => {
     expect(
       read({ baseRefOid: " b4se ", authorAssociation: "FIRST_TIME_CONTRIBUTOR" }),
     ).toMatchObject({ baseSha: "b4se", authorAssociation: "FIRST_TIME_CONTRIBUTOR" });
-    // GitHub's schema makes both non-null, so the typed decoder rejects a null or an unknown value
-    // instead of reading it as "not said"; only an absent key (the fork fields not requested) is.
+    // The decoder takes the base commit as a non-null string (it rejects an explicit null; only an
+    // absent key, the fork fields not requested, reads as "not said") and passes any string for the
+    // author's standing through, so a blank one is trimmed to "not said" by the detail mapping.
     expect(Result.isFailure(decodePullRequestCoreJson(coreJson([], { baseRefOid: null })))).toBe(
       true,
     );
-    expect(
-      Result.isFailure(decodePullRequestCoreJson(coreJson([], { authorAssociation: "" }))),
-    ).toBe(true);
+    expect(read({ baseRefOid: "  ", authorAssociation: "" })).toMatchObject({
+      baseSha: null,
+      authorAssociation: null,
+    });
   });
 
   it("shows a re-running check once, as the run that is happening now", () => {

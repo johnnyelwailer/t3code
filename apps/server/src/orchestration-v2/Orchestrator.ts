@@ -172,7 +172,6 @@ import {
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 import { keepsRenderedWakeText } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
-import { t3teamUserInputAnswerText } from "./t3team-userInputAnswerText.ts";
 import { visibleShellIndex, visibleShellSnapshot } from "./t3team-hiddenShellThreads.ts";
 import { rewritePersistenceFailureCause } from "./persistenceStorageError.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -8810,9 +8809,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               cause: "Answer each question before sending.",
             });
           }
-          // t3team: multi-select answers arrive as label arrays (joined with " • ").
-          const text = t3teamUserInputAnswerText(answer) ?? "";
-          replies.push(`${question.question}\n${text}`);
+          const text = typeof answer === "string" ? answer : answer.join(", ");
+          replies.push(`${question.question}\n${text.trim()}`);
         }
         if (replies.length === 0) {
           return yield* new OrchestratorDispatchError({

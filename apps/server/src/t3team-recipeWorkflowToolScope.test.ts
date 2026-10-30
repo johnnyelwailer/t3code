@@ -33,7 +33,11 @@ import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
 import type { T3TeamThreadArtifactInput } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { draftToolContext, findDraftArtifact } from "./t3team-workflowHostDraft.fixtures.ts";
+import {
+  draftToolContext,
+  enableWorkItemDraftsFlagForFile,
+  findDraftArtifact,
+} from "./t3team-workflowHostDraft.fixtures.ts";
 import { makeT3TeamWorkflowHostToolClient } from "./t3team-workflowHostTools.ts";
 import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
@@ -49,6 +53,8 @@ const runsRoot = NodePath.join(
 NodeFS.mkdirSync(runsRoot, { recursive: true });
 const root = NodeFS.mkdtempSync(NodePath.join(runsRoot, "scope-fixtures-"));
 afterAll(() => NodeFS.rmSync(root, { recursive: true, force: true }));
+// The draft tools refuse while WORKITEM_DETAIL_DRAFTS is off (its default).
+enableWorkItemDraftsFlagForFile();
 
 const WORKFLOW_BODY = `import { Schema } from "effect";
 import { getTools } from "@t3team/sdk";

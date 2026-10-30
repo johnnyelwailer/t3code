@@ -8,8 +8,8 @@
  * Message-capability requests are excluded from terminal dismissal, so the
  * question survives the asking turn ending and restarts. The user's answer
  * goes through upstream `runtime-request.respond`, which joins
- * "<question>\n<answer>" into a new user message (multi-select answers via
- * `t3teamUserInputAnswerText`). An agent cannot cancel or replace it.
+ * "<question>\n<answer>" into a new user message (multi-select answers are
+ * joined with ", "). An agent cannot cancel or replace it.
  *
  * Guardrail: one pending message-mode question per thread — checked and
  * written under the thread lock, so two concurrent asks cannot both pass.
