@@ -31,7 +31,9 @@ describe("buildPendingNewTasks with a distribution's pending drafts", () => {
   it("is the stock list without a pending map: empty drafts stay out", () => {
     const drafts = { [draftKey]: draft() };
     expect(buildPendingNewTasks({ queuedMessages: [], drafts })).toEqual([]);
-    expect(buildPendingNewTasks({ queuedMessages: [], drafts, pendingDrafts: NO_PENDING_DRAFTS })).toEqual([]);
+    expect(
+      buildPendingNewTasks({ queuedMessages: [], drafts, pendingDrafts: NO_PENDING_DRAFTS }),
+    ).toEqual([]);
   });
 
   it("lists an empty draft the distribution holds, and reopens it by its draft key", () => {

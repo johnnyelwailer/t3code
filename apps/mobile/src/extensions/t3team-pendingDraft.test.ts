@@ -67,7 +67,13 @@ describe("withPlaceholderProject", () => {
   it("lets the route draft resolve to open instead of returning to the picker", () => {
     const resolve = (projects: ReadonlyArray<EnvironmentProject>) =>
       resolveRouteDraft({
-        flow: { environmentId: null, projectKey: null, draftKey: null, submitting: false, expandedProvider: null },
+        flow: {
+          environmentId: null,
+          projectKey: null,
+          draftKey: null,
+          submitting: false,
+          expandedProvider: null,
+        },
         routeDraftId: draftKey,
         draftsLoaded: true,
         stamp: { environmentId, projectId },

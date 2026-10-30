@@ -27,7 +27,10 @@ export function usePendingDraft(draftKey: string | null): PendingDraft | null {
 export function usePendingDraftProjects(
   catalog: ReadonlyArray<EnvironmentProject>,
   routeDraftId: string | undefined,
-): { readonly projects: ReadonlyArray<EnvironmentProject>; readonly pendingDraft: PendingDraft | null } {
+): {
+  readonly projects: ReadonlyArray<EnvironmentProject>;
+  readonly pendingDraft: PendingDraft | null;
+} {
   const pendingDraft = usePendingDraft(routeDraftId ?? null);
   const project = pendingDraft?.project;
   const environmentId = project?.environmentId;
@@ -41,6 +44,9 @@ export function usePendingDraftProjects(
         : placeholderProject({ environmentId, id, title, workspaceRoot }),
     [environmentId, id, title, workspaceRoot],
   );
-  const projects = useMemo(() => withPlaceholderProject(catalog, placeholder), [catalog, placeholder]);
+  const projects = useMemo(
+    () => withPlaceholderProject(catalog, placeholder),
+    [catalog, placeholder],
+  );
   return { projects, pendingDraft };
 }
