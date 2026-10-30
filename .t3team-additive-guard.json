@@ -386,6 +386,7 @@
     "apps/web/src/components/chat/BackgroundJobsIndicator.test.tsx",
     "apps/web/src/components/chat/BackgroundJobsIndicator.tsx",
     "apps/web/src/components/chat/ChatComposer.tsx",
+    "apps/web/src/components/chat/SecretRequestCard.tsx",
     "apps/web/src/components/chat/ChatHeader.tsx",
     "apps/web/src/components/chat/ComposerCommandMenu.tsx",
     "apps/web/src/components/chat/ComposerPendingUserInputPanel.permissions.test.tsx",
