@@ -15,16 +15,7 @@ export function EnvironmentPickerTopSlot(
   const EnvironmentPickerTop = mobileExtensions.environmentPickerTop;
   const { selectedProject, ...rest } = props;
   // One object per selection, so a slot may use it as a dependency.
-  const facts = useMemo(
-    () => selectedProjectFacts(selectedProject),
-    [
-      selectedProject?.id,
-      selectedProject?.environmentId,
-      selectedProject?.title,
-      selectedProject?.workspaceRoot,
-      selectedProject?.repositoryIdentity,
-    ],
-  );
+  const facts = useMemo(() => selectedProjectFacts(selectedProject), [selectedProject]);
   return EnvironmentPickerTop ? (
     <ExtensionBoundary>
       <EnvironmentPickerTop {...rest} selectedProject={facts} />
