@@ -114,6 +114,23 @@ describe("createEnvironmentUnreachableReader", () => {
     expect(make(true).read(EnvironmentId.make("unknown"))).toBe(true);
   });
 
+  it("follows an environment from connected to ended after the reader was created", () => {
+    const catalog = Atom.make({
+      isReady: true,
+      entries: new Map([[ended, {}]]),
+    } as unknown as EnvironmentCatalogState);
+    const state = Atom.make(AsyncResult.success<SupervisorConnectionState>(BASE));
+    const registry = AtomRegistry.make();
+    const read = createEnvironmentUnreachableReader({
+      registry,
+      catalogValueAtom: catalog,
+      stateAtom: () => state,
+    });
+    expect(read(ended)).toBe(false);
+    registry.set(state, AsyncResult.success(blocked("configuration", "session_ended")));
+    expect(read(ended)).toBe(true);
+  });
+
   it("answers reachable until the catalog is ready", () => {
     expect(make(false).read(ended)).toBe(false);
   });
