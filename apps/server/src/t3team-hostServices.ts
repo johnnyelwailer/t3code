@@ -1,4 +1,4 @@
-import type { HostService, HostServiceDefinition } from "@t3team/pack-api";
+import type { HostService, HostServiceCaller, HostServiceDefinition } from "@t3team/pack-api";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,6 +16,7 @@ export class HostServices extends Context.Service<
       method: "GET" | "POST",
       path: string,
       body: unknown,
+      caller?: HostServiceCaller,
     ) => Effect.Effect<unknown, HostServiceError>;
   }
 >()("t3/t3team-hostServices/HostServices") {}
@@ -54,12 +55,12 @@ const make = Effect.fn("hostServices.make")(function* (
         );
       }
     }),
-    request: (id, method, path, body) =>
+    request: (id, method, path, body, caller) =>
       Effect.tryPromise({
         try: async () => {
           const service = services.get(id);
           if (!service) throw new Error("Host service is unavailable");
-          return service.request(method, path, body);
+          return service.request(method, path, body, caller);
         },
         catch: hostServiceError,
       }),
