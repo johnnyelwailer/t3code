@@ -1,9 +1,11 @@
 import type { BrokerEnvironmentGateway } from "@t3tools/client-runtime/connection";
+import type { RepositoryIdentity } from "@t3tools/contracts";
 import type * as Stream from "effect/Stream";
 import type { ComponentType } from "react";
 import type { PlatformOSType } from "react-native";
 
 import type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
+import type { PendingDraftSlot } from "./t3team-pendingDraftTypes";
 
 /** What the home screen knows about the connections catalog. */
 export interface HomeCatalogState {
@@ -85,11 +87,23 @@ export interface UrlPolicy {
   readonly documentBaseUrl?: (httpBase: string) => string | undefined;
 }
 
+/** The project a new thread is for, as the stock picker knows it: what a slot needs to act on THIS project. */
+export interface SelectedProjectFacts {
+  readonly id: string;
+  readonly environmentId: string;
+  readonly title: string;
+  readonly workspaceRoot: string;
+  /** Null for a project with no repository (no remote). */
+  readonly repositoryIdentity: RepositoryIdentity | null;
+}
+
 export interface EnvironmentPickerTopProps {
   /** Leaves the picker. */
   readonly close: () => void;
   /** Title of the project the new thread is for; null when none is selected (scratch or empty). */
   readonly selectedProjectTitle?: string | null;
+  /** The selected project itself (id, repository identity); null when none is selected. */
+  readonly selectedProject?: SelectedProjectFacts | null;
   /** Ids of the environments that host the selected project, by the stock picker's own rule. */
   readonly hostingEnvironmentIds?: ReadonlyArray<string>;
 }
@@ -137,6 +151,13 @@ export interface MobileExtensions {
    * a thread on one. `close` leaves the picker. Nothing without one.
    */
   readonly environmentPickerTop?: ComponentType<EnvironmentPickerTopProps>;
+  /**
+   * Drafts that wait for an environment the catalog does not list yet (for example a cloud session
+   * still starting). Such a draft opens with a placeholder project, shows its `Card` above the
+   * composer controls, blocks Send with its reason, and is listed with a live status in the Chats
+   * list even while empty. Nothing without one.
+   */
+  readonly pendingDraft?: PendingDraftSlot;
   /** Replaces the empty home screen shown before any thread exists. */
   readonly homeEmptyState?: HomeEmptyStateSlot;
   /** Replaces the wordmark title of the home header. */

@@ -31,6 +31,7 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3_linked_repository_sync: "t3team.project.sync_linked_repository",
   t3_machine_find_definitions: "t3team.machine.find_definitions",
   t3_machine_set_source: "t3team.machine.set_source",
+  request_desktop_route: "t3team.desktop_route.request",
 } as const;
 
 const MCP_NAME_BY_TOOL_ID: ReadonlyMap<string, string> = new Map(

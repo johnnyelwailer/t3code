@@ -95,6 +95,8 @@ import { newTaskFlowKey } from "./new-task-flow-state";
 import { appAtomRegistry } from "../../state/atom-registry";
 
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
+import { pendingDraftSendBlock } from "../../extensions/t3team-pendingDraft";
+import { PendingDraftCardSlot } from "../../extensions/t3team-PendingDraftCardSlot";
 
 function NewTaskWorkspaceIcon(props: {
   readonly workspaceMode: "local" | "worktree";
@@ -165,6 +167,7 @@ export function NewTaskDraftScreen(props: {
   // selectedProject falls back to the environment's first project; remember only a chosen one.
   useRememberThreadProject(
     selectedProject &&
+      flow.pendingDraft === null &&
       selectedProjectKey === scopedProjectKey(selectedProject.environmentId, selectedProject.id)
       ? selectedProject
       : null,
@@ -899,6 +902,7 @@ export function NewTaskDraftScreen(props: {
           content: heroViewport,
           controls: (
             <View className="pb-1">
+              <PendingDraftCardSlot pendingDraft={flow.pendingDraft} draftKey={flow.draftKey} />
               {projectClone && projectClone.phase !== "done" && selectedProject ? (
                 <View className="px-1 pb-2">
                   <ProjectCloneBanner
@@ -927,7 +931,7 @@ export function NewTaskDraftScreen(props: {
             </View>
           ),
           editorRef: promptInputRef,
-          sendBlockedReason: setupBlockReason,
+          sendBlockedReason: pendingDraftSendBlock(flow.pendingDraft, setupBlockReason),
           interactionLocked: isComposerInteractionLocked,
         }}
         canOperateThread={canOperate}
