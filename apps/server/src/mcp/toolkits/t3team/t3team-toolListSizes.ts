@@ -1,9 +1,6 @@
 /**
- * What each MCP tool costs an agent that loads the whole `tools/list`: the bytes of
- * `{name, description, inputSchema}`, the same fields `AgentContextBudget.test.ts` measures, split
- * into the tool description, the field `description` strings inside the input schema, and the
- * rest of the schema. Pure functions over registered tools, so the budget test, the description
- * cap test and the size report share one definition of "bytes".
+ * Bytes each MCP tool costs in `tools/list` (`{name, description, inputSchema}`, as the budget test
+ * measures), split into description, schema field descriptions and the rest of the schema.
  */
 
 export interface MeasuredTool {
