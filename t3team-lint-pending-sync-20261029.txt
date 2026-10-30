@@ -19,6 +19,7 @@ apps/desktop/src/backend/t3team-backendHealthWatchdog.ts
 apps/desktop/src/backend/t3team-backendLiveness.ts
 apps/desktop/src/settings/t3team-settingsFileReplace.ts
 apps/desktop/src/updates/t3team-nexiElectronUpdater.ts
+apps/desktop/src/updates/t3team-nexiMacSwapScript.ts
 apps/desktop/src/updates/t3team-nexiMacUpdater.ts
 apps/desktop/src/updates/t3team-nexiUpdateFeed.ts
 apps/desktop/src/updates/t3team-nexiUpdateProvider.ts
@@ -889,6 +890,7 @@ apps/web/src/components/settings/t3team-featureFlagsSettings.fixture.ts
 apps/web/src/components/settings/t3team-toolAuthTools.ts
 apps/web/src/components/settings/t3team-useJiraAccountStatuses.ts
 apps/web/src/components/sidebar/SidebarChrome.tsx
+apps/web/src/components/sidebar/t3team-NexiUpdateNotice.tsx
 apps/web/src/components/sidebar/t3team-SidebarProjectScopeDisc.tsx
 apps/web/src/components/sidebar/t3team-SidebarProjectScopePills.tsx
 apps/web/src/components/sidebar/t3team-sidebarProjectScopePills.logic.ts
