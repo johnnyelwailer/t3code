@@ -10,6 +10,7 @@ import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
 import { makeLinkedRepositorySyncHandler } from "./t3team-linkedRepositoryTools.ts";
 import { makeMachineFindDefinitionsHandler } from "./t3team-machineDefinitionTools.ts";
 import { makeMachineSetSourceHandler } from "./t3team-machineSourceHandler.ts";
+import { requestDesktopRoute } from "./t3team-desktopRouteHandler.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 import { whenMcpToolEnabled } from "./t3team-mcpToolFeatureGate.ts";
 
@@ -244,6 +245,10 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
     // Not a broker tool: proposes a machine source through a t3_ask_user question and saves nothing.
     t3_machine_set_source: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3_machine_set_source", services.setMachineSource),
+    ),
+    // Not a broker tool: asks the user through a t3_ask_user question and grants nothing.
+    request_desktop_route: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("request_desktop_route", requestDesktopRoute),
     ),
     t3team_thread_skill_metadata: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3team_thread_skill_metadata", (input) => threadSkillMetadata(input)),
