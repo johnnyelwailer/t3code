@@ -45,7 +45,7 @@ export function collectFieldDescriptions(schema: unknown): ReadonlyArray<string>
   return found;
 }
 
-export function fieldDescriptionBytesOf(schema: unknown): number {
+function fieldDescriptionBytesOf(schema: unknown): number {
   return collectFieldDescriptions(schema).reduce(
     (sum, text) => sum + utf8Bytes(JSON.stringify(text)),
     0,
@@ -80,7 +80,7 @@ export function measureToolListSizes(
 }
 
 /** Bytes to tokens at the rule of thumb the context-budget discussion uses (about 4 bytes a token). */
-export const estimateTokens = (bytes: number) => Math.round(bytes / 4);
+const estimateTokens = (bytes: number) => Math.round(bytes / 4);
 
 export function formatToolSizeTable(rows: ReadonlyArray<ToolSizeRow>): string {
   const pad = (text: string | number, width: number) => String(text).padStart(width);
