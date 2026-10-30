@@ -1,4 +1,5 @@
 import * as Dialog from "../components/ui/Dialog";
+import { noticeMachineSourceNotSaved } from "./t3team-machineSourceNotice";
 import { useServerConfigs } from "./entities";
 import {
   questionAttachmentDraftKey,
@@ -399,6 +400,8 @@ export function useSelectedThreadRequests() {
         selectedThreadShell.id,
         activePendingUserInput.requestId,
       );
+      // t3team: a machine-source proposal is saved on the desktop; say it was not saved here.
+      noticeMachineSourceNotSaved(activePendingUserInput.questions, activePendingUserInputAnswers);
     }
     return result;
   };

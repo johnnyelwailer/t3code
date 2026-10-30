@@ -210,15 +210,24 @@ it.layer(NodeServices.layer)("project machine source", (it) => {
     }),
   );
 
-  it.effect.each(["", "a..b", "-x", "a b", "x.lock", "a~1", "a/"])(
-    "refuses the branch name %j",
-    (branch) =>
-      Effect.gen(function* () {
-        const fixture = yield* remoteFixture({ files: DEVCONTAINER, gitOutput: lsRemote });
-        const error = yield* withService((service) =>
-          service.setSource(remoteProjectId, { branch: branch === "" ? " " : branch }),
-        ).pipe(Effect.flip, Effect.provide(fixture.layer));
-        expect(error.reason).toBe("invalid_source");
-      }),
+  it.effect.each([
+    "",
+    "a..b",
+    "-x",
+    "a b",
+    "x.lock",
+    "a~1",
+    "a/",
+    "a\u200Bb",
+    "a\u202Eb",
+    "a\uFEFFb",
+  ])("refuses the branch name %j", (branch) =>
+    Effect.gen(function* () {
+      const fixture = yield* remoteFixture({ files: DEVCONTAINER, gitOutput: lsRemote });
+      const error = yield* withService((service) =>
+        service.setSource(remoteProjectId, { branch: branch === "" ? " " : branch }),
+      ).pipe(Effect.flip, Effect.provide(fixture.layer));
+      expect(error.reason).toBe("invalid_source");
+    }),
   );
 });

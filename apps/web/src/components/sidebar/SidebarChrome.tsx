@@ -31,6 +31,7 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarConnectSignInPill } from "./t3team-SidebarConnectSignInPill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
+import { NexiUpdateNotice } from "./t3team-NexiUpdateNotice";
 import { T3TeamSidebarWorkNavItems } from "~/t3team/components/t3team-SidebarWorkNav";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
@@ -288,6 +289,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       <SidebarProviderUpdatePill />
       <SidebarConnectSignInPill />
       <SidebarUpdateArchitectureWarning />
+      <NexiUpdateNotice />
       {/* The fork's t3team work-nav items (My work, Backlog) sit inline in
           SidebarUtilityMenu's icon row so they stay visible on every route. */}
       <SidebarUtilityMenu />

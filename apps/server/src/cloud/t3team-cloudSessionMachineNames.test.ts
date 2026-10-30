@@ -26,6 +26,13 @@ describe("machineRepositoryFromRemote", () => {
     }
   });
 
+  it("lowercases the host of a scp-style remote", () => {
+    expect(machineRepositoryFromRemote("git@GitHub.com:Acme/api.git")).toMatchObject({
+      host: "github.com",
+      url: "https://github.com/Acme/api.git",
+    });
+  });
+
   it("never carries credentials into the clone URL", () => {
     expect(machineRepositoryFromRemote("https://x:ghp_secret@github.com/a/b.git")?.url).toBe(
       "https://github.com/a/b.git",

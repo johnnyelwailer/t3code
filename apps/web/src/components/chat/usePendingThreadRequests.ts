@@ -22,6 +22,7 @@ import {
 import { create } from "zustand";
 import { useRef, useState, type RefObject, type SetStateAction } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useApplyMachineSourceAnswer } from "../../cloud/t3team-useApplyMachineSourceAnswer";
 import { type DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { getUploadedAttachments, useAttachmentUploadStore } from "../../lib/attachmentUploadQueue";
@@ -140,6 +141,10 @@ export function usePendingThreadRequests(input: {
   });
   const dismissThreadUserInput = useAtomCommand(threadEnvironment.dismissUserInput, {
     reportFailure: false,
+  });
+  const applyMachineSourceAnswer = useApplyMachineSourceAnswer({
+    environmentId,
+    projectId: serverProjection?.thread.projectId ?? null,
   });
   const userInputResponsesInFlight = useRef(new Set<string>());
   const [respondingRequestIds, setRespondingRequestIds] = useState<RuntimeRequestId[]>([]);
@@ -331,6 +336,8 @@ export function usePendingThreadRequests(input: {
       }
       attachmentsByQuestionId.set(question.id, uploaded as UserInputAttachments[string]);
     }
+    // Captured at submit: the composer may show another thread when the answer lands.
+    const saveMachineSource = applyMachineSourceAnswer(pendingInput.questions, providerAnswers);
     userInputResponsesInFlight.current.add(responseKey);
 
     setRespondingUserInputRequestIds((existing) =>
@@ -354,6 +361,8 @@ export function usePendingThreadRequests(input: {
         error instanceof Error ? error.message : "Failed to submit user input.",
       );
     }
+    // t3team: an accepted machine-source proposal is saved on the user's own environment.
+    if (result._tag === "Success") void saveMachineSource?.();
     userInputResponsesInFlight.current.delete(responseKey);
     setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
     return result;

@@ -248,6 +248,7 @@ import {
   t3teamAtlassianOAuthCallbackRouteLayer,
 } from "./t3team-atlassian-oauth-flowRoutes.ts";
 import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
+import { t3teamNexiUpdateRouteLayer } from "./t3team-nexiUpdate-routes.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
 import { startHostServices, withHostServices } from "./t3team-hostServices.ts";
@@ -316,6 +317,7 @@ import { StandbyInterestLive } from "./cloud/t3team-StandbyInterest.ts";
 import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectMachineDiscovery.ts";
 import { layer as MachineDefinitionFinderLayer } from "./project/t3team-MachineDefinitionFinder.ts";
+import { layer as MachineSourceProposalLayer } from "./project/t3team-MachineSourceProposal.ts";
 import { T3TeamSettleGuardsLive } from "./t3team-childSettleGuards.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import {
@@ -1137,6 +1139,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamAtlassianProjectsRouteLayer,
     t3teamAtlassianResourceRouteLayer,
     t3teamAtlassianResourcesRouteLayer,
+    t3teamNexiUpdateRouteLayer,
     t3teamTempoRouteLayer,
   ).pipe(Layer.provide(t3teamRouteAuthLayer)),
   Layer.mergeAll(
@@ -1174,6 +1177,8 @@ const layerMakeRoutes = Layer.mergeAll(
     Layer.provide(T3TeamThreadMailboxDeliveryLive),
     // t3team: t3_machine_find_definitions searches the project's repositories for machine definitions.
     Layer.provide(MachineDefinitionFinderLayer),
+    // t3team: t3_machine_set_source proves a proposed machine source before the user is asked.
+    Layer.provide(MachineSourceProposalLayer),
     Layer.provide(McpOAuth.layerMcpClientAuthenticator),
   ),
   // Follows delegated tasks running in linked environments, including after a restart.
