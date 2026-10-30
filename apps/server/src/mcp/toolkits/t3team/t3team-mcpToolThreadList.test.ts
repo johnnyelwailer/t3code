@@ -27,7 +27,12 @@ const PUBLISH_MCP = "t3_change_request_publish";
 const PUBLISH_TOOL = "t3team.change_request.publish";
 
 beforeEach(() =>
-  replaceFeatureFlagPresetValues(new Map([["AGENTS_CHANGE_REQUEST_PUBLISH", true]])),
+  replaceFeatureFlagPresetValues(
+    new Map([
+      ["AGENTS_CHANGE_REQUEST_PUBLISH", true],
+      ["WORKITEM_DETAIL_DRAFTS", true],
+    ]),
+  ),
 );
 afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
@@ -169,38 +174,52 @@ it.effect("drops it when the thread has no binding or the credential has no thre
 );
 
 /** The work-item read tools are listed only while the caller's binding holds them (Jira connected). */
-const WORK_ITEM_MCP = ["t3_work_item_search", "t3_work_item_get"];
-const WORK_ITEM_TOOLS = ["t3team.work_item.search", "t3team.work_item.get"];
+const WORK_ITEM_MCP = [
+  "t3_work_item_search",
+  "t3_work_item_get",
+  "t3_work_item_draft",
+  "t3_work_item_change_set",
+];
+const WORK_ITEM_TOOLS = [
+  "t3team.work_item.search",
+  "t3team.work_item.get",
+  "t3team.work_item.draft",
+  "t3team.work_item.change_set",
+];
 
-it.effect("lists the work-item read tools for a thread whose binding holds them", () =>
+it.effect("lists the work-item read and draft tools for a thread whose binding holds them", () =>
   Effect.gen(function* () {
     const names = yield* listedTools({ heldToolIds: WORK_ITEM_TOOLS });
     for (const name of WORK_ITEM_MCP) expect(names).toContain(name);
   }),
 );
 
-it.effect("drops the work-item read tools when the binding lacks them or there is no thread", () =>
-  Effect.gen(function* () {
-    for (const input of [
-      { heldToolIds: ["t3team.thread.search"] },
-      { heldToolIds: undefined },
-      { heldToolIds: WORK_ITEM_TOOLS, withThread: false },
-    ]) {
-      const names = yield* listedTools(input);
-      for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
-      expect(names).toContain("t3_show_widget");
-    }
-  }),
+it.effect(
+  "drops the work-item read and draft tools when the binding lacks them or there is no thread",
+  () =>
+    Effect.gen(function* () {
+      for (const input of [
+        { heldToolIds: ["t3team.thread.search"] },
+        { heldToolIds: undefined },
+        { heldToolIds: WORK_ITEM_TOOLS, withThread: false },
+      ]) {
+        const names = yield* listedTools(input);
+        for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
+        expect(names).toContain("t3_show_widget");
+      }
+    }),
 );
 
-it.effect("drops the work-item read tools when the list handler cannot reach the broker", () =>
-  Effect.gen(function* () {
-    const names = yield* listedTools({ heldToolIds: WORK_ITEM_TOOLS, broker: "absent" });
-    for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
-    // Every other tool keeps the existing fail-open behavior.
-    expect(names).toContain("t3_show_widget");
-    expect(names).toContain(PUBLISH_MCP);
-  }),
+it.effect(
+  "drops the work-item read and draft tools when the list handler cannot reach the broker",
+  () =>
+    Effect.gen(function* () {
+      const names = yield* listedTools({ heldToolIds: WORK_ITEM_TOOLS, broker: "absent" });
+      for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
+      // Every other tool keeps the existing fail-open behavior.
+      expect(names).toContain("t3_show_widget");
+      expect(names).toContain(PUBLISH_MCP);
+    }),
 );
 
 /**
@@ -245,6 +264,23 @@ describe("through the real broker on the production /mcp bind path", () => {
     Effect.gen(function* () {
       const names = yield* listed();
       for (const name of WORK_ITEM_MCP) expect(names).not.toContain(name);
+    }),
+  );
+
+  it.effect("keeps the draft tool off the list while the drafts flag is off, reads stay", () =>
+    Effect.gen(function* () {
+      atlassianAuths.set("acct-1", {
+        kind: "basic",
+        siteUrl: "https://example.atlassian.net",
+        email: "a@example.com",
+        apiToken: "x",
+      });
+      replaceFeatureFlagPresetValues(new Map([["AGENTS_CHANGE_REQUEST_PUBLISH", true]]));
+      const names = yield* listed();
+      expect(names).not.toContain("t3_work_item_draft");
+      expect(names).not.toContain("t3_work_item_change_set");
+      expect(names).toContain("t3_work_item_search");
+      expect(names).toContain("t3_work_item_get");
     }),
   );
 });

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { T3TeamThreadArtifact } from "@t3tools/contracts";
 
-import { collectT3TeamDraftMutations } from "./t3team-useDraftMutationIngest";
+import {
+  changeSetArtifact,
+  FIXTURE_THREAD_ID,
+  memberArtifact,
+  type FixtureMember,
+} from "~/t3team/changeset/t3team-changeSetFixtures";
+import { useChangeSetOutcomeStore } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
+import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
+
+import { collectT3TeamDraftMutations, ingestThreadDrafts } from "./t3team-useDraftMutationIngest";
 
 type IngestArtifact = Pick<T3TeamThreadArtifact, "kind" | "payload" | "createdAt">;
 
@@ -56,6 +65,17 @@ describe("collectT3TeamDraftMutations", () => {
     expect(collected[0]).not.toHaveProperty("projectId");
   });
 
+  it("leaves out a draft a change-set card owns", () => {
+    const collected = collectT3TeamDraftMutations({
+      artifacts: [draftMessage({ id: "jira-draft:m1" }), draftMessage({ id: "jira-draft:m2" })],
+      sourceThreadId: "thread-1",
+      knownDraftIds: new Set(),
+      ownedDraftIds: new Set(["jira-draft:m1"]),
+    });
+
+    expect(collected.map((draft) => draft.id)).toEqual(["jira-draft:m2"]);
+  });
+
   it("maps a document draft's patch onto proposedContent", () => {
     const [draft] = collectT3TeamDraftMutations({
       artifacts: [draftMessage({ id: "jira-draft:m2", field: "description" })],
@@ -90,5 +110,67 @@ describe("collectT3TeamDraftMutations", () => {
     });
 
     expect(collected).toEqual([]);
+  });
+});
+
+describe("ingestThreadDrafts with a change set", () => {
+  const member: FixtureMember = {
+    id: "jira-draft:cs1",
+    issueKey: "PROJ-1",
+    field: "status",
+    patch: { targetStatus: "Done" },
+  };
+  const stored = () => useT3TeamDraftMutationStore.getState().drafts.map((draft) => draft.id);
+  const reset = () => useT3TeamDraftMutationStore.setState({ drafts: [] });
+  const ingest = (status?: "draft" | "discarded", withSet = true) =>
+    ingestThreadDrafts({
+      threadId: FIXTURE_THREAD_ID,
+      artifacts: [
+        memberArtifact(member),
+        ...(withSet
+          ? [changeSetArtifact({ title: "t", members: [member], ...(status ? { status } : {}) })]
+          : []),
+      ],
+    });
+
+  it("keeps an open set's members out of the per-draft review", () => {
+    reset();
+    ingest();
+    expect(stored()).toEqual([]);
+  });
+
+  it("removes a member ingested before its set arrived", () => {
+    reset();
+    ingest(undefined, false);
+    expect(stored()).toEqual(["jira-draft:cs1"]);
+    ingest();
+    expect(stored()).toEqual([]);
+  });
+
+  it("offers the members again when the set never arrived, or was discarded", () => {
+    reset();
+    ingest(undefined, false);
+    expect(stored()).toEqual(["jira-draft:cs1"]);
+    reset();
+    ingest("discarded");
+    expect(stored()).toEqual(["jira-draft:cs1"]);
+  });
+
+  it("forgets session results for operations the server already holds a verdict for", () => {
+    reset();
+    useChangeSetOutcomeStore.setState({
+      outcomes: new Map([["jira-draft:cs1", { draftId: "jira-draft:cs1", status: "uncertain" }]]),
+      held: new Map([["jira-draft:cs1", "uncertain"]]),
+      running: new Map(),
+    });
+    ingestThreadDrafts({
+      threadId: FIXTURE_THREAD_ID,
+      artifacts: [
+        memberArtifact({ ...member, status: "applied" }),
+        changeSetArtifact({ title: "t", members: [member] }),
+      ],
+    });
+    expect(useChangeSetOutcomeStore.getState().held.size).toBe(0);
+    expect(useChangeSetOutcomeStore.getState().outcomes.size).toBe(0);
   });
 });

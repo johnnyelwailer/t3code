@@ -5,6 +5,11 @@ import {
 } from "~/t3team/workitem/t3team-useWorkItemFieldMutation";
 import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
 import type { WorkItemPerson } from "~/t3team/workitem/t3team-workItemFieldReaders";
+import {
+  writeWorkItemAssignee,
+  writeWorkItemEstimatePoints,
+  writeWorkItemStatus,
+} from "~/t3team/workitem/t3team-workItemFieldWrites";
 
 export type WorkItemFieldMutations = {
   readonly status: WorkItemFieldMutationResult<string>;
@@ -44,7 +49,7 @@ export function useWorkItemFieldMutations(input: {
     action: "changing the status",
     mutate: async (targetStatus) => {
       if (!backend || !accountId) return;
-      await backend.updateIssueStatus({ accountId, issueIdOrKey, targetStatus });
+      await writeWorkItemStatus({ backend, accountId, issueIdOrKey }, targetStatus);
       onReload();
     },
   });
@@ -55,12 +60,7 @@ export function useWorkItemFieldMutations(input: {
     isEqual: (a, b) => assigneeIdentity(a) === assigneeIdentity(b),
     mutate: async (next) => {
       if (!backend || !accountId) return;
-      await backend.updateIssueAssignee({
-        accountId,
-        issueIdOrKey,
-        assigneeAccountId: next?.accountId ?? null,
-        assigneeDisplayName: next?.displayName ?? null,
-      });
+      await writeWorkItemAssignee({ backend, accountId, issueIdOrKey }, next);
       onReload();
     },
   });
@@ -70,12 +70,7 @@ export function useWorkItemFieldMutations(input: {
     action: "updating story points",
     mutate: async (nextValue) => {
       if (!backend || !accountId) return;
-      await backend.updateIssueEstimate({
-        accountId,
-        issueIdOrKey,
-        estimateValue: nextValue,
-        estimateMode: "points",
-      });
+      await writeWorkItemEstimatePoints({ backend, accountId, issueIdOrKey }, nextValue);
       onReload();
     },
   });

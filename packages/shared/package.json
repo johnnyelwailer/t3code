@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./t3team-workItemChangeSetHash": {
+      "types": "./src/t3team-workItemChangeSetHash.ts",
+      "import": "./src/t3team-workItemChangeSetHash.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"
