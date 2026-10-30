@@ -185,6 +185,9 @@
         // Imported only by distribution modules the pack compiles in (nexi-work/broker/agent); the
         // pack plugin resolves their bare imports against this package so the bundler inlines them.
         "ws",
+        // Same: imported by nexi-work/pack/nexplore-global/pi-mcp*.ts and pi-skills-exec.ts, which the pack
+        // compiles in. Upstream deleted the unused declaration; the pack's import check needs it.
+        "@modelcontextprotocol/sdk",
       ],
     },
     "apps/desktop": {

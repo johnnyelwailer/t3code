@@ -10,6 +10,10 @@ import {
   readStatusDraftPatch,
   readSubtaskDraftPatch,
 } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
+import {
+  writeWorkItemLink,
+  writeWorkItemSubtask,
+} from "~/t3team/workitem/t3team-workItemFieldWrites";
 
 /**
  * Builds one "resolve this scalar draft" dispatcher for the strip, covering every field kind this
@@ -56,18 +60,7 @@ export function useWorkItemDraftStripScalarAccept(input: {
       if (!link) return undefined;
       return () =>
         acceptAction(draft, async () => {
-          if (link.action === "remove") {
-            await backend.deleteIssueLink({ accountId, linkId: link.linkId });
-          } else {
-            const { otherIssueIdOrKey, linkTypeName, direction } = link;
-            await backend.createIssueLink({
-              accountId,
-              issueIdOrKey,
-              otherIssueIdOrKey,
-              linkTypeName,
-              direction,
-            });
-          }
+          await writeWorkItemLink({ backend, accountId, issueIdOrKey }, link);
           onReload();
         });
     }
@@ -76,12 +69,7 @@ export function useWorkItemDraftStripScalarAccept(input: {
       if (!subtask) return undefined;
       return () =>
         acceptAction(draft, async () => {
-          await backend.createSubtask({
-            accountId,
-            projectId,
-            parentIssueIdOrKey: issueIdOrKey,
-            ...subtask,
-          });
+          await writeWorkItemSubtask({ backend, accountId, issueIdOrKey }, projectId, subtask);
           onReload();
         });
     }

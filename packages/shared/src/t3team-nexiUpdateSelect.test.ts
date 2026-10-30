@@ -187,6 +187,47 @@ describe("selectNexiPayload with the names a real build publishes (workflow run 
   });
 });
 
+describe("rc.6 -> rc.7 with the assets of the published desktop-v0.1.2-rc.6 release", () => {
+  // The asset names of GHE release desktop-v0.1.2-rc.6 (a pre-release); rc.7 comes from the same workflow.
+  const assetsOf = (version: string, mac: string, win: string) => [
+    asset(1, `Nexi-Work-${version}-arm64-${mac}.dmg`),
+    asset(2, `Nexi-Work-${version}-arm64-${mac}.dmg.sha256`),
+    asset(3, `Nexi-Work-${version}-arm64-${mac}.dmg.verification.txt`),
+    asset(4, `Nexi-Work-${version}-arm64-${mac}.zip`),
+    asset(5, `Nexi-Work-${version}-arm64-${mac}.zip.sha256`),
+    asset(6, `Nexi-Work-${version}-x64-${win}.exe`),
+    asset(7, `Nexi-Work-${version}-x64-${win}.exe.sha256`),
+    asset(8, `Nexi-Work-${version}-x64-${win}.exe.verification.txt`),
+    asset(9, "latest-mac.yml"),
+    asset(10, "latest.yml"),
+  ];
+  const rc6 = release("0.1.2-rc.6", {
+    assets: assetsOf("0.1.2-rc.6", "20261030-0644", "20261030-0550"),
+  });
+  const rc7 = release("0.1.2-rc.7", {
+    assets: assetsOf("0.1.2-rc.7", "20261030-1030", "20261030-0950"),
+  });
+
+  it("an rc.6 build is offered rc.7 on macOS and on Windows although every desktop release is a pre-release", () => {
+    expect(rc7.prerelease).toBe(true);
+    const mac6 = pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.2-rc.6", ...mac });
+    expect(mac6?.version).toBe("0.1.2-rc.7");
+    expect(mac6?.payload.name).toBe("Nexi-Work-0.1.2-rc.7-arm64-20261030-1030.zip");
+    const win6 = pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.2-rc.6", ...win });
+    expect(win6?.payload.name).toBe("Nexi-Work-0.1.2-rc.7-x64-20261030-0950.exe");
+  });
+
+  it("an rc.7 build has nothing newer, and a stable build still ignores both pre-releases", () => {
+    expect(
+      pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.2-rc.7", ...mac }),
+    ).toBeNull();
+    expect(pickNexiUpdate({ releases: [rc6, rc7], currentVersion: "0.1.1", ...mac })).toBeNull();
+  });
+
+  it("takes no track: the pick depends only on the build's version, the release list and the machine", () => {
+    // pickNexiUpdate has no channel input, so no track setting can make an rc build skip an rc release.
+    expect(pickNexiUpdate.length).toBe(1);
+
 describe("Linux: the x64 AppImage and latest-linux.yml", () => {
   const linux = { platform: "linux", arch: "x64" } as const;
   const assets = [

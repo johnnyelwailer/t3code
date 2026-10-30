@@ -24,9 +24,29 @@ export type T3TeamDraftCarrierOutcome = "applied" | "dismissed";
 
 export const T3TEAM_DRAFT_STATUS_PATH = "/api/t3team/thread/draft-mutation/status";
 
+/** POSTs one verdict body to the thread's draft status route; throws a sentence naming the cause. */
+export async function postDraftVerdict(
+  httpBaseUrl: string,
+  body: Record<string, string>,
+): Promise<void> {
+  const auth = await primaryServerAuthInit();
+  const response = await fetch(`${httpBaseUrl}${T3TEAM_DRAFT_STATUS_PATH}`, {
+    method: "POST",
+    credentials: auth.credentials,
+    headers: { ...auth.headers, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    // The route answers with a sentence naming the cause; surface it rather than a bare status code.
+    const message = await readDraftStatusError(response);
+    throw new Error(message);
+  }
+}
+
 export async function recordDraftCarrierOutcome(input: {
   readonly backend: BackendApi | null | undefined;
-  readonly draft: T3TeamDraftMutation;
+  readonly draft: Pick<T3TeamDraftMutation, "id" | "sourceThreadId">;
   readonly outcome: T3TeamDraftCarrierOutcome;
 }): Promise<void> {
   const httpBaseUrl = input.backend?.httpBaseUrl;
@@ -35,23 +55,11 @@ export async function recordDraftCarrierOutcome(input: {
     return;
   }
 
-  const auth = await primaryServerAuthInit();
-  const response = await fetch(`${httpBaseUrl}${T3TEAM_DRAFT_STATUS_PATH}`, {
-    method: "POST",
-    credentials: auth.credentials,
-    headers: { ...auth.headers, "content-type": "application/json" },
-    body: JSON.stringify({
-      threadId: input.draft.sourceThreadId,
-      draftId: input.draft.id,
-      status: input.outcome,
-    }),
+  await postDraftVerdict(httpBaseUrl, {
+    threadId: input.draft.sourceThreadId,
+    draftId: input.draft.id,
+    status: input.outcome,
   });
-
-  if (!response.ok) {
-    // The route answers with a sentence naming the cause; surface it rather than a bare status code.
-    const message = await readDraftStatusError(response);
-    throw new Error(message);
-  }
 }
 
 async function readDraftStatusError(response: Response): Promise<string> {

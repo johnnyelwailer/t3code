@@ -31,6 +31,7 @@ import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
+import { NexiAboutUpdateRow, NexiUpdateTrackRow } from "./t3team-NexiAboutUpdateRows";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -317,7 +318,10 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? (
+      <NexiAboutUpdateRow />
+      {hasDesktopBridge && updateState?.feed === "nexi-ghe" ? (
+        <NexiUpdateTrackRow />
+      ) : hasDesktopBridge ? (
         <SettingsRow
           {...searchableSetting("update-track")}
           description={

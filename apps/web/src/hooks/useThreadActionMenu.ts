@@ -28,6 +28,10 @@ import { threadEnvironment } from "../state/threads";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope } from "../state/session";
 import {
+  isLocalThreadAction,
+  readEnvironmentUnreachable,
+} from "../state/t3team-localThreadActions";
+import {
   readEnvironmentServerConfigLoaded,
   readEnvironmentSupportsAutoSettleOptOut,
   readThreadShell,
@@ -134,6 +138,7 @@ export function useThreadActionMenu(input: {
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
       const items = buildThreadActionMenuItems({
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
+        environmentUnreachable: readEnvironmentUnreachable(threadRef.environmentId),
         canFind: onFind !== undefined,
         branch: thread.branch ?? null,
         projectFilter: null,
@@ -154,7 +159,8 @@ export function useThreadActionMenu(input: {
       const action: ThreadActionMenuId = clicked.value;
       if (
         threadActionRequiresOperate(action) &&
-        !readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope)
+        !readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope) &&
+        !(isLocalThreadAction(action) && readEnvironmentUnreachable(threadRef.environmentId))
       ) {
         failureToast(
           "Thread action unavailable",

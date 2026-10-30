@@ -9,7 +9,7 @@ import { WorkItemDraftRowVerbs } from "~/t3team/workitem/t3team-WorkItemDraftRow
 export type WorkItemDraftStripRowData = {
   readonly id: string;
   readonly fieldLabel: string;
-  /** Undefined falls back to `summary` — the generic path for a field kind with no from/to reader. */
+  /** An empty `from` shows only the proposed value. Undefined falls back to `summary`. */
   readonly changeLine?: { readonly from: string; readonly to: string } | undefined;
   readonly summary?: string | undefined;
   /** Undefined when this field kind has no accept path wired in this view yet. */
@@ -22,6 +22,8 @@ export type WorkItemDraftStripRowData = {
   readonly reviewInPlace?:
     | { readonly onClick: () => void; readonly added: number; readonly removed: number }
     | undefined;
+  /** Replaces the Accept/Comment/Dismiss verbs, e.g. when a change set owns the verdict. */
+  readonly trailing?: React.ReactNode | undefined;
 };
 
 /**
@@ -50,10 +52,17 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
 
         {row.changeLine ? (
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className="truncate text-muted-foreground line-through">
-              {row.changeLine.from}
-            </span>
-            <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+            {row.changeLine.from !== "" ? (
+              <>
+                <span className="truncate text-muted-foreground line-through">
+                  {row.changeLine.from}
+                </span>
+                <ChevronRight
+                  className="size-3 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </>
+            ) : null}
             <span className="truncate font-medium text-foreground">{row.changeLine.to}</span>
           </span>
         ) : row.reviewInPlace ? (
@@ -80,7 +89,9 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
           <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.summary}</span>
         )}
 
-        {row.reviewInPlace ? (
+        {row.trailing !== undefined ? (
+          row.trailing
+        ) : row.reviewInPlace ? (
           <Button
             size="xs"
             variant="ghost"

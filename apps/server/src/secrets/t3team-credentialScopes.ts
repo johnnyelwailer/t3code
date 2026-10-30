@@ -10,6 +10,7 @@ const IMPLIED: Readonly<Record<string, ReadonlyArray<string>>> = {
   "admin:gpg_key": ["write:gpg_key", "read:gpg_key"],
   "write:gpg_key": ["read:gpg_key"],
   "write:discussion": ["read:discussion"],
+  "write:packages": ["read:packages"],
   project: ["read:project"],
   user: ["read:user", "user:email", "user:follow"],
 };

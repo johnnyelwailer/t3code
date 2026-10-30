@@ -157,6 +157,10 @@ import { useOlderSettledShelf, useOlderSettledShelfGrowth } from "../state/older
 import { useThreadSearch } from "../state/queries";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
+import {
+  isLocalThreadAction,
+  readEnvironmentUnreachable,
+} from "../state/t3team-localThreadActions";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
@@ -857,18 +861,23 @@ function ProjectScopeRowIcon(props: { isSelected: boolean; children: ReactNode }
   );
 }
 
+// Settle and delete (`localAction`) also work on threads whose environment cannot be reached.
 function canOperateThreads(
   threads: ReadonlyArray<Pick<SidebarThreadSummary, "environmentId">>,
+  localAction = false,
 ): boolean {
-  return threads.every((thread) =>
-    readEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope),
+  return threads.every(
+    (thread) =>
+      readEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope) ||
+      (localAction && readEnvironmentUnreachable(thread.environmentId)),
   );
 }
 
 function checkThreadOperations(
   threads: ReadonlyArray<Pick<SidebarThreadSummary, "environmentId">>,
+  localAction = false,
 ): boolean {
-  if (canOperateThreads(threads)) return true;
+  if (canOperateThreads(threads, localAction)) return true;
   toastManager.add({
     type: "error",
     title: "Thread action unavailable",
@@ -2364,7 +2373,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             {
               id: "settle",
               label: `Settle (${count})`,
-              disabled: settlingThreads.length === 0 || !canOperateThreads(settlingThreads),
+              disabled: settlingThreads.length === 0 || !canOperateThreads(settlingThreads, true),
             },
             ...(canSnoozeSelection
               ? [
@@ -2403,7 +2412,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               id: "delete",
               label: `Delete (${count})`,
               destructive: true,
-              disabled: !canOperateThreads(selectedThreads),
+              disabled: !canOperateThreads(selectedThreads, true),
             },
           ],
           position,
@@ -2424,7 +2433,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 })
               : selectedThreads;
       if (clicked.value === "settle" && actionTargets.length === 0) return;
-      if (clicked.value !== "mark-unread" && !checkThreadOperations(actionTargets)) return;
+      if (
+        clicked.value !== "mark-unread" &&
+        !checkThreadOperations(actionTargets, isLocalThreadAction(clicked.value))
+      )
+        return;
       if (clicked.value?.startsWith("snooze:")) {
         const preset =
           clicked.value === "snooze:custom"
@@ -2555,6 +2568,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             const thread = threadByKeyRef.current.get(threadKey);
             return thread ? [thread] : [];
           }),
+          true,
         )
       )
         return;
@@ -2691,6 +2705,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 threadRef.environmentId,
                 AuthOrchestrationOperateScope,
               ),
+              environmentUnreachable: readEnvironmentUnreachable(threadRef.environmentId),
               branch: thread.branch ?? null,
               projectFilter: threadProjectGroup
                 ? {
@@ -2722,7 +2737,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
-        if (threadActionRequiresOperate(clicked.value) && !checkThreadOperations([thread])) return;
+        if (
+          threadActionRequiresOperate(clicked.value) &&
+          !checkThreadOperations([thread], isLocalThreadAction(clicked.value))
+        )
+          return;
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
