@@ -15,11 +15,18 @@ export const forkToolkit = T3TeamToolkit;
 
 const fullText = process.env.T3_EVAL_FULL_TOOL_TEXT === "1";
 
+/** Records the registered text either way, so `t3_tool_help` answers in both arms. */
 export const advertisedToolText = <
   T extends { name: string; description?: string; inputSchema: unknown },
 >(
   tool: T,
-) => (fullText ? tool : { ...tool, ...advertiseToolDocs(tool) });
+) => {
+  const advertised = advertiseToolDocs(tool);
+  return fullText ? tool : { ...tool, ...advertised };
+};
+
+/** The full-text arm is the diet's "before": it has no `t3_tool_help`. */
+export const listedInEval = (name: string) => !(fullText && name === "t3_tool_help");
 
 /** What the fork tool answers when a case has no mock for it. */
 export const forkToolDefault = (name: string, input: Readonly<Record<string, unknown>>) => {
