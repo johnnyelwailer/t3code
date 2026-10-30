@@ -1,3 +1,4 @@
+import * as Base64Url from "effect/encoding/Base64Url";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -91,14 +92,14 @@ describe("desktop route question", () => {
       "a\\b",
       "a\u0000b",
     ]) {
-      const id = `desktop-route:v1:${Buffer.from(JSON.stringify({ target, internal: false })).toString("base64url")}`;
+      const id = `desktop-route:v1:${Base64Url.encode(JSON.stringify({ target, internal: false }))}`;
       expect(decodeDesktopRouteQuestionId(id), JSON.stringify(target)).toBeNull();
     }
     for (const id of [
       "desktop-route:v1:",
       "desktop-route:v1:!!!",
       "machine-source:v1:abc",
-      "desktop-route:v1:" + Buffer.from("not json").toString("base64url"),
+      "desktop-route:v1:" + Base64Url.encode("not json"),
     ]) {
       expect(decodeDesktopRouteQuestionId(id)).toBeNull();
     }
