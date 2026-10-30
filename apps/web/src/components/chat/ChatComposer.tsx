@@ -201,7 +201,6 @@ import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { VoiceComposerDock } from "../../t3team/voice/t3team-VoiceComposerDock";
 import { VoiceComposerInline } from "../../t3team/voice/t3team-VoiceComposerInline";
 import { applyT3TeamComposerMenuReplacement } from "~/t3team/composer/t3team-composerMenuApply";
-import type { T3TeamComposerMenuAppliedText } from "~/t3team/composer/t3team-composerMenuApply";
 import {
   ComposerAttachButton,
   ComposerAttachmentFileList,
@@ -1122,33 +1121,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
 
   const activePendingUserInput = pendingUserInputs[0] ?? null;
-
-  /**
-   * Commits editor text the composer produced itself (menu accept, imperative
-   * insert). While a plan question is being answered it routes through the
-   * pending-answer channel, exactly as typing does.
-   */
-  const commitComposerText = (next: T3TeamComposerMenuAppliedText) => {
-    promptRef.current = next.text;
-    const activePendingQuestion = activePendingProgress?.activeQuestion;
-    if (activePendingQuestion && activePendingUserInput) {
-      onChangeActivePendingUserInputCustomAnswer(
-        activePendingQuestion.id,
-        next.text,
-        next.cursor,
-        next.expandedCursor,
-        false,
-      );
-    } else {
-      setPrompt(next.text);
-    }
-    setComposerCursor(next.cursor);
-    if (next.focusEditorAfterReplace) {
-      window.requestAnimationFrame(() => {
-        composerEditorRef.current?.focusAt(next.cursor);
-      });
-    }
-  };
 
   const composerSelectLockRef = useRef(false);
   const composerMenuOpenRef = useRef(false);

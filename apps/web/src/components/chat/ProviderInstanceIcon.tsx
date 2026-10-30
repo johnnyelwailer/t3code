@@ -7,16 +7,7 @@ import {
 } from "@t3tools/client-runtime/state/provider-instance-display";
 
 import { ProviderDriverKind } from "@t3tools/contracts";
-import {
-  AntigravityIcon,
-  ClaudeAI,
-  CursorIcon,
-  GrokIcon,
-  Icon,
-  OpenAI,
-  OpenCodeIcon,
-  PiAgentIcon,
-} from "../Icons";
+import { AntigravityIcon, ClaudeAI, Icon, OpenAI, PiAgentIcon } from "../Icons";
 import { NexploreAI } from "../t3team-NexploreAIIcon";
 
 import { cn } from "~/lib/utils";

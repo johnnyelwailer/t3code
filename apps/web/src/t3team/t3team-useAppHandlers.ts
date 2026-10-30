@@ -2,7 +2,6 @@ import { useCallback, useRef } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadActions } from "~/hooks/useThreadActions";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { matchesProjectThreadTicket } from "~/t3team/t3team-ticketLookup";
 import type {
   ProjectKickoffThreadInput,

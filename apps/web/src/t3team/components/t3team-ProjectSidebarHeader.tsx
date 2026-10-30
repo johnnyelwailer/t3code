@@ -7,7 +7,6 @@ import {
   SidebarStageBackdrop,
   useSidebarStageBackdropVariant,
 } from "~/components/SidebarStageBackdrop";
-import { T3TeamLeftSidebarHeaderToggle } from "~/t3team/t3team-LeftSidebarHeaderToggle";
 import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { isNexploreBrand, PackBrandIdentity } from "~/t3team/components/t3team-PackBrandIdentity";
 

@@ -4,7 +4,6 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
-import { serializeBacklogCacheJson } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import {
   pruneStaleT3TeamAtlassianBacklogViews,
   T3TEAM_BACKLOG_VIEW_STALE_MS,
@@ -153,30 +152,3 @@ describe("T3TEAM_BACKLOG_VIEW_STALE_MS", () => {
     assert.strictEqual(T3TEAM_BACKLOG_VIEW_STALE_MS, 30 * 24 * 60 * 60 * 1000);
   });
 });
-
-const insertIssue = (input: { identity: ReturnType<typeof identityFor>; issueId: string }) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    yield* sql`
-      INSERT INTO t3team_atlassian_backlog_issues (
-        provider, account_id, external_project_id, issue_id, issue_key, resource_json, updated_at
-      )
-      VALUES (
-        ${input.identity.provider}, ${input.identity.accountId}, ${input.identity.externalProjectId},
-        ${input.issueId}, ${input.issueId}, ${serializeBacklogCacheJson({ id: input.issueId })}, 0
-      )
-    `;
-  });
-
-const countIssues = (identity: ReturnType<typeof identityFor>) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const rows = yield* sql<{ count: number }>`
-      SELECT COUNT(*) AS "count"
-      FROM t3team_atlassian_backlog_issues
-      WHERE provider = ${identity.provider}
-        AND account_id = ${identity.accountId}
-        AND external_project_id = ${identity.externalProjectId}
-    `;
-    return rows[0]?.count ?? 0;
-  });

@@ -5,6 +5,9 @@
 # no-manual-memo for the whole repo. These fork-owned files predate those rules (they are not
 # upstream files) and cannot be converted in a sync. vite.config.ts turns exactly those rules off
 # for exactly the files below, so any NEW or changed fork file is still held to them.
+# 2026-10-29 sync: the new rules no-low-value-comments, no-unreasoned-state-sync, no-em-dash-copy,
+# no-inline-schema-compile, no-polling-loop-in-tests and react/no-array-index-key are exempted via
+# t3team-lint-pending-sync-20261029.txt (separate list, so these rules' files do not also lose the rules above).
 # One repo-relative path per line; delete a line when its file is converted.
 apps/desktop/src/backend/t3team-backendHealthWatchdog.ts
 apps/server/src/account/t3team-AccountOAuth.ts

@@ -17,7 +17,7 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -60,7 +60,6 @@ afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
 
 const projectId = ProjectId.make("proj-run-control-retry");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
-const threadId = ThreadId.make("run-control-retry-thread");
 const nowIso = (): string => "2026-07-21T00:00:00.000Z";
 
 const failingSource = `import { Schema } from "effect";

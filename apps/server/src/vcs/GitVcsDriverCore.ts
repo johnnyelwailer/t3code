@@ -32,11 +32,7 @@ import {
   type ReviewDiffPreviewSource,
   type VcsRef,
 } from "@t3tools/contracts";
-import {
-  dedupeRemoteBranchesWithLocalMatches,
-  normalizeGitRemoteUrl,
-  redactCommandArgs,
-} from "@t3tools/shared/git";
+import { dedupeRemoteBranchesWithLocalMatches, redactCommandArgs } from "@t3tools/shared/git";
 import { truncate } from "@t3tools/shared/String";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { compactTraceAttributes } from "@t3tools/shared/observability";

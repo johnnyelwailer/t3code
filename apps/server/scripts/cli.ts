@@ -23,8 +23,6 @@ import {
   ServerCliDevelopmentIconTargetMissingError,
   ServerCliDistributionNotInlinedError,
   ServerCliExecutableImportError,
-  ServerCliPublishIconSourceMissingError,
-  ServerCliPublishIconTargetMissingError,
   ServerCliWebClientMissingError,
 } from "./cliErrors.ts";
 

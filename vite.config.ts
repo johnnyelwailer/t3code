@@ -23,7 +23,13 @@ const T3TEAM_LINT_PENDING_FILES = NodeFS.readFileSync(
   .split("\n")
   .filter((line) => line.length > 0 && !line.startsWith("#"));
 
-const DOM_TEST_ENVIRONMENT_ALLOWLIST: Array<string> = [];
+// t3team: TEMPORARY exemption for the rules the 2026-10-29 sync turned on; see t3team-lint-pending-sync-20261029.txt.
+const T3TEAM_SYNC_20261029_PENDING_FILES = NodeFS.readFileSync(
+  NodeURL.fileURLToPath(new URL("./t3team-lint-pending-sync-20261029.txt", import.meta.url)),
+  "utf8",
+)
+  .split("\n")
+  .filter((line) => line.length > 0 && !line.startsWith("#"));
 
 const TEST_EXCLUDE = [
   "**/.repos/**",
@@ -653,6 +659,7 @@ export default defineConfig({
         // errors, so they stay "warn": the directive still suppresses, the fork additions only warn.
         files: [
           "apps/web/src/components/BranchToolbar.tsx",
+          "apps/web/src/components/Sidebar.tsx",
           "apps/web/src/components/chat/MessagesTimeline.tsx",
           "apps/web/src/components/chat/ModelPickerContent.tsx",
           "apps/web/src/components/pullRequest/PullRequestCodeTab.tsx",
@@ -688,6 +695,46 @@ export default defineConfig({
           "t3code/require-disposable-render": "off",
           "react/memo-dependencies": "off",
         },
+      },
+      {
+        // t3team: TEMPORARY exemption for the rules the 2026-10-29 sync turned on (see
+        // t3team-lint-pending-sync-20261029.txt). Must stay after the blocks that enable them.
+        files: [...T3TEAM_SYNC_20261029_PENDING_FILES],
+        rules: {
+          "react/no-array-index-key": "off",
+          "t3code/no-em-dash-copy": "off",
+          "t3code/no-inline-schema-compile": "off",
+          "t3code/no-low-value-comments": "off",
+          "t3code/no-polling-loop-in-tests": "off",
+          "t3code/no-unreasoned-state-sync": "off",
+        },
+      },
+      {
+        // t3team: TEMPORARY. The voice hooks write refs during render and sync state in effects,
+        // which upstream's React Compiler rules now flag for packages/*. They are fork-owned and
+        // not converted in a sync; delete this block when they are rewritten.
+        files: [
+          "packages/shared/src/t3team-voiceInputUi/t3team-useVoiceInput.ts",
+          "packages/shared/src/t3team-voiceInputUi/t3team-useVoiceInputControls.ts",
+        ],
+        rules: {
+          "react/exhaustive-effect-dependencies": "off",
+          "react/memo-dependencies": "off",
+          "react/refs": "off",
+          "react/set-state-in-effect": "off",
+        },
+      },
+      {
+        // t3team: files that carry upstream's own oxlint-disable-next-line directives for this rule.
+        // "off" would turn those directives into unused-directive errors, so the rule stays "warn".
+        files: [
+          "apps/web/src/components/Sidebar.tsx",
+          "apps/web/src/components/preview/PreviewPanelShell.tsx",
+          "apps/web/src/components/pullRequest/PullRequestCodeTab.tsx",
+          "apps/web/src/components/pullRequest/PullRequestDetailPanel.tsx",
+          "apps/web/src/components/pullRequest/PullRequestsPage.tsx",
+        ],
+        rules: { "t3code/no-unreasoned-state-sync": "warn" },
       },
       {
         files: [

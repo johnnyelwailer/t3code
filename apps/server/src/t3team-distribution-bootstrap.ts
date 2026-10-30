@@ -55,10 +55,7 @@ import { toPackProviderDriverDefinition } from "./t3team-pack-driverDefinition.t
 import { setPackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
 import { setPackSetupProfileOverlay } from "./t3team-pack-setupProfileOverlay.ts";
 import { setWorkflowAgentModelPolicy } from "./t3team-workflowAgentModelPolicy.ts";
-import {
-  DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS,
-  setWorkflowEphemeralConcurrencyPolicy,
-} from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
+import { setWorkflowEphemeralConcurrencyPolicy } from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
 import { setWorkflowRepairPolicy } from "./t3team-workflowRepairPolicy.ts";
 
 /**

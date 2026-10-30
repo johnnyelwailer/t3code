@@ -669,6 +669,7 @@ export function HomeScreen(props: HomeScreenProps) {
     return (
       <View className={containerClassName}>
         <ExtensionBoundary onFailure={() => setEmptyStateFailed(true)}>
+          {/* oxlint-disable-next-line react/static-components -- homeEmptyStateFor returns the registered slot Component, a stable identity, not one created per render. */}
           <EmptyStateExtension onAddConnection={props.onAddConnection} />
         </ExtensionBoundary>
       </View>

@@ -37,7 +37,7 @@ describe("parseJobSpec", () => {
   });
 
   it("rejects missing image", () => {
-    const { image, ...rest } = base;
+    const { image: _image, ...rest } = base;
     expect(() => parseJobSpec(rest)).toThrow(JobSpecValidationError);
   });
 

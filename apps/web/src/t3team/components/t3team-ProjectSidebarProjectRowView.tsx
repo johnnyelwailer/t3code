@@ -57,7 +57,7 @@ export function ProjectSidebarProjectRowView(props: ProjectRowProps) {
     effectiveVisibleTicketIds,
     effectiveHiddenTicketCount,
   } = useProjectSidebarProjectRowPinnedState(props, state);
-  const { visiblePinnedItems, pinnedItemVisibleTicketIds, currentIssueCount, githubItems } =
+  const { visiblePinnedItems, pinnedItemVisibleTicketIds, currentIssueCount } =
     deriveProjectSidebarPinnedFeedState({
       showPinnedOnlyFeed,
       ticketViewMode,

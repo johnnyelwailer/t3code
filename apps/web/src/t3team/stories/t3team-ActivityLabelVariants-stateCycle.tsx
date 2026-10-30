@@ -26,7 +26,7 @@ import { DEMO_STATES, useStateCycle } from "./t3team-ActivityLabelVariants-state
 export function StateCycleCard() {
   const cardRef = useRef<HTMLDivElement>(null);
   const sizersRef = useRef<HTMLSpanElement>(null);
-  const { i, state, previous, liveToLive, spinState, setSpinState, measure, over } = useStateCycle(
+  const { state, previous, liveToLive, spinState, setSpinState, measure, over } = useStateCycle(
     cardRef,
     sizersRef,
   );

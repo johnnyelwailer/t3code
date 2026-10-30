@@ -22,7 +22,6 @@ import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
 import { useWorkspaceMutationRefresh } from "~/hooks/useWorkspaceMutationRefresh";
-import { isWindowsPlatform } from "~/lib/utils";
 import { useFileContextMenu, type FileContextMenuAction } from "~/fileContextMenu";
 import { readLocalApi } from "~/localApi";
 import { T3_PIERRE_ICONS } from "~/pierre-icons";
@@ -49,30 +48,6 @@ interface FileBrowserPanelProps {
   onRefreshSelectedFile?: () => void;
   workspaceMutationId: string | null;
 }
-
-/**
- * Node rows render at 12px in the app's sans stack: San Francisco on macOS,
- * Segoe UI on Windows. Windows' ClearType subpixel rendering makes 400-weight
- * text at this size read visibly heavier than macOS' grayscale antialiasing,
- * so on Windows the tree's regular weight is pinned one step down (Segoe UI
- * Light) so the node text matches the macOS weight. macOS and Linux keep the
- * explicit 400 baseline. nexplore.ghe.com/pj/nexi-distribution#195
- */
-const TREE_REGULAR_FONT_WEIGHT =
-  typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform) ? 300 : 400;
-
-const TREE_UNSAFE_CSS = `
-  :host {
-    --trees-bg-override: transparent;
-    --trees-selected-bg-override: color-mix(in srgb, currentColor 12%, transparent);
-    --trees-hover-bg-override: color-mix(in srgb, currentColor 7%, transparent);
-    --trees-border-color-override: color-mix(in srgb, currentColor 14%, transparent);
-    --trees-font-family-override: var(--font-sans);
-    --trees-font-size-override: 12px;
-    --trees-font-weight-regular-override: ${TREE_REGULAR_FONT_WEIGHT};
-  }
-  button[data-type='item'] { border-radius: 5px; }
-`;
 
 function treePath(entry: ProjectEntry): string {
   return entry.kind === "directory" ? `${entry.path}/` : entry.path;

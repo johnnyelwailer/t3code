@@ -282,7 +282,7 @@ describe("@runbook/core checkpoint crash-resume (durable runtime)", () => {
     // Run 25 iterations, then journaled the in-flight agent of iteration 25 without its checkpoint
     // (crash between the agent call and the checkpoint commit). The counter continues AT 50, so
     // the in-flight agent lands at seq 51 — strictly after the boundary checkpoint at seq 50.
-    const firstRun = await runIterations({ journal, k: 25 });
+    await runIterations({ journal, k: 25 });
     const firstRuntime = createDurableRuntime({
       journal: new Map(),
       writer: journal.sink,

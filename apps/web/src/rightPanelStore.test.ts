@@ -13,8 +13,6 @@ import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
   selectPullRequestSurfaceView,
-  selectSelectedRightPanelSurface,
-  selectThreadPanelOpen,
   selectThreadPanelVisibility,
   selectThreadRightPanelState,
   useRightPanelStore,

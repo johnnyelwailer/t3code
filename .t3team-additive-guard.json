@@ -767,7 +767,9 @@
     "packages/client-runtime/src/authorization/layer.test.ts",
     "packages/source-control-github/src/server/gitHubPullRequestJson.test.ts",
     "packages/source-control-testing/src/TestSourceControlHost.ts",
-    "apps/web/src/components/chat/useComposerStash.ts"
+    "apps/web/src/components/chat/useComposerStash.ts",
+    "packages/integrations-atlassian/src/adf/markdownToAdf.test.ts",
+    "packages/runbook-core/src/checkpointWindow.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

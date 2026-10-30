@@ -107,7 +107,6 @@ it.effect("GitVcsDriver.execute preserves redacted stderr in GitCommandError", (
   return Effect.gen(function* () {
     const driver = yield* GitVcsDriver.GitVcsDriver;
     const fileSystem = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
     const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-git-stderr-" });
 
     yield* driver.execute({
