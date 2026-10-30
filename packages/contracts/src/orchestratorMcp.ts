@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { AuthMcpClientAccess } from "./auth.ts";
+import { CredentialHost, CredentialScope, CredentialVariableName } from "./t3team-credentialSources.ts";
 import {
   ContextTransferId,
   EnvironmentId,
@@ -823,15 +824,15 @@ export const OrchestratorMcpRequestSecretInput = Schema.Struct({
     description:
       'secretRef (default) for a T3 tool. file for a shell CLI: read the path in your command, e.g. TOKEN="$(cat <file>)" wrangler whoami.',
   }),
-  host: Schema.optional(TrimmedNonEmptyString).annotate({
+  host: Schema.optional(CredentialHost).annotate({
     description:
       "The host the credential is for (e.g. npm.pkg.github.com). Lets the card offer the user's own sign-in for it.",
   }),
-  name: Schema.optional(TrimmedNonEmptyString).annotate({
+  name: Schema.optional(CredentialVariableName).annotate({
     description:
       "The environment variable your command reads (e.g. NX_GH_PKG_READ_TOKEN): the one the repository's own config names. Lets the card offer a variable of that name from the user's machine.",
   }),
-  scopes: Schema.optional(Schema.Array(TrimmedNonEmptyString)).annotate({
+  scopes: Schema.optional(Schema.Array(CredentialScope).check(Schema.isMaxLength(16))).annotate({
     description: "Scopes the credential needs, e.g. read:packages. Shown to the user and checked.",
   }),
   timeoutMs: Schema.optional(

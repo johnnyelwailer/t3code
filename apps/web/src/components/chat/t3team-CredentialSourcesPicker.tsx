@@ -26,6 +26,8 @@ export interface CredentialRequestSource {
 export function T3TeamCredentialSourcesPicker(props: {
   readonly source: CredentialRequestSource;
   readonly busy: boolean;
+  /** True while a source is being checked or read, so the card can hold its own actions. */
+  readonly onReadingChange: (reading: boolean) => void;
   /** The chosen source's value, handed to the card's own answer. */
   readonly onValue: (value: string) => void;
 }) {
@@ -51,6 +53,7 @@ export function T3TeamCredentialSourcesPicker(props: {
     if (primaryEnvironmentId === null || inFlight.current) return;
     inFlight.current = true;
     setReading("probe");
+    props.onReadingChange(true);
     setError(null);
     const result = await probe({
       environmentId: primaryEnvironmentId,
@@ -64,6 +67,7 @@ export function T3TeamCredentialSourcesPicker(props: {
     }).finally(() => {
       inFlight.current = false;
       setReading(null);
+      props.onReadingChange(false);
     });
     if (result._tag === "Success") setOptions(credentialSourceOptions(result.value));
     else setError("Could not check this machine. Enter the value below instead.");
@@ -73,6 +77,7 @@ export function T3TeamCredentialSourcesPicker(props: {
     if (primaryEnvironmentId === null || inFlight.current) return;
     inFlight.current = true;
     setReading(id);
+    props.onReadingChange(true);
     setError(null);
     const result = await read({
       environmentId: primaryEnvironmentId,
@@ -84,6 +89,7 @@ export function T3TeamCredentialSourcesPicker(props: {
     }).finally(() => {
       inFlight.current = false;
       setReading(null);
+      props.onReadingChange(false);
     });
     if (result._tag === "Success") props.onValue(result.value.value);
     else setError("Could not read that source on this machine. Enter the value below instead.");
@@ -118,6 +124,7 @@ export function T3TeamCredentialSourcesPicker(props: {
               size="xs"
               variant="outline"
               disabled={props.busy || reading !== null || option.disabled}
+              aria-label={`Use ${option.label}`}
               onClick={() => void use(option.id)}
             >
               Use
@@ -128,7 +135,7 @@ export function T3TeamCredentialSourcesPicker(props: {
           )}
           {option.hint === undefined ? null : (
             <p className="text-xs text-muted-foreground">
-              Missing scope. Run <code className="font-mono">{option.hint}</code>, then ask again.
+              This sign-in lacks a requested scope. To add it, run <code className="font-mono">{option.hint}</code>, then ask again.
             </p>
           )}
           {option.warning === undefined ? null : (

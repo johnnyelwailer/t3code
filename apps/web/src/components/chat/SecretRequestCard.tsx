@@ -67,6 +67,9 @@ function PendingSecretRequestForm(props: {
   });
   const [secret, setSecret] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // A source read in flight: answering by hand or declining waits for it.
+  const [picking, setPicking] = useState(false);
+  const blocked = submitting || picking;
   const [error, setError] = useState<string | null>(null);
   // Enter and click can both submit before a render.
   const inFlight = useRef(false);
@@ -119,6 +122,7 @@ function PendingSecretRequestForm(props: {
         <T3TeamCredentialSourcesPicker
           source={item.source}
           busy={submitting}
+          onReadingChange={setPicking}
           onValue={(value) => void send({ type: "save", secret: value })}
         />
       )}
@@ -138,13 +142,13 @@ function PendingSecretRequestForm(props: {
             data-bwignore
             placeholder={item.placeholder ?? SECRET_REQUEST_DEFAULT_PLACEHOLDER}
             value={secret}
-            disabled={submitting}
+            disabled={blocked}
             aria-invalid={error !== null || undefined}
             aria-describedby={error !== null ? `${privacyId} ${errorId}` : privacyId}
             onChange={(event) => setSecret(event.currentTarget.value)}
           />
         </div>
-        <Button type="submit" disabled={submitting || secret.trim().length === 0}>
+        <Button type="submit" disabled={blocked || secret.trim().length === 0}>
           Save securely
         </Button>
       </div>
@@ -165,7 +169,7 @@ function PendingSecretRequestForm(props: {
           type="button"
           size="xs"
           variant="ghost-muted"
-          disabled={submitting}
+          disabled={blocked}
           onClick={() => void send({ type: "decline" })}
         >
           Decline

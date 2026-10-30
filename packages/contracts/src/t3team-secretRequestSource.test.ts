@@ -28,3 +28,10 @@ it("the turn item's source carries only host, name and scopes", () => {
     scopes: ["repo"],
   });
 });
+
+it("request_secret rejects hints the credential probe could not use, up front", () => {
+  const base = { label: "Token", reason: "for npm" };
+  assert.throws(() => decodeInput({ ...base, host: "https://npm.pkg.github.com" }));
+  assert.throws(() => decodeInput({ ...base, host: "NPM.pkg.github.com" }));
+  assert.throws(() => decodeInput({ ...base, scopes: ["read packages"] }));
+});
