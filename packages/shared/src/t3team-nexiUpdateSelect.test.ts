@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   isEligibleNexiTag,
+  isSupportedNexiRuntime,
   parseNexiUpdateManifest,
   pickNexiUpdate,
   selectNexiPayload,
@@ -158,7 +159,7 @@ describe("selectNexiPayload: the right asset per platform and arch", () => {
       selectNexiPayload(r.assets, "0.1.2", { platform: "win32", arch: "arm64" })?.payload.name,
     ).toMatch(/x64.*\.exe$/u);
   });
-  it("an Intel Mac and Linux get nothing: no such build is published", () => {
+  it("an Intel Mac, and a Linux release without an AppImage, get nothing", () => {
     expect(selectNexiPayload(r.assets, "0.1.2", { platform: "darwin", arch: "x64" })).toBeNull();
     expect(selectNexiPayload(r.assets, "0.1.2", { platform: "linux", arch: "x64" })).toBeNull();
   });
@@ -226,6 +227,46 @@ describe("rc.6 -> rc.7 with the assets of the published desktop-v0.1.2-rc.6 rele
   it("takes no track: the pick depends only on the build's version, the release list and the machine", () => {
     // pickNexiUpdate has no channel input, so no track setting can make an rc build skip an rc release.
     expect(pickNexiUpdate.length).toBe(1);
+  });
+});
+
+describe("Linux: the x64 AppImage and latest-linux.yml", () => {
+  const linux = { platform: "linux", arch: "x64" } as const;
+  const assets = [
+    asset(1, "Nexi-Work-0.1.2-rc.7-x86_64-20261030-1030.AppImage", 281_430_515),
+    asset(2, "Nexi-Work-0.1.2-rc.7-x86_64-20261030-1030.AppImage.sha256", 119),
+    asset(3, "latest-linux.yml"),
+    asset(4, "latest.yml"),
+    asset(5, "latest-mac.yml"),
+  ];
+  it("takes the AppImage electron-builder names x86_64 (and an x64 one), never its .sha256", () => {
+    expect(selectNexiPayload(assets, "0.1.2-rc.7", linux)?.payload.id).toBe(1);
+    expect(selectNexiPayload(assets, "0.1.2-rc.7", linux)?.manifest.name).toBe("latest-linux.yml");
+    const x64Named = [
+      asset(1, "Nexi-Work-0.1.2-rc.7-x64-20261030-1030.AppImage"),
+      asset(3, "latest-linux.yml"),
+    ];
+    expect(selectNexiPayload(x64Named, "0.1.2-rc.7", linux)?.payload.id).toBe(1);
+  });
+  it("needs its own manifest and an arch it is built for", () => {
+    expect(
+      selectNexiPayload(
+        assets.filter((a) => a.name !== "latest-linux.yml"),
+        "0.1.2-rc.7",
+        linux,
+      ),
+    ).toBeNull();
+    expect(
+      selectNexiPayload(assets, "0.1.2-rc.7", { platform: "linux", arch: "arm64" }),
+    ).toBeNull();
+    expect(selectNexiPayload(assets, "0.1.2-rc.8", linux)).toBeNull();
+  });
+  it("is a supported runtime, and an rc.6 Linux build is offered rc.7 as a pre-release", () => {
+    expect(isSupportedNexiRuntime(linux)).toBe(true);
+    const rc7 = release("0.1.2-rc.7", { assets });
+    expect(
+      pickNexiUpdate({ releases: [rc7], currentVersion: "0.1.2-rc.6", ...linux })?.payload.name,
+    ).toMatch(/\.AppImage$/u);
   });
 });
 
