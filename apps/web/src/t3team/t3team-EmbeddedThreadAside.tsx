@@ -10,7 +10,7 @@ type EmbeddedThreadAsideProps = {
   thread: ProjectThread;
   projectId: string;
   projectTitle: string;
-  projectSource?: Pick<ProjectSource, "provider">;
+  projectSource?: Pick<ProjectSource, "provider" | "accountId">;
   projectWorkspaceRoot?: string;
   ticketId?: string;
   onThreadKickoffConsumed: (threadId: string) => void;

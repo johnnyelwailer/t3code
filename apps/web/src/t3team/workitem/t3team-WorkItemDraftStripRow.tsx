@@ -22,6 +22,8 @@ export type WorkItemDraftStripRowData = {
   readonly reviewInPlace?:
     | { readonly onClick: () => void; readonly added: number; readonly removed: number }
     | undefined;
+  /** Replaces the Accept/Comment/Dismiss verbs, e.g. when a change set owns the verdict. */
+  readonly trailing?: React.ReactNode | undefined;
 };
 
 /**
@@ -80,7 +82,9 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
           <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.summary}</span>
         )}
 
-        {row.reviewInPlace ? (
+        {row.trailing !== undefined ? (
+          row.trailing
+        ) : row.reviewInPlace ? (
           <Button
             size="xs"
             variant="ghost"

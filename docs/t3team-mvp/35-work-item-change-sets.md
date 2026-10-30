@@ -281,6 +281,39 @@ A change set is a thin grouping over the existing drafts; nothing here writes to
 Not built: a server commit path (applying runs in the client through the existing accept
 handlers), temp-id hierarchy, delete operations, trusted auto-commit, un-discarding.
 
+## Implemented: web half, preview and approval card (slice 3b)
+
+`WorkItemChangeSetMount` (`apps/web/src/t3team/changeset/`) renders every `work-item-change-set` artifact
+of a thread above the conversation, inside `ThreadChatView`, so the full thread, the embedded aside
+and the right-panel thread tab all show it. It follows the 3a contract:
+
+- Each `operations[].draftId` must be a `draft-mutation` artifact on the SAME thread, else the
+  operation reads `missing` and is never sent. Rows render from the member draft, never from the
+  set's display copies.
+- `verifyDraftPayloadHash` runs before every write, in the apply sequencer
+  (`t3team-changeSetApply.ts`, pure, injected `acceptOp`/`record`). A mismatch is refused with
+  "Changed since proposed, not applied". A `changed` operation is never counted as approved.
+- Apply reuses the work item view's field writes (`t3team-workItemFieldWrites.ts`, shared with
+  `useWorkItemFieldMutations` and the strip's link/subtask accept) driven from the member payload.
+  Description and comment drafts are sent as the proposed markdown.
+- Operations are independent: a failure stays on that operation and the run continues, except that a
+  failed write stops the rest of that issue when a later operation targets the same field. Only
+  `draft` operations are sent, so a re-run resumes. A write whose verdict could not be recorded is
+  `unrecorded` and a retry only records it, so it is never written twice.
+- Per-operation approve toggles default to approved. Apply writes the approved operations and records
+  `applied`; toggled-off ones are recorded `dismissed`. "Discard set" calls the 3a `changeSetId` route.
+- While a set is `draft`, its members are not ingested into the per-draft review store
+  (`collectT3TeamDraftMutations` `ownedDraftIds`), so they are not offered twice. A discarded set
+  releases them.
+
+Not built: delete operations, temp-id hierarchy, a server commit path, trusted auto-commit,
+un-discarding, mobile. Known gaps: an hour-tracked estimate has no accept path anywhere in the web
+client (the item view's strip does not offer one either), so it reads "Apply from the item view" and
+is not written; the card shows proposed values without the current ones, because the thread has no
+loaded work item; the work item view does not reload after a change-set apply until its next fetch;
+the per-draft strip's scalar accepts still do not record their verdict on the carrier, only the
+description diff does.
+
 ## MVP Slice
 
 1. Define shared schemas for `WorkItemChangeSet` and `WorkItemDraftOperation`.

@@ -40,6 +40,8 @@ export interface ThreadChatViewBodyProps {
   bootstrapProgress: ThreadBootstrapProgress | null;
   retryThreadBootstrap: () => void;
   composerState: ThreadChatComposerState;
+  /** Proposed work-item change sets, shown above the conversation. */
+  changeSetSlot?: React.ReactNode;
 }
 
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
@@ -75,6 +77,7 @@ export function ThreadChatViewBody({
     submitRecipeCardAction,
     onOpenThread,
   },
+  changeSetSlot,
 }: ThreadChatViewBodyProps) {
   // Handed over unconditionally: the accessory self-gates (attachment strip, staged action card,
   // staged note rows), so this must NOT re-derive "is anything staged" from attachments alone.
@@ -136,6 +139,7 @@ export function ThreadChatViewBody({
           compact
         />
       ) : null}
+      {changeSetSlot}
       <ComposerHandleContext
         value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
       >

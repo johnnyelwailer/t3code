@@ -56,6 +56,17 @@ describe("collectT3TeamDraftMutations", () => {
     expect(collected[0]).not.toHaveProperty("projectId");
   });
 
+  it("leaves out a draft a change-set card owns", () => {
+    const collected = collectT3TeamDraftMutations({
+      artifacts: [draftMessage({ id: "jira-draft:m1" }), draftMessage({ id: "jira-draft:m2" })],
+      sourceThreadId: "thread-1",
+      knownDraftIds: new Set(),
+      ownedDraftIds: new Set(["jira-draft:m1"]),
+    });
+
+    expect(collected.map((draft) => draft.id)).toEqual(["jira-draft:m2"]);
+  });
+
   it("maps a document draft's patch onto proposedContent", () => {
     const [draft] = collectT3TeamDraftMutations({
       artifacts: [draftMessage({ id: "jira-draft:m2", field: "description" })],

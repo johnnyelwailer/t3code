@@ -34,8 +34,7 @@ export function T3TeamThreadRightPanelSurface({
       ? null
       : { environmentId: ref.environmentId, projectId: ProjectId.make(thread.projectId) },
   );
-  const projectSourceProvider =
-    project === null ? undefined : readLiveProjectSourceBinding(project)?.provider;
+  const projectSourceBinding = project === null ? undefined : readLiveProjectSourceBinding(project);
 
   if (thread === null) {
     // Genuinely still loading: neither the shell nor the detail fetch has resolved yet. The
@@ -53,7 +52,16 @@ export function T3TeamThreadRightPanelSurface({
       threadId={threadId}
       projectId={thread.projectId}
       projectTitle={project?.title ?? thread.projectId}
-      {...(projectSourceProvider ? { projectSource: { provider: projectSourceProvider } } : {})}
+      {...(projectSourceBinding
+        ? {
+            projectSource: {
+              provider: projectSourceBinding.provider,
+              ...(projectSourceBinding.provider !== "local"
+                ? { accountId: projectSourceBinding.accountId }
+                : {}),
+            },
+          }
+        : {})}
       {...(project?.workspaceRoot ? { projectWorkspaceRoot: project.workspaceRoot } : {})}
       title={thread.title}
       hideHeader
