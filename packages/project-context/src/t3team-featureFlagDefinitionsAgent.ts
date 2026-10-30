@@ -20,6 +20,15 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  AGENTS_DESKTOP_ROUTE: {
+    group: "Agent",
+    subgroup: "Tools",
+    label: "Desktop route request",
+    description:
+      "A cloud-session agent may ask you to let one host be reached through your own computer when the session's network cannot reach it. Off: the tool is not offered.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   AGENTS_PREFER_READY_PROVIDER: {
     group: "Agent",
     subgroup: "Providers",

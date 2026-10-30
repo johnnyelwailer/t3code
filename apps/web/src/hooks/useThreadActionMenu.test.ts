@@ -19,6 +19,7 @@ function deferred<T>() {
 
 const state = vi.hoisted(() => ({
   granted: new Set<string>(),
+  unreachable: new Set<string>(),
   effects: [] as string[],
   completed: deferred<void>(),
   show: vi.fn<
@@ -118,6 +119,10 @@ vi.mock("./useSettings", () => ({
       timestampFormat: "12-hour",
     }),
 }));
+vi.mock("../state/t3team-localThreadActions", () => ({
+  readEnvironmentUnreachable: (environmentId: string) => state.unreachable.has(environmentId),
+  isLocalThreadAction: (action: string) => action === "settle" || action === "delete",
+}));
 vi.mock("./useThreadActions", () => ({
   canTurnThreadIntoProject: () => false,
   useThreadActions: () =>
@@ -160,6 +165,7 @@ const createMenu = (options: { readonly onFind?: (threadRef: typeof target) => v
 
 beforeEach(() => {
   state.granted = new Set(["primary"]);
+  state.unreachable = new Set();
   state.effects = [];
   state.completed = deferred<void>();
   state.show.mockReset().mockResolvedValue(null);
@@ -179,6 +185,28 @@ describe("thread menu permissions", () => {
       expect(state.effects).toEqual([]);
     },
   );
+
+  it("settles a thread of an unreachable environment (ended cloud session) without permission", async () => {
+    state.unreachable.add("secondary");
+    state.show.mockResolvedValue("settle");
+    createMenu().openMenu(position);
+    await state.completed.promise;
+    const items = state.show.mock.calls[0]![0];
+    const enabled = (id: string) => items.find((item) => item.id === id)?.disabled !== true;
+    expect(enabled("settle")).toBe(true);
+    expect(enabled("delete")).toBe(true);
+    expect(enabled("pin")).toBe(false);
+    expect(state.effects).toEqual(["settleThread"]);
+  });
+
+  it("keeps settle and delete disabled without permission on a reachable environment", () => {
+    createMenu().openMenu(position);
+    return vi.waitFor(() => {
+      const items = state.show.mock.calls[0]![0];
+      expect(items.find((item) => item.id === "settle")?.disabled).toBe(true);
+      expect(items.find((item) => item.id === "delete")?.disabled).toBe(true);
+    });
+  });
 
   it("offers find only to a header that can open it, without task permission", async () => {
     createMenu().openMenu(position);
