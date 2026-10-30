@@ -50,8 +50,10 @@ export function isSupportedNexiRuntime(runtime: NexiRuntime): boolean {
       [
         { id: 0, name: "x-0.0.0-arm64.zip", size: 0, state: "uploaded" },
         { id: 0, name: "x-0.0.0-x64.exe", size: 0, state: "uploaded" },
+        { id: 0, name: "x-0.0.0-x86_64.AppImage", size: 0, state: "uploaded" },
         { id: 0, name: "latest-mac.yml", size: 0, state: "uploaded" },
         { id: 0, name: "latest.yml", size: 0, state: "uploaded" },
+        { id: 0, name: "latest-linux.yml", size: 0, state: "uploaded" },
       ],
       "0.0.0",
       runtime,
@@ -64,7 +66,8 @@ const isPrereleaseVersion = (version: string) => version.includes("-");
 /**
  * The asset the updater installs on this machine, and the manifest that carries its sha512. The
  * ZIP, not the DMG, on macOS: the app bundle is swapped from it. Only published builds exist:
- * macOS arm64 and Windows x64 (an arm64 Windows runs the x64 installer under emulation).
+ * macOS arm64, Windows x64 (an arm64 Windows runs the x64 installer under emulation) and Linux
+ * x64 as an AppImage (electron-builder names its arch `x86_64`; `x64` is accepted too).
  */
 export function selectNexiPayload(
   assets: ReadonlyArray<NexiGheAsset>,
@@ -82,6 +85,12 @@ export function selectNexiPayload(
     payloadMatches = (asset) =>
       asset.name.endsWith(".exe") && asset.name.includes("-x64") && versioned(asset);
     manifestName = "latest.yml";
+  } else if (runtime.platform === "linux" && runtime.arch === "x64") {
+    payloadMatches = (asset) =>
+      asset.name.endsWith(".AppImage") &&
+      (asset.name.includes("-x86_64") || asset.name.includes("-x64")) &&
+      versioned(asset);
+    manifestName = "latest-linux.yml";
   } else {
     return null;
   }

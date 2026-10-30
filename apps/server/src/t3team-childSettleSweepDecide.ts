@@ -78,6 +78,7 @@ export type SettleSweepShell = Pick<
   | "id"
   | "lineage"
   | "archivedAt"
+  | "pinnedAt"
   | "settledOverride"
   | "updatedAt"
   | "latestRunCompletedAt"
@@ -124,7 +125,7 @@ export function pickSettleSweepCandidates(
   );
   const candidates: SettleSweepCandidate[] = [];
   for (const shell of shells) {
-    if (!isSubagentChild(shell) || shell.archivedAt !== null) continue;
+    if (!isSubagentChild(shell) || shell.archivedAt !== null || shell.pinnedAt != null) continue;
     // Any explicit override (settled, or a user's "keep active") is final for auto-settle.
     if (shell.settledOverride !== null || hasLiveWork(shell)) continue;
     const base = { threadId: shell.id, snapshotAt: shell.updatedAt };

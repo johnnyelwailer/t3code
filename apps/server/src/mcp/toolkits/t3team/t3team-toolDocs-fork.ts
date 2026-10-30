@@ -177,4 +177,13 @@ export const FORK_TOOL_DOCS: ToolDocsTable = {
       message_id: "id in the delivered summary marker",
     },
   },
+  request_desktop_route: {
+    description:
+      "- Ask user to route ONE host via their computer; only asks, never say applied\n- only when a cloud session cannot reach a host (DNS/connect/TLS)\n- answer = next message: wait, retry\n- one pending question per thread",
+    fields: {
+      target: "One host/URL/IP/small range; no wildcard",
+      reason: "What fails, why needed (user reads)",
+      internal: "Private-network address",
+    },
+  },
 };

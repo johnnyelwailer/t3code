@@ -23,6 +23,7 @@ import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { SETTLED_PARENT_SETTLE_COMMAND_PREFIX } from "./t3team-childSettleSweepDecide.ts";
+import { makePinnedSettleGuard } from "./t3team-pinnedSettleGuard.ts";
 import {
   combineSettleGuards,
   T3TeamSettleGuard,
@@ -158,7 +159,9 @@ export const makeChildSettleGuardChecks = (
         ),
     );
 
+    const pinned = yield* makePinnedSettleGuard;
     const check: T3TeamSettleGuardCheck = combineSettleGuards(
+      pinned,
       (input) =>
         String(input.commandId).startsWith(SETTLED_PARENT_SETTLE_COMMAND_PREFIX)
           ? parentStillSettled(input.threadId)

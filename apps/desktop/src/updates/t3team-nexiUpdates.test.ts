@@ -121,6 +121,30 @@ describe("DesktopUpdates with the interim Nexi feed", () => {
     },
   );
 
+  it.effect(
+    "keeps offering the rc under the Nightly track instead of dropping it into a fake up to date",
+    () => {
+      const harness = makeHarness({
+        nexiFeed: feed(true),
+        env: { T3CODE_DESKTOP_MOCK_UPDATES: "false" },
+      });
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+          yield* updates.setChannel("nightly");
+          harness.emit("update-available", { version: "0.1.2-rc.7" });
+          yield* flushCallbacks;
+          const state = yield* updates.getState;
+          assert.equal(state.channel, "nightly");
+          assert.equal(state.status, "available");
+          assert.equal(state.availableVersion, "0.1.2-rc.7");
+          assert.equal(state.feed, "nexi-ghe");
+        }),
+      ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+    },
+  );
+
   it.effect("keeps an ordinary check error ordinary: no issue", () => {
     const harness = makeHarness({
       nexiFeed: feed(true),
