@@ -38,6 +38,11 @@ import { SecretRequests } from "../secrets/SecretRequests.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { SourceControlRepositoryService } from "../sourceControl/SourceControlRepositoryService.ts";
 import { T3TeamAskUserWriter } from "../mcp/toolkits/t3team/t3team-askUserWriter.ts";
+import { T3TeamToolkit } from "../mcp/toolkits/t3team/tools.ts";
+import {
+  formatToolSizeTable,
+  measureToolListSizes,
+} from "../mcp/toolkits/t3team/t3team-toolListSizes.ts";
 import { T3TeamToolBroker } from "../t3team-toolBroker.ts";
 import { GitVcsDriver } from "../vcs/GitVcsDriver.ts";
 import { VcsStatusBroadcaster } from "../vcs/VcsStatusBroadcaster.ts";
@@ -109,6 +114,11 @@ const codexAdditionalContext = () =>
     .map((entry) => entry.value)
     .join("");
 
+const toolsLayer = McpHttpServer.layerTools.pipe(
+  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provide(toolHandlerServices),
+);
+
 // CI rejects a PR that raises any value above main's agentContextBudget.json, so growth
 // needs the agent-context-increase label. Lower the values when the text shrinks.
 it.effect("agent context matches the committed budget", () =>
@@ -133,12 +143,17 @@ it.effect("agent context matches the committed budget", () =>
       measured,
       "Set agentContextBudget.json to the measured values. Before you cut text to fit, run the evals that cover it (evals/README.md).",
     ).toEqual(budget);
-  }).pipe(
-    Effect.provide(
-      McpHttpServer.layerTools.pipe(
-        Layer.provideMerge(McpServer.McpServer.layer),
-        Layer.provide(toolHandlerServices),
-      ),
-    ),
-  ),
+  }).pipe(Effect.provide(toolsLayer)),
+);
+
+// `T3_TOOL_SIZE_REPORT=1 vp test run src/provider/AgentContextBudget.test.ts` prints what each tool costs.
+it.effect.skipIf(!process.env.T3_TOOL_SIZE_REPORT)("prints the per-tool size table", () =>
+  Effect.gen(function* () {
+    const mcp = yield* McpServer.McpServer;
+    const rows = measureToolListSizes(
+      mcp.tools.map(({ tool }) => tool),
+      new Set(Object.keys(T3TeamToolkit.tools)),
+    );
+    yield* Effect.sync(() => process.stdout.write(`\n${formatToolSizeTable(rows)}\n`));
+  }).pipe(Effect.provide(toolsLayer)),
 );
