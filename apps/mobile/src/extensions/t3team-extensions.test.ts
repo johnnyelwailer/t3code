@@ -10,6 +10,7 @@ describe("mobileExtensions", () => {
     expect(mobileExtensions.workspaceTab).toBeUndefined();
     expect(mobileExtensions.newTaskTop).toBeUndefined();
     expect(mobileExtensions.environmentPickerTop).toBeUndefined();
+    expect(mobileExtensions.pendingDraft).toBeUndefined();
     expect(homeEmptyStateFor(mobileExtensions, catalog, "android")).toBeNull();
   });
 });
