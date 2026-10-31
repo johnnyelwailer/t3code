@@ -9,12 +9,14 @@ export function T3TeamRichChoiceAction({
   label,
   multiple,
   picked,
+  disabled,
   onClick,
 }: {
   readonly ref: Ref<HTMLButtonElement>;
   readonly label: string;
   readonly multiple: boolean;
   readonly picked: boolean;
+  readonly disabled: boolean;
   readonly onClick: () => void;
 }) {
   const added = multiple && picked;
@@ -24,6 +26,7 @@ export function T3TeamRichChoiceAction({
       data-rc-action=""
       className="w-full sm:w-auto"
       variant={added ? "outline" : "default"}
+      disabled={disabled}
       aria-pressed={multiple ? picked : undefined}
       onClick={onClick}
     >
