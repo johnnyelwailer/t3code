@@ -152,6 +152,28 @@ it.effect("agent context matches the committed budget", () =>
   }).pipe(Effect.provide(toolsLayer)),
 );
 
+// The tool list is part of the cacheable prompt prefix: two builds must serialize to the same bytes
+// (no per-build values, deterministic key order), so a change breaks the cache once at deploy.
+const serializedToolList = Effect.gen(function* () {
+  const mcp = yield* McpServer.McpServer;
+  return JSON.stringify(
+    mcp.tools.map(({ tool }) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    })),
+  );
+}).pipe(Effect.provide(toolsLayer));
+
+it.effect("the tool list serializes to identical bytes on every build", () =>
+  Effect.gen(function* () {
+    const first = yield* serializedToolList;
+    const second = yield* serializedToolList;
+    expect(second).toBe(first);
+    expect(first).toContain('"rich-choice"');
+  }),
+);
+
 // The fork's own tools advertise minimal text; the full text is behind t3_tool_help.
 it.effect("every fork tool description and field note is within the cap", () =>
   Effect.gen(function* () {
