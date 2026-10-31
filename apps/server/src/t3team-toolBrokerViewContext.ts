@@ -5,6 +5,7 @@
 import type { T3TeamStoredViewContext, ThreadId } from "@t3tools/contracts";
 import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
@@ -18,7 +19,7 @@ function describeViewContext(stored: T3TeamStoredViewContext | undefined, nowMs:
   }
   return {
     published: true,
-    publishedAt: new Date(stored.publishedAtMs).toISOString(),
+    publishedAt: DateTime.formatIso(DateTime.makeUnsafe(stored.publishedAtMs)),
     ageSeconds: Math.max(0, Math.round((nowMs - stored.publishedAtMs) / 1000)),
     ...stored.viewContext,
   } as const;

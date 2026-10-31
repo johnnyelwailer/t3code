@@ -47,6 +47,13 @@ const deleted = (threadId: ThreadId) =>
     payload: { id: threadId },
   }) as unknown as OrchestrationV2DomainEvent;
 
+const archived = (threadId: ThreadId) =>
+  ({
+    type: "thread.archived",
+    threadId,
+    payload: { id: threadId },
+  }) as unknown as OrchestrationV2DomainEvent;
+
 const runWith = (
   events: ReadonlyArray<OrchestrationV2DomainEvent>,
   seed: ReadonlyArray<readonly [ThreadId, T3TeamTurnToolContext]>,
@@ -59,6 +66,7 @@ const runWith = (
       yield* store.put({ threadId, toolContext });
       yield* store.putViewContext({
         threadId,
+        sequence: 1,
         nowMs: 1,
         viewContext: {
           version: 1,
@@ -122,6 +130,22 @@ describe("T3TeamThreadToolContextEvictionReactorLayer", () => {
         expect(result.sourceArtifacts).toEqual([]);
         // Other threads keep theirs.
         expect(result.forkFacts?.retention).toBe("ephemeral");
+      }),
+    ),
+  );
+
+  it.effect("drops only the published view of an archived thread", () =>
+    runWith(
+      [archived(source)],
+      [
+        [source, context],
+        [fork, context],
+      ],
+    ).pipe(
+      Effect.map((result) => {
+        expect(result.sourceView).toBeUndefined();
+        expect(result.source).toEqual(context);
+        expect(result.forkView?.publishedAtMs).toBe(1);
       }),
     ),
   );

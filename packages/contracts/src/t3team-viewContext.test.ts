@@ -23,10 +23,14 @@ describe("T3TeamViewContext", () => {
   it("decodes a published my-work view and a cleared publication", () => {
     expect(decode(context).visibleItemIds).toHaveLength(2);
     const publication = Schema.decodeUnknownSync(T3TeamThreadViewContextPublication);
-    expect(publication({ threadId: "thread-1", viewContext: context }).viewContext?.surface).toBe(
-      "my-work",
-    );
-    expect(publication({ threadId: "thread-1", viewContext: null }).viewContext).toBeNull();
+    expect(
+      publication({ threadId: "thread-1", sequence: 1, viewContext: context }).viewContext?.surface,
+    ).toBe("my-work");
+    expect(
+      publication({ threadId: "thread-1", sequence: 2, viewContext: null }).viewContext,
+    ).toBeNull();
+    expect(() => publication({ threadId: "thread-1", viewContext: null })).toThrow();
+    expect(() => publication({ threadId: "thread-1", sequence: -1, viewContext: null })).toThrow();
   });
 
   it("rejects an unknown surface, version, selection kind, filter value and an oversized id list", () => {

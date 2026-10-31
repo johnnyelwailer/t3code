@@ -45,7 +45,8 @@ export function usePublishThreadViewContext(input: {
     if (!enabled || api === undefined || threadId === null) return;
     const id = ThreadId.make(threadId);
     publisher.current = createViewContextPublisher({
-      publish: (viewContext) => api.publishThreadViewContext({ threadId: id, viewContext }),
+      publish: (viewContext, sequence) =>
+        api.publishThreadViewContext({ threadId: id, sequence, viewContext }),
     });
     return () => {
       publisher.current?.dispose();

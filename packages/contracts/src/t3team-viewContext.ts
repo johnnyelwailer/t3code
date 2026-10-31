@@ -43,9 +43,14 @@ export const T3TeamViewContext = Schema.Struct({
 });
 export type T3TeamViewContext = typeof T3TeamViewContext.Type;
 
-/** `POST /api/t3team/thread/view-context`: `viewContext: null` clears the thread's entry. */
+/**
+ * `POST /api/t3team/thread/view-context`: `viewContext: null` clears the thread's entry. The server
+ * ignores a publication whose `sequence` is not above the last one it saw for the thread, so
+ * requests that arrive out of order cannot overwrite a newer one or a clear.
+ */
 export const T3TeamThreadViewContextPublication = Schema.Struct({
   threadId: ThreadId,
+  sequence: NonNegativeInt,
   viewContext: Schema.NullOr(T3TeamViewContext),
 });
 export type T3TeamThreadViewContextPublication = typeof T3TeamThreadViewContextPublication.Type;

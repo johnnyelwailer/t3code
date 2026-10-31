@@ -6,13 +6,16 @@
  */
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ThreadId, type T3TeamViewContext } from "@t3tools/contracts";
+import { ProjectId, ThreadId, type T3TeamViewContext } from "@t3tools/contracts";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { isMcpToolEnabled } from "./mcp/toolkits/t3team/t3team-mcpToolFeatureGate.ts";
 import { t3teamThreadViewContextRouteLayer } from "./t3team-thread-view-context-routes.ts";
 import {
@@ -43,12 +46,29 @@ const viewContext: T3TeamViewContext = {
   visibleItemCount: 2,
 };
 
+const otherThreadId = ThreadId.make("thread-elsewhere");
+const projectId = ProjectId.make("project-1");
+
+const resolvedThreads = Layer.mergeAll(
+  Layer.mock(ThreadManagementService)({
+    getThreadRecords: ((id: ThreadId) =>
+      id === threadId || id === otherThreadId
+        ? Effect.succeed({ thread: { id, projectId, deletedAt: null } })
+        : Effect.fail(`unknown thread ${id}`)) as never,
+  }),
+  Layer.mock(ProjectStoreV2)({
+    getShell: (id) =>
+      Effect.succeed(id === projectId ? Option.some({ id } as never) : Option.none()),
+  }),
+);
+
 const serve = HttpRouter.serve(t3teamThreadViewContextRouteLayer, {
   disableListenLog: true,
   disableLogger: true,
 }).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
   Layer.provideMerge(T3TeamThreadToolContextStoreLive),
+  Layer.provide(resolvedThreads),
 );
 
 const run = <A, E>(
@@ -65,6 +85,18 @@ const publish = (body: unknown) =>
       body: HttpBody.jsonUnsafe(body),
     });
     return response.status;
+  });
+
+const publishBody = (sequence: number, overrides: Record<string, unknown> = {}) => ({
+  threadId,
+  sequence,
+  viewContext,
+  ...overrides,
+});
+
+const storedFor = (id: ThreadId) =>
+  Effect.gen(function* () {
+    return (yield* (yield* T3TeamThreadToolContextStore).getViewContext(id))?.viewContext;
   });
 
 const readViaTool = Effect.gen(function* () {
@@ -98,9 +130,9 @@ describe("t3_view_read", () => {
     const answers = await run(
       Effect.gen(function* () {
         const before = yield* readViaTool;
-        const status = yield* publish({ threadId, viewContext });
+        const status = yield* publish(publishBody(1));
         const published = yield* readViaTool;
-        yield* publish({ threadId, viewContext: null });
+        yield* publish(publishBody(2, { viewContext: null }));
         const cleared = yield* readViaTool;
         return { before, status, published, cleared };
       }),
@@ -125,17 +157,77 @@ describe("t3_view_read", () => {
 
   it("rejects a malformed publication and, with the flag off, neither stores nor answers", async () => {
     replaceFeatureFlagPresetValues(new Map([["AGENTS_VIEW_CONTEXT", true]]));
-    const invalid = await run(publish({ threadId, viewContext: { ...viewContext, surface: "x" } }));
+    const invalid = await run(
+      publish(publishBody(1, { viewContext: { ...viewContext, surface: "x" } })),
+    );
     expect(invalid).toBe(400);
 
     replaceFeatureFlagPresetValues(new Map([["AGENTS_VIEW_CONTEXT", false]]));
     const off = await run(
       Effect.gen(function* () {
-        const status = yield* publish({ threadId, viewContext });
+        const status = yield* publish(publishBody(1));
         return { status, answer: yield* readViaTool };
       }),
     );
     expect(off.status).toBe(403);
     expect(off.answer.viewContext).toBeUndefined();
+  });
+
+  it("rejects an unknown thread and a context for another project, and stores nothing", async () => {
+    replaceFeatureFlagPresetValues(new Map([["AGENTS_VIEW_CONTEXT", true]]));
+    const outcome = await run(
+      Effect.gen(function* () {
+        const unknown = yield* publish(publishBody(1, { threadId: ThreadId.make("thread-nope") }));
+        const crossProject = yield* publish(
+          publishBody(1, { viewContext: { ...viewContext, projectId: "project-2" } }),
+        );
+        return {
+          unknown,
+          crossProject,
+          unknownStored: yield* storedFor(ThreadId.make("thread-nope")),
+          crossStored: yield* storedFor(threadId),
+        };
+      }),
+    );
+    expect(outcome).toEqual({
+      unknown: 404,
+      crossProject: 400,
+      unknownStored: undefined,
+      crossStored: undefined,
+    });
+  });
+
+  it("lands a publication only on its own thread", async () => {
+    replaceFeatureFlagPresetValues(new Map([["AGENTS_VIEW_CONTEXT", true]]));
+    const stored = await run(
+      Effect.gen(function* () {
+        yield* publish(publishBody(1));
+        return { own: yield* storedFor(threadId), other: yield* storedFor(otherThreadId) };
+      }),
+    );
+    expect(stored.own?.projectId).toBe("project-1");
+    expect(stored.other).toBeUndefined();
+  });
+
+  it("ignores a late publication after a clear, and any write after the thread was deleted", async () => {
+    replaceFeatureFlagPresetValues(new Map([["AGENTS_VIEW_CONTEXT", true]]));
+    const outcome = await run(
+      Effect.gen(function* () {
+        const store = yield* T3TeamThreadToolContextStore;
+        yield* publish(publishBody(5));
+        yield* publish(publishBody(6, { viewContext: null }));
+        const late = yield* publish(publishBody(5));
+        const afterLate = yield* storedFor(threadId);
+        yield* store.evictViewContext({ threadId, deleted: true });
+        const afterDelete = yield* publish(publishBody(7));
+        return { late, afterLate, afterDelete, stored: yield* storedFor(threadId) };
+      }),
+    );
+    expect(outcome).toEqual({
+      late: 200,
+      afterLate: undefined,
+      afterDelete: 404,
+      stored: undefined,
+    });
   });
 });

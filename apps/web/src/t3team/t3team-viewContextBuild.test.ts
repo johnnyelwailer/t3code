@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildViewContext, selectionFromAside } from "./t3team-viewContextBuild";
+import { buildDigestPlan, type DigestGraph } from "./t3team-projectMyWorkDigestPlan";
+import type { ProjectTicket } from "./t3team-types";
+import {
+  buildViewContext,
+  digestVisibleTicketIds,
+  selectionFromAside,
+} from "./t3team-viewContextBuild";
 
 const view = { surface: "my-work", projectId: "p1", filters: { query: "q" } } as const;
 
@@ -40,5 +46,45 @@ describe("buildViewContext", () => {
       id: "acme/web#7",
     });
     expect(selectionFromAside(null, null)).toBeNull();
+  });
+});
+
+function ticket(id: string, status: string, assignee = "Philip"): ProjectTicket {
+  return {
+    id,
+    projectId: "p1",
+    title: id,
+    ref: { displayId: id, title: id, url: "" },
+    status,
+    assignee,
+    updatedAt: "2026-09-20T08:00:00.000Z",
+    sprintState: "active",
+  } as unknown as ProjectTicket;
+}
+
+describe("digestVisibleTicketIds", () => {
+  it("lists the resolved plan's rows in lane order and leaves out done and other people's tickets", () => {
+    const graph: DigestGraph = {
+      scope: "project",
+      projects: [{ id: "p1", name: "P" }],
+      viewer: { name: "Philip", role: "", lastVisitAt: "2026-09-29T00:00:00.000Z" },
+      tickets: [
+        ticket("next", "To Do"),
+        ticket("finished", "Done"),
+        ticket("theirs", "In Progress", "Dana"),
+        ticket("doing", "In Progress"),
+        ticket("reviewing", "In Review"),
+      ],
+      claims: [],
+      decisions: [],
+      changeRequests: [],
+      transitions: [],
+      blockers: [],
+    };
+    const plan = buildDigestPlan(graph, Date.parse("2026-09-30T08:00:00.000Z"));
+    const ids = digestVisibleTicketIds(plan);
+    expect(ids).toEqual(["doing", "next", "reviewing"]);
+    expect(ids).not.toContain("finished");
+    expect(ids).not.toContain("theirs");
   });
 });

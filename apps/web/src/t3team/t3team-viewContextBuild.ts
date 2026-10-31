@@ -40,3 +40,20 @@ export function buildViewContext(input: {
     visibleItemCount: ids.length,
   };
 }
+
+const LANE_ORDER = ["side", "main", "footer"];
+
+/** Ticket ids of the rows a resolved digest plan renders, in the order its lanes lay them out. */
+export function digestVisibleTicketIds(plan: {
+  readonly sections: ReadonlyArray<{
+    readonly placement: string;
+    readonly items: ReadonlyArray<{ readonly ticketId: string }>;
+  }>;
+}): string[] {
+  const ids = LANE_ORDER.flatMap((placement) =>
+    plan.sections
+      .filter((section) => section.placement === placement)
+      .flatMap((section) => section.items.map((item) => item.ticketId)),
+  );
+  return [...new Set(ids)];
+}
