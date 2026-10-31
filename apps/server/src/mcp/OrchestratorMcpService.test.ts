@@ -69,6 +69,10 @@ import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "./McpToolAccess.testkit.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
+import {
+  DelegatedTaskPreparation,
+  defaultDelegatedTaskPreparation,
+} from "./t3team-delegatedTaskPreparation.ts";
 import { resolveRuntimeMode } from "./delegatedTaskModes.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
@@ -1325,6 +1329,7 @@ describe("OrchestratorMcpService provider resolution", () => {
           instanceId: codexInstanceId,
           driver: ProviderDriverKind.make("codex"),
         }),
+        displayName: "Codex",
         models: [
           model("gpt-6", {
             name: "Sol",
@@ -1352,7 +1357,7 @@ describe("OrchestratorMcpService provider resolution", () => {
               ],
             },
           }),
-          model("gpt-5", { isLegacy: true }),
+          model("gpt-5", { name: "Code Legacy", isLegacy: true }),
           model("gpt-4", { isLegacy: true }),
           model("gpt-3", { name: "GPT-3", isLegacy: true }),
           model("my-alpha", { isCustom: true }),
@@ -1470,7 +1475,7 @@ describe("OrchestratorMcpService provider resolution", () => {
         );
         assert.deepEqual((yield* capabilitiesWith("gpt 5")).providers[0]!.models, []);
         assert.deepEqual((yield* capabilitiesWith("gpt 5", true)).providers[0]!.models, [
-          { id: "gpt-5", legacy: true },
+          { id: "gpt-5", label: "Code Legacy", legacy: true },
         ]);
       }),
     );
@@ -1518,7 +1523,7 @@ describe("OrchestratorMcpService provider resolution", () => {
           );
           vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "false");
           assert.deepEqual((yield* capabilitiesWith("gpt 5")).providers[0]!.models, [
-            { id: "gpt-5" },
+            { id: "gpt-5", label: "Code Legacy" },
           ]);
         }),
     );
@@ -1567,6 +1572,18 @@ describe("OrchestratorMcpService provider resolution", () => {
           { id: codexInstanceId, models: ["gpt-6", "gpt-4", "gpt-3", "my-alpha"], omitted: 1 },
           { id: opencodeInstanceId, models: [], omitted: 0 },
         ]);
+        assert.deepEqual(listing(yield* capabilitiesWith(" ")), listing(yield* capabilitiesWith()));
+        for (const search of ["code", "codex code", "  CODE  "]) {
+          assert.deepEqual(listing(yield* capabilitiesWith(search))[0], {
+            id: codexInstanceId,
+            models: ["gpt-5"],
+            omitted: 0,
+          });
+        }
+        assert.deepEqual(
+          listing(yield* capabilitiesWith("open"))[1],
+          listing(yield* capabilitiesWith())[1],
+        );
         assert.deepEqual(listing(yield* capabilitiesWith("codex gpt 5"))[0], {
           id: codexInstanceId,
           models: ["gpt-5"],
@@ -1768,6 +1785,8 @@ describe("OrchestratorMcpService provider resolution", () => {
         const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
         const accepted = yield* Ref.make(false);
         const everyCandidateDisabled = yield* Ref.make(false);
+        const afterCreateRuns = yield* Ref.make(0);
+        const afterReplayRuns = yield* Ref.make(0);
         const task = {
           id: taskId,
           threadId: parentThreadId,
@@ -1876,7 +1895,23 @@ describe("OrchestratorMcpService provider resolution", () => {
             modelSelection: { instanceId: string; model: string };
           };
           assert.equal(retryCommand.modelSelection.instanceId, codexInstanceId);
-        }).pipe(Effect.provide(layerOrchestratorService.pipe(Layer.provide(layerDependencies))));
+          // t3team: the retry replays the receipt, so post-create effects ran exactly once.
+          assert.equal(yield* Ref.get(afterCreateRuns), 1);
+          assert.equal(yield* Ref.get(afterReplayRuns), 1);
+        }).pipe(
+          Effect.provide(layerOrchestratorService.pipe(Layer.provide(layerDependencies))),
+          Effect.provideService(DelegatedTaskPreparation, {
+            ...defaultDelegatedTaskPreparation,
+            prepare: (input) =>
+              defaultDelegatedTaskPreparation.prepare(input).pipe(
+                Effect.map((prepared) => ({
+                  ...prepared,
+                  afterCreate: () => Ref.update(afterCreateRuns, (n) => n + 1).pipe(Effect.as([])),
+                  afterReplay: Ref.update(afterReplayRuns, (n) => n + 1),
+                })),
+              ),
+          }),
+        );
       }),
   );
 

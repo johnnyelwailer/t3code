@@ -2,6 +2,7 @@
  * Fork framing on V2 user messages. The hidden-framing predicate and the cached ext decode are
  * shared with mobile (`@t3tools/client-runtime/state/message-framing`).
  */
+import { isAttachmentOnlyBootstrapPrompt } from "@t3tools/shared/composerContextReferences";
 import type { OrchestrationMessageContext, T3TeamMessageExt } from "@t3tools/contracts";
 import {
   isHiddenT3TeamFramingMessage,
@@ -42,16 +43,17 @@ export function t3teamOptimisticMessage<
 }
 
 /**
- * The message as its bubble shows it: a fork send that appended context (work items) to the
- * provider prompt records the person's own words as ext `displayText`, so the bubble shows those
- * instead of the prompt with the context dump. Copy writes that stored initiating string;
- * rollback still reads `message.text`.
+ * The message as its bubble shows it: ext `displayText` (the person's own words) replaces a prompt
+ * with appended work-item context; copy and rollback still read `message.text`. Upstream's
+ * attachment-only cleanup then applies, so the agent's bootstrap prompt shows as no text.
  */
 export function t3teamDisplayedUserMessage<
   M extends { readonly text: string; readonly t3teamExt?: T3TeamMessageExt | undefined },
 >(message: M): M {
   const displayText = message.t3teamExt?.displayText;
-  return displayText === undefined || displayText === message.text
-    ? message
-    : { ...message, text: displayText };
+  const shown =
+    displayText === undefined || displayText === message.text
+      ? message
+      : { ...message, text: displayText };
+  return isAttachmentOnlyBootstrapPrompt(shown.text) ? { ...shown, text: "" } : shown;
 }
