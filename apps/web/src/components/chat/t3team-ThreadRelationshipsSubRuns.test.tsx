@@ -102,6 +102,8 @@ it("lists an app-owned delegated child once, in the sub-run tree, and keeps prov
       <ThreadRelationshipsPanel
         environmentId={EnvironmentId.make("test")}
         threadId={ThreadId.make("parent")}
+        showLineage
+        showSideChats={false}
       />,
     );
   });

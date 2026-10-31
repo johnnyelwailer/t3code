@@ -28,6 +28,7 @@ export interface DelayedStatusInput<A> {
   readonly value: A | null;
   readonly deadlinePassed: boolean;
   readonly timing?: DelayedStatusTiming;
+  readonly showDelayMs?: number | undefined;
 }
 
 /**
@@ -37,10 +38,10 @@ export interface DelayedStatusInput<A> {
  */
 export function stepDelayedStatus<A>(
   state: DelayedStatusState<A> | null,
-  { key, value, deadlinePassed, timing }: DelayedStatusInput<A>,
+  { key, value, deadlinePassed, timing, showDelayMs: inputShowDelayMs }: DelayedStatusInput<A>,
   now: () => number,
 ): DelayedStatusState<A> {
-  const showDelayMs = timing?.showDelayMs ?? STATUS_SHOW_DELAY_MS;
+  const showDelayMs = timing?.showDelayMs ?? inputShowDelayMs ?? STATUS_SHOW_DELAY_MS;
   const minVisibleMs = timing?.minVisibleMs ?? STATUS_MIN_VISIBLE_MS;
   const idle = (): DelayedStatusState<A> => ({ phase: "idle", key });
   const pending = (): DelayedStatusState<A> => ({
