@@ -6,6 +6,7 @@ import {
   ProviderThreadId,
   ProviderTurnId,
   ThreadId,
+  type ResolvedProviderInstanceEnvironment,
 } from "@t3tools/contracts";
 import type {
   PackProviderDriverDefinition,
@@ -64,11 +65,14 @@ const mcpSessions = McpProviderSessions.of({
   takeHtmlRender: () => Effect.succeed(undefined),
 });
 
-const createInScope = (definition: PackProviderDriverDefinition) =>
+const createInScope = (
+  definition: PackProviderDriverDefinition,
+  environment: ResolvedProviderInstanceEnvironment = [],
+) =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
     const instance = yield* bridgePackProviderDriver(definition)
-      .create({ instanceId, displayName: "Example", environment: [], enabled: true, config: {} })
+      .create({ instanceId, displayName: "Example", environment, enabled: true, config: {} })
       .pipe(
         Effect.provideService(Scope.Scope, scope),
         Effect.provideService(McpProviderSessions, mcpSessions),
@@ -422,6 +426,29 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
       const bare = yield* capture();
       expect(bare.seen).toEqual([undefined]);
       for (const run of [set, empty, bare]) yield* Scope.close(run.scope, Exit.void);
+    }),
+  );
+
+  it.effect("forwards the resolved instance environment, secret-sourced entries included", () =>
+    Effect.gen(function* () {
+      const pack = makeScriptedPack();
+      const seen: Array<Record<string, string | undefined>> = [];
+      const { scope } = yield* createInScope(
+        {
+          ...pack.definition,
+          create: async (input) => {
+            seen.push(input.environment);
+            return pack.instance;
+          },
+        },
+        [
+          { name: "PLAIN_FLAG", value: "on", sensitive: false },
+          // The registry already read this one out of its secret reference.
+          { name: "API_TOKEN", value: "token-from-secret-store", sensitive: true },
+        ] as ResolvedProviderInstanceEnvironment,
+      );
+      expect(seen).toEqual([{ PLAIN_FLAG: "on", API_TOKEN: "token-from-secret-store" }]);
+      yield* Scope.close(scope, Exit.void);
     }),
   );
 });
