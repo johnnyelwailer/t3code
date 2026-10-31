@@ -454,7 +454,9 @@
     "apps/web/src/components/pullRequest/PullRequestSummaryTab.test.tsx",
     "apps/web/src/components/pullRequest/PullRequestSummaryTab.tsx",
     "apps/web/src/components/pullRequest/ThreadPullRequestsPanel.tsx",
+    "apps/web/src/components/pullRequest/pullRequestFilesViewed.logic.ts",
     "apps/web/src/components/pullRequest/usePullRequestActions.ts",
+    "apps/web/src/components/pullRequest/usePullRequestFilesViewed.ts",
     "apps/web/src/components/settings/ConnectionsSettings.tsx",
     "apps/web/src/components/settings/DiagnosticsSettings.tsx",
     "apps/web/src/components/settings/EnvironmentRow.tsx",
@@ -795,7 +797,8 @@
     "apps/server/src/orchestration-v2/SubagentProjection.test.ts",
     "apps/server/src/peer/RemoteDelegation.test.ts",
     "apps/server/src/provider/agentContextBudget.json",
-    "apps/web/src/components/chat/MessagesTimeline.browser.test.tsx"
+    "apps/web/src/components/chat/MessagesTimeline.browser.test.tsx",
+    "apps/web/src/components/diffs/DiffFileTree.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

@@ -1,7 +1,5 @@
 import {
   CheckCheckIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
   ListIcon,
   ListTreeIcon,
   PanelLeftIcon,
@@ -43,11 +41,9 @@ function HeaderButton({
 }
 
 export interface DiffExplorerTreeHeaderProps {
+  readonly accessoryOnly?: boolean;
   readonly fileCount: number;
   readonly viewedCount: number;
-  readonly hasDirectories: boolean;
-  readonly everythingOpen: boolean;
-  readonly onToggleAllDirectories: () => void;
   readonly showFullPaths: boolean;
   readonly onToggleFullPaths: () => void;
   readonly onMarkAllViewed: () => void;
@@ -60,11 +56,9 @@ export interface DiffExplorerTreeHeaderProps {
  * files are listed and where the pane sits.
  */
 export function DiffExplorerTreeHeader({
+  accessoryOnly = false,
   fileCount,
   viewedCount,
-  hasDirectories,
-  everythingOpen,
-  onToggleAllDirectories,
   showFullPaths,
   onToggleFullPaths,
   onMarkAllViewed,
@@ -74,26 +68,22 @@ export function DiffExplorerTreeHeader({
   const targetSide = side === "left" ? "right" : "left";
   return (
     <div
-      className="flex h-10 min-h-10 shrink-0 items-center gap-0.5 border-b border-border/60 px-2 text-xs text-muted-foreground"
+      className={
+        accessoryOnly
+          ? "contents"
+          : "flex h-10 min-h-10 shrink-0 items-center gap-0.5 border-b border-border/60 px-2 text-xs text-muted-foreground"
+      }
       data-surface-subheader
     >
-      <span className="px-1 font-medium text-foreground">Files</span>
-      <span className="tabular-nums">{fileCount}</span>
+      {accessoryOnly ? null : (
+        <>
+          <span className="px-1 font-medium text-foreground">Files</span>
+          <span className="tabular-nums">{fileCount}</span>
+        </>
+      )}
       <span className="ml-auto min-w-0 truncate pr-1 tabular-nums text-2xs">
         {viewedCount}/{fileCount} viewed
       </span>
-      {hasDirectories && !showFullPaths ? (
-        <HeaderButton
-          label={everythingOpen ? "Collapse all folders" : "Expand all folders"}
-          onClick={onToggleAllDirectories}
-        >
-          {everythingOpen ? (
-            <ChevronsDownUpIcon className="size-3.5" />
-          ) : (
-            <ChevronsUpDownIcon className="size-3.5" />
-          )}
-        </HeaderButton>
-      ) : null}
       <HeaderButton
         label={showFullPaths ? "Show as folders" : "Show full file paths"}
         onClick={onToggleFullPaths}
