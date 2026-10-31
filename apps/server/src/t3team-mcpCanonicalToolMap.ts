@@ -23,6 +23,7 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3_recipe_validate: "t3team.recipe.validate",
   t3_mywork_digest: "t3team.mywork.digest.read",
   t3_mywork_arrange: "t3team.mywork.arrange",
+  t3_view_read: "t3team.view.read",
   t3_work_item_search: "t3team.work_item.search",
   t3_work_item_get: "t3team.work_item.get",
   t3_work_item_draft: "t3team.work_item.draft",

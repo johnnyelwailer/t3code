@@ -54,6 +54,7 @@ const make = Effect.gen(function* () {
       return Effect.all(
         [
           store.put({ threadId: event.threadId, toolContext: null }),
+          store.putViewContext({ threadId: event.threadId, viewContext: null, nowMs: 0 }),
           facts.remove(event.threadId),
           artifacts.removeByThread(event.threadId),
         ],

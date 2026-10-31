@@ -24,6 +24,7 @@ import {
   T3TeamWorkItemChangeSetTool,
   T3TeamWorkItemDraftTool,
 } from "./t3team-workItemDraftTools.ts";
+import { T3TeamViewReadTool } from "./t3team-viewReadTool.ts";
 import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workItemReadTools.ts";
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
@@ -78,7 +79,6 @@ export { mcpDescriptionOf };
  */
 export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
   "t3team.backlog.set_assignee_filter",
-  "t3team.view.read",
   "t3team.work_item.refresh_context_bundle",
   "t3team.project.refresh_context_bundle",
   // Draft mutations — workflow-body surface only; see the note above.
@@ -523,6 +523,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRecipeValidateTool,
   T3TeamMyWorkDigestTool,
   T3TeamMyWorkArrangeTool,
+  T3TeamViewReadTool,
   T3TeamWorkItemSearchTool,
   T3TeamWorkItemGetTool,
   T3TeamWorkItemDraftTool,

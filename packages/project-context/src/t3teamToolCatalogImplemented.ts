@@ -164,7 +164,8 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.view.read",
     label: "Read view",
     title: "Read current t3team view",
-    description: "Read the latest thread, project, and current t3team view context.",
+    description:
+      "Read what the user is looking at: the view this thread was opened beside (viewContext: surface, projectId, selection, filters, visibleItemIds, visibleItemCount, publishedAt, ageSeconds), plus this thread and its project. viewContext.published is false when no view shares its state; check ageSeconds before trusting it. Read-only.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],

@@ -150,6 +150,10 @@ export const FORK_TOOL_DOCS: ToolDocsTable = {
       "- Read provider usage limits (read-only): session/weekly/monthly quota\n- Per provider instance + hub account: usedPercent, resetsAt, severity normal|warning|critical\n- Check before delegating long work\n- provider_instance_id filters",
     fields: { provider_instance_id: "id from orchestrator_capabilities" },
   },
+  t3_view_read: {
+    description:
+      "- Read what the user is looking at (read-only)\n- viewContext: surface, projectId, selection, filters, visibleItemIds\n- published:false = none shared; ageSeconds = staleness",
+  },
   t3_work_item_get: {
     description:
       "- Read one work item by key (read-only)\n- Key must be in this project\n- Returns fields, description, comments (newest 50, commentsTruncated), links, children\n- Never read keys of other projects",

@@ -18,6 +18,7 @@ import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digest
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
+import { useReportMyWorkVisibleItems } from "~/t3team/t3team-useReportMyWorkView";
 import { useDigestVariantFlags } from "~/t3team/t3team-digestVariantFlags";
 import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
@@ -65,6 +66,11 @@ export function ProjectMyWorkDigestContent({
     () => applyDigestFilters(graph, digestFilters),
     [graph, digestFilters],
   );
+  const visibleItemIds = useMemo(
+    () => effectiveGraph?.tickets.map((ticket) => ticket.id) ?? [],
+    [effectiveGraph],
+  );
+  useReportMyWorkVisibleItems(project.id, visibleItemIds);
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
   // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
   const nowMs = Date.parse(`${useNowMinute()}Z`);
