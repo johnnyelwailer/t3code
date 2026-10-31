@@ -9,25 +9,25 @@ shared provider settings.
 Use a separate Claude config directory for each account. This also works for named
 presets that need different Claude settings or a router connection.
 
-Keep your existing account in the default directory. On the environment's machine,
-create the second login:
-
-```bash
-mkdir -p ~/.claude_personal
-CLAUDE_CONFIG_DIR=~/.claude_personal claude auth login
-```
-
-Add another Claude instance in **Settings > Providers**:
+Keep your existing account in the default directory. Add another Claude instance in
+**Settings > Providers**:
 
 | Instance        | Binary path | CLAUDE_CONFIG_DIR path |
 | --------------- | ----------- | ---------------------- |
 | Claude Work     | `claude`    | Leave empty            |
 | Claude Personal | `claude`    | `~/.claude_personal`   |
 
+Then open the instance and choose **Sign in** under Account. Pick Claude
+subscription, Anthropic Console, or SSO, finish the login in your browser, and
+paste the code back into the sign-in terminal if Claude asks for it. Each instance
+signs in to its own config directory. Instances that use an API key or a custom
+endpoint have no Sign in button. To sign in from a terminal instead, run
+`CLAUDE_CONFIG_DIR=~/.claude_personal claude auth login` on the environment's machine.
+
 An empty config-directory setting uses Claude Code's normal configuration. The
 custom setting changes `CLAUDE_CONFIG_DIR`, leaving `HOME` and the system keychain
-location intact. Use the same variable for the login command. Setting `HOME`
-instead can put credentials where this provider will not find them.
+location intact. Setting `HOME` instead can put credentials where this provider will
+not find them.
 
 Check the account reported in provider settings after signing in. Existing
 threads can switch only between Claude instances with the same config directory.
