@@ -27,7 +27,8 @@ export async function serializeComposerImages(
           mimeType: image.mimeType,
           sizeBytes: image.sizeBytes,
           dataUrl,
-          type: image.type,
+          // t3team: only file attachments need the marker; hydration reads its absence as an image.
+          ...(image.type === "file" ? { type: "file" as const } : {}),
           ...(image.source && "kind" in image.source ? { source: image.source } : {}),
         });
       } catch {

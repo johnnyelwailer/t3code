@@ -68,6 +68,8 @@ import {
 import { resolvePlanFollowUpSubmission } from "../../proposedPlan";
 import { type ChatMessage } from "../../types";
 import { recordPromptSent } from "../GitHubStarPrompt";
+import { t3teamPackProductName } from "~/t3team/t3team-appBrandName";
+import { readT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
@@ -1628,7 +1630,10 @@ export function useComposerSend(input: ComposerSendInput) {
         ) {
           handleNewThreadInActiveProject();
         }
-        void recordPromptSent(environmentId);
+        // t3team: a distribution ships under its own name; never ask its users to star upstream.
+        if (t3teamPackProductName(readT3TeamPackAppearance()) === undefined) {
+          void recordPromptSent(environmentId);
+        }
       }
     }
 
