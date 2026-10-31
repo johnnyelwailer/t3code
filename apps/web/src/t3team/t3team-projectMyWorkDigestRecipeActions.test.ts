@@ -83,7 +83,7 @@ function catalogOf(...ids: string[]): DigestRecipeCatalog {
 
 describe("digest recipe actions", () => {
   it("offers the pack's comment recipe first on a changes-requested PR, scoped to it", () => {
-    const [primary, second] = digestItemActions(graphWith("changes-requested"), "t1", 0);
+    const [primary, second] = digestItemActions(graphWith("changes-requested"), "t1");
     expect(primary).toEqual({
       label: "Handle comments",
       recipe: "pr-handle-comments",
@@ -102,7 +102,6 @@ describe("digest recipe actions", () => {
     const actions = digestItemActions(
       { ...graph, changeRequests: [...graph.changeRequests, second] },
       "t1",
-      0,
     );
     expect(actions.map((action) => action.label)).toEqual([
       "Review #9",
@@ -114,12 +113,12 @@ describe("digest recipe actions", () => {
   });
 
   it("keeps the unnumbered labels when the ticket has a single PR", () => {
-    const labels = digestItemActions(graphWith("needs-you"), "t1", 0).map((a) => a.label);
+    const labels = digestItemActions(graphWith("needs-you"), "t1").map((a) => a.label);
     expect(labels).toEqual(["Review PR", "Review with agent"]);
   });
 
   it("keeps the CI link primary and adds the fix-checks recipe on a failing PR", () => {
-    const actions = digestItemActions(graphWith("ci-failing"), "t1", 0);
+    const actions = digestItemActions(graphWith("ci-failing"), "t1");
     expect(actions.map((action) => action.recipe ?? action.href)).toEqual([
       "https://ghe.example.com/hive/app/pull/9",
       "pr-fix-ci",
@@ -149,7 +148,7 @@ describe("digest recipe actions", () => {
 });
 
 describe("availableDigestItemActions", () => {
-  const actions = digestItemActions(graphWith("changes-requested"), "t1", 0);
+  const actions = digestItemActions(graphWith("changes-requested"), "t1");
 
   it("drops a recipe pill whose recipe is not in the catalog, keeping the links", () => {
     expect(availableDigestItemActions(actions, catalogOf("pr-review")).map((a) => a.label)).toEqual(
@@ -166,9 +165,9 @@ describe("availableDigestItemActions", () => {
     expect(availableDigestItemActions(actions, elsewhere).map((a) => a.label)).toEqual(["Open PR"]);
   });
 
-  it("never offers a recipe that has no PR scope (the unshipped nudge)", () => {
-    const nudge = [{ label: "Nudge", recipe: "nudge-agent-thread" }];
-    expect(availableDigestItemActions(nudge, catalogOf("nudge-agent-thread"))).toEqual([]);
+  it("never offers a recipe pill that has no PR scope, even when the recipe is in the catalog", () => {
+    const unscoped = [{ label: "Handle comments", recipe: "pr-handle-comments" }];
+    expect(availableDigestItemActions(unscoped, catalogOf("pr-handle-comments"))).toEqual([]);
   });
 });
 
