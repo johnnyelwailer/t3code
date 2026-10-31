@@ -44,7 +44,10 @@ export function WorkspaceRootScreen() {
   const extraSelected = extraTabSelected(state, extraTab);
   // The pane on show; while the extra tab is selected, `selectedTab` keeps its last stock value.
   const pane: WorkspacePane = extraSelected ? EXTRA_WORKSPACE_TAB : state.selectedTab;
-  const tabs: readonly WorkspacePane[] = extraTab === null ? TABS : [...TABS, EXTRA_WORKSPACE_TAB];
+  // In split view the extra tab lives in the sidebar column; its detail pane stays the chat detail.
+  const tabs: readonly WorkspacePane[] =
+    extraTab === null || layout.usesSplitView ? TABS : [...TABS, EXTRA_WORKSPACE_TAB];
+  const selected: WorkspacePane = layout.usesSplitView && extraSelected ? "threads" : pane;
   const floating = floatingTabsMetrics(
     enabled.length + 1 + (extraTab === null ? 0 : 1),
     scale,
@@ -53,14 +56,16 @@ export function WorkspaceRootScreen() {
   );
   const context = {
     ...workspace,
-    bottomClearance: floatingTabsEnabled
-      ? insets.bottom +
-        FLOATING_TABS.bottom +
-        FLOATING_TABS.edge +
-        Math.max(floating.height, pane === "threads" ? floating.fabOffset + fabSize : 0)
-      : pane === "threads"
-        ? fabClearance + 16
-        : 16,
+    bottomClearance: layout.usesSplitView
+      ? workspace.bottomClearance
+      : floatingTabsEnabled
+        ? insets.bottom +
+          FLOATING_TABS.bottom +
+          FLOATING_TABS.edge +
+          Math.max(floating.height, pane === "threads" ? floating.fabOffset + fabSize : 0)
+        : pane === "threads"
+          ? fabClearance + 16
+          : 16,
   };
   // An extra tab that appears late and asks for it opens untouched workspaces once; one that
   // went away while selected hands the selection back to the last stock tab.
@@ -77,62 +82,50 @@ export function WorkspaceRootScreen() {
     }
   }, [extraTab, state, dispatch]);
 
-  if (layout.usesSplitView) {
-    if (enabled.length === 0) return <View className="flex-1 bg-screen" />;
-    return (
-      <WorkspaceTabPanes
-        tabs={TABS}
-        // The extra tab lives in the sidebar column; its detail pane stays the empty chat detail.
-        selected={extraSelected ? "threads" : state.selectedTab}
-        renderTab={(tab) =>
-          tab === "threads" ? (
-            <HomeRouteScreen />
-          ) : tab !== "pullRequests" ? (
-            <WorkspaceExtraTab tab={tab} />
-          ) : (
-            <>
-              <NativeStackScreenOptions options={{ headerShown: false }} />
-              <AndroidScreenHeader title="Pull requests" />
-              <View className="flex-1 items-center justify-center px-10">
-                <EmptyState
-                  title="Select a pull request"
-                  detail="Choose a pull request from the sidebar to review it."
-                  variant="plain"
-                />
-              </View>
-            </>
-          )
-        }
-      />
-    );
-  }
-
   return (
     <WorkspaceTabsContext value={context}>
-      <View className="flex-1 bg-header">
-        <NativeStackScreenOptions options={{ headerShown: false }} />
+      <View className={layout.usesSplitView ? "flex-1 bg-screen" : "flex-1 bg-header"}>
+        {!layout.usesSplitView ? (
+          <NativeStackScreenOptions options={{ headerShown: false }} />
+        ) : null}
         <SafeAreaInsetsContext
           value={
-            floatingTabsEnabled
-              ? pane === "usage" || pane === EXTRA_WORKSPACE_TAB
-                ? { ...insets, bottom: context.bottomClearance }
-                : insets
-              : { ...insets, bottom: 0 }
+            layout.usesSplitView
+              ? insets
+              : floatingTabsEnabled
+                ? pane === "usage" || pane === EXTRA_WORKSPACE_TAB
+                  ? { ...insets, bottom: context.bottomClearance }
+                  : insets
+                : { ...insets, bottom: 0 }
           }
         >
-          {enabled.length === 0 && extraTab === null ? (
+          {layout.usesSplitView && enabled.length === 0 ? (
+            <View className="flex-1 bg-screen" />
+          ) : enabled.length === 0 && extraTab === null ? (
             <WorkspaceNoTabs />
           ) : (
             <WorkspaceTabPanes
               tabs={tabs}
-              selected={pane}
+              selected={selected}
               renderTab={(tab) =>
                 tab === "threads" ? (
                   <HomeRouteScreen />
-                ) : tab === "extra" ? (
+                ) : tab === EXTRA_WORKSPACE_TAB ? (
                   <WorkspaceExtraTabPane tab={extraTab} />
                 ) : tab !== "pullRequests" ? (
                   <WorkspaceExtraTab tab={tab} />
+                ) : layout.usesSplitView ? (
+                  <>
+                    <NativeStackScreenOptions options={{ headerShown: false }} />
+                    <AndroidScreenHeader title="Pull requests" />
+                    <View className="flex-1 items-center justify-center px-10">
+                      <EmptyState
+                        title="Select a pull request"
+                        detail="Choose a pull request from the sidebar to review it."
+                        variant="plain"
+                      />
+                    </View>
+                  </>
                 ) : (
                   <PullRequestsScreen
                     renderFrame={(filters, list) => (
@@ -147,7 +140,7 @@ export function WorkspaceRootScreen() {
             />
           )}
         </SafeAreaInsetsContext>
-        {floatingTabsEnabled ? (
+        {layout.usesSplitView ? null : floatingTabsEnabled ? (
           <FloatingWorkspaceTabs fillWidth onNewThread={startNewTask} />
         ) : (
           <AndroidWorkspaceNavigation onNewThread={startNewTask} />

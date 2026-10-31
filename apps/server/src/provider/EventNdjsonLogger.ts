@@ -31,11 +31,6 @@ const DEFAULT_MAX_AGE_MS = 14 * DAY_MS;
 const DEFAULT_RETENTION_CHECK_INTERVAL_MS = 5 * 60 * 1_000;
 const DEFAULT_MAX_BUFFERED_BYTES = MEBIBYTE;
 const DEFAULT_MAX_BUFFERED_RECORDS = 512;
-/**
- * Sinks untouched for longer than this are dropped from the store so a
- * long-lived server doesn't keep one per thread ever logged.
- */
-const IDLE_SINK_TTL_MS = 10 * 60 * 1_000;
 const MAX_RECORD_CHARACTERS = 64 * 1024;
 const MAX_RECORD_FIELDS = 1_024;
 const MAX_RECORD_DEPTH = 16;
@@ -119,12 +114,7 @@ interface StoreState {
   readonly pending: Array<PendingRecord>;
   readonly pendingBytes: number;
   readonly sinks: ReadonlyMap<string, AsyncFileSink>;
-  /**
-   * Last drain that wrote to each segment's sink, so idle sinks can be dropped.
-   * Without this the map grows one entry per thread ever logged and never
-   * shrinks — a long-lived server accumulates them for the whole process life.
-   */
-  readonly sinkLastUsedMs: ReadonlyMap<string, number>;
+  readonly writtenSinceRetention: ReadonlySet<string>;
   readonly flushScheduled: boolean;
   readonly closed: boolean;
   readonly lastRetentionAt: number;
@@ -494,7 +484,7 @@ const drainPending = Effect.fnUntraced(function* (input: {
   }
 
   const sinks = new Map(input.state.sinks);
-  const sinkLastUsedMs = new Map(input.state.sinkLastUsedMs);
+  const writtenSegments = new Set(input.state.writtenSinceRetention);
   const failures: Array<FileOperationFailure> = [];
   const attributionByStream = new Map<
     EventNdjsonStream,
@@ -520,6 +510,7 @@ const drainPending = Effect.fnUntraced(function* (input: {
       sink = created.success;
       sinks.set(threadSegment, sink);
     }
+    writtenSegments.add(threadSegment);
 
     const written = yield* writeBatchedMessages(
       sink,
@@ -540,24 +531,19 @@ const drainPending = Effect.fnUntraced(function* (input: {
     ).pipe(Effect.result);
     if (Result.isFailure(written)) {
       sinks.delete(threadSegment);
-      sinkLastUsedMs.delete(threadSegment);
       failures.push({ filePath, cause: written.failure });
-    } else {
-      sinkLastUsedMs.set(threadSegment, input.now);
     }
-  }
-
-  // Drop sinks no thread has written to in a while. A sink is cheap (append-only,
-  // no held handle), but one per thread ever logged still grows without bound on a
-  // long-lived server; a later write for that thread transparently re-creates it.
-  for (const [threadSegment, lastUsedMs] of sinkLastUsedMs) {
-    if (input.now - lastUsedMs <= IDLE_SINK_TTL_MS) continue;
-    sinks.delete(threadSegment);
-    sinkLastUsedMs.delete(threadSegment);
   }
 
   const retentionDue =
     input.now - input.state.lastRetentionAt >= input.options.retentionCheckIntervalMs;
+  if (retentionDue) {
+    // A sink idle for a whole retention interval reopens from disk on its next
+    // write, so retention may remove its files without leaving a stale size.
+    for (const threadSegment of sinks.keys()) {
+      if (!writtenSegments.has(threadSegment)) sinks.delete(threadSegment);
+    }
+  }
   const retention = retentionDue
     ? yield* Effect.promise(() =>
         enforceRetention({
@@ -587,7 +573,7 @@ const drainPending = Effect.fnUntraced(function* (input: {
       pending: [],
       pendingBytes: 0,
       sinks,
-      sinkLastUsedMs,
+      writtenSinceRetention: retentionDue ? new Set() : writtenSegments,
       flushScheduled: input.timerFired ? false : input.state.flushScheduled,
       closed: input.close,
       lastRetentionAt: retentionDue ? input.now : input.state.lastRetentionAt,
@@ -654,7 +640,7 @@ export const makeEventNdjsonLogStore = Effect.fnUntraced(function* (
     pending: [],
     pendingBytes: 0,
     sinks: new Map(),
-    sinkLastUsedMs: new Map(),
+    writtenSinceRetention: new Set(),
     flushScheduled: false,
     closed: false,
     lastRetentionAt: initializedAt,

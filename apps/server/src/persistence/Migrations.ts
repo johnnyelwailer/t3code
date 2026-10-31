@@ -178,6 +178,9 @@ import Migration0120 from "./Migrations/070_PeerLinks.ts";
 import Migration0121 from "./Migrations/071_PeerLinkFence.ts";
 import Migration0122 from "./Migrations/072_WaitingLinkRequestIndex.ts";
 import Migration0123 from "./Migrations/073_ActiveTurnItemIndexes.ts";
+// New from the 2026-10-31 upstream sync (upstream 074-075), appended above the fork's maximum (123).
+import Migration0124 from "./Migrations/074_ExcludeAttachmentPlaceholdersFromSearch.ts";
+import Migration0125 from "./Migrations/075_SubagentDeliveryState.ts";
 
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -265,7 +268,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 123) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 125) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -310,6 +313,9 @@ export const migrationEntries = [
   [121, "PeerLinkFence", Migration0121],
   [122, "WaitingLinkRequestIndex", Migration0122],
   [123, "ActiveTurnItemIndexes", Migration0123],
+  // Upstream 074-075 live at 124-125 in this fork's ledger; see the import comment.
+  [124, "ExcludeAttachmentPlaceholdersFromSearch", Migration0124],
+  [125, "SubagentDeliveryState", Migration0125],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -338,7 +344,7 @@ export const FIRST_V2_MIGRATION_ID = 84;
 // re-ensures 86-92 and 98) must keep starting on databases whose history has holes. Add each id a
 // sync appends from upstream.
 export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
-  84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115, 118, 119, 120, 121, 122, 123,
+  84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115, 118, 119, 120, 121, 122, 123, 124, 125,
 ]);
 
 // Migrators skip ids up to the highest recorded; reject collisions that would skip V2 schema.

@@ -168,6 +168,7 @@ function pullRequestServiceLayer(
     subscribeMerges: Effect.die("not used"),
     subscribeStateChanges: Effect.die("not used"),
     subscribeRefreshes: Stream.empty,
+    withSharedProjectReads: (effect) => effect,
     refreshAfterTurn: () => Effect.void,
     routing: () => Effect.die("not used"),
     routingIdentity: () => Effect.die("not used"),
