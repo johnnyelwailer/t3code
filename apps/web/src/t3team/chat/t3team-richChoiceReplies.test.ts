@@ -5,7 +5,14 @@ import type { ChatMessage } from "~/types";
 
 import { deriveRichChoiceCardStates } from "./t3team-richChoiceReplies";
 
-const card = (widgetId: string, titles = ["Alpha", "Beta"]): ChatMessage =>
+const card = (
+  widgetId: string,
+  titles = ["Alpha", "Beta"],
+  html = JSON.stringify({
+    prompt: "Pick",
+    options: titles.map((title, i) => ({ id: `o${i}`, title, body: "b" })),
+  }),
+): ChatMessage =>
   ({
     id: `m-${widgetId}`,
     role: "system",
@@ -18,10 +25,7 @@ const card = (widgetId: string, titles = ["Alpha", "Beta"]): ChatMessage =>
             widgetId,
             title: "pick",
             format: "rich-choice",
-            html: JSON.stringify({
-              prompt: "Pick",
-              options: titles.map((title, i) => ({ id: `o${i}`, title, body: "b" })),
-            }),
+            html,
           },
         } satisfies T3TeamMessageWidgetAttachment,
       ],
@@ -91,13 +95,7 @@ describe("deriveRichChoiceCardStates", () => {
   });
 
   it("ignores cards with an invalid payload", () => {
-    const broken = card("w1");
-    (broken.t3teamExt!.attachments![0] as T3TeamMessageWidgetAttachment).widget = {
-      widgetId: "w1",
-      title: "pick",
-      format: "rich-choice",
-      html: "{nope",
-    };
+    const broken = card("w1", ["A"], "{nope");
     expect(deriveRichChoiceCardStates(entries(broken)).size).toBe(0);
   });
 });

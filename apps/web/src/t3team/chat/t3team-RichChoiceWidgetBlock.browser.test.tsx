@@ -8,7 +8,7 @@ import { deriveRichChoiceCardStates } from "./t3team-richChoiceReplies";
 import { T3TeamTimelineRowsProvider } from "./t3team-timelineRows";
 import { T3TeamWidgetBlock } from "./t3team-widgetBlock";
 
-const sendTurn = vi.hoisted(() => vi.fn(async () => undefined));
+const sendTurn = vi.hoisted(() => vi.fn(async (_input: { readonly text: string }) => undefined));
 vi.mock(import("~/t3team/chat/t3team-sendThreadTurn"), async (importOriginal) => ({
   ...(await importOriginal()),
   sendT3TeamThreadTurn: sendTurn,
@@ -203,7 +203,7 @@ describe("rich-choice widget block", () => {
     expect(el.textContent).toContain("<img src=x onerror=alert(1)>");
     await act(() => action(el).click());
     await vi.waitFor(() => expect(sendTurn).toHaveBeenCalledTimes(1));
-    const sent = (sendTurn.mock.calls[0]![0] as { text: string }).text;
+    const sent = sendTurn.mock.calls[0]![0].text;
     expect(sent.endsWith("(ids: a)")).toBe(true);
   });
 });
