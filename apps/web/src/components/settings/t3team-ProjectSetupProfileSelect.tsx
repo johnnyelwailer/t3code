@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { T3TeamRichChoice } from "../../t3team/rich-choice/t3team-RichChoice";
 import { toProfileRichChoiceOptions } from "../../t3team/rich-choice/t3team-profileRichChoiceOptions";
@@ -19,6 +19,7 @@ import { Dialog, DialogDescription, DialogHeader, DialogPopup, DialogTitle } fro
 export function T3TeamProjectSetupProfileSelect() {
   const projectSetupProfile = useT3TeamProjectSetupProfile();
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   // Pack profiles replace the bundled catalog; reading the bundled list offered roles the distribution does not ship.
   const cards = listT3TeamProjectSetupCardOptions(useT3TeamPackSetupProfiles());
   const current = cards.find((card) => card.id === projectSetupProfile) ?? cards[0];
@@ -26,6 +27,7 @@ export function T3TeamProjectSetupProfileSelect() {
   return (
     <>
       <Button
+        ref={triggerRef}
         variant="outline"
         className="w-full justify-between sm:w-56"
         aria-label="Default project setup profile"
@@ -36,7 +38,7 @@ export function T3TeamProjectSetupProfileSelect() {
         <span className="text-xs text-muted-foreground">Change</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogPopup className="max-w-3xl">
+        <DialogPopup className="max-w-3xl" finalFocus={triggerRef}>
           <DialogHeader>
             <DialogTitle>Who are you, and how do you want to work?</DialogTitle>
             <DialogDescription>

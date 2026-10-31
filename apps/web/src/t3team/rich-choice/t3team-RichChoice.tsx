@@ -1,9 +1,9 @@
-import { CheckIcon } from "lucide-react";
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
+import { T3TeamRichChoiceAction } from "./t3team-RichChoiceAction";
 import { T3TeamRichChoiceCard } from "./t3team-RichChoiceCard";
 import { T3TeamRichChoiceControls } from "./t3team-RichChoiceControls";
 import {
@@ -40,7 +40,10 @@ export function T3TeamRichChoice({
   readonly options: readonly RichChoiceOption[];
   /** Option shown in front first. */
   readonly defaultId?: string | undefined;
-  /** Options already chosen (the current setting); marked on their cards. */
+  /**
+   * Options already chosen, marked on their cards. Single choice: controlled, the marker follows
+   * this prop (the saved setting). Multiple: the initial picks; later ones are kept locally.
+   */
   readonly selectedIds?: readonly string[];
   readonly multiple?: boolean;
   readonly chooseLabel?: string;
@@ -50,14 +53,15 @@ export function T3TeamRichChoice({
   readonly className?: string;
 }) {
   const [index, setIndex] = useState(() => resolveRichChoiceInitialIndex(options, defaultId));
-  const [picked, setPicked] = useState<readonly string[]>(selectedIds);
+  const [localPicked, setLocalPicked] = useState<readonly string[]>(selectedIds);
   const viewportRef = useRef<HTMLDivElement>(null);
   const chooseRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const count = options.length;
   const frontIndex = Math.min(index, Math.max(count - 1, 0));
   const front = options[frontIndex];
 
-  const { dragX, dragging, handlers } = useRichChoiceDrag({
+  const { dragX, dragging, handlers, clearSwallow } = useRichChoiceDrag({
     frontIndex,
     count,
     cardWidth: () => viewportRef.current?.firstElementChild?.firstElementChild?.clientWidth ?? 300,
@@ -66,22 +70,44 @@ export function T3TeamRichChoice({
 
   if (!front) return null;
 
-  const goTo = (next: number, focusFront = false) => {
+  const ids = new Set(options.map((option) => option.id));
+  const picked = (multiple ? localPicked : selectedIds).filter((id) => ids.has(id));
+
+  type FocusTarget = "action" | "dot" | null;
+  const goTo = (next: number, focus: FocusTarget = null) => {
     setIndex(next);
-    if (focusFront) requestAnimationFrame(() => chooseRef.current?.focus());
+    if (focus === null) return;
+    requestAnimationFrame(() => {
+      const root = rootRef.current;
+      const target =
+        focus === "action"
+          ? chooseRef.current
+          : root?.querySelector<HTMLElement>(`[data-rc-dot="${next}"]`);
+      target?.focus();
+    });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    clearSwallow();
     const next = resolveRichChoiceKey(event.key, frontIndex, count);
     if (next === null) return;
     event.preventDefault();
-    goTo(next);
+    const origin = event.target instanceof Element ? event.target : null;
+    // The focused control is replaced or no longer current once the front card moves: follow it.
+    goTo(
+      next,
+      origin?.closest("[data-rc-action]")
+        ? "action"
+        : origin?.closest("[data-rc-dot]")
+          ? "dot"
+          : null,
+    );
   };
 
   const choose = () => {
     const next = toggleRichChoiceSelection(picked, front.id, multiple);
-    setPicked(next);
-    if (!multiple) onChoose(next);
+    if (multiple) setLocalPicked(next);
+    else onChoose(next);
   };
 
   const frontChosen = picked.includes(front.id);
@@ -93,6 +119,7 @@ export function T3TeamRichChoice({
 
   return (
     <div
+      ref={rootRef}
       role="group"
       aria-roledescription="carousel"
       aria-label={prompt}
@@ -138,22 +165,13 @@ export function T3TeamRichChoice({
                     renderBody={renderBody}
                     footer={
                       isFront ? (
-                        <Button
+                        <T3TeamRichChoiceAction
                           ref={chooseRef}
-                          className="w-full sm:w-auto"
-                          variant={frontChosen && multiple ? "outline" : "default"}
-                          aria-pressed={multiple ? frontChosen : undefined}
+                          label={chooseLabel}
+                          multiple={multiple}
+                          picked={frontChosen}
                           onClick={choose}
-                        >
-                          {frontChosen && multiple ? (
-                            <>
-                              <CheckIcon className="size-4" aria-hidden />
-                              Added
-                            </>
-                          ) : (
-                            chooseLabel
-                          )}
-                        </Button>
+                        />
                       ) : undefined
                     }
                   />
@@ -164,7 +182,7 @@ export function T3TeamRichChoice({
                     tabIndex={-1}
                     aria-label={`Show ${label}`}
                     className="absolute inset-0 z-10 cursor-pointer rounded-3xl focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    onClick={() => goTo(position, true)}
+                    onClick={() => goTo(position, "action")}
                   />
                 )}
               </div>

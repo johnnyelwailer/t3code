@@ -80,14 +80,14 @@ function Frame({ children }: { children: React.ReactNode }) {
 }
 
 function Roles({ selected, defaultId }: { selected?: string; defaultId?: string }) {
-  const [last, setLast] = useState<string | null>(null);
+  const [last, setLast] = useState<string | null>(selected ?? null);
   return (
     <Frame>
       <T3TeamRichChoice
         prompt="Choose your role"
         options={roles}
         defaultId={defaultId}
-        selectedIds={selected ? [selected] : []}
+        selectedIds={last ? [last] : []}
         onChoose={([id]) => setLast(id ?? null)}
       />
       <p className="text-center text-sm text-muted-foreground" data-testid="picked">
