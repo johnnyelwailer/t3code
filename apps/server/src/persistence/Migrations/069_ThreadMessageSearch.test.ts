@@ -61,7 +61,8 @@ it.effect.each(["inserted", "updated", "backfilled", "rebuilt"])(
   (path) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: path === "backfilled" ? 68 : 73 });
+      // t3team: upstream 068/073 run at fork ids 118/123 (see Migrations.ts).
+      yield* runMigrations({ toMigrationInclusive: path === "backfilled" ? 118 : 123 });
       if (path !== "backfilled") {
         // Pre-upgrade triggers indexed user text even when it was an attachment placeholder.
         yield* sql`DROP TRIGGER orchestration_v2_message_search_insert`;
@@ -124,7 +125,7 @@ it.effect.each(["inserted", "updated", "backfilled", "rebuilt"])(
           `;
         }
       }
-      yield* runMigrations({ toMigrationInclusive: path === "backfilled" ? 69 : undefined });
+      yield* runMigrations({ toMigrationInclusive: path === "backfilled" ? 119 : undefined });
       if (path === "rebuilt") yield* rebuildMessageSearch(sql);
       const indexed = yield* sql<{ readonly messageId: string }>`
         SELECT messages.message_id AS "messageId"

@@ -1471,7 +1471,7 @@ describe("OrchestratorMcpService provider resolution", () => {
         );
         assert.deepEqual((yield* capabilitiesWith("gpt 5")).providers[0]!.models, []);
         assert.deepEqual((yield* capabilitiesWith("gpt 5", true)).providers[0]!.models, [
-          { id: "gpt-5", legacy: true },
+          { id: "gpt-5", legacy: true, label: "Code Legacy" },
         ]);
       }),
     );
@@ -1519,7 +1519,7 @@ describe("OrchestratorMcpService provider resolution", () => {
           );
           vi.stubEnv("NEXI_FF_ORCHESTRATOR_LATEST_ONLY", "false");
           assert.deepEqual((yield* capabilitiesWith("gpt 5")).providers[0]!.models, [
-            { id: "gpt-5" },
+            { id: "gpt-5", label: "Code Legacy" },
           ]);
         }),
     );

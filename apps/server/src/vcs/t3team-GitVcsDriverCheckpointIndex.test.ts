@@ -346,6 +346,13 @@ const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver
         if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
           return Effect.succeed(ok(".git\n"));
         }
+        // Capture resolves the common dir, index path and HEAD in one rev-parse; a missing
+        // index file keeps the capture off the index-reuse path.
+        if (args[0] === "rev-parse" && args.includes("--git-common-dir")) {
+          return Effect.succeed(
+            ok(`${input.cwd}/.git\n${input.cwd}/.git/missing-index\nhead-oid\n`),
+          );
+        }
         if (args[0] === "config" && args[1] === "--bool") {
           return Effect.succeed(failed(1, ""));
         }
