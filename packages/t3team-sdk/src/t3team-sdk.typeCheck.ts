@@ -125,6 +125,21 @@ function collectDiagnostics(
     return [unavailable(`the workflow file could not be added to the program`)];
   }
 
+  // A missing lib file (ts6053 / ts2318) is reported without a file, so the per-file filter below
+  // would drop it and leave only its symptoms: `Record`, `Promise`, `JSON` "not found" in the
+  // author's own code, which no edit can fix (the packaged-layout incident fixed in #713).
+  const missingLib = [...program.getOptionsDiagnostics(), ...program.getGlobalDiagnostics()].find(
+    (diagnostic) =>
+      diagnostic.file === undefined && diagnostic.category === ts.DiagnosticCategory.Error,
+  );
+  if (missingLib !== undefined) {
+    return [
+      unavailable(
+        `the TypeScript lib declarations could not be loaded (${ts.flattenDiagnosticMessageText(missingLib.messageText, " ")})`,
+      ),
+    ];
+  }
+
   const findings: WorkflowAuditFinding[] = [];
   for (const diagnostic of ts.getPreEmitDiagnostics(program, sf)) {
     // Only this file, and only real problems: a diagnostic in a dependency's declarations, or a

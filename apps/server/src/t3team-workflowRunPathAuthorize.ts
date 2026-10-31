@@ -90,6 +90,13 @@ const readAndPrecheckSource = (input: {
     }),
   );
 
+/** Names every root a workflow file may live in, and the alternative that needs no file at all. */
+const outsideRootsMessage = (requestedPath: string, roots: ReadonlyArray<string>): string =>
+  `Workflow '${requestedPath}' is outside ${roots.map((root) => `'${root}'`).join(" and ")}. ` +
+  `Save it inside ${roots.length > 1 ? "one of them" : "it"} (a relative path resolves against ` +
+  `'${roots[0]}'), or omit workflowPath and pass intent so the host writes the source itself. ` +
+  CONTAINMENT_HINT;
+
 /**
  * Resolve what a `t3team.orchestration.run` call should execute, prechecked and pinned:
  * inline `source` is persisted at `.t3team-runs/<runId>/workflow.ts`; a workspace-local
@@ -102,6 +109,8 @@ export function resolveRunWorkflowPath(input: {
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
   readonly workspaceRoot: string;
+  /** The calling thread's own worktree, when it has one; relative paths resolve against it. */
+  readonly checkoutRoot?: string | undefined;
   readonly runId: string;
   readonly args: RunWorkflowPathInput;
 }): Effect.Effect<string, string> {
@@ -122,13 +131,27 @@ export function resolveRunWorkflowPath(input: {
   }
 
   const requestedPath = args.workflowPath?.trim() ?? "";
-  const withinWorkspace = Effect.try({
-    try: () => resolveWithinRoot(path, workspaceRoot, requestedPath),
-    catch: (error) => `${errorMessage(error)} ${CONTAINMENT_HINT}`,
+  // A thread in its own worktree writes the file THERE (live incident: the agent's file "resolved
+  // outside" the project root, so it moved it into an unrelated folder to get it accepted).
+  const roots = [...new Set([input.checkoutRoot ?? workspaceRoot, workspaceRoot])];
+  const candidates = roots.flatMap((root) => {
+    try {
+      return [{ root, resolved: resolveWithinRoot(path, root, requestedPath) }];
+    } catch {
+      return [];
+    }
   });
   return Effect.gen(function* () {
-    const contained = yield* withinWorkspace.pipe(Effect.result);
-    if (contained._tag === "Success") {
+    let contained = candidates[0];
+    for (const candidate of candidates) {
+      if (yield* fileSystem.exists(candidate.resolved).pipe(Effect.orElseSucceed(() => false))) {
+        contained = candidate;
+        break;
+      }
+    }
+    if (contained !== undefined) {
+      const containingRoot = contained.root;
+      const resolvedPath = contained.resolved;
       // Workspace-local (including `.t3team-runs/<runId>/workflow.ts`): containment re-proved
       // after the existence probe so a symlink swap between acceptance and launch is caught,
       // then the source is prechecked and snapshotted so the run is self-contained and
@@ -136,10 +159,10 @@ export function resolveRunWorkflowPath(input: {
       // `.t3team-runs/<runId>/` snapshot).
       const resolved = yield* confirmRunnable({
         fileSystem,
-        resolved: contained.success,
+        resolved: resolvedPath,
         reauthorize: () =>
           Effect.try({
-            try: () => resolveWithinRoot(path, workspaceRoot, requestedPath) !== "",
+            try: () => resolveWithinRoot(path, containingRoot, requestedPath) !== "",
             catch: () => "unauthorized",
           }).pipe(Effect.orElseSucceed(() => false)),
       });
@@ -161,7 +184,7 @@ export function resolveRunWorkflowPath(input: {
       path,
       workspaceRoot,
       requestedPath,
-      containmentError: contained.failure,
+      containmentError: outsideRootsMessage(requestedPath, roots),
     });
     yield* readAndPrecheckSource({ fileSystem, resolved: packPath });
     return packPath;
