@@ -23,6 +23,10 @@ vi.mock(import("../../state/environments"), () => ({
   useEnvironment: (() => null) as never,
   useEnvironmentProviders: (() => new Map()) as never,
 }));
+// t3team: the fork's sub-run tree reads environments this test does not mock.
+vi.mock(import("../../t3team/chat/t3team-useThreadSubRuns"), () => ({
+  useT3TeamThreadSubRuns: (() => ({ tree: null, childThreadIds: new Set() })) as never,
+}));
 vi.mock(import("../../lib/archivedThreadsState"), () => ({
   useArchivedThreadSnapshots: (() => ({ snapshots: [] })) as never,
 }));

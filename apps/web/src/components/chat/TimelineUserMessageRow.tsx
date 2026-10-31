@@ -67,10 +67,7 @@ import {
   resolveUserMessageContext,
   selectedMessageContextFragment,
 } from "~/lib/composerContextRecords";
-import {
-  collectComposerContextReferences,
-  formatComposerContextReference,
-} from "@t3tools/shared/composerContextReferences";
+import { collectComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import {
   COMPOSER_CONTEXT_CLIPBOARD_MIME,
   encodeComposerContextClipboardHtml,
@@ -572,8 +569,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           },
           records: copyRecords,
         });
-  const copyText =
-    resolvedContext.text || mediaCopyRecords.map(formatComposerContextReference).join("\n");
   const onBodyCopyCapture = (event: React.ClipboardEvent<HTMLDivElement>) => {
     if (resolvedContext.records.length === 0 || !event.clipboardData) return;
     const selection = window.getSelection();
@@ -793,15 +788,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         {typeof revertTurnCount === "number" && (
           <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
         )}
-        {(initiatingPrompt ?? copyText) && (
+        {initiatingPrompt !== null && (
           <MessageCopyButton
-            // t3team: plain text is the stored initiating string. Structured paste still rides
-            // beside it when that string is the message the context records belong to.
-            text={initiatingPrompt ?? (contextClipboardFragment ? copyText : plainText)}
+            // t3team: plain text is the stored initiating string; triggers have none. Structured
+            // paste still rides beside it when that string is the message the records belong to.
+            text={initiatingPrompt}
             {...(contextClipboardFragment &&
-            (initiatingPrompt === null ||
-              initiatingPrompt === resolvedContext.text ||
-              initiatingPrompt === row.message.text)
+            (initiatingPrompt === resolvedContext.text || initiatingPrompt === row.message.text)
               ? {
                   extraFlavors: {
                     [COMPOSER_CONTEXT_CLIPBOARD_MIME]: contextClipboardFragment,
