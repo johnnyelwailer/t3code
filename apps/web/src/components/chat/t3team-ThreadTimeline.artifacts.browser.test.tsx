@@ -40,7 +40,7 @@ vi.mock("~/state/entities", async (importOriginal) => {
   const { useSyncExternalStore } = await import("react");
   return {
     ...(await importOriginal<typeof import("~/state/entities")>()),
-    useThreadVisibleTurnItems: () =>
+    useTimelineVisibleTurnItems: () =>
       useSyncExternalStore(
         seams.subscribe,
         () => seams.turnItems,

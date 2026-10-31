@@ -72,6 +72,7 @@ import * as ServerSourceControlHost from "./sourceControl/ServerSourceControlHos
 import * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import { BUILT_IN_SOURCE_CONTROL_DRIVER_LIST } from "./sourceControl/sourceControlDefinitions.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
+import * as SecretResolver from "./secrets/SecretResolver.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import { T3TeamRemoteEnvironmentLive } from "./t3team-remoteEnvironmentServices.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
@@ -974,6 +975,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(layerOrchestrationApplication),
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),
   Layer.provideMerge(Layer.merge(ProjectStore.layer, ThreadSearch.layer)),
+  Layer.provideMerge(SecretResolver.layer),
   Layer.provideMerge(layerServerSettings),
   // Signal sources (GHE #332): placed BEFORE the PullRequestService + Persistence provides
   // below — in `a.pipe(provideMerge(b))` the accumulated layer's requirements are satisfied

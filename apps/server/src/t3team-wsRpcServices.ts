@@ -93,6 +93,8 @@ import type * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-regis
 import type * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import type * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import type * as RelayClient from "@t3tools/shared/relayClient";
+import type * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
+import type * as NpmRelease from "./cloud/npmRelease.ts";
 import type * as Crypto from "effect/Crypto";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
@@ -136,6 +138,7 @@ export type WsRpcHandlerServices =
   | ManagedProjectFolders.ManagedProjectFolders
   | McpAppRequests.McpAppRequests
   | ModelManifest.ModelManifest
+  | NpmRelease.NpmRelease
   | OrchestrationEventStore.OrchestrationEventStore
   | Orchestrator.OrchestratorV2
   | OtlpEndpointCheck.OtlpEndpointCheck
@@ -170,6 +173,7 @@ export type WsRpcHandlerServices =
   | ReviewService.ReviewService
   | ScheduledTasks.ScheduledTaskService
   | SecretRequests.SecretRequests
+  | SecretResolver.SecretResolver
   | GitHubRest.GitHubRest
   | ServerConfig.ServerConfig
   | ServerEnvironment.ServerEnvironment
