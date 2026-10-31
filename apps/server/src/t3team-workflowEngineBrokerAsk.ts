@@ -24,7 +24,7 @@ import { newWorkflowStepPromptMessageId } from "./t3team-workflowTurnPrompt.ts";
 import { workflowTurnText } from "./t3team-workflowTurnText.ts";
 
 export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Promise<boolean> {
-  const { deps, enqueue, runPrimitive, step } = core;
+  const { deps, enqueue, runPrimitive, step, childSpawnRefusalFor } = core;
   const { correlationId, kind, payload, isLiveCompositionAsk, makeLiveSettlement } = s;
   if (kind === "thread.turn") {
     const p = payload as ThreadTurnPayload;
@@ -62,18 +62,25 @@ export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Prom
     });
     await runPrimitive(
       () =>
-        enqueue(() =>
+        enqueue(() => {
+          // The child's `thread.create` was refused by the host and this is the awaited verb that
+          // follows it, so the author's `agent()` fails with the ORIGINAL refusal here instead of
+          // starting a turn on a thread that does not exist. Checked inside the queue — after the
+          // pending ask is registered, never as an await before it — so it inherits the same
+          // ordering as the startTurn it guards, and a queued create cannot land in between.
+          const refusal = childSpawnRefusalFor?.(p.threadId);
+          if (refusal !== undefined) throw refusal.error;
           // Queued behind any active run on the thread (a busy thread is not an error), so the
           // step's own run answers it. `user` role because that is how a provider receives turn
           // input — NOT because a person wrote it; the author stamp says so.
-          deps.host.startTurn({
+          return deps.host.startTurn({
             threadId: p.threadId,
             messageId: promptMessageId,
             text: workflowTurnText(p),
             modelSelection,
             author,
-          }),
-        ),
+          });
+        }),
       liveSettlement
         ? undefined
         : async () => {
