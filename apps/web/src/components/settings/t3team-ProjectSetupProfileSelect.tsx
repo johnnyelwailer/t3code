@@ -1,54 +1,62 @@
+import { useState } from "react";
+
+import { T3TeamRichChoice } from "../../t3team/rich-choice/t3team-RichChoice";
+import { toProfileRichChoiceOptions } from "../../t3team/rich-choice/t3team-profileRichChoiceOptions";
 import { useT3TeamPackSetupProfiles } from "../../t3team/t3team-packSetupProfiles";
-import {
-  resolveT3TeamProjectSetupProfileId,
-  type T3TeamProjectSetupProfileId,
-} from "../../t3team/t3team-projectSetup";
+import { resolveT3TeamProjectSetupProfileId } from "../../t3team/t3team-projectSetup";
 import { listT3TeamProjectSetupCardOptions } from "../../t3team/t3team-projectSetupProfileCatalog";
 import {
   useT3TeamProjectSetupProfile,
   writeT3TeamProjectSetupProfile,
 } from "../../t3team/t3team-projectSetupProfile";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Button } from "../ui/button";
+import { Dialog, DialogDescription, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 
 /**
- * The default-setup-profile picker. Split out of `t3team-ProjectSetupSetting.tsx` so the whole
- * control — including the profile state it reads — disappears with the `WORK_PROFILE_CHOOSER`
- * flag rather than being hidden around live hooks.
+ * The default-setup-profile picker, split out so it disappears with `WORK_PROFILE_CHOOSER`.
+ * Changing the role opens the shared rich-choice carousel.
  */
 export function T3TeamProjectSetupProfileSelect() {
   const projectSetupProfile = useT3TeamProjectSetupProfile();
-  // Same catalog the setup wizard renders: pack-contributed profiles replace the
-  // bundled ones. Reading the bundled list here made Settings offer profiles the
-  // distribution does not ship (and label the selection "Product Partner").
-  const projectSetupProfiles = listT3TeamProjectSetupCardOptions(useT3TeamPackSetupProfiles());
-
-  const setProjectSetupProfile = (profileId: T3TeamProjectSetupProfileId) => {
-    writeT3TeamProjectSetupProfile(profileId);
-  };
+  const [open, setOpen] = useState(false);
+  // Pack profiles replace the bundled catalog; reading the bundled list offered roles the distribution does not ship.
+  const cards = listT3TeamProjectSetupCardOptions(useT3TeamPackSetupProfiles());
+  const current = cards.find((card) => card.id === projectSetupProfile) ?? cards[0];
 
   return (
-    <Select
-      value={projectSetupProfile}
-      onValueChange={(value) => {
-        setProjectSetupProfile(resolveT3TeamProjectSetupProfileId(value ?? undefined));
-      }}
-    >
-      <SelectTrigger className="w-full sm:w-56" aria-label="Default project setup profile">
-        <SelectValue>
-          {projectSetupProfiles.find((profile) => profile.id === projectSetupProfile)?.title ??
-            projectSetupProfiles[0]?.title}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectPopup align="start" alignItemWithTrigger={false}>
-        {projectSetupProfiles.map((profile) => (
-          <SelectItem hideIndicator key={profile.id} value={profile.id}>
-            <div className="space-y-0.5">
-              <div>{profile.title}</div>
-              <div className="text-xs text-muted-foreground">{profile.description}</div>
-            </div>
-          </SelectItem>
-        ))}
-      </SelectPopup>
-    </Select>
+    <>
+      <Button
+        variant="outline"
+        className="w-full justify-between sm:w-56"
+        aria-label="Default project setup profile"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      >
+        <span className="truncate">{current?.title}</span>
+        <span className="text-xs text-muted-foreground">Change</span>
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogPopup className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Who are you, and how do you want to work?</DialogTitle>
+            <DialogDescription>
+              The role steers recipes, lens and communication style. You can change it any time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-6">
+            <T3TeamRichChoice
+              prompt="Choose your role"
+              options={toProfileRichChoiceOptions(cards)}
+              defaultId={current?.id}
+              selectedIds={current ? [current.id] : []}
+              onChoose={([id]) => {
+                writeT3TeamProjectSetupProfile(resolveT3TeamProjectSetupProfileId(id));
+                setOpen(false);
+              }}
+            />
+          </div>
+        </DialogPopup>
+      </Dialog>
+    </>
   );
 }
