@@ -265,6 +265,13 @@ export class PullRequestService extends Context.Service<
     readonly diffFileContents: (
       input: PullRequestDiffFileContentsInput,
     ) => Effect.Effect<PullRequestDiffFileContentsResult, PullRequestError>;
+    /** One side of a changed file as raw bytes; null when that side does not exist. */
+    readonly diffFileBytes: (
+      input: PullRequestDiffFileContentsInput & {
+        readonly side: "old" | "new";
+        readonly maxBytes: number;
+      },
+    ) => Effect.Effect<Uint8Array | null, PullRequestError>;
     /**
      * t3team: one file of one of the project's repositories at one commit sha. `unsupported` is a
      * host that cannot read a file at a revision, as opposed to a file that is not there.
@@ -609,6 +616,9 @@ function withRateLimitBackoff(
     ...(api.getDiffFileContents === undefined
       ? {}
       : { getDiffFileContents: wrap("getDiffFileContents", api.getDiffFileContents) }),
+    ...(api.getDiffFileBytes === undefined
+      ? {}
+      : { getDiffFileBytes: wrap("getDiffFileBytes", api.getDiffFileBytes) }),
     ...(api.readFileAtRevision === undefined
       ? {}
       : { readFileAtRevision: wrap("readFileAtRevision", api.readFileAtRevision) }),
@@ -2071,6 +2081,32 @@ export const make = Effect.gen(function* () {
               new PullRequestOperationError({
                 operation: "diffFileContents",
                 detail: "This host cannot expand unchanged pull request lines.",
+              }),
+            );
+      }),
+    );
+
+  const readDiffFileBytes: PullRequestService["Service"]["diffFileBytes"] = (input) =>
+    requireProject(input).pipe(
+      Effect.flatMap((project) => {
+        const read = project.api.getDiffFileBytes;
+        return project.api.capabilities.diff && read
+          ? read({
+              cwd: project.project.workspaceRoot,
+              repository: project.repository,
+              host: project.host,
+              number: input.number,
+              ...(input.commit === undefined ? {} : { commit: input.commit }),
+              changeType: input.changeType,
+              oldPath: input.oldPath,
+              newPath: input.newPath,
+              side: input.side,
+              maxBytes: input.maxBytes,
+            }).pipe(Effect.mapError(toPullRequestError("diffFileBytes")))
+          : Effect.fail(
+              new PullRequestOperationError({
+                operation: "diffFileBytes",
+                detail: "This host cannot read changed files.",
               }),
             );
       }),
@@ -3860,6 +3896,22 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+  // Same changed-files restriction as diffFileContents.
+  const diffFileBytes: PullRequestService["Service"]["diffFileBytes"] = (input) =>
+    changesFile(input).pipe(
+      Effect.flatMap((changed) =>
+        changed
+          ? readDiffFileBytes(input)
+          : Effect.fail(
+              new PullRequestOperationError({
+                operation: "diffFileBytes",
+                detail: "This file is not part of the change request.",
+                reason: "not-found",
+              }),
+            ),
+      ),
+    );
+
   return PullRequestService.of({
     withSharedProjectReads,
     routing,
@@ -3903,6 +3955,7 @@ export const make = Effect.gen(function* () {
     threadComments,
     diff: credentialCached(diff),
     diffFileContents,
+    diffFileBytes,
     fileAtRevision,
     filesViewed: credentialCached(filesViewed),
     setFilesViewed,

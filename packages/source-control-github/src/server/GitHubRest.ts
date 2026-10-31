@@ -7,7 +7,10 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http";
 
-import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
+import {
+  collectUint8StreamBytes,
+  decodeUtf8,
+} from "@t3tools/provider-core/server/collectStreamText";
 import * as GitHubAppSignIn from "./GitHubAppSignIn.ts";
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubQuota from "./GitHubQuota.ts";
@@ -26,6 +29,8 @@ export interface GitHubRestResponse {
   readonly truncated: boolean;
   /** Invalid UTF-8 indicates a binary raw file. */
   readonly invalidUtf8: boolean;
+  /** The undecoded body of a successful `responseType: "bytes"` read; `body` is then empty. */
+  readonly bytes?: Uint8Array;
 }
 
 export interface GitHubRestInput {
@@ -40,6 +45,8 @@ export interface GitHubRestInput {
   /** Revalidate cached answers; 304 returns successfully without spending quota. */
   readonly ifNoneMatch?: string;
   readonly maxResponseBytes?: number;
+  /** `bytes` keeps a successful body undecoded, for binary files. Defaults to `text`. */
+  readonly responseType?: "text" | "bytes";
   /** Defaults to 30 seconds; a whole pull request's patch may need longer. */
   readonly timeout?: Duration.Input;
   /** Overrides `SourceControlRateLimit.Interactive` for this one request. */
@@ -148,6 +155,7 @@ export const make = Effect.gen(function* () {
     readonly operation: string;
     readonly request: HttpClientRequest.HttpClientRequest;
     readonly maxResponseBytes: number;
+    readonly responseType: "text" | "bytes";
     readonly timeout?: Duration.Input | undefined;
     readonly allowReserve: boolean;
     readonly acceptNotModified: boolean;
@@ -177,22 +185,25 @@ export const make = Effect.gen(function* () {
               // Client spans expose SHAs and branches through url.full/url.query.
               Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
             );
-          const collected = yield* collectUint8StreamText({
+          const collected = yield* collectUint8StreamBytes({
             stream: response.stream,
             maxBytes: input.maxResponseBytes,
           }).pipe(
             Effect.catchIf(
               (error) => error.reason._tag === "EmptyBodyError",
-              () => Effect.succeed({ text: "", truncated: false, invalidUtf8: false }),
+              () => Effect.succeed({ data: new Uint8Array(), truncated: false }),
             ),
           );
           const { status, headers: responseHeaders } = response;
-          const answer = {
+          const keepBytes = input.responseType === "bytes" && status >= 200 && status < 300;
+          const decoded = keepBytes ? { text: "", invalidUtf8: false } : decodeUtf8(collected.data);
+          const answer: GitHubRestResponse = {
             status,
             headers: responseHeaders,
-            body: collected.text,
+            body: decoded.text,
             truncated: collected.truncated,
-            invalidUtf8: collected.invalidUtf8,
+            invalidUtf8: decoded.invalidUtf8,
+            ...(keepBytes ? { bytes: collected.data } : {}),
           };
           return classify({ answer, acceptNotModified: input.acceptNotModified });
         }).pipe(
@@ -228,6 +239,7 @@ export const make = Effect.gen(function* () {
           operation: input.operation,
           request,
           maxResponseBytes: input.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
+          responseType: input.responseType ?? "text",
           timeout: input.timeout,
           allowReserve: input.allowReserve ?? interactive,
           acceptNotModified: input.ifNoneMatch !== undefined,

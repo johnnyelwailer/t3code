@@ -797,7 +797,15 @@
     "apps/server/src/provider/agentContextBudget.json",
     "apps/web/src/components/chat/MessagesTimeline.browser.test.tsx",
     "apps/web/src/components/ChatView.browser.test.tsx",
-    "apps/web/src/components/chat/ThreadRelationshipsControl.browser.test.tsx"
+    "apps/web/src/components/chat/ThreadRelationshipsControl.browser.test.tsx",
+    "apps/server/src/assets/AssetAccess.test.ts",
+    "apps/server/src/assets/AssetAccess.ts",
+    "packages/provider-core/src/server/collectStreamText.ts",
+    "packages/source-control-core/src/server/PullRequestProvider.ts",
+    "packages/source-control-github/src/server/GitHubPullRequestProvider.ts",
+    "packages/source-control-github/src/server/GitHubRest.test.ts",
+    "packages/source-control-gitlab/src/server/GitLabPullRequestCli.ts",
+    "packages/source-control-gitlab/src/server/GitLabPullRequestProvider.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
@@ -891,7 +899,12 @@
     "scripts/setup-git-hooks.mjs",
     "t3team-additive-guard.mjs",
     "apps/web/src/t3team/packs/t3team-kit-fixture-pack/distribution.json",
-    "apps/web/src/t3team/packs/t3team-kit-fixture-pack/pack.json"
+    "apps/web/src/t3team/packs/t3team-kit-fixture-pack/pack.json",
+    "apps/server/src/assets/changeRequestFileAsset.ts",
+    "packages/shared/src/diffImage.test.ts",
+    "packages/shared/src/diffImage.ts",
+    "packages/source-control-gitlab/src/server/gitLabRepositoryFileJson.test.ts",
+    "packages/source-control-gitlab/src/server/gitLabRepositoryFileJson.ts"
   ],
   "baseRef": "upstream/main",
   "forkBaselineRef": "t3team/fork-baseline-20261031",

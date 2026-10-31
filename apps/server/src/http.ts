@@ -2,6 +2,7 @@ import * as Mime from "effect/http/Mime";
 import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
+  CHANGE_REQUEST_FILE_ASSET,
   EnvironmentHttpApi,
 } from "@t3tools/contracts";
 import { isDevProxiedPath } from "@t3tools/shared/devProxy";
@@ -32,6 +33,7 @@ import { OtlpTracer, OtlpSerialization } from "effect/observability";
 import * as ServerConfig from "./config.ts";
 import { ASSET_ROUTE_PREFIX, readMcpAppHtml, resolveAsset } from "./assets/AssetAccess.ts";
 import { sourceControlMediaResponse } from "./assets/sourceControlMediaResponse.ts";
+import { readChangeRequestFileAsset } from "./assets/changeRequestFileAsset.ts";
 import { statMediaFile, streamMediaFile, type OpenMediaFile } from "./assets/MediaFile.ts";
 import {
   ATTACHMENT_UPLOAD_ROUTE_PREFIX,
@@ -402,6 +404,19 @@ const layerUntracedRequests = Layer.succeed(HttpMiddleware.TracerDisabledWhen)((
 
 export const withUntracedRequests = Layer.provide(layerUntracedRequests);
 
+function bytesAssetResponse(asset: { readonly bytes: Uint8Array; readonly mimeType: string }) {
+  return HttpServerResponse.uint8Array(asset.bytes, {
+    contentType: asset.mimeType,
+    headers: {
+      "cache-control": "private, max-age=3600",
+      "x-content-type-options": "nosniff",
+      ...(asset.mimeType === "image/svg+xml"
+        ? { "content-security-policy": SVG_CONTENT_SECURITY_POLICY }
+        : {}),
+    },
+  });
+}
+
 export const layerAssetRoute = HttpRouter.add(
   "GET",
   `${ASSET_ROUTE_PREFIX}/*`,
@@ -425,11 +440,12 @@ export const layerAssetRoute = HttpRouter.add(
     if (!asset) {
       return HttpServerResponse.text("Not Found", { status: 404 });
     }
-    if (asset.kind === "bytes") {
-      return HttpServerResponse.uint8Array(asset.bytes, {
-        contentType: asset.mimeType,
-        headers: { "cache-control": "private, max-age=3600", "x-content-type-options": "nosniff" },
-      });
+    if (asset.kind === "bytes") return bytesAssetResponse(asset);
+    if (asset.kind === CHANGE_REQUEST_FILE_ASSET) {
+      const file = yield* readChangeRequestFileAsset(asset.resource);
+      return file === null
+        ? HttpServerResponse.text("Not Found", { status: 404 })
+        : bytesAssetResponse(file);
     }
     if (asset.kind === "source-control-media") {
       return yield* sourceControlMediaResponse(asset, request.headers).pipe(

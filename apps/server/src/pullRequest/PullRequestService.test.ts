@@ -4858,6 +4858,11 @@ it.effect(
                 read.push(`${input.oldPath}->${input.newPath}`);
                 return { oldContents: "old", newContents: "new" };
               }),
+            getDiffFileBytes: (input) =>
+              Effect.sync(() => {
+                read.push(`${input.side}:${input.oldPath}`);
+                return new Uint8Array([1]);
+              }),
           }),
         ],
       });
@@ -4890,9 +4895,22 @@ it.effect(
         })
         .pipe(Effect.flip);
 
+      const deletedFileBytes = (path: string) =>
+        service.diffFileBytes({
+          ...ref,
+          changeType: "deleted",
+          oldPath: path,
+          newPath: path,
+          side: "old",
+          maxBytes: 8,
+        });
+      yield* deletedFileBytes("gone.md");
+      const outsideBytes = yield* deletedFileBytes(".env").pipe(Effect.flip);
+
       assert.strictEqual(outside._tag, "PullRequestOperationError");
       assert.strictEqual(halfRename._tag, "PullRequestOperationError");
-      assert.deepStrictEqual(read, ["src/old.ts->src/new.ts", "gone.md->gone.md"]);
+      assert.strictEqual(outsideBytes._tag, "PullRequestOperationError");
+      assert.deepStrictEqual(read, ["src/old.ts->src/new.ts", "gone.md->gone.md", "old:gone.md"]);
       assert.deepStrictEqual(diffReads, [undefined, "2"]);
     }),
 );

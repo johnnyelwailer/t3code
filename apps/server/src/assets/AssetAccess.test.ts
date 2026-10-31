@@ -7,6 +7,9 @@ import {
   AssetCreateUrlInput,
   AssetPreviewTypeValidationError,
   SOURCE_CONTROL_MEDIA_ASSET,
+  CHANGE_REQUEST_FILE_ASSET,
+  ProjectId,
+  type ChangeRequestFileAssetResource,
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
@@ -1517,6 +1520,33 @@ describe("AssetAccess", () => {
       expect(response.headers["content-length"]).toBe("5");
     }).pipe(Effect.provide(Layer.merge(layerTest, layerDrivers)), Effect.scoped);
   });
+
+  it.effect("signs a changed image of a change request, and refuses a non-image", () =>
+    Effect.gen(function* () {
+      const file = {
+        _tag: CHANGE_REQUEST_FILE_ASSET,
+        projectId: ProjectId.make("p1"),
+        repository: "acme/web",
+        number: 7,
+        changeType: "change",
+        side: "old",
+      } satisfies Partial<ChangeRequestFileAssetResource>;
+      const image = { ...file, oldPath: "assets/logo.png", newPath: "assets/logo.png" };
+      const issued = yield* issueAssetUrl({ resource: image });
+      expect(issued.relativeUrl.endsWith("/logo.png")).toBe(true);
+      const suffix = issued.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separator = suffix.indexOf("/");
+      expect(yield* resolveAsset(suffix.slice(0, separator), suffix.slice(separator + 1))).toEqual({
+        kind: CHANGE_REQUEST_FILE_ASSET,
+        resource: image,
+      });
+
+      const error = yield* issueAssetUrl({
+        resource: { ...file, oldPath: ".env", newPath: ".env" },
+      }).pipe(Effect.flip);
+      expect(error._tag).toBe("AssetPreviewTypeValidationError");
+    }).pipe(Effect.provide(layerTest)),
+  );
 
   it.effect("refuses media no host keeps behind a credential, without echoing the URL", () =>
     Effect.gen(function* () {
