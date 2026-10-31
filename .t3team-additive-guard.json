@@ -805,7 +805,13 @@
     "packages/source-control-github/src/server/GitHubPullRequestProvider.ts",
     "packages/source-control-github/src/server/GitHubRest.test.ts",
     "packages/source-control-gitlab/src/server/GitLabPullRequestCli.ts",
-    "packages/source-control-gitlab/src/server/GitLabPullRequestProvider.ts"
+    "packages/source-control-gitlab/src/server/GitLabPullRequestProvider.ts",
+    "apps/mobile/modules/t3-review-diff/android/src/main/java/expo/modules/t3reviewdiff/T3ReviewDiffModule.kt",
+    "apps/mobile/modules/t3-review-diff/android/src/main/java/expo/modules/t3reviewdiff/T3ReviewDiffView.kt",
+    "apps/mobile/modules/t3-review-diff/ios/T3ReviewDiffModule.swift",
+    "apps/mobile/modules/t3-review-diff/ios/T3ReviewDiffView.swift",
+    "apps/mobile/src/features/diffs/nativeReviewDiffSurface.ts",
+    "apps/mobile/src/features/pull-requests/PullRequestRouteScreen.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
@@ -904,7 +910,13 @@
     "packages/shared/src/diffImage.test.ts",
     "packages/shared/src/diffImage.ts",
     "packages/source-control-gitlab/src/server/gitLabRepositoryFileJson.test.ts",
-    "packages/source-control-gitlab/src/server/gitLabRepositoryFileJson.ts"
+    "packages/source-control-gitlab/src/server/gitLabRepositoryFileJson.ts",
+    "apps/mobile/modules/t3-review-diff/android/src/main/java/expo/modules/t3reviewdiff/ReviewDiffImageLoader.kt",
+    "apps/mobile/modules/t3-review-diff/android/src/main/java/expo/modules/t3reviewdiff/ReviewDiffImageRow.kt",
+    "apps/mobile/modules/t3-review-diff/ios/ReviewDiffImageRow.swift",
+    "apps/mobile/src/features/pull-requests/pullRequestDiffImages.test.ts",
+    "apps/mobile/src/features/pull-requests/pullRequestDiffImages.ts",
+    "apps/mobile/src/features/pull-requests/usePullRequestDiffImages.ts"
   ],
   "baseRef": "upstream/main",
   "forkBaselineRef": "t3team/fork-baseline-20261031",
