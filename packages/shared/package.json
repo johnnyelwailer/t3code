@@ -39,6 +39,10 @@
       "types": "./src/t3team-cloudSessionFit.ts",
       "import": "./src/t3team-cloudSessionFit.ts"
     },
+    "./t3team-richChoicePayload": {
+      "types": "./src/t3team-richChoicePayload.ts",
+      "import": "./src/t3team-richChoicePayload.ts"
+    },
     "./t3team-widgetIconSprite": {
       "types": "./src/t3team-widgetIconSprite.ts",
       "import": "./src/t3team-widgetIconSprite.ts"

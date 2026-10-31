@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
 
+import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
 import { T3TeamRichChoice } from "~/t3team/rich-choice/t3team-RichChoice";
 import type { RichChoiceOption } from "~/t3team/rich-choice/t3team-richChoice.logic";
 
@@ -133,6 +134,36 @@ export const TwoOptions: Story = {
         prompt="Pick a model preset"
         options={roles.slice(0, 2)}
         onChoose={() => {}}
+      />
+    </Frame>
+  ),
+};
+
+/**
+ * What an agent shows with `t3_show_widget {format: "rich-choice"}`: the same carousel inside the
+ * widget frame. In this story there is no thread, so a pick is not sent anywhere.
+ */
+export const AgentWidget: Story = {
+  args: { prompt: "Choose your role", options: roles, onChoose: () => {} },
+  render: () => (
+    <Frame>
+      <T3TeamWidgetBlock
+        threadRef={null}
+        widget={{
+          widgetId: "story-widget",
+          title: "role_choice",
+          format: "rich-choice",
+          html: JSON.stringify({
+            prompt: "Which role fits your day-to-day work?",
+            options: roles.slice(0, 4).map((role) => ({
+              id: role.id,
+              title: role.title,
+              tag: role.tag,
+              body: role.body,
+              chips: role.chips,
+            })),
+          }),
+        }}
       />
     </Frame>
   ),

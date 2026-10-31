@@ -418,9 +418,25 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
     widget_code: Schema.optional(Schema.String).annotate({
       description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
     }),
-    format: Schema.optional(Schema.Literals(["html", "svg"])).annotate({
+    format: Schema.optional(Schema.Literals(["html", "svg", "rich-choice"])).annotate({
       description: T3TEAM_WIDGET_FORMAT_DESCRIPTION,
     }),
+    choice: Schema.optional(
+      Schema.Struct({
+        prompt: Schema.String,
+        options: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            title: Schema.String,
+            body: Schema.String,
+            tag: Schema.optional(Schema.String),
+            chips: Schema.optional(Schema.Array(Schema.String)),
+          }),
+        ),
+        multiple: Schema.optional(Schema.Boolean),
+        default_id: Schema.optional(Schema.String),
+      }),
+    ),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(
       Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
