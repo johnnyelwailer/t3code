@@ -3,10 +3,11 @@ import {
   formatRichChoicePick,
   parseRichChoicePayload,
 } from "@t3tools/shared/t3team-richChoicePayload";
-import { useState } from "react";
+import { useContext, useState } from "react";
 
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { T3TeamRichChoice } from "~/t3team/rich-choice/t3team-RichChoice";
+import { T3TeamTimelineRowsProvider } from "~/t3team/chat/t3team-timelineRows";
 import { buildT3TeamWidgetPromptTransport } from "~/t3team/chat/t3team-useWidgetBlockController";
 import { sendT3TeamThreadTurn } from "~/t3team/chat/t3team-sendThreadTurn";
 
@@ -18,9 +19,15 @@ function parseWidgetPayload(html: string) {
   }
 }
 
+type SendState =
+  | { readonly status: "idle" }
+  | { readonly status: "sending" | "sent"; readonly ids: readonly string[] }
+  | { readonly status: "failed" };
+
 /**
  * A `rich-choice` widget, rendered natively (no iframe) from its validated payload. The pick goes
  * back as the same hidden, agent-visible widget action message a bridge widget's `sendPrompt` makes.
+ * Whether the card is open, answered or superseded comes from the thread, so it survives remounts.
  */
 export function T3TeamRichChoiceWidgetBlock(props: {
   readonly widget: T3TeamMessageWidgetAttachment["widget"];
@@ -28,46 +35,71 @@ export function T3TeamRichChoiceWidgetBlock(props: {
 }) {
   const { widget, threadRef } = props;
   const backend = useBackend();
-  const [picked, setPicked] = useState<readonly string[]>([]);
+  const threadState = useContext(T3TeamTimelineRowsProvider).richChoiceCardStates.get(
+    widget.widgetId,
+  );
+  const [send, setSend] = useState<SendState>({ status: "idle" });
   const parsed = parseWidgetPayload(widget.html);
-
   if (!parsed?.ok) return null;
   const { payload } = parsed;
-  const answered = picked.length > 0;
+
+  const answeredIds = threadState?.status === "answered" ? threadState.pickedIds : null;
+  const pickedIds =
+    answeredIds ?? (send.status === "idle" || send.status === "failed" ? [] : send.ids);
+  const stale = threadState?.status === "stale";
+  const locked =
+    answeredIds !== null || stale || send.status === "sending" || send.status === "sent";
+  const canSend = backend !== null && threadRef !== null;
+
+  const choose = (ids: readonly string[]) => {
+    if (locked || !backend || !threadRef) return;
+    setSend({ status: "sending", ids });
+    const transport = buildT3TeamWidgetPromptTransport({
+      widgetId: widget.widgetId,
+      widgetTitle: widget.title,
+      text: formatRichChoicePick(payload, ids),
+    });
+    sendT3TeamThreadTurn({
+      backend,
+      threadId: threadRef.threadId,
+      text: transport.text,
+      t3teamExt: transport.t3teamExt,
+    }).then(
+      () => setSend({ status: "sent", ids }),
+      () => setSend({ status: "failed" }),
+    );
+  };
+
+  const note =
+    answeredIds || send.status === "sent"
+      ? "Your pick was sent."
+      : stale
+        ? "This question was superseded."
+        : send.status === "sending"
+          ? "Sending your pick…"
+          : send.status === "failed"
+            ? "Your pick could not be sent. Try again."
+            : null;
+
   return (
     <div className="w-full rounded-xl border border-border/55 bg-background/65 p-4">
       <p className="mb-3 text-sm font-medium text-foreground">{payload.prompt}</p>
       <T3TeamRichChoice
         prompt={payload.prompt}
-        options={payload.options.map((option) => ({
-          id: option.id,
-          title: option.title,
-          body: option.body,
-          tag: option.tag,
-          image: option.image ? { src: option.image } : undefined,
-          chips: option.chips,
-        }))}
+        options={payload.options}
         defaultId={payload.default_id}
         multiple={payload.multiple === true}
-        selectedIds={picked}
-        onChoose={(ids) => {
-          if (answered || !backend || !threadRef) return;
-          setPicked(ids);
-          const transport = buildT3TeamWidgetPromptTransport({
-            widgetId: widget.widgetId,
-            widgetTitle: widget.title,
-            text: formatRichChoicePick(payload, ids),
-          });
-          void sendT3TeamThreadTurn({
-            backend,
-            threadId: threadRef.threadId,
-            text: transport.text,
-            t3teamExt: transport.t3teamExt,
-          });
-        }}
+        selectedIds={pickedIds}
+        disabled={locked || !canSend}
+        onChoose={choose}
       />
-      {answered ? (
-        <p className="mt-2 text-center text-xs text-muted-foreground">Your pick was sent.</p>
+      {note ? (
+        <p
+          role={send.status === "failed" ? "alert" : "status"}
+          className="mt-2 text-center text-xs text-muted-foreground"
+        >
+          {note}
+        </p>
       ) : null}
     </div>
   );

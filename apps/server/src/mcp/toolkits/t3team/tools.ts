@@ -430,7 +430,6 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
             title: Schema.String,
             body: Schema.String,
             tag: Schema.optional(Schema.String),
-            image: Schema.optional(Schema.String),
             chips: Schema.optional(Schema.Array(Schema.String)),
           }),
         ),

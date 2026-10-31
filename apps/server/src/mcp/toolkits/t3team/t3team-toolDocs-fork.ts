@@ -18,12 +18,14 @@ const WORK_ITEM_FIELDS = {
 export const FORK_TOOL_DOCS: ToolDocsTable = {
   t3_show_widget: {
     description:
-      "- Inline widget; don't re-describe\n- intent (builder) OR widget_code (replay)\n- format: html|svg auto; rich-choice: choice only, pick returns as message\n- bridge: sendPrompt(text), window.host.callTool (capabilities.tools)\n- theme/icons: t3_tool_help",
+      "- Inline widget; don't re-describe\n- intent (builder) OR widget_code (replay)\n- format: html|svg auto, no network; rich-choice: choice only\n- bridge: sendPrompt(text), window.host.callTool (capabilities.tools)\n- theme/icons: t3_tool_help",
     fields: {
       title: "snake_case artifact name",
-      widget_code: "raw SVG or HTML fragment, no html/body tags",
-      capabilities: "tools callable via window.host.callTool",
+      widget_code: "SVG/HTML fragment, no html/body tags",
+      capabilities: "tool ids for window.host.callTool",
       choice: "rich-choice: prompt, options[], multiple?, default_id?",
+      multiple: "pick several; user presses Confirm",
+      default_id: "shown first, not preselected",
     },
   },
   t3_mywork_arrange: {

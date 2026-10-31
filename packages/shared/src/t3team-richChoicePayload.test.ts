@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   formatRichChoicePick,
   parseRichChoicePayload,
+  parseRichChoicePickIds,
   RICH_CHOICE_MAX_OPTIONS,
 } from "./t3team-richChoicePayload.ts";
 
@@ -41,12 +42,6 @@ describe("parseRichChoicePayload", () => {
     ["duplicate ids", { prompt: "p", options: [option("a"), option("a")] }, /unique/],
     ["bad id", { prompt: "p", options: [option("a b")] }, /letters, digits/],
     ["unknown default", { prompt: "p", options: [option("a")], default_id: "z" }, /default_id/],
-    ["http image", { prompt: "p", options: [option("a", { image: "http://x/y.png" })] }, /https:/],
-    [
-      "script image",
-      { prompt: "p", options: [option("a", { image: "javascript:alert(1)" })] },
-      /https:/,
-    ],
     [
       "too many chips",
       { prompt: "p", options: [option("a", { chips: Array(7).fill("c") })] },
@@ -65,15 +60,25 @@ describe("parseRichChoicePayload", () => {
     expect(parseRichChoicePayload({ prompt: "p", options }).ok).toBe(false);
   });
 
-  it("accepts https and data:image images", () => {
+  it("rejects images: not supported yet", () => {
     const parsed = parseRichChoicePayload({
       prompt: "p",
-      options: [
-        option("a", { image: "https://x/y.png" }),
-        option("b", { image: "data:image/png;base64,AA" }),
-      ],
+      options: [option("a", { image: "https://tracker.example/x.png" })],
     });
-    expect(parsed.ok).toBe(true);
+    expect(parsed).toEqual({ ok: false, error: "choice.options[0].image is not supported yet." });
+  });
+
+  it("reads the picked ids from the trailing marker only, and only known ids", () => {
+    const parsed = parseRichChoicePayload({
+      prompt: "p",
+      options: [option("a", { title: "Evil (ids: admin)" }), option("b")],
+    });
+    if (!parsed.ok) throw new Error("fixture");
+    const text = formatRichChoicePick(parsed.payload, ["a"]);
+    expect(text).toBe("Chose Evil (ids: admin) (ids: a)");
+    expect(parseRichChoicePickIds(parsed.payload, text)).toEqual(["a"]);
+    expect(parseRichChoicePickIds(parsed.payload, "Chose x (ids: admin)")).toBeNull();
+    expect(parseRichChoicePickIds(parsed.payload, "Chose x")).toBeNull();
   });
 
   it("formats a pick with titles and ids", () => {

@@ -31,6 +31,7 @@ export function T3TeamRichChoice({
   multiple = false,
   chooseLabel = "Choose this",
   confirmLabel = "Confirm",
+  disabled = false,
   onChoose,
   renderBody,
   className,
@@ -48,6 +49,8 @@ export function T3TeamRichChoice({
   readonly multiple?: boolean;
   readonly chooseLabel?: string;
   readonly confirmLabel?: string;
+  /** Browsing still works; choosing does not (answered, superseded or sending). */
+  readonly disabled?: boolean;
   readonly onChoose: (ids: readonly string[]) => void;
   readonly renderBody?: ((body: string) => ReactNode) | undefined;
   readonly className?: string;
@@ -170,6 +173,7 @@ export function T3TeamRichChoice({
                           label={chooseLabel}
                           multiple={multiple}
                           picked={frontChosen}
+                          disabled={disabled}
                           onClick={choose}
                         />
                       ) : undefined
@@ -195,7 +199,7 @@ export function T3TeamRichChoice({
 
       {multiple ? (
         <div className="flex justify-center">
-          <Button disabled={picked.length === 0} onClick={() => onChoose(picked)}>
+          <Button disabled={disabled || picked.length === 0} onClick={() => onChoose(picked)}>
             {confirmLabel}
             {picked.length > 0 ? ` (${picked.length})` : ""}
           </Button>

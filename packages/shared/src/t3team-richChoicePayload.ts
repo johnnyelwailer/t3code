@@ -9,8 +9,6 @@ export interface RichChoicePayloadOption {
   readonly title: string;
   readonly body: string;
   readonly tag?: string;
-  /** `https:` or `data:image/` URL. */
-  readonly image?: string;
   readonly chips?: ReadonlyArray<string>;
 }
 
@@ -30,10 +28,9 @@ const MAX = {
   prompt: 200,
   chip: 40,
   chips: 6,
-  image: 120_000,
 };
 const ID_PATTERN = /^[A-Za-z0-9_.:-]+$/;
-const IMAGE_PATTERN = /^(https:\/\/|data:image\/(png|jpeg|webp|gif|svg\+xml)[;,])/;
+const PICK_IDS = /\(ids: ([A-Za-z0-9_.:, -]+)\)$/;
 
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -66,16 +63,9 @@ function parseOption(raw: unknown, index: number): RichChoicePayloadOption | { e
   if (typeof title !== "string") return title;
   const body = text(option.body, `${where}.body`, MAX.body, true);
   if (typeof body !== "string") return body;
+  if (option.image !== undefined) return { error: `${where}.image is not supported yet.` };
   const tag = text(option.tag, `${where}.tag`, MAX.tag, false);
   if (typeof tag !== "string") return tag;
-  let image: string | undefined;
-  if (option.image !== undefined) {
-    const raw = text(option.image, `${where}.image`, MAX.image, true);
-    if (typeof raw !== "string") return raw;
-    if (!IMAGE_PATTERN.test(raw))
-      return { error: `${where}.image must be an https: or data:image/ URL.` };
-    image = raw;
-  }
   let chips: string[] | undefined;
   if (option.chips !== undefined) {
     if (!Array.isArray(option.chips) || option.chips.length > MAX.chips) {
@@ -93,7 +83,6 @@ function parseOption(raw: unknown, index: number): RichChoicePayloadOption | { e
     title,
     body,
     ...(tag ? { tag } : {}),
-    ...(image ? { image } : {}),
     ...(chips && chips.length > 0 ? { chips } : {}),
   };
 }
@@ -153,4 +142,17 @@ export function formatRichChoicePick(
 ): string {
   const titles = pickedIds.map((id) => payload.options.find((o) => o.id === id)?.title ?? id);
   return `Chose ${titles.join(", ")} (ids: ${pickedIds.join(", ")})`;
+}
+
+/** The ids in a pick message: the trailing `(ids: …)`, so a title that quotes one cannot spoof it. */
+export function parseRichChoicePickIds(
+  payload: RichChoicePayload,
+  text: string,
+): ReadonlyArray<string> | null {
+  const match = PICK_IDS.exec(text.trim());
+  if (!match?.[1]) return null;
+  const ids = match[1].split(",").map((id) => id.trim());
+  const known = new Set(payload.options.map((option) => option.id));
+  const unique = [...new Set(ids)];
+  return unique.length > 0 && unique.every((id) => known.has(id)) ? unique : null;
 }

@@ -36,6 +36,10 @@ describe("rich-choice widget input", () => {
       { title: "x", format: "rich-choice" },
       { title: "x", format: "rich-choice", choice: { prompt: "p", options: [] } },
       { title: "x", widget_code: "<div/>", choice },
+      {
+        ...args,
+        choice: { ...choice, options: [{ ...choice.options[0]!, image: "https://x/y.png" }] },
+      },
     ]) {
       assert.property(parseT3TeamWidgetShowInput(bad), "error");
     }
