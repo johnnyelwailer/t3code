@@ -1,3 +1,9 @@
+import {
+  CHANGE_REQUEST_FILE_ASSET,
+  type ChangeRequestFileAssetResource,
+  type PullRequestRef,
+} from "@t3tools/contracts";
+
 import { mediaKindFromPath, mediaMimeType } from "./mediaPreview.ts";
 
 export type DiffFileChangeType = "change" | "rename-pure" | "rename-changed" | "new" | "deleted";
@@ -33,4 +39,26 @@ export function diffImageSides(file: {
   return file.lineCount === 0 && diffImageMimeType(file.path) !== null
     ? changedSides(file.changeType)
     : [];
+}
+
+/** The asset a client asks for to show one side of a changed image. */
+export function changeRequestFileResource(input: {
+  readonly ref: PullRequestRef;
+  readonly commit?: string | null | undefined;
+  readonly file: {
+    readonly path: string;
+    readonly previousPath: string | null;
+    readonly changeType: DiffFileChangeType;
+  };
+  readonly side: DiffImageSide;
+}): ChangeRequestFileAssetResource {
+  return {
+    _tag: CHANGE_REQUEST_FILE_ASSET,
+    ...input.ref,
+    ...(input.commit ? { commit: input.commit } : {}),
+    changeType: input.file.changeType,
+    oldPath: input.file.previousPath ?? input.file.path,
+    newPath: input.file.path,
+    side: input.side,
+  };
 }

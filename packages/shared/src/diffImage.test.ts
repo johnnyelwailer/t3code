@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { ProjectId } from "@t3tools/contracts";
+
 import {
+  changeRequestFileResource,
   diffImageMimeType,
   diffImageSides,
   type DiffFileChangeType,
@@ -32,5 +35,28 @@ describe("diffImageMimeType", () => {
     expect(diffImageMimeType("a/b.jpeg")).toBe("image/jpeg");
     expect(diffImageMimeType("a/b.svg")).toBe("image/svg+xml");
     expect(diffImageMimeType("a/b.mp4")).toBeNull();
+  });
+});
+
+describe("changeRequestFileResource", () => {
+  it("names the side of a renamed image at the commit the reader opened", () => {
+    expect(
+      changeRequestFileResource({
+        ref: { projectId: ProjectId.make("p1"), repository: "acme/web", number: 7 },
+        commit: "abc1234",
+        file: { path: "b.png", previousPath: "a.png", changeType: "rename-changed" },
+        side: "old",
+      }),
+    ).toEqual({
+      _tag: "change-request-file",
+      projectId: "p1",
+      repository: "acme/web",
+      number: 7,
+      commit: "abc1234",
+      changeType: "rename-changed",
+      oldPath: "a.png",
+      newPath: "b.png",
+      side: "old",
+    });
   });
 });

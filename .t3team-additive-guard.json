@@ -811,7 +811,8 @@
     "apps/mobile/modules/t3-review-diff/ios/T3ReviewDiffModule.swift",
     "apps/mobile/modules/t3-review-diff/ios/T3ReviewDiffView.swift",
     "apps/mobile/src/features/diffs/nativeReviewDiffSurface.ts",
-    "apps/mobile/src/features/pull-requests/PullRequestRouteScreen.tsx"
+    "apps/mobile/src/features/pull-requests/PullRequestRouteScreen.tsx",
+    "patches/@pierre%2Fdiffs@1.6.1.patch"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
@@ -916,7 +917,8 @@
     "apps/mobile/modules/t3-review-diff/ios/ReviewDiffImageRow.swift",
     "apps/mobile/src/features/pull-requests/pullRequestDiffImages.test.ts",
     "apps/mobile/src/features/pull-requests/pullRequestDiffImages.ts",
-    "apps/mobile/src/features/pull-requests/usePullRequestDiffImages.ts"
+    "apps/mobile/src/features/pull-requests/usePullRequestDiffImages.ts",
+    "apps/web/src/components/pullRequest/PullRequestDiffImage.tsx"
   ],
   "baseRef": "upstream/main",
   "forkBaselineRef": "t3team/fork-baseline-20261031",

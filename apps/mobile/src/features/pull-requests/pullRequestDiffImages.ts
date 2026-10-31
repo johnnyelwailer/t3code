@@ -1,10 +1,14 @@
-import {
-  CHANGE_REQUEST_FILE_ASSET,
-  type ChangeRequestFileAssetResource,
-  type EnvironmentId,
-  type PullRequestRef,
+import type {
+  ChangeRequestFileAssetResource,
+  EnvironmentId,
+  PullRequestRef,
 } from "@t3tools/contracts";
-import { diffImageMimeType, diffImageSides, type DiffImageSide } from "@t3tools/shared/diffImage";
+import {
+  changeRequestFileResource,
+  diffImageMimeType,
+  diffImageSides,
+  type DiffImageSide,
+} from "@t3tools/shared/diffImage";
 
 import type { FilePreviewItem, FilePreviewSource } from "../../components/FilePreviewModal.types";
 import type { NativeReviewDiffRow } from "../diffs/nativeReviewDiffSurface";
@@ -20,7 +24,7 @@ export interface PullRequestDiffImage {
 
 export interface PullRequestDiffImageTarget {
   readonly environmentId: EnvironmentId;
-  readonly input: Pick<PullRequestRef, "projectId" | "repository" | "number" | "host">;
+  readonly input: PullRequestRef;
   readonly commit?: string | undefined;
 }
 
@@ -60,15 +64,12 @@ export function pullRequestDiffImageResource(
   image: PullRequestDiffImage,
   side: DiffImageSide,
 ): ChangeRequestFileAssetResource {
-  return {
-    _tag: CHANGE_REQUEST_FILE_ASSET,
-    ...target.input,
-    ...(target.commit ? { commit: target.commit } : {}),
-    changeType: image.file.changeType,
-    oldPath: image.file.previousPath ?? image.file.path,
-    newPath: image.file.path,
+  return changeRequestFileResource({
+    ref: target.input,
+    commit: target.commit,
+    file: image.file,
     side,
-  };
+  });
 }
 
 function galleryItem(

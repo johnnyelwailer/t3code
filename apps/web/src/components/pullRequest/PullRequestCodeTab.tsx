@@ -98,6 +98,7 @@ import { useCodeViewFileReveal } from "../diffs/useCodeViewFileReveal";
 import { useHideTestFiles } from "../diffs/useHideTestFiles";
 import { orderDiffFilesLikeTree } from "../diffs/diffFileTree.logic";
 import { StyledDiffCodeView } from "../diffs/StyledDiffCodeView";
+import { PullRequestDiffImage, pullRequestDiffImageSides } from "./PullRequestDiffImage";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
 import { Checkbox } from "../ui/checkbox";
@@ -1020,6 +1021,20 @@ function PullRequestCodeTab({
     );
   };
 
+  const renderEmptyDiffBody = (item: CodeViewItem<ReviewAnnotationGroup>) => {
+    if (item.type !== "diff") return null;
+    const sides = pullRequestDiffImageSides(item.fileDiff);
+    return sides.length === 0 ? null : (
+      <PullRequestDiffImage
+        environmentId={environmentId}
+        reference={reference}
+        commit={commit}
+        fileDiff={item.fileDiff}
+        sides={sides}
+      />
+    );
+  };
+
   const renderHeaderMetadata = (item: CodeViewItem<ReviewAnnotationGroup>) => {
     if (item.type !== "diff") return null;
     let { additions, deletions } = sourceFileStats.get(item.id) ?? getDiffLineStat([item.fileDiff]);
@@ -1855,6 +1870,7 @@ function PullRequestCodeTab({
               renderCodeViewFooter={renderCodeViewFooter}
               renderHeaderPrefix={renderHeaderPrefix}
               renderHeaderMetadata={renderHeaderMetadata}
+              renderEmptyDiffBody={renderEmptyDiffBody}
               renderAnnotation={renderAnnotation}
               // Find may repeat requests before render; only unfold, never toggle.
               onRevealSearchMatch={(item) =>
