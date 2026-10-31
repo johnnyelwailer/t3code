@@ -12,7 +12,7 @@ import { McpAppFrame } from "./McpAppFrame";
 import { checkpointFileTotals } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { useFileContextMenuHandler } from "../../fileContextMenu";
-import { useProject, useThreadShell } from "../../state/entities";
+import { useAssistantMessageText, useProject, useThreadShell } from "../../state/entities";
 import { MessageCopyButton } from "./MessageCopyButton";
 import { AssistantCitationSource } from "./AssistantCitationSource";
 import { resolveAssistantMessageCopyState } from "./MessagesTimeline.logic";
@@ -27,10 +27,16 @@ import { workflowCompletionDisplayText } from "~/t3team/chat/t3team-workflowComp
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  // The timeline holds a streaming message's row while only its text grows.
+  const liveText = useAssistantMessageText(
+    row.message.streaming ? ctx.threadRef : null,
+    row.projectedItem?.item.id,
+  );
+  const text = liveText ?? row.message.text;
   // t3team: a workflow's terminal result (`t3team-wf-result:<runId>`) or a workflow step's
   // reply stored as raw JSON re-renders as display text; other messages pass through unchanged.
-  const messageText = row.message.text
-    ? workflowCompletionDisplayText(row.message.id, row.message.text, {
+  const messageText = text
+    ? workflowCompletionDisplayText(row.message.id, text, {
         workflowStepReply: row.workflowStepReply === true,
       })
     : row.message.streaming
