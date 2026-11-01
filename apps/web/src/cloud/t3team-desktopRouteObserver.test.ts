@@ -50,6 +50,7 @@ const makeDeps = (claimed: Set<string>, grantResult = true) => ({
   now: () => NOW,
   once: makeOnce(claimed),
   isClaimed: (id: string) => claimed.has(id),
+  isOwnSubmit: (_id: string) => false,
   primaryEnvironmentId: () => own as EnvironmentId | null,
   sessions: vi.fn(async () => [{ sessionId: "4242", environmentId: cloud }]),
   grant: vi.fn(async () => grantResult),
@@ -181,5 +182,71 @@ describe("handleDesktopRouteAnswers", () => {
       deps,
     );
     expect(deps.grant).toHaveBeenCalledOnce();
+  });
+
+  it("never applies an internal route answered elsewhere: a notice, no grant, no private range", async () => {
+    const internalProposal = { target: "npm.nexplore.ch", internal: true };
+    const internalId = encodeDesktopRouteQuestionId(internalProposal);
+    const claimed = new Set<string>();
+    const deps = await run(
+      {
+        live: [
+          {
+            requestId: "req-int" as RuntimeRequestId,
+            resolvedAtMs: NOW - 1_000,
+            questions: [
+              {
+                id: internalId,
+                header: DESKTOP_ROUTE_QUESTION_HEADER,
+                question: desktopRouteQuestionLine(internalProposal),
+                options: [],
+              },
+            ],
+            answers: { [internalId]: DESKTOP_ROUTE_ONCE_LABEL },
+          },
+        ],
+      },
+      { claimed },
+    );
+    expect(deps.grant).not.toHaveBeenCalled();
+    expect(deps.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Internal routes are approved on this computer" }),
+    );
+    expect(claimed.has("req-int")).toBe(true);
+  });
+
+  it("treats a private address as internal even when the id says it is not", async () => {
+    const lying = { target: "10.9.9.9", internal: false };
+    const lyingId = encodeDesktopRouteQuestionId(lying);
+    const deps = await run({
+      live: [
+        {
+          requestId: "req-lie" as RuntimeRequestId,
+          resolvedAtMs: NOW - 1_000,
+          questions: [
+            {
+              id: lyingId,
+              header: DESKTOP_ROUTE_QUESTION_HEADER,
+              question: desktopRouteQuestionLine(lying),
+              options: [],
+            },
+          ],
+          answers: { [lyingId]: DESKTOP_ROUTE_ONCE_LABEL },
+        },
+      ],
+    });
+    expect(deps.grant).not.toHaveBeenCalled();
+    expect(deps.notify).toHaveBeenCalledOnce();
+  });
+
+  it("leaves an answer this client's own card is submitting to its own path: no grant, no notice", async () => {
+    const deps = makeDeps(new Set());
+    deps.isOwnSubmit = (id: string) => id === "req-1";
+    await handleDesktopRouteAnswers(
+      { environmentId: cloud, threadId: "t" as ThreadId, live: [answered({})], missed: [] },
+      deps,
+    );
+    expect(deps.grant).not.toHaveBeenCalled();
+    expect(deps.notify).not.toHaveBeenCalled();
   });
 });

@@ -27,7 +27,7 @@ import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 
 const MAX_REASON_LENGTH = 500;
 const NOTE =
-  'Nothing is routed until the user accepts on their own computer; the answer arrives as the user\'s next message. Then run the failing command again. If their computer is offline or asleep nothing is granted yet: the command fails with a clear status (502, X-Nexi-Route). An answer is applied only if their computer sees it within ten minutes; after that it shows "expired, ask again": tell the user to wake their computer and ask again.';
+  "Nothing is routed until the user accepts on their own computer; the answer arrives as the user's next message. Then run the failing command again. If their computer is offline or asleep nothing is granted yet: the command fails with a clear status (502, X-Nexi-Route). An answer is applied only if their computer sees it within ten minutes; after that it shows \"expired, ask again\": tell the user to wake their computer and ask again. An internal address can only be approved on the user's own computer, not from their phone.";
 
 const refuse = (message: string) => new T3TeamMcpToolError({ message });
 const oneLine = (text: string) => stripInvisibleFormat(text).replace(/\s+/g, " ").trim();

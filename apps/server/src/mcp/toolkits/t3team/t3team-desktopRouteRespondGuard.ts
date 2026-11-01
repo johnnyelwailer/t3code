@@ -6,10 +6,21 @@
 import { OrchestratorMcpFailure, isDesktopRouteQuestionIdPrefixed } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
+/** Every question of every `user_input_request` item for the request, not just the first item. */
 export const refuseDesktopRouteAnswerFromAgent = (
-  questions: ReadonlyArray<{ readonly id: string }>,
+  turnItems: ReadonlyArray<{ readonly type: string; readonly requestId?: string }>,
+  requestId: string,
 ) =>
-  questions.some((question) => isDesktopRouteQuestionIdPrefixed(question.id))
+  turnItems.some(
+    (item) =>
+      item.type === "user_input_request" &&
+      item.requestId === requestId &&
+      "questions" in item &&
+      Array.isArray(item.questions) &&
+      item.questions.some((question: { readonly id: string }) =>
+        isDesktopRouteQuestionIdPrefixed(question.id),
+      ),
+  )
     ? Effect.fail(
         new OrchestratorMcpFailure({
           code: "capability_denied",

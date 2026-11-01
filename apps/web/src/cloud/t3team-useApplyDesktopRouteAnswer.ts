@@ -4,7 +4,7 @@ import { toastManager } from "../components/ui/toast";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { usePrimaryEnvironmentId, useCloudSessions } from "../state/t3team-cloudSessions";
 import { captureDesktopRouteApply } from "./t3team-desktopRouteCapture";
-import { runDesktopRouteOnce } from "./t3team-desktopRouteClaims";
+import { markDesktopRouteOwnSubmit, runDesktopRouteOnce } from "./t3team-desktopRouteClaims";
 import { postDesktopRouteGrant } from "./t3team-desktopRouteGrant";
 import { applyOwnDesktopRouteGrant } from "./t3team-desktopRouteObserver";
 
@@ -41,6 +41,7 @@ export function useApplyDesktopRouteAnswer(thread: { readonly environmentId: Env
         };
       }
       const { grant } = captured;
+      markDesktopRouteOwnSubmit(requestId);
       return () =>
         applyOwnDesktopRouteGrant(requestId, grant, {
           once: runDesktopRouteOnce,
