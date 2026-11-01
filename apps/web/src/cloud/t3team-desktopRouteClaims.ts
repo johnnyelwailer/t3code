@@ -69,3 +69,16 @@ export function isDesktopRouteRequestClaimed(
 ): boolean {
   return memory.includes(requestId) || read(storage).includes(requestId);
 }
+
+const OWN_SUBMIT_TTL_MS = 60_000;
+const ownSubmits = new Map<string, number>();
+
+/** This client's card is submitting this request: its own path grants it, so the observer skips it. */
+export function markDesktopRouteOwnSubmit(requestId: string, now: number = Date.now()): void {
+  ownSubmits.set(requestId, now);
+}
+
+export function isDesktopRouteOwnSubmit(requestId: string, now: number = Date.now()): boolean {
+  const at = ownSubmits.get(requestId);
+  return at !== undefined && now - at < OWN_SUBMIT_TTL_MS;
+}

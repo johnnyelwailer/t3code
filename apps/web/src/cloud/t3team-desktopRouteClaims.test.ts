@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isDesktopRouteRequestClaimed, runDesktopRouteOnce } from "./t3team-desktopRouteClaims";
+import {
+  isDesktopRouteOwnSubmit,
+  isDesktopRouteRequestClaimed,
+  markDesktopRouteOwnSubmit,
+  runDesktopRouteOnce,
+} from "./t3team-desktopRouteClaims";
 
 const memoryStorage = () => {
   const data = new Map<string, string>();
@@ -75,5 +80,14 @@ describe("runDesktopRouteOnce", () => {
     await runDesktopRouteOnce("req-broken", work, { storage: broken, locks: sharedLock() });
     await runDesktopRouteOnce("req-broken", work, { storage: broken, locks: sharedLock() });
     expect(runs).toBe(1);
+  });
+});
+
+describe("own submit marks", () => {
+  it("hold for a minute, then the observer may act on a request whose own submit never finished", () => {
+    markDesktopRouteOwnSubmit("req-own", 1_000);
+    expect(isDesktopRouteOwnSubmit("req-own", 30_000)).toBe(true);
+    expect(isDesktopRouteOwnSubmit("req-own", 61_001)).toBe(false);
+    expect(isDesktopRouteOwnSubmit("req-other", 2_000)).toBe(false);
   });
 });

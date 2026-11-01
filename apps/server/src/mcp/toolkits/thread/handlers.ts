@@ -243,11 +243,11 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       Effect.gen(function* () {
         const requestId = yield* required(input.requestId, "requestId");
         const answers = yield* required(input.answers, "answers");
-        const { threads, projection, item } = yield* readQuestion({
+        const { threads, projection } = yield* readQuestion({
           threadId: input.threadId,
           requestId,
         });
-        yield* refuseDesktopRouteAnswerFromAgent(item.questions);
+        yield* refuseDesktopRouteAnswerFromAgent(projection.turnItems, requestId);
         const result = yield* threads
           .dispatch({
             type: "runtime-request.respond",

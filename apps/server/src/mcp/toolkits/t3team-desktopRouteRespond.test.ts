@@ -66,9 +66,15 @@ const questionId = encodeDesktopRouteQuestionId(proposal);
 const requestId = RuntimeRequestId.make("route-question");
 
 /** The agent's own MCP client (no read-only restriction) tries to answer the question. */
-const respondFromAgent = (ids: ReadonlyArray<string>, dispatched: string[]) => {
+const respondFromAgent = (
+  ids: ReadonlyArray<string>,
+  dispatched: string[],
+  /** A second `user_input_request` item for the same request, as a re-emitted question would be. */
+  laterItemIds: ReadonlyArray<string> = [],
+) => {
   const shell = McpToolAccessTestkit.liveThreadShell(threadId);
   const projection = McpToolAccessTestkit.idleThreadProjection(shell);
+  const groups = laterItemIds.length > 0 ? [ids, laterItemIds] : [ids];
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     return yield* server
@@ -77,7 +83,9 @@ const respondFromAgent = (ids: ReadonlyArray<string>, dispatched: string[]) => {
         arguments: {
           action: "respond",
           requestId,
-          answers: Object.fromEntries(ids.map((id) => [id, DESKTOP_ROUTE_SESSION_LABEL])),
+          answers: Object.fromEntries(
+            [...ids, ...laterItemIds].map((id) => [id, DESKTOP_ROUTE_SESSION_LABEL]),
+          ),
         },
       })
       .pipe(
@@ -108,32 +116,30 @@ const respondFromAgent = (ids: ReadonlyArray<string>, dispatched: string[]) => {
                     resolvedAt: null,
                   },
                 ],
-                turnItems: [
-                  {
-                    id: TurnItemId.make("route-question-item"),
-                    threadId,
-                    runId: null,
-                    nodeId: null,
-                    providerThreadId: null,
-                    providerTurnId: null,
-                    nativeItemRef: null,
-                    parentItemId: null,
-                    ordinal: 0,
-                    status: "pending",
-                    title: null,
-                    startedAt: shell.createdAt,
-                    completedAt: null,
-                    updatedAt: shell.updatedAt,
-                    type: "user_input_request",
-                    requestId,
-                    questions: ids.map((id) => ({
-                      id,
-                      header: DESKTOP_ROUTE_QUESTION_HEADER,
-                      question: desktopRouteQuestionLine(proposal),
-                      options: [{ label: DESKTOP_ROUTE_SESSION_LABEL, description: "x" }],
-                    })),
-                  },
-                ],
+                turnItems: groups.map((group, index) => ({
+                  id: TurnItemId.make(`route-question-item-${index}`),
+                  threadId,
+                  runId: null,
+                  nodeId: null,
+                  providerThreadId: null,
+                  providerTurnId: null,
+                  nativeItemRef: null,
+                  parentItemId: null,
+                  ordinal: index,
+                  status: "pending",
+                  title: null,
+                  startedAt: shell.createdAt,
+                  completedAt: null,
+                  updatedAt: shell.updatedAt,
+                  type: "user_input_request",
+                  requestId,
+                  questions: group.map((id) => ({
+                    id,
+                    header: DESKTOP_ROUTE_QUESTION_HEADER,
+                    question: desktopRouteQuestionLine(proposal),
+                    options: [{ label: DESKTOP_ROUTE_SESSION_LABEL, description: "x" }],
+                  })),
+                })),
               }),
             dispatch: (command) => {
               dispatched.push(command.type);
@@ -151,6 +157,16 @@ const refused = (ids: ReadonlyArray<string>) => {
   const dispatched: string[] = [];
   return Effect.gen(function* () {
     const result = yield* respondFromAgent(ids, dispatched);
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("capability_denied");
+    expect(dispatched).toEqual([]);
+  });
+};
+
+const refusedWithLaterItem = (ids: ReadonlyArray<string>, later: ReadonlyArray<string>) => {
+  const dispatched: string[] = [];
+  return Effect.gen(function* () {
+    const result = yield* respondFromAgent(ids, dispatched, later);
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain("capability_denied");
     expect(dispatched).toEqual([]);
@@ -179,6 +195,10 @@ it.effect("the prefix is matched case-insensitively", () =>
 
 it.effect("a request that mixes a desktop-route question with an ordinary one is refused", () =>
   refused(["size", questionId]),
+);
+
+it.effect("a desktop-route question in a later item for the same request is refused too", () =>
+  refusedWithLaterItem(["size"], [questionId]),
 );
 
 it.effect("an ordinary question is still answerable", () => {
