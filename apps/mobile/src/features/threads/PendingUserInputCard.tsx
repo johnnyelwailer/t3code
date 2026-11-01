@@ -1,6 +1,10 @@
 import { Button } from "../../components/ui/Button";
 import { QuestionAttachments } from "./QuestionAttachments";
-import type { EnvironmentId, RuntimeRequestId } from "@t3tools/contracts";
+import {
+  desktopRouteCardFrom,
+  type EnvironmentId,
+  type RuntimeRequestId,
+} from "@t3tools/contracts";
 import type { ThreadUserInputQuestion } from "@t3tools/client-runtime/state/thread-requests";
 import { useRef } from "react";
 import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
@@ -15,6 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { USER_INPUT_TOGGLE_DURATION_MS } from "./pendingUserInputLayout";
+import { T3TeamDesktopRouteQuestion } from "./t3team-DesktopRouteQuestion";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
@@ -215,6 +220,22 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
         ) : null}
         {props.pendingUserInput.questions.map((question) => {
           const draft = props.drafts[question.id];
+          const routeCard = desktopRouteCardFrom(question);
+          if (routeCard !== null && props.pendingUserInput.questions.length === 1) {
+            return (
+              <T3TeamDesktopRouteQuestion
+                key={question.id}
+                card={routeCard}
+                question={question}
+                requestId={props.pendingUserInput.requestId}
+                environmentId={props.environmentId}
+                disabled={responseDisabled || !props.canOperateThread}
+                answers={props.answers}
+                onSelectOption={props.onSelectOption}
+                onSubmit={props.onSubmit}
+              />
+            );
+          }
           return (
             <View key={question.id} className="gap-2 pt-1">
               <Text className="font-t3-bold text-xs uppercase tracking-[1px] text-foreground-muted">
