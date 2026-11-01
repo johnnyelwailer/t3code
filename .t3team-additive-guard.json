@@ -798,7 +798,8 @@
     "apps/server/src/provider/agentContextBudget.json",
     "apps/web/src/components/chat/MessagesTimeline.browser.test.tsx",
     "apps/web/src/components/ChatView.browser.test.tsx",
-    "apps/web/src/components/chat/ThreadRelationshipsControl.browser.test.tsx"
+    "apps/web/src/components/chat/ThreadRelationshipsControl.browser.test.tsx",
+    "apps/server/src/usage/UsageService.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

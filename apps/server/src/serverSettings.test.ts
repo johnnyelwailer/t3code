@@ -124,6 +124,26 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(layerServerSettings())),
   );
 
+  it.effect("links environments by default and persists only an opt-out", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      const service = yield* ServerSettingsModule.ServerSettingsService;
+
+      yield* fs.writeFileString(config.settingsPath, `{ "enableAgentBrowserAccess": false }`);
+      assert.isTrue((yield* service.getSettings).linkedEnvironmentsEnabled);
+
+      yield* service.updateSettings({ linkedEnvironmentsEnabled: false });
+      assert.isFalse((yield* service.getSettings).linkedEnvironmentsEnabled);
+      const persisted = yield* decodeSettingsFile(yield* fs.readFileString(config.settingsPath));
+      assert.isFalse(persisted.linkedEnvironmentsEnabled);
+
+      yield* service.updateSettings({ linkedEnvironmentsEnabled: true });
+      const reset = yield* decodeSettingsFile(yield* fs.readFileString(config.settingsPath));
+      assert.notProperty(reset, "linkedEnvironmentsEnabled");
+    }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("serializes concurrent model preference edits without cancelling duplicate adds", () =>
     Effect.gen(function* () {
       const service = yield* ServerSettingsModule.ServerSettingsService;
