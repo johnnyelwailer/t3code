@@ -7,6 +7,8 @@ import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
 
+import { WorkflowRunIntentInput } from "@t3team/sdk/tools/t3teamWorkflow";
+
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
   T3TEAM_WIDGET_FORMAT_DESCRIPTION,
@@ -18,7 +20,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
 import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
-import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
+import { mcpDescriptionOf, mcpPropertyDescriptionOf } from "./t3team-mcpToolDescription.ts";
 import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
 import {
   T3TeamWorkItemChangeSetTool,
@@ -232,18 +234,20 @@ const T3TeamReadMessageTool = Tool.make("t3_read_message", {
 // gate). Routes to the t3team.orchestration.run broker tool. Prefer this over
 // walking multi-step tasks by hand; on a `failed` status, fix the source and run
 // again.
+const runProperty = (property: string) =>
+  mcpPropertyDescriptionOf("t3team.orchestration.run", property);
 const orchestrationRunParameters = Schema.Struct({
-  source: Schema.optional(Schema.String),
-  workflowPath: Schema.optional(Schema.String),
-  recipe: Schema.optional(Schema.String),
-  action: Schema.optional(Schema.String),
-  args: Schema.optional(Schema.Unknown),
-  replaceRunId: Schema.optional(Schema.String),
-  intent: Schema.Struct({
-    goal: Schema.String,
-    expectedOutcome: Schema.String,
-    guardrails: Schema.Array(Schema.String),
+  source: Schema.optional(Schema.String).annotate({ description: runProperty("source") }),
+  workflowPath: Schema.optional(Schema.String).annotate({
+    description: runProperty("workflowPath"),
   }),
+  recipe: Schema.optional(Schema.String).annotate({ description: runProperty("recipe") }),
+  action: Schema.optional(Schema.String).annotate({ description: runProperty("action") }),
+  args: Schema.optional(Schema.Unknown).annotate({ description: runProperty("args") }),
+  replaceRunId: Schema.optional(Schema.String).annotate({
+    description: runProperty("replaceRunId"),
+  }),
+  intent: Schema.optional(WorkflowRunIntentInput).annotate({ description: runProperty("intent") }),
 });
 
 // ONE description source: the broker catalog entry is what in-app agents read (TOOL_SPECS copies
@@ -478,16 +482,13 @@ const T3TeamRecipeListTool = Tool.make("t3_recipe_list", {
 // existing on-disk recipe (`path`) or inline source (`source`, the same body
 // passed to t3_orchestration_run). Routes to the t3team.recipe.validate
 // broker tool; never writes or executes anything.
+const validateProperty = (property: string) =>
+  mcpPropertyDescriptionOf("t3team.recipe.validate", property);
 const T3TeamRecipeValidateTool = Tool.make("t3_recipe_validate", {
-  description:
-    "Statically validate an agent orchestration before running it: pass `source` (inline " +
-    "orchestration TypeScript — same body you would pass to t3_orchestration_run) or `path` " +
-    "(a .workflow.ts or recipe directory in the workspace). Returns {ok, meta?, shape?, " +
-    "errors[]}; fix errors and re-validate until ok before calling t3_orchestration_run. " +
-    "Nothing is executed or written.",
+  description: mcpDescriptionOf("t3team.recipe.validate"),
   parameters: Schema.Struct({
-    path: Schema.optional(Schema.String),
-    source: Schema.optional(Schema.String),
+    path: Schema.optional(Schema.String).annotate({ description: validateProperty("path") }),
+    source: Schema.optional(Schema.String).annotate({ description: validateProperty("source") }),
   }),
   success: Schema.Unknown,
   failure: T3TeamToolFailure,
