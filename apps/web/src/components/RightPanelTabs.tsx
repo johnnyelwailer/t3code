@@ -1,5 +1,6 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
+import { PinnedPanelTab, type PinnedPanelTabProps } from "~/t3team/t3team-PinnedPanelTab";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   threadRuntimeIsActive,
@@ -167,6 +168,11 @@ export interface RightPanelTabsProps {
    * the default body is a recipe host, not the generic "open browser" list.
    */
   emptyState?: ReactNode;
+  /**
+   * A permanent first tab that is not a surface: active while `activeSurfaceId` is null (its
+   * body is `emptyState`), never closable or draggable. Select it with the store's `activatePinned`.
+   */
+  pinnedTab?: PinnedPanelTabProps;
   children: ReactNode;
 }
 
@@ -1386,6 +1392,13 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           data-right-panel-tab-list
         >
           <div className="flex h-full w-max min-w-full items-center gap-1">
+            {props.pinnedTab ? (
+              <PinnedPanelTab
+                pinned={props.pinnedTab}
+                active={props.activeSurfaceId === null}
+                ownsDesktopTitleBar={ownsDesktopTitleBar}
+              />
+            ) : null}
             <SortableTabList surfaces={props.surfaces} onMove={props.onMoveSurface}>
               {props.surfaces.map((surface) => {
                 const previewTabId = previewTabIdOf(surface, props.previewSessions);

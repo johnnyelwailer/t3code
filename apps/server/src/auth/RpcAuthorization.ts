@@ -77,6 +77,8 @@ export const RPC_REQUIRED_SCOPES = {
   // t3team: "Move to" another machine — capture is read-only but only serves an operate flow.
   [WS_METHODS.t3teamThreadHandoffPrepare]: AuthOrchestrationOperateScope,
   [WS_METHODS.t3teamThreadHandoffRecord]: AuthOrchestrationOperateScope,
+  // t3team: binds a thread to the view it started from (a thread fact write).
+  [WS_METHODS.t3teamContextBindingRecord]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetConfig]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetNpmRelease]: AuthOrchestrationReadScope,

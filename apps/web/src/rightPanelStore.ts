@@ -213,6 +213,8 @@ interface RightPanelStoreState {
   activateTerminal: (ref: ScopedThreadRef, surfaceId: string, terminalId: string) => void;
   closeTerminal: (ref: ScopedThreadRef, surfaceId: string, terminalId: string) => void;
   activateSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
+  /** Selects the host's pinned tab (`RightPanelTabs` `pinnedTab`): no surface is active, tabs stay. */
+  activatePinned: (ref: ScopedThreadRef) => void;
   closeSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeOtherSurfaces: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeSurfacesToRight: (ref: ScopedThreadRef, surfaceId: string) => void;
@@ -1065,6 +1067,14 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             current.surfaces.some((surface) => surface.id === surfaceId)
               ? { ...current, isOpen: true, activeSurfaceId: surfaceId }
               : current,
+          ),
+        ),
+      activatePinned: (ref) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            current.isOpen && current.activeSurfaceId === null
+              ? current
+              : { ...current, isOpen: true, activeSurfaceId: null },
           ),
         ),
       closeSurface: (ref, surfaceId) =>

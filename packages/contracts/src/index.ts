@@ -75,6 +75,7 @@ export * from "./t3team-workItemChangeSet.ts";
 export * from "./t3team-packDocuments.ts";
 export * from "./t3team-environmentCapabilities.ts";
 export * from "./t3team-threadStopCascade.ts";
+export * from "./t3team-contextBinding.ts";
 export * from "./t3team-threadHandoff.ts";
 export * from "./providerJobControl.ts";
 export * from "./t3ProjectFile.ts";
