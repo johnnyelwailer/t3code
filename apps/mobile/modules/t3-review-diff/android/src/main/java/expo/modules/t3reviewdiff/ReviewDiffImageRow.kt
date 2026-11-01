@@ -107,7 +107,7 @@ internal class ReviewDiffImageRowDrawing(private val density: Float) {
     text: String,
     area: RectF,
     theme: DiffTheme,
-    paint: Paint,
+    paint: Paint
   ) {
     paint.color = theme.mutedText
     val textWidth = paint.measureText(text)
