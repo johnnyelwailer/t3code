@@ -13,6 +13,8 @@ import {
   AssetWorkspacePathValidationError,
   AssetWorkspaceResolutionError,
   AssetWorkspaceRootNormalizationError,
+  CHANGE_REQUEST_FILE_ASSET,
+  ChangeRequestFileAssetResource,
   SOURCE_CONTROL_MEDIA_ASSET,
   ThreadId,
   ToolActivityNativeAppReference,
@@ -30,6 +32,7 @@ import {
   readImageDimensions,
   type ImageDimensions,
 } from "@t3tools/shared/imageDimensions";
+import { diffImageMimeType } from "@t3tools/shared/diffImage";
 import { MCP_APP_MAX_HTML_BYTES } from "@t3tools/shared/mcpApp";
 import {
   isProjectFaviconPath,
@@ -66,6 +69,7 @@ import * as NativeAppIconResolver from "./NativeAppIconResolver.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
 import { extractIcnsPng } from "./icns.ts";
 import { openMediaFile, readMediaFileHeader, type OpenMediaFile } from "./MediaFile.ts";
+import { changeRequestFilePath } from "./changeRequestFileAsset.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 export const ASSET_ROUTE_PREFIX = "/api/assets";
@@ -177,6 +181,12 @@ const AssetClaimsSchema = Schema.Union([
     cwd: Schema.String,
     expiresAt: Schema.Number,
   }),
+  Schema.Struct({
+    version: Schema.Literal(1),
+    kind: Schema.Literal(CHANGE_REQUEST_FILE_ASSET),
+    resource: ChangeRequestFileAssetResource,
+    expiresAt: Schema.Number,
+  }),
 ]);
 type AssetClaims = typeof AssetClaimsSchema.Type;
 
@@ -204,6 +214,10 @@ export type ResolvedAsset =
       readonly url: string;
       readonly cwd: string;
       readonly expiresAt: number;
+    }
+  | {
+      readonly kind: typeof CHANGE_REQUEST_FILE_ASSET;
+      readonly resource: ChangeRequestFileAssetResource;
     };
 
 function decodeClaims(encodedPayload: string): AssetClaims | null {
@@ -846,6 +860,20 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       fileName = media.fileName;
       break;
     }
+    case CHANGE_REQUEST_FILE_ASSET: {
+      const filePath = changeRequestFilePath(input.resource);
+      if (diffImageMimeType(filePath) === null) {
+        return yield* new AssetPreviewTypeValidationError({ resource: input.resource });
+      }
+      claims = {
+        version: 1,
+        kind: CHANGE_REQUEST_FILE_ASSET,
+        resource: input.resource,
+        expiresAt,
+      };
+      fileName = path.basename(filePath);
+      break;
+    }
   }
 
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
@@ -961,6 +989,10 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
       cwd: claims.cwd,
       expiresAt: claims.expiresAt,
     } satisfies ResolvedAsset;
+  }
+
+  if (claims.kind === CHANGE_REQUEST_FILE_ASSET) {
+    return { kind: CHANGE_REQUEST_FILE_ASSET, resource: claims.resource } satisfies ResolvedAsset;
   }
 
   if (claims.kind === "tool-output-image") {

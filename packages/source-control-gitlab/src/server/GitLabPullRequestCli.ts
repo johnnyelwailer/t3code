@@ -66,6 +66,7 @@ import type {
   ProviderFileAtRevision,
 } from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import { readGitLabFileAtRevision } from "./t3team-GitLabFileAtRevision.ts";
+import { repositoryFileBytes, repositoryFileOutputBudget } from "./gitLabRepositoryFileJson.ts";
 
 export class GitLabMergeRequestReadError extends Schema.TaggedError<GitLabMergeRequestReadError>()(
   "GitLabMergeRequestReadError",
@@ -320,6 +321,20 @@ export class GitLabPullRequestCli extends Context.Service<
       { readonly oldContents: string; readonly newContents: string },
       GitLabPullRequestCliError
     >;
+
+    /** One side of a changed file, undecoded. Null when that side does not exist. */
+    readonly getMergeRequestDiffFileBytes: (input: {
+      readonly cwd: string;
+      readonly repository: string;
+      readonly host?: string | undefined;
+      readonly number: number;
+      readonly commit?: string | undefined;
+      readonly changeType: "change" | "rename-pure" | "rename-changed" | "new" | "deleted";
+      readonly oldPath: string;
+      readonly newPath: string;
+      readonly side: "old" | "new";
+      readonly maxBytes: number;
+    }) => Effect.Effect<Uint8Array | null, GitLabPullRequestCliError>;
 
     readonly getProjectMergeCapabilities: (input: {
       readonly cwd: string;
@@ -1325,6 +1340,28 @@ export const make = Effect.gen(function* () {
       }),
     );
 
+  const diffFileRefs = Effect.fn("GitLabPullRequestCli.diffFileRefs")(function* (input: {
+    readonly cwd: string;
+    readonly host?: string | undefined;
+    readonly repository: string;
+    readonly number: number;
+    readonly commit?: string | undefined;
+    readonly changeType: "change" | "rename-pure" | "rename-changed" | "new" | "deleted";
+  }) {
+    if (input.commit !== undefined && !isCommitSha(input.commit)) {
+      return yield* new GitLabDiffCommitError({ command: "glab", cwd: input.cwd });
+    }
+    return yield* input.commit === undefined
+      ? getDiffRefs(input)
+      : getCommitDiffRefs({
+          cwd: input.cwd,
+          host: input.host,
+          repository: input.repository,
+          commit: input.commit,
+          allowRoot: input.changeType === "new",
+        });
+  });
+
   return GitLabPullRequestCli.of({
     getViewerUsername: viewerUsername,
 
@@ -1473,18 +1510,7 @@ export const make = Effect.gen(function* () {
     getMergeRequestDiffFileContents: Effect.fn(
       "GitLabPullRequestCli.getMergeRequestDiffFileContents",
     )(function* (input) {
-      if (input.commit !== undefined && !isCommitSha(input.commit)) {
-        return yield* new GitLabDiffCommitError({ command: "glab", cwd: input.cwd });
-      }
-      const refs = yield* input.commit === undefined
-        ? getDiffRefs(input)
-        : getCommitDiffRefs({
-            cwd: input.cwd,
-            host: input.host,
-            repository: input.repository,
-            commit: input.commit,
-            allowRoot: input.changeType === "new",
-          });
+      const refs = yield* diffFileRefs(input);
 
       const readFile = (revision: string, filePath: string) =>
         api({
@@ -1523,6 +1549,35 @@ export const make = Effect.gen(function* () {
       );
       return { oldContents, newContents };
     }),
+
+    getMergeRequestDiffFileBytes: Effect.fn("GitLabPullRequestCli.getMergeRequestDiffFileBytes")(
+      function* (input) {
+        if (input.side === "old" ? input.changeType === "new" : input.changeType === "deleted") {
+          return null;
+        }
+        const refs = yield* diffFileRefs(input);
+        const filePath = input.side === "old" ? input.oldPath : input.newPath;
+        const result = yield* api({
+          cwd: input.cwd,
+          host: input.host,
+          path: `projects/${projectPath(input.repository)}/repository/files/${encodeURIComponent(
+            filePath,
+          )}?ref=${encodeURIComponent(input.side === "old" ? refs.baseSha : refs.headSha)}`,
+          maxOutputBytes: repositoryFileOutputBudget(input.maxBytes),
+          timeoutMs: DIFF_TIMEOUT_MS,
+        });
+        const bytes = result.stdoutTruncated ? null : repositoryFileBytes(result.stdout.trim());
+        if (bytes === null || bytes.byteLength > input.maxBytes) {
+          return yield* new GitLabDiffFileContentsUnavailableError({
+            command: "glab",
+            cwd: input.cwd,
+            path: filePath,
+            reason: "oversized",
+          });
+        }
+        return bytes;
+      },
+    ),
 
     getProjectMergeCapabilities: Effect.fn("GitLabPullRequestCli.getProjectMergeCapabilities")(
       function (input) {

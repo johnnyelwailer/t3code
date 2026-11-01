@@ -191,6 +191,7 @@ function pullRequestServiceLayer(
           nextCursor: null,
         } satisfies PullRequestDiffResult)),
     fileAtRevision: () => Effect.die("not used"),
+    diffFileBytes: () => Effect.die("not used"),
     diffFileContents: () =>
       Effect.succeed({
         oldContents: "export const value = 'old';\n",
