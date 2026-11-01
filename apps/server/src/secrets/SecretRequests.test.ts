@@ -465,7 +465,10 @@ it.effect("a replayed answer cannot overwrite the saved value", () =>
         .answer({ threadId, turnItemId, answer: { type: "save", secret: "attacker" } })
         .pipe(Effect.flip);
       assert.equal(replay.reason, "already_answered");
-      assert.deepEqual(valuesOf(stored).map((value) => value.includes("attacker")), [false]);
+      assert.deepEqual(
+        valuesOf(stored).map((value) => value.includes("attacker")),
+        [false],
+      );
       const ref = Option.getOrThrow(yield* service.savedRef({ threadId, turnItemId }));
       assert.equal(yield* service.consume({ ref, projectId }), "first");
     }),
