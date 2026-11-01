@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { claimDesktopRouteRequest } from "./t3team-desktopRouteClaims";
+import { isDesktopRouteRequestClaimed, runDesktopRouteOnce } from "./t3team-desktopRouteClaims";
 
 const memoryStorage = () => {
   const data = new Map<string, string>();
@@ -10,15 +10,58 @@ const memoryStorage = () => {
   };
 };
 
-describe("claimDesktopRouteRequest", () => {
-  it("is true once per request id, across a restart that keeps the storage", () => {
+/** One lock shared by "windows": runs hold it one after another, as navigator.locks does. */
+const sharedLock = () => {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (run: () => Promise<void>) => {
+    const next = tail.then(run, run);
+    tail = next;
+    return next;
+  };
+};
+
+describe("runDesktopRouteOnce", () => {
+  it("runs the work once per request id, across a restart that keeps the storage", async () => {
     const storage = memoryStorage();
-    expect(claimDesktopRouteRequest("req-a", storage)).toBe(true);
-    expect(claimDesktopRouteRequest("req-a", storage)).toBe(false);
-    expect(claimDesktopRouteRequest("req-b", storage)).toBe(true);
+    let runs = 0;
+    const work = async () => (runs++, true);
+    await runDesktopRouteOnce("req-a", work, { storage, locks: sharedLock() });
+    await runDesktopRouteOnce("req-a", work, { storage, locks: sharedLock() });
+    await runDesktopRouteOnce("req-b", work, { storage, locks: sharedLock() });
+    expect(runs).toBe(2);
+    expect(isDesktopRouteRequestClaimed("req-a", storage)).toBe(true);
   });
 
-  it("still claims once when the storage cannot be written or read", () => {
+  it("two windows racing on one request run the work once", async () => {
+    const storage = memoryStorage();
+    const locks = sharedLock();
+    let runs = 0;
+    const work = async () => {
+      await Promise.resolve();
+      runs++;
+      return true;
+    };
+    await Promise.all([
+      runDesktopRouteOnce("req-race", work, { storage, locks }),
+      runDesktopRouteOnce("req-race", work, { storage, locks }),
+    ]);
+    expect(runs).toBe(1);
+  });
+
+  it("does not claim a failed run, so another client can still act", async () => {
+    const storage = memoryStorage();
+    const locks = sharedLock();
+    const outcomes = [false, true];
+    let runs = 0;
+    const work = async () => outcomes[runs++] ?? true;
+    await runDesktopRouteOnce("req-retry", work, { storage, locks });
+    expect(isDesktopRouteRequestClaimed("req-retry", storage)).toBe(false);
+    await runDesktopRouteOnce("req-retry", work, { storage, locks });
+    expect(runs).toBe(2);
+    expect(isDesktopRouteRequestClaimed("req-retry", storage)).toBe(true);
+  });
+
+  it("still claims once when the storage cannot be written or read", async () => {
     const broken = {
       getItem: () => {
         throw new Error("denied");
@@ -27,7 +70,10 @@ describe("claimDesktopRouteRequest", () => {
         throw new Error("full");
       },
     };
-    expect(claimDesktopRouteRequest("req-broken", broken)).toBe(true);
-    expect(claimDesktopRouteRequest("req-broken", broken)).toBe(false);
+    let runs = 0;
+    const work = async () => (runs++, true);
+    await runDesktopRouteOnce("req-broken", work, { storage: broken, locks: sharedLock() });
+    await runDesktopRouteOnce("req-broken", work, { storage: broken, locks: sharedLock() });
+    expect(runs).toBe(1);
   });
 });

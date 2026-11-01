@@ -1,8 +1,9 @@
 import type { DesktopRouteProposal } from "./t3team-desktopRoute.ts";
 
-/** Names that only resolve inside a network; no public name ends this way. */
+/** Names that only resolve inside a network or are reserved: no public name ends this way. */
 const PRIVATE_SUFFIXES = [
   ".local",
+  ".localhost",
   ".internal",
   ".lan",
   ".corp",
@@ -10,28 +11,32 @@ const PRIVATE_SUFFIXES = [
   ".intranet",
   ".localdomain",
   ".private",
+  ".svc",
+  ".test",
+  ".invalid",
+  ".example",
+  ".arpa",
 ];
 
 const hostOf = (target: string): string => {
   const noScheme = target.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
   const authority = noScheme.split(/[/?#]/)[0] ?? "";
   const bracketed = /^\[([^\]]*)\]/.exec(authority);
+  const [name = "", port] = authority.split(":");
   const host =
-    bracketed?.[1] ??
-    (authority.includes(":") && authority.split(":").length === 2
-      ? (authority.split(":")[0] ?? "")
-      : authority);
-  return host.toLowerCase().replace(/\.$/, "").split("/")[0] ?? "";
+    bracketed?.[1] ?? (port !== undefined && authority.split(":").length === 2 ? name : authority);
+  return host.toLowerCase().replace(/\.$/, "");
 };
 
-const ipv4Octets = (host: string): ReadonlyArray<number> | null => {
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (m === null) return null;
-  const octets = m.slice(1).map(Number);
-  return octets.every((n) => n <= 255) ? octets : null;
-};
+const isNumericLabel = (label: string) => /^(0x[0-9a-f]*|\d+)$/.test(label);
 
-function privateIpv4([a = 0, b = 0]: ReadonlyArray<number>): boolean {
+/** [a, b, c] for a clean dotted-decimal IPv4 (no leading zeros, no octal or hex forms), else null. */
+const dottedQuad = (labels: ReadonlyArray<string>): ReadonlyArray<number> | null =>
+  labels.length === 4 && labels.every((l) => /^(0|[1-9]\d{0,2})$/.test(l) && Number(l) <= 255)
+    ? labels.map(Number)
+    : null;
+
+function privateIpv4([a = 0, b = 0, c = 0]: ReadonlyArray<number>): boolean {
   return (
     a === 0 ||
     a === 10 ||
@@ -39,25 +44,29 @@ function privateIpv4([a = 0, b = 0]: ReadonlyArray<number>): boolean {
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
     (a === 192 && b === 168) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
     (a === 100 && b >= 64 && b <= 127) ||
     a >= 224
   );
 }
 
 /**
- * Whether the target is NOT a public-looking address: a private, loopback, link-local or reserved
- * IP literal, a name that only resolves inside a network, or anything this cannot read as a host.
- * It only ever adds caution: a plain name can still resolve privately, which is what the agent's
- * own `internal` flag says, and which this never clears.
+ * True unless the target looks public: any non-clean-decimal IP form, an IPv6 literal, a private,
+ * reserved or documentation IPv4, a network-only name, or anything not plain ASCII host syntax.
+ * It only adds caution: a plain name may still resolve privately, which this never clears.
  */
 export function looksInternalDesktopRouteTarget(target: string): boolean {
   const host = hostOf(target);
   if (host === "" || host === "localhost") return true;
-  const v4 = ipv4Octets(host);
-  if (v4 !== null) return privateIpv4(v4);
-  if (host.includes(":")) return true; // IPv6 literals are not classified: treated as internal
-  if (/^[\d.]+$/.test(host)) return true; // a malformed or short-form numeric host
-  return !host.includes(".") || PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(host)) return true;
+  const labels = host.split(".");
+  const quad = dottedQuad(labels);
+  if (quad !== null) return privateIpv4(quad);
+  if (labels.some(isNumericLabel)) return true;
+  return labels.length === 1 || PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix));
 }
 
 /**

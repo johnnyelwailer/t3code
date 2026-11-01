@@ -6,7 +6,7 @@ import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { readPrimaryEnvironmentId } from "~/state/environments";
 import { cloudSessionListAtom } from "~/state/t3team-cloudSessions";
 import { toastManager } from "../components/ui/toast";
-import { claimDesktopRouteRequest } from "./t3team-desktopRouteClaims";
+import { isDesktopRouteRequestClaimed, runDesktopRouteOnce } from "./t3team-desktopRouteClaims";
 import { postDesktopRouteGrant } from "./t3team-desktopRouteGrant";
 import { handleDesktopRouteAnswers } from "./t3team-desktopRouteObserver";
 
@@ -21,7 +21,8 @@ export function DesktopRouteAnswerObserver() {
     const stop = onThreadAnswersResolved((event) => {
       void handleDesktopRouteAnswers(event, {
         now: Date.now,
-        claim: claimDesktopRouteRequest,
+        once: runDesktopRouteOnce,
+        isClaimed: isDesktopRouteRequestClaimed,
         primaryEnvironmentId: readPrimaryEnvironmentId,
         sessions: () =>
           readSessionsForBrokerAttach({ registry: appAtomRegistry, list: cloudSessionListAtom }),

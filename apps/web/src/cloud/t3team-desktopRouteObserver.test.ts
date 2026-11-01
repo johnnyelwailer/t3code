@@ -10,7 +10,10 @@ import {
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { DESKTOP_ROUTE_ANSWER_TTL_MS } from "./t3team-desktopRouteClaims";
-import { handleDesktopRouteAnswers } from "./t3team-desktopRouteObserver";
+import {
+  applyOwnDesktopRouteGrant,
+  handleDesktopRouteAnswers,
+} from "./t3team-desktopRouteObserver";
 
 const proposal = { target: "npm.nexplore.ch", internal: false };
 const id = encodeDesktopRouteQuestionId(proposal);
@@ -37,27 +40,29 @@ const answered = (over: {
   answers: { [id]: over.answer ?? DESKTOP_ROUTE_ONCE_LABEL },
 });
 
+/** The same once-per-request-id contract as runDesktopRouteOnce, in memory. */
+const makeOnce = (claimed: Set<string>) => async (id: string, work: () => Promise<boolean>) => {
+  if (claimed.has(id)) return;
+  if (await work()) claimed.add(id);
+};
+
+const makeDeps = (claimed: Set<string>, grantResult = true) => ({
+  now: () => NOW,
+  once: makeOnce(claimed),
+  isClaimed: (id: string) => claimed.has(id),
+  primaryEnvironmentId: () => own as EnvironmentId | null,
+  sessions: vi.fn(async () => [{ sessionId: "4242", environmentId: cloud }]),
+  grant: vi.fn(async () => grantResult),
+  notify: vi.fn(),
+});
+
 const run = async (
   event: Partial<Pick<ThreadAnswersResolved, "live" | "missed" | "environmentId">>,
-  overrides: { readonly claimed?: Set<string> } = {},
+  overrides: { readonly claimed?: Set<string>; readonly grantResult?: boolean } = {},
 ) => {
-  const claimed = overrides.claimed ?? new Set<string>();
-  const deps = {
-    now: () => NOW,
-    claim: (requestId: string) => !claimed.has(requestId) && (claimed.add(requestId), true),
-    primaryEnvironmentId: () => own,
-    sessions: vi.fn(async () => [{ sessionId: "4242", environmentId: cloud }]),
-    grant: vi.fn(async () => {}),
-    notify: vi.fn(),
-  };
+  const deps = makeDeps(overrides.claimed ?? new Set<string>(), overrides.grantResult);
   await handleDesktopRouteAnswers(
-    {
-      environmentId: cloud,
-      threadId: "t" as ThreadId,
-      live: [],
-      missed: [],
-      ...event,
-    },
+    { environmentId: cloud, threadId: "t" as ThreadId, live: [], missed: [], ...event },
     deps,
   );
   return deps;
@@ -131,18 +136,9 @@ describe("handleDesktopRouteAnswers", () => {
     expect(deps.grant).not.toHaveBeenCalled();
   });
 
-  it("says so, and grants nothing, when the thread's session is not among the user's sessions", async () => {
-    const claimed = new Set<string>();
-    const deps = {
-      now: () => NOW,
-      claim: (requestId: string) => !claimed.has(requestId) && (claimed.add(requestId), true),
-      primaryEnvironmentId: () => own,
-      sessions: async () => {
-        throw new Error("list failed");
-      },
-      grant: vi.fn(async () => {}),
-      notify: vi.fn(),
-    };
+  it("says so, and grants nothing, when the session list cannot be read", async () => {
+    const deps = makeDeps(new Set());
+    deps.sessions.mockRejectedValue(new Error("list failed"));
     await handleDesktopRouteAnswers(
       { environmentId: cloud, threadId: "t" as ThreadId, live: [answered({})], missed: [] },
       deps,
@@ -151,5 +147,39 @@ describe("handleDesktopRouteAnswers", () => {
     expect(deps.notify).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Desktop route not set up" }),
     );
+  });
+
+  it("treats an answer dated in the future (clock skew) as fresh, not as an error", async () => {
+    const deps = await run({ live: [answered({ ageMs: -5 * 60_000 })] });
+    expect(deps.grant).toHaveBeenCalledOnce();
+  });
+
+  it("a failed grant is not claimed, so the submitting client can still make it", async () => {
+    const claimed = new Set<string>();
+    const failing = await run({ live: [answered({})] }, { claimed, grantResult: false });
+    expect(failing.grant).toHaveBeenCalledOnce();
+    expect(claimed.has("req-1")).toBe(false);
+    const own = makeDeps(claimed);
+    await applyOwnDesktopRouteGrant(
+      "req-1",
+      { session: "4242", target: "npm.nexplore.ch", scope: "once", allowPrivate: false },
+      own,
+    );
+    expect(own.grant).toHaveBeenCalledOnce();
+  });
+
+  it("the submitting client and the observer share one claim: one answer grants once", async () => {
+    const claimed = new Set<string>();
+    const deps = makeDeps(claimed);
+    await applyOwnDesktopRouteGrant(
+      "req-1",
+      { session: "4242", target: "npm.nexplore.ch", scope: "once", allowPrivate: false },
+      deps,
+    );
+    await handleDesktopRouteAnswers(
+      { environmentId: cloud, threadId: "t" as ThreadId, live: [answered({})], missed: [] },
+      deps,
+    );
+    expect(deps.grant).toHaveBeenCalledOnce();
   });
 });

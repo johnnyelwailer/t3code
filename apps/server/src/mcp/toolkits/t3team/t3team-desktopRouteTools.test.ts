@@ -172,6 +172,22 @@ it.effect("offers 'Always for this host' only for a public host, never an intern
   );
 });
 
+it.effect("normalises internal from the address, so the card and the grant agree", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  return withFlag(
+    true,
+    Effect.gen(function* () {
+      yield* callTool({ ...ARGS, target: "10.0.0.5", internal: false }, { asked });
+      const [question] = asked[0]?.questions ?? [];
+      expect(decodeDesktopRouteQuestionId(question?.id ?? "")).toEqual({
+        target: "10.0.0.5",
+        internal: true,
+      });
+      expect(question?.question).toContain("internal address");
+    }),
+  );
+});
+
 it.effect("is off unless the flag is on", () => {
   const asked: Array<T3TeamAskUserAskInput> = [];
   return withFlag(
