@@ -6,6 +6,7 @@
  *   artifacts. Without this the in-memory Map and both side tables only ever
  *   grow (V2 deletion is final), and every client's all-threads facts
  *   snapshot carries the deleted threads.
+ * - `thread.archived` drops the thread's published view context only.
  * - `thread.created` for a FORK (`lineage.relationshipToParent === "fork"`,
  *   upstream `thread.fork`) copies the source thread's tool context, so the
  *   fork keeps the work-item / backlog binding its source had. Delegated
@@ -30,7 +31,9 @@ import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 
 const isToolContextLifecycleEvent = (event: OrchestrationV2DomainEvent) =>
-  event.type === "thread.created" || event.type === "thread.deleted";
+  event.type === "thread.created" ||
+  event.type === "thread.deleted" ||
+  event.type === "thread.archived";
 
 export interface T3TeamThreadToolContextEvictionReactorShape {
   readonly start: () => Effect.Effect<void, never, Scope.Scope>;
@@ -54,11 +57,16 @@ const make = Effect.gen(function* () {
       return Effect.all(
         [
           store.put({ threadId: event.threadId, toolContext: null }),
+          store.evictViewContext({ threadId: event.threadId, deleted: true }),
           facts.remove(event.threadId),
           artifacts.removeByThread(event.threadId),
         ],
         { discard: true },
       );
+    }
+    // An archived thread has no view beside it; its tool context stays for an unarchive.
+    if (event.type === "thread.archived") {
+      return store.evictViewContext({ threadId: event.threadId, deleted: false });
     }
     if (event.type !== "thread.created") return Effect.void;
     const lineage = event.payload.lineage;

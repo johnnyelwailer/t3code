@@ -4,6 +4,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { bindProjectKickoffThread } from "~/t3team/t3team-bindProjectKickoffThread";
 import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
+import { usePublishThreadViewContext } from "~/t3team/t3team-usePublishThreadViewContext";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
 import { MyWorkRightPanel } from "~/t3team/t3team-MyWorkRightPanel";
@@ -62,6 +63,12 @@ export function AppDashboardPane({
       activeThreadStatus: activeThread?.status ?? null,
       visibleThreadCount: projectThreads.length,
     },
+  });
+
+  usePublishThreadViewContext({
+    threadId: activeThreadId,
+    projectId: project.id,
+    active: activeDashboardMode === "my-work",
   });
 
   useEffect(() => {
