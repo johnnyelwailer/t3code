@@ -5,6 +5,7 @@
  */
 import type { EnvironmentId, PullRequestRef } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { PinIcon } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
 
 import { isElectron } from "~/env";
@@ -55,12 +56,15 @@ export function MyWorkRightPanel({
   projectThreads,
   onRememberEmbeddedThread,
   kickoff,
+  chatTab,
 }: {
   /** Scope for ticket detail; a ticket from another project does not follow into this aside. */
   project: ProjectShellProject | null;
   projectThreads: ProjectThread[];
   onRememberEmbeddedThread: (threadId: string) => void;
   kickoff: ReactNode;
+  /** The context chat (`CONTEXT_CHAT_TAB`): a pinned Chat tab whose body replaces the kickoff. */
+  chatTab?: ReactNode;
 }) {
   const environmentId = usePrimaryEnvironmentId();
   const keybindings = useServerKeybindings();
@@ -101,7 +105,7 @@ export function MyWorkRightPanel({
         onRememberEmbeddedThread={onRememberEmbeddedThread}
       />
     ) : (
-      kickoff
+      (chatTab ?? kickoff)
     );
 
   const closeSurface = (surface: RightPanelSurface) => {
@@ -129,6 +133,18 @@ export function MyWorkRightPanel({
       desktopByTabId={EMPTY_PREVIEW_DESKTOP_STATE}
       terminalLabelsById={EMPTY_TERMINAL_LABELS}
       emptyState={emptyBody}
+      {...(chatTab === undefined
+        ? {}
+        : {
+            pinnedTab: {
+              label: "Chat",
+              icon: PinIcon,
+              onActivate: () => {
+                if (digestTicket !== null) closeDigestPullRequest();
+                useRightPanelStore.getState().activatePinned(MY_WORK_PANEL_REF);
+              },
+            },
+          })}
       onActivate={(surface) =>
         useRightPanelStore.getState().activateSurface(MY_WORK_PANEL_REF, surface.id)
       }

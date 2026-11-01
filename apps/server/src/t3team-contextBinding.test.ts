@@ -49,18 +49,26 @@ const record = (
     );
   });
 
-/** Both writers read before either writes, so a read-then-write implementation always races. */
-const bothReadFirst = Effect.gen(function* () {
+/**
+ * Both writers reach the store's write before either proceeds, so a read-then-write handler
+ * always races. A writer that never arrives fails the test (the timeout is a defect, not
+ * swallowed), and `arrivals` lets the test assert that both did.
+ */
+const bothWriteTogether = Effect.gen(function* () {
   const gate = yield* Deferred.make<void>();
   let arrivals = 0;
   const wait = Effect.suspend(() => {
     arrivals += 1;
     return arrivals >= 2 ? Deferred.succeed(gate, undefined) : Deferred.await(gate);
-  }).pipe(Effect.timeout("200 millis"), Effect.ignore);
-  return (store: ThreadFactsStore.T3TeamThreadFactsStore["Service"]) => ({
-    ...store,
-    get: (id: ThreadId) => store.get(id).pipe(Effect.tap(() => wait)),
-  });
+  }).pipe(Effect.timeout("5 seconds"), Effect.orDie);
+  return {
+    arrivals: () => arrivals,
+    wrap: (store: ThreadFactsStore.T3TeamThreadFactsStore["Service"]) => ({
+      ...store,
+      upsert: (id: ThreadId, patch: Parameters<typeof store.upsert>[1]) =>
+        wait.pipe(Effect.andThen(store.upsert(id, patch))),
+    }),
+  };
 });
 
 const storedBinding = (threadId: ThreadId) =>
@@ -101,13 +109,14 @@ describe("recordContextBinding", () => {
     it.effect("lets only one of two concurrent conflicting writes win", () =>
       Effect.gen(function* () {
         const dashboard: T3TeamContextBinding = { ...MY_WORK, kind: "project-dashboard" };
-        const wrap = yield* bothReadFirst;
+        const gate = yield* bothWriteTogether;
         const results = yield* Effect.all(
-          [record(KNOWN, MY_WORK, wrap), record(KNOWN, dashboard, wrap)].map((write) =>
+          [record(KNOWN, MY_WORK, gate.wrap), record(KNOWN, dashboard, gate.wrap)].map((write) =>
             Effect.result(write),
           ),
           { concurrency: "unbounded" },
         );
+        assert.strictEqual(gate.arrivals(), 2, "both writers reached the write before release");
         assert.strictEqual(results.filter((result) => result._tag === "Success").length, 1);
         const failure = results.find((result) => result._tag === "Failure");
         assert.strictEqual(

@@ -43,6 +43,8 @@ export function useT3TeamScratchHomeChat(allProjects: ReadonlyArray<ProjectShell
 
   return {
     scratchProject,
+    /** The environment whose Scratch folder `scratchProject` is. */
+    scratchEnvironmentId: environmentId,
     /** Creates the Scratch project; absent when no connected environment offers one. */
     startScratch: environmentId === null || scratchProject !== null ? undefined : startScratch,
   };
