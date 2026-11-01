@@ -52,9 +52,12 @@ export function encodeDesktopRouteQuestionId(proposal: DesktopRouteProposal): st
   return `${DESKTOP_ROUTE_QUESTION_PREFIX}${Base64Url.encode(encodeProposal(proposal))}`;
 }
 
-/** A target as one visible token: no whitespace, no wildcard, nothing that hides or reorders text, no credentials. */
+/**
+ * A target as one visible ASCII token: no whitespace, wildcard, credentials, control or look-alike
+ * (non-ASCII) characters, nothing that hides or reorders text. International names use punycode.
+ */
 const plainTarget = (target: string) =>
-  !/[\s*@\\]/.test(target) && !hasInvisibleFormat(target) && !/[\u0000-\u001f\u007f]/.test(target);
+  !/[\s*@\\]/.test(target) && !hasInvisibleFormat(target) && !/[^\u0021-\u007e]/.test(target);
 
 /** The proposal a question id carries, or null for any other id or a malformed one. Never throws. */
 export function decodeDesktopRouteQuestionId(id: string): DesktopRouteProposal | null {

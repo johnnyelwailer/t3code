@@ -25,6 +25,16 @@ const question = (overrides: Record<string, unknown> = {}) => ({
 const answerOf = (label: string, q = question()) => ({ [q.id]: label });
 
 describe("desktop route question", () => {
+  it("refuses a look-alike (non-ASCII) host in an id, and accepts its punycode form", () => {
+    for (const target of ["ｅｘａｍｐｌｅ.com", "exаmple.com", "例え.jp"]) {
+      expect(
+        decodeDesktopRouteQuestionId(encodeDesktopRouteQuestionId({ target, internal: false })),
+      ).toBeNull();
+    }
+    const ok = { target: "xn--80ak6aa92e.com", internal: false };
+    expect(decodeDesktopRouteQuestionId(encodeDesktopRouteQuestionId(ok))).toEqual(ok);
+  });
+
   it("matches the namespace by prefix, case-insensitively, whatever follows", () => {
     for (const id of [
       DESKTOP_ROUTE_QUESTION_PREFIX,
