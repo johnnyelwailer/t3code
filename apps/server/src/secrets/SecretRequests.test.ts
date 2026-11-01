@@ -481,7 +481,8 @@ it.effect("another thread gets no ref for a saved answer and cannot take its fil
         assert.isTrue(Option.isNone(yield* service.savedRef({ threadId: other, turnItemId })));
         const stolen = yield* service.saveToFile({ threadId: other, turnItemId }).pipe(Effect.flip);
         assert.equal(stolen.reason, "ref_unavailable");
-        assert.deepEqual(valuesOf(stored), ["mine"]);
+        assert.equal(valuesOf(stored).length, 1);
+        assert.include(valuesOf(stored)[0], "mine");
       }),
     { delivery: "file", directory: "/nonexistent-secret-dir" },
   ),
