@@ -4,7 +4,8 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { buildDigestRecipeCatalogInput } from "~/t3team/t3team-digestRecipeLaunch";
-import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
+import { useT3TeamSidecarRecipeDiscovery } from "~/t3team/t3team-sidecarRecipes";
+import type { RecipeDiscoveryStatus } from "~/t3team/t3team-useRecipeDiscovery";
 import type {
   T3TeamSidecarRecipeInput,
   T3TeamSidecarRecipeQuickStart,
@@ -19,6 +20,8 @@ export type DigestRecipeCatalog = {
   readonly projectId: string;
   readonly catalogInput: T3TeamSidecarRecipeInput;
   readonly recipes: ReadonlyMap<string, T3TeamSidecarRecipeQuickStart>;
+  /** Whether discovery has answered; a recipe missing from `recipes` is only absent once it has. */
+  readonly discovery: RecipeDiscoveryStatus;
 };
 
 const DigestRecipeCatalogContext = createContext<DigestRecipeCatalog | null>(null);
@@ -42,14 +45,15 @@ export function DigestRecipeCatalogProvider({
     () => buildDigestRecipeCatalogInput({ project, profileId }),
     [profileId, project],
   );
-  const quickStarts = useT3TeamSidecarRecipeQuickStarts({ ...catalogInput, backend });
+  const { quickStarts, status } = useT3TeamSidecarRecipeDiscovery({ ...catalogInput, backend });
   const catalog = useMemo<DigestRecipeCatalog>(
     () => ({
       projectId: project.id,
       catalogInput,
       recipes: new Map(quickStarts.map((quickStart) => [quickStart.id, quickStart])),
+      discovery: status,
     }),
-    [catalogInput, project.id, quickStarts],
+    [catalogInput, project.id, quickStarts, status],
   );
   return (
     <DigestRecipeCatalogContext.Provider value={launchable ? catalog : null}>

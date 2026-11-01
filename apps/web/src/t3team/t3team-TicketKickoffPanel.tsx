@@ -67,6 +67,8 @@ export function TicketKickoffPanel({
       projectId,
       surface: "workitem.detail.sidepanel",
       projectWorkspaceRoot: quickStartRecipeInput.project.workspace?.rootPath,
+      project: quickStartRecipeInput.project,
+      ...(ticketId ? { ticketId } : {}),
       ...(workItemRef ? { workItem: workItemRef } : {}),
       openThread: onOpenThread,
       buildSelectedRecipe: (recipe, customization) => ({
