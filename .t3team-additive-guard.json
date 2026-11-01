@@ -31,6 +31,8 @@
     "apps/mobile/src/features/devices/device-stream-document.ts",
     "apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx",
     "apps/mobile/src/features/threads/QuestionAnswerHistory.tsx",
+    "apps/mobile/src/features/threads/SecretRequestCard.tsx",
+    "apps/server/src/secrets/SecretRequests.test.ts",
     "apps/mobile/src/lib/attachmentDownload.ts",
     "apps/mobile/src/lib/openExternalUrl.ts",
     "apps/mobile/src/native/EnrichedMarkdownText.tsx",
