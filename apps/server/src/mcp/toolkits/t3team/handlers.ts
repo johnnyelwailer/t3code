@@ -13,6 +13,7 @@ import { makeMachineSetSourceHandler } from "./t3team-machineSourceHandler.ts";
 import { requestDesktopRoute } from "./t3team-desktopRouteHandler.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 import { whenMcpToolEnabled } from "./t3team-mcpToolFeatureGate.ts";
+import { t3ToolHelpHandler } from "./t3team-toolHelpTool.ts";
 
 /**
  * The calling credential's scope, gated on the same `orchestration` capability
@@ -206,6 +207,11 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
         callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_mywork_arrange, input),
       ),
     ),
+    t3_current_view: McpToolAccess.readsAsCaller(
+      whenMcpToolEnabled("t3_current_view", (input) =>
+        callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_current_view, input),
+      ),
+    ),
     t3_work_item_search: McpToolAccess.readsAsCaller((input) =>
       callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_search, input),
     ),
@@ -253,5 +259,6 @@ export const T3TeamToolkitHandlersLive = McpToolAccess.toLayer(
     t3team_thread_skill_metadata: McpToolAccess.readsAsCaller(
       whenMcpToolEnabled("t3team_thread_skill_metadata", (input) => threadSkillMetadata(input)),
     ),
+    t3_tool_help: McpToolAccess.readsAsCaller(t3ToolHelpHandler),
   })) satisfies Effect.Effect<McpToolAccess.Handlers<typeof T3TeamToolkit.tools>>,
 );

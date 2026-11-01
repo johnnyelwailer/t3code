@@ -72,6 +72,7 @@ import * as ServerSourceControlHost from "./sourceControl/ServerSourceControlHos
 import * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import { BUILT_IN_SOURCE_CONTROL_DRIVER_LIST } from "./sourceControl/sourceControlDefinitions.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
+import * as SecretResolver from "./secrets/SecretResolver.ts";
 import * as ProviderInstanceRegistryHydration from "./provider/ProviderInstanceRegistryHydration.ts";
 import { T3TeamRemoteEnvironmentLive } from "./t3team-remoteEnvironmentServices.ts";
 import * as ProjectSettingsOverrideSweep from "./provider/ProjectSettingsOverrideSweep.ts";
@@ -288,6 +289,7 @@ import {
   t3teamStateMigrationResumeLayer,
 } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
+import { t3teamThreadViewContextRouteLayer } from "./t3team-thread-view-context-routes.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamVoiceRouteLayer } from "./t3team-voice-routes.ts";
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
@@ -974,6 +976,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   Layer.provideMerge(layerOrchestrationApplication),
   Layer.provideMerge(RuntimeLayer.layerEventInfrastructure),
   Layer.provideMerge(Layer.merge(ProjectStore.layer, ThreadSearch.layer)),
+  Layer.provideMerge(SecretResolver.layer),
   Layer.provideMerge(layerServerSettings),
   // Signal sources (GHE #332): placed BEFORE the PullRequestService + Persistence provides
   // below — in `a.pipe(provideMerge(b))` the accumulated layer's requirements are satisfied
@@ -1166,6 +1169,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamThreadDraftMutationStatusRouteLayer,
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
+    t3teamThreadViewContextRouteLayer,
     t3teamThreadPlacementRouteLayer,
     t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,

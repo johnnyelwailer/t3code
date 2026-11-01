@@ -435,7 +435,7 @@ export function resolveDefaultProjectRef(
   },
 ): ScopedProjectRef | null {
   const orderedProjects = orderItemsByPreferredIds({
-    items: projects,
+    items: projects.filter((project) => project.archivedAt == null),
     preferredIds: projectOrder,
     getId: getProjectOrderKey,
     getPreferenceIds: (project) => [

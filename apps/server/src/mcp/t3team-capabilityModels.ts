@@ -10,8 +10,8 @@ const LISTED_MODEL_LIMIT = 8;
 
 /**
  * Picks the models orchestrator_capabilities shows for one provider. Hidden
- * models never appear. Search words naming the provider are dropped; other words
- * list matches. With no words left, lists pinned models (custom, favorite, the
+ * models never appear. Whole provider words select the provider; partial words filter
+ * models when any match. With no words left, lists pinned models (custom, favorite, the
  * caller's own) plus the provider's non-legacy models, or only the first few in
  * the user's model order for large catalogs.
  */
@@ -35,10 +35,22 @@ export function listCapabilityModels(input: {
     .toSorted((a, b) => (rank.get(a.slug) ?? rank.size) - (rank.get(b.slug) ?? rank.size));
   const { instanceId, driver, displayName } = input.provider;
   const providerText = `${instanceId} ${driver} ${displayName ?? ""}`.toLowerCase();
-  const modelTerms = input.searchTerms.filter((term) => !providerText.includes(term));
+  // Whole ids like "codex-work" and their parts both name the provider.
+  const providerWords = new Set([
+    ...providerText.split(/\s+/),
+    ...providerText.split(/[^\p{L}\p{N}]+/u),
+  ]);
+  const modelText = (model: ServerProviderModel) =>
+    `${model.slug} ${model.name} ${model.subProvider ?? ""}`.toLowerCase();
+  // Part of a provider word ("agent" in "claudeAgent") names the provider unless a model matches it.
+  const modelTerms = input.searchTerms.filter(
+    (term) =>
+      !providerWords.has(term) &&
+      (!providerText.includes(term) || visible.some((model) => modelText(model).includes(term))),
+  );
   if (modelTerms.length > 0) {
     const matches = visible.filter((model) => {
-      const text = `${model.slug} ${model.name} ${model.subProvider ?? ""}`.toLowerCase();
+      const text = modelText(model);
       return modelTerms.every((term) => text.includes(term));
     });
     const listed = matches.slice(0, LISTED_MODEL_LIMIT);

@@ -8,6 +8,7 @@ import { useProjectDashboardMyWorkRecipeSupport } from "~/t3team/hooks/t3team-us
 import { useProjectGitHubActivity } from "~/t3team/hooks/t3team-useProjectGitHubActivity";
 import { useProjectKanbanStatusMutation } from "~/t3team/hooks/t3team-useProjectKanbanStatusMutation";
 import { useProjectMyWorkState } from "~/t3team/hooks/t3team-useProjectMyWorkState";
+import { useReportMyWorkViewContext } from "~/t3team/t3team-useReportMyWorkView";
 import { useProjectWorkspaceAutoSync } from "~/t3team/hooks/t3team-useProjectWorkspaceAutoSync";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -85,6 +86,22 @@ export function ProjectDashboardMyWorkView({
     }),
     [query, statusCategory, excludedTypeKeys, selectedPriority, selectedStatus],
   );
+  useReportMyWorkViewContext({
+    projectId: project.id,
+    state: {
+      query,
+      lens,
+      viewMode,
+      groupMode,
+      statusCategory,
+      excludedTypeKeys,
+      selectedPriority,
+      selectedStatus,
+      tableSortBy,
+      tableSortDirection,
+    },
+    filteredWorkItems,
+  });
   const { canMoveTickets, moveTicketToStatus } = useProjectKanbanStatusMutation({
     project,
     reloadTickets,

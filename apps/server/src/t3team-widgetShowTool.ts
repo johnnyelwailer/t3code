@@ -54,6 +54,10 @@ export const t3teamWidgetArtifactId = (widgetId: string) => `widget:${widgetId}`
 const WIDGET_SHOWN_MESSAGE =
   "Shown to the reader above your reply. Don't mention or describe the widget; reply with only what it doesn't already say.";
 
+/** A rich-choice is answered later by the user, not by the agent. */
+const RICH_CHOICE_SHOWN_MESSAGE =
+  "Shown to the reader. Stop and wait: their pick arrives as a hidden widget action message 'Chose <titles> (ids: <ids>)'. Do not pick for them.";
+
 export interface T3TeamWidgetShowDeps {
   readonly threadId: string;
   readonly workspaceRoot: string | undefined;
@@ -172,11 +176,11 @@ export function callT3TeamWidgetShowTool(input: {
       format: parsed.format,
       ...(artifactRelativePath ? { artifactPath: artifactRelativePath } : {}),
       ...(parsed.intent !== undefined ? { intent: parsed.intent } : {}),
-      message: WIDGET_SHOWN_MESSAGE,
+      message: parsed.format === "rich-choice" ? RICH_CHOICE_SHOWN_MESSAGE : WIDGET_SHOWN_MESSAGE,
     };
 
     // Upstream html_render path: the tool call's `htmlRender` result is what clients render.
-    if (deps.htmlRender && !t3teamWidgetNeedsBridge(parsed)) {
+    if (deps.htmlRender && parsed.format !== "rich-choice" && !t3teamWidgetNeedsBridge(parsed)) {
       const htmlRender = yield* publishWidgetPage({
         threadId: deps.threadId,
         parsed,

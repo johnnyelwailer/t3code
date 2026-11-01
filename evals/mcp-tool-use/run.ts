@@ -39,6 +39,8 @@ import { EnvironmentId, ORCHESTRATOR_MCP_RUNNING_TASK_NEXT, ThreadId } from "@t3
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import { formatThreadLink } from "@t3tools/shared/threadLinks";
 import { buildCodexAdditionalContext } from "../../apps/server/src/provider/CodexDeveloperInstructions.ts";
+import { makeSideChatContext } from "../../apps/server/src/orchestration-v2/ContextHandoffService.ts";
+import { withInlineContext } from "../../apps/server/src/orchestration-v2/ContextHandoffDelivery.ts";
 import { AttachmentToolkit } from "../../apps/server/src/mcp/toolkits/attachment/tools.ts";
 import { DeviceToolkit } from "../../apps/server/src/mcp/toolkits/device/tools.ts";
 import { EnvironmentToolkit } from "../../apps/server/src/mcp/toolkits/environment/tools.ts";
@@ -53,6 +55,12 @@ import {
 } from "../../apps/server/src/mcp/toolkits/pullRequests/tools.ts";
 import { ThreadToolkit } from "../../apps/server/src/mcp/toolkits/thread/tools.ts";
 import { WorktreeToolkit } from "../../apps/server/src/mcp/toolkits/worktree/tools.ts";
+import {
+  advertisedToolText,
+  forkToolDefault,
+  forkToolkit,
+  listedInEval,
+} from "./t3team-forkTools.ts";
 import {
   CLAUDE_PROVIDER,
   makeClaudeQueryOptions,
@@ -249,6 +257,10 @@ export const McpToolUseCase = Schema.Struct({
     shellMocks: Schema.optional(
       Schema.Array(Schema.Struct({ match: Schema.String, output: Schema.String })),
     ),
+    /** The thread is a side chat's first turn: T3 puts the parent's digest ahead of `prompt`. */
+    sideChat: Schema.optional(
+      Schema.Struct({ parentThreadId: Schema.String, digest: Schema.Array(Schema.String) }),
+    ),
   }),
   prompt: Schema.String,
   /** Records for the context chips `prompt` links, projected as T3 sends them. */
@@ -364,12 +376,22 @@ const t3SourceTools: ReadonlyArray<Tool.Any> = [
   PreviewToolkit,
   DeviceToolkit,
   HtmlToolkit,
-].flatMap((toolkit): ReadonlyArray<Tool.Any> => Object.values(toolkit.tools));
-const t3Tools: ReadonlyArray<ApiTool> = t3SourceTools.map((tool) => ({
-  name: `${T3_PREFIX}${tool.name}`,
-  description: Tool.getDescription(tool) ?? "",
-  input_schema: advertisedJsonSchema(tool),
-}));
+  forkToolkit,
+]
+  .flatMap((toolkit): ReadonlyArray<Tool.Any> => Object.values(toolkit.tools))
+  .filter((tool) => listedInEval(tool.name));
+const t3Tools: ReadonlyArray<ApiTool> = t3SourceTools.map((tool) => {
+  const advertised = advertisedToolText({
+    name: tool.name,
+    description: Tool.getDescription(tool) ?? "",
+    inputSchema: advertisedJsonSchema(tool),
+  });
+  return {
+    name: `${T3_PREFIX}${tool.name}`,
+    description: advertised.description,
+    input_schema: advertised.inputSchema,
+  };
+});
 const enabledWhen = (predicate: () => boolean) =>
   new Set(
     t3SourceTools
@@ -870,10 +892,21 @@ export const buildMessages = (sample: Sample) => {
     }
     if (turn.text) push(turn.role, text(turn.text));
   }
-  const prompt =
+  const userText =
     testCase.promptContext === undefined
       ? testCase.prompt
       : projectComposerContextForProvider({ text: testCase.prompt, ...testCase.promptContext });
+  const sideChat = testCase.setup.sideChat;
+  const prompt =
+    sideChat === undefined
+      ? userText
+      : withInlineContext(
+          makeSideChatContext({
+            parentThreadId: ThreadId.make(sideChat.parentThreadId),
+            digest: sideChat.digest,
+          }),
+          userText,
+        );
   const childPrompt = () => taskPrompt({ task: prompt, role: delegateRole });
   push("user", text(role === "delegated-child" ? childPrompt() : prompt));
   // Claude Code gives a subagent its SubagentStart hooks' context as a reminder after the task.
@@ -937,6 +970,8 @@ const pullRequest = (repo: string, input: Readonly<Record<string, unknown>>) => 
 
 /** A believable T3 result for a tool the case does not mock. */
 const t3Default = (sample: Sample, name: string, input: Readonly<Record<string, unknown>>) => {
+  const fork = forkToolDefault(name, input);
+  if (fork !== undefined) return fork;
   const pr = () => pullRequest(sample.repo, input);
   switch (name) {
     case "orchestrator_capabilities":

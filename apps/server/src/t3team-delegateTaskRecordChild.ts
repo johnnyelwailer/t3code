@@ -29,7 +29,7 @@ export interface DelegatedChildRecorderDeps {
   readonly loadProject: (
     projectId: OrchestrationV2AppThread["projectId"],
   ) => Effect.Effect<OrchestrationProjectShell | undefined>;
-  readonly toolContexts: T3TeamThreadToolContextStoreShape | undefined;
+  readonly toolContexts: Pick<T3TeamThreadToolContextStoreShape, "get" | "put"> | undefined;
   /** The visible thread a hidden workflow helper's children are placed under. */
   readonly workflowLaunchThreadFor: ((threadId: string) => string | undefined) | undefined;
 }

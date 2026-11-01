@@ -123,9 +123,10 @@ export const T3TeamMessageWidgetAttachment = Schema.Struct({
   widget: Schema.Struct({
     widgetId: TrimmedNonEmptyString,
     title: TrimmedNonEmptyString,
-    /** Tier pipeline the widget body targets. Only html/svg render today (sandboxed iframe);
-     * mdx/tsx are reserved for the T1 safe-mdx renderer and T2b compose pipeline. */
-    format: Schema.Literals(["html", "svg", "mdx", "tsx"]),
+    /** Tier pipeline the widget body targets. html/svg render in a sandboxed iframe; `rich-choice`
+     * renders natively (its `html` field is the JSON payload); mdx/tsx are reserved for the T1
+     * safe-mdx renderer and T2b compose pipeline. */
+    format: Schema.Literals(["html", "svg", "mdx", "tsx", "rich-choice"]),
     html: Schema.String,
     /** Legacy published-widget reference; see {@link T3TeamWidgetHtmlRenderRef}. */
     htmlRender: Schema.optional(T3TeamWidgetHtmlRenderRef),
