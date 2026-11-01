@@ -74,7 +74,14 @@ internal class ReviewDiffImageRowDrawing(private val density: Float) {
       area.inset(PANEL_PADDING_DP * density / 2f, PANEL_PADDING_DP * density / 2f)
       when (val state = states.getOrNull(index)) {
         is ReviewDiffImageState.Ready -> drawFitted(canvas, state, area)
-        ReviewDiffImageState.Unavailable -> drawCaption(canvas, "Preview unavailable", area, theme, labelPaint)
+        ReviewDiffImageState.Unavailable ->
+          drawCaption(
+            canvas,
+            "Preview unavailable",
+            area,
+            theme,
+            labelPaint,
+          )
         else -> drawCaption(canvas, "Loading image…", area, theme, labelPaint)
       }
     }
@@ -95,7 +102,13 @@ internal class ReviewDiffImageRowDrawing(private val density: Float) {
     )
   }
 
-  private fun drawCaption(canvas: Canvas, text: String, area: RectF, theme: DiffTheme, paint: Paint) {
+  private fun drawCaption(
+    canvas: Canvas,
+    text: String,
+    area: RectF,
+    theme: DiffTheme,
+    paint: Paint,
+  ) {
     paint.color = theme.mutedText
     val textWidth = paint.measureText(text)
     val metrics = paint.fontMetrics

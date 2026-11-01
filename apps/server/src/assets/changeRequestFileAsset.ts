@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 
-export const CHANGE_REQUEST_FILE_MAX_BYTES = 20 * 1024 * 1024;
+const CHANGE_REQUEST_FILE_MAX_BYTES = 20 * 1024 * 1024;
 
 export function changeRequestFilePath(resource: ChangeRequestFileAssetResource): string {
   return resource.side === "old" ? resource.oldPath : resource.newPath;
