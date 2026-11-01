@@ -236,6 +236,9 @@ import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
 import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
 import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
+import { spliceFeedEntriesByTime } from "../../lib/t3team-richChoiceFeed";
+import { useT3TeamRichChoiceFeedEntries } from "../../state/t3team-useRichChoiceFeedEntries";
+import { T3TeamRichChoiceFeedRow } from "../rich-choice/t3team-RichChoiceFeedRow";
 import { ThreadMcpApp } from "./McpAppWebView";
 import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
@@ -1678,6 +1681,16 @@ function renderFeedEntry(
         render={entry.render}
         frameWidth={props.contentWidth}
         iconColor={iconSubtleColor}
+      />
+    );
+  }
+
+  if (entry.type === "t3team-rich-choice") {
+    return (
+      <T3TeamRichChoiceFeedRow
+        environmentId={props.environmentId}
+        threadId={props.threadId}
+        entry={entry}
       />
     );
   }
@@ -3162,9 +3175,13 @@ export const ThreadFeed = memo(function ThreadFeed({
   const [loadedListKey, setLoadedListKey] = useState<string | null>(null);
   const { jumpToMessageId } = props;
   const jumpReady = !!jumpToMessageId && loadedListKey === `${feedThreadKey}:filled`;
-  const presentedFeed = appendGuestPendingMessages(
-    useThreadFeedPresentation(props, expandedTurnIds, expandedWorkGroups),
-    guestShare,
+  const richChoiceEntries = useT3TeamRichChoiceFeedEntries(props.environmentId, props.threadId);
+  const presentedFeed = spliceFeedEntriesByTime(
+    appendGuestPendingMessages(
+      useThreadFeedPresentation(props, expandedTurnIds, expandedWorkGroups),
+      guestShare,
+    ),
+    richChoiceEntries,
   );
   const jumpRunId =
     jumpReady &&

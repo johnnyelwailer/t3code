@@ -39,6 +39,22 @@
       "types": "./src/t3team-cloudSessionFit.ts",
       "import": "./src/t3team-cloudSessionFit.ts"
     },
+    "./t3team-richChoiceLogic": {
+      "types": "./src/t3team-richChoiceLogic.ts",
+      "import": "./src/t3team-richChoiceLogic.ts"
+    },
+    "./t3team-richChoiceCardState": {
+      "types": "./src/t3team-richChoiceCardState.ts",
+      "import": "./src/t3team-richChoiceCardState.ts"
+    },
+    "./t3team-widgetArtifact": {
+      "types": "./src/t3team-widgetArtifact.ts",
+      "import": "./src/t3team-widgetArtifact.ts"
+    },
+    "./t3team-widgetPromptTransport": {
+      "types": "./src/t3team-widgetPromptTransport.ts",
+      "import": "./src/t3team-widgetPromptTransport.ts"
+    },
     "./t3team-richChoicePayload": {
       "types": "./src/t3team-richChoicePayload.ts",
       "import": "./src/t3team-richChoicePayload.ts"

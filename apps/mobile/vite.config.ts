@@ -37,6 +37,9 @@ const reactTests = [
   "src/features/threads/use-thread-list-now.test.tsx",
   "src/features/home/home-list-options.test.tsx",
   "src/features/connection/ConnectionsNewRouteScreen.test.tsx",
+  "src/features/rich-choice/t3team-RichChoiceCarousel.test.tsx",
+  "src/features/rich-choice/t3team-RichChoiceFeedRow.test.tsx",
+  "src/state/t3team-useRichChoiceFeedEntries.test.tsx",
 ];
 
 const sourceRoot = `${normalizePath(NodeURL.fileURLToPath(new URL("./src", import.meta.url)))}/`;
