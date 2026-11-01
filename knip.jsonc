@@ -160,7 +160,9 @@
         // One-off operator script, run by path (it imports its -run/-mapping/-layers siblings).
         "scripts/t3team-replay-task-records-to-plans.ts",
         // Workflow fixtures loaded at runtime by URL (new URL("../__fixtures__/" + name)) from
-        // the t3team-workflowEngine{DecisionCard,Reactor} integration tests, not imported.
+        // the t3team-workflowEngine{ChildRefusal,DecisionCard,Reactor} integration tests, not imported.
+        "__fixtures__/t3team-childRefusalCaught.workflow.ts",
+        "__fixtures__/t3team-childRefusalPropagate.workflow.ts",
         "__fixtures__/t3team-decisionChoice.workflow.ts",
         "__fixtures__/t3team-parallelAgentsAfterResume.workflow.ts",
         // graphqlgen reads its config.
