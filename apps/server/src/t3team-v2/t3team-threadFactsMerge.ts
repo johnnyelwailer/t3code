@@ -24,6 +24,11 @@ export interface T3TeamThreadFactsPatch {
   readonly resourcePressurePaused?: boolean;
   /** Merged per key; a `null` value removes the key. */
   readonly extensions?: Readonly<Record<string, unknown>>;
+  /**
+   * Set only for keys with no stored value of any shape, decided inside the store's
+   * transaction. A stored value, even one this build cannot read, is never replaced.
+   */
+  readonly extensionsIfAbsent?: Readonly<Record<string, unknown>>;
 }
 
 type MutableFacts = { -readonly [K in keyof T3TeamThreadFacts]: T3TeamThreadFacts[K] };
@@ -83,6 +88,15 @@ export function mergeThreadFacts(
     }
     if (Object.keys(extensions).length === 0) delete next.extensions;
     else next.extensions = extensions;
+  }
+  if (patch.extensionsIfAbsent !== undefined) {
+    const extensions: Record<string, unknown> = { ...next.extensions };
+    for (const [key, value] of Object.entries(patch.extensionsIfAbsent)) {
+      if (key in extensions) continue;
+      extensions[key] = value;
+      changed = true;
+    }
+    next.extensions = extensions;
   }
   if (!changed) return null;
   next.updatedAt = nowIso;
