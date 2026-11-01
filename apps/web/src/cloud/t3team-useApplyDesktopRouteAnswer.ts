@@ -1,17 +1,16 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 
-import { CredentialRequestError, credentialRequest } from "~/account/t3team-credentialRequest";
 import { toastManager } from "../components/ui/toast";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { usePrimaryEnvironmentId, useCloudSessions } from "../state/t3team-cloudSessions";
 import { captureDesktopRouteApply } from "./t3team-desktopRouteCapture";
-
-const HOST_SERVICE = "/api/t3team/host-services/nexplore-global.desktop-route";
+import { claimDesktopRouteRequest } from "./t3team-desktopRouteClaims";
+import { postDesktopRouteGrant } from "./t3team-desktopRouteGrant";
 
 /**
- * Makes the grant for an accepted desktop-route proposal on THIS desktop's host service, so a phone,
- * the VM or the agent can never create one. The session is the thread's own, never one the question
- * carries. Returns null unless the answer accepted a proposal; else a function to run after submit.
+ * Grants an accepted desktop-route proposal on THIS desktop's host service; a phone, the VM or the
+ * agent never can. The session is the thread's own. Returns null unless the answer accepted one.
+ * `requestId` shares one claim with the observer of answers made elsewhere: one answer grants once.
  */
 export function useApplyDesktopRouteAnswer(thread: { readonly environmentId: EnvironmentId }) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -20,6 +19,7 @@ export function useApplyDesktopRouteAnswer(thread: { readonly environmentId: Env
     (
       questions: Parameters<typeof captureDesktopRouteApply>[0]["questions"],
       answers: Record<string, unknown>,
+      requestId?: string,
     ) => {
       const captured = captureDesktopRouteApply({
         questions,
@@ -41,31 +41,8 @@ export function useApplyDesktopRouteAnswer(thread: { readonly environmentId: Env
       }
       const { grant } = captured;
       return async () => {
-        try {
-          await credentialRequest("POST", `${HOST_SERVICE}/grant`, {
-            fallbackReason: "host_service_failed",
-            body: grant,
-          });
-          toastManager.add({
-            type: "success",
-            title: `Routing ${grant.target} through this computer`,
-            description:
-              grant.scope === "once"
-                ? "Once."
-                : grant.scope === "session"
-                  ? "For this session."
-                  : "Always, for this host.",
-          });
-        } catch (error) {
-          toastManager.add({
-            type: "error",
-            title: "Desktop route not set up",
-            description:
-              error instanceof CredentialRequestError || error instanceof Error
-                ? error.message
-                : "The desktop could not make the grant.",
-          });
-        }
+        if (requestId !== undefined && !claimDesktopRouteRequest(requestId)) return;
+        await postDesktopRouteGrant(grant);
       };
     },
   );

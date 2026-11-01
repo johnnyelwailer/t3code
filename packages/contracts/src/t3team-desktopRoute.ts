@@ -2,6 +2,7 @@ import * as Base64Url from "effect/encoding/Base64Url";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
+import { isInternalDesktopRouteProposal } from "./t3team-desktopRouteInternal.ts";
 import { escapeMarkdownText, hasInvisibleFormat } from "./t3team-projectMachineSource.ts";
 
 /**
@@ -97,7 +98,9 @@ export function desktopRouteAcceptedFrom(
       question.header === DESKTOP_ROUTE_QUESTION_HEADER &&
       question.question?.startsWith(desktopRouteQuestionLine(proposal)) === true;
     const scope = SCOPE_BY_LABEL[answer.trim()];
-    return shown && scope !== undefined ? { ...proposal, scope } : null;
+    // "Always" on an internal host would let a name the agent controls reach any private address later.
+    const refused = scope === "always" && isInternalDesktopRouteProposal(proposal);
+    return shown && scope !== undefined && !refused ? { ...proposal, scope } : null;
   }
   return null;
 }

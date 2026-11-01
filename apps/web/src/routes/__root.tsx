@@ -28,6 +28,7 @@ import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPrompt
 import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
 import { DesktopWebLinkCoordinator } from "../components/desktop/DesktopWebLinkCoordinator";
+import { DesktopRouteAnswerObserver } from "../cloud/t3team-DesktopRouteAnswerObserver";
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
@@ -254,6 +255,8 @@ function RootRouteBranch() {
           <DesktopWebLinkCoordinator />
         ) : null}
         {isElectron ? <RunningThreadKeepAlive /> : null}
+        {/* t3team: grants a desktop route a phone approved, from this computer only. */}
+        {isElectron && primaryEnvironmentAuthenticated ? <DesktopRouteAnswerObserver /> : null}
         {/* t3team: delivers drafts' first messages queued for a cloud session, app-wide. */}
         {primaryEnvironmentAuthenticated ? <CloudQueuedSendFlusher /> : null}
         {/* t3team: the voice session (recorder, global hotkey, floating widget), app-wide. */}
