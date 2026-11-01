@@ -61,6 +61,15 @@ interface CountRow {
   readonly n: number;
 }
 
+// Mirror checkpoint.ts's private RESOLVABLE_SENT_KINDS: only these prefix sends can
+// make a replay window unsafe. One-way sends are discarded by the reference selector.
+const REPLAY_WINDOW_RESOLVABLE_SENT_KINDS = [
+  "thread.turn",
+  "user.input",
+  "model.resolve",
+  "wait.until",
+] as const;
+
 /** Parse the seq out of a `"<runId>:<seq>"` correlationId (the SDK's documented scheme). */
 function seqFromCorrelationId(correlationId: string): number {
   const parsed = Number(correlationId.slice(correlationId.lastIndexOf(":") + 1));
@@ -160,7 +169,8 @@ export function buildSqliteJournalStore(sql: SqlClient.SqlClient): JournalStore 
       // Bounded materialization: the bySeq suffix strictly after the boundary (or the whole journal
       // when no valid checkpoint exists — a pre-checkpoint run stays a full-replay run), the FULL
       // `resolved` correlation map, and the prefix `sent` rows used only for unsettled-ask
-      // detection (they are not part of the returned bySeq).
+      // detection (they are not part of the returned bySeq). The prefix read is narrowed to the
+      // resolvable kinds so collapsed one-way payloads are not loaded into the replay working set.
       const suffixRows =
         boundarySeq === undefined
           ? await Effect.runPromise(
@@ -187,6 +197,8 @@ export function buildSqliteJournalStore(sql: SqlClient.SqlClient): JournalStore 
                 SELECT entry_json AS "entryJson"
                 FROM workflow_journal
                 WHERE run_id = ${runId} AND phase = 'sent' AND seq < ${boundarySeq}
+                  AND json_extract(entry_json, '$.kind')
+                    IN ${sql.in(REPLAY_WINDOW_RESOLVABLE_SENT_KINDS)}
                 ORDER BY seq ASC
               `,
             );
