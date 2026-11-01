@@ -31,7 +31,14 @@ const scaffoldWorkspace = Effect.fn("scaffoldWorkspace")(function* () {
   return workspaceRoot;
 });
 
-beforeAll(() => replaceFeatureFlagPresetValues(new Map([["WORKITEM_DELIVERY_RECIPES", true]])));
+beforeAll(() =>
+  replaceFeatureFlagPresetValues(
+    new Map([
+      ["WORKITEM_DELIVERY_RECIPES", true],
+      ["BUNDLED_RECIPE_EXAMPLES", true],
+    ]),
+  ),
+);
 afterAll(() => replaceFeatureFlagPresetValues(new Map()));
 
 const SCAFFOLDED_PATHS = [

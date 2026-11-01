@@ -3,4 +3,5 @@ export * from "./dashboardWidgets.ts";
 export * from "./profiles.ts";
 export * from "./recipes.ts";
 export * from "./sidecarSections.ts";
+export * from "./t3team-bundledRecipeExamples.ts";
 export * from "./skillPacks.ts";

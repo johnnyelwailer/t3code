@@ -1,4 +1,5 @@
-import { listBundledT3TeamRecipes } from "@t3tools/t3team-skill-packs";
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
+import { listBundledT3TeamRecipes, scaffoldedBundledRecipes } from "@t3tools/t3team-skill-packs";
 
 import {
   T3TEAM_PROJECT_RECIPES_ROOT,
@@ -23,7 +24,12 @@ function bundledRecipeWorkflowFiles(recipeId: string): ReadonlyArray<T3TeamProje
 }
 
 export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetupFile> {
-  const bundledRecipes = offeredRecipes(listBundledT3TeamRecipes());
+  const bundledRecipes = offeredRecipes(
+    scaffoldedBundledRecipes(
+      listBundledT3TeamRecipes(),
+      readFeatureFlag("BUNDLED_RECIPE_EXAMPLES"),
+    ),
+  );
   return bundledRecipes.flatMap((recipe): ReadonlyArray<T3TeamProjectSetupFile> => {
     const workflowFiles = bundledRecipeWorkflowFiles(recipe.id);
     return [

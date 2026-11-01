@@ -39,4 +39,13 @@ export const RECIPE_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  BUNDLED_RECIPE_EXAMPLES: {
+    group: "Orchestration",
+    subgroup: "Recipes",
+    label: "Bundled recipe examples",
+    description:
+      "The example recipes compiled into the app, offered as quick starts and slash commands and added to new projects. Off: only Create or edit a recipe is offered; recipes from packs and projects are unaffected.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
 } as const satisfies Record<string, FeatureFlagDefinition>;

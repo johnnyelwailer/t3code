@@ -7,8 +7,12 @@ import {
   shouldShowThreadKickoffPlaceholder,
   ThreadKickoffPlaceholder,
 } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
-import { buildT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
+import { buildT3TeamSidecarRecipeQuickStarts as buildQuickStarts } from "~/t3team/t3team-sidecarRecipes";
 import type { ProjectShellProject } from "@t3tools/project-context";
+
+/** These cases assert the bundled examples, so they run with `BUNDLED_RECIPE_EXAMPLES` on. */
+const buildT3TeamSidecarRecipeQuickStarts = (input: Parameters<typeof buildQuickStarts>[0]) =>
+  buildQuickStarts(input, true);
 
 function createProject(profileId: string, workspaceRoot?: string): ProjectShellProject {
   return {
