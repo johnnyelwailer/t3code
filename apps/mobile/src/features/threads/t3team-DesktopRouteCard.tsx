@@ -16,7 +16,10 @@ export function T3TeamDesktopRouteCard(props: {
   readonly onAnswer: (label: string) => void;
 }) {
   const { card, sessionLabel, disabled, onAnswer } = props;
-  const { once, session, always, decline } = card.actions;
+  const { always, decline } = card.actions;
+  // A phone cannot approve an internal address yet: the desktop refuses it, so it is not offered.
+  const once = card.internal ? null : card.actions.once;
+  const session = card.internal ? null : card.actions.session;
   const row = (name: string, children: React.ReactNode) => (
     <View className="gap-0.5">
       <Text className="font-t3-bold text-2xs uppercase tracking-[1px] text-foreground-muted">
@@ -56,12 +59,14 @@ export function T3TeamDesktopRouteCard(props: {
       )}
       {card.internal ? (
         <Text className="font-sans text-xs text-foreground-muted">
-          It may resolve to a private network address on your network.
+          It may resolve to a private network address on your network. Internal addresses are
+          approved on your computer, not from the phone.
         </Text>
-      ) : null}
-      <Text className="font-sans text-xs text-foreground-muted">
-        Your computer applies this, only for this host and only while it is online.
-      </Text>
+      ) : (
+        <Text className="font-sans text-xs text-foreground-muted">
+          Your computer applies this, only for this host and only while it is online.
+        </Text>
+      )}
       <View className="gap-2">
         {once === null ? null : (
           <Button

@@ -90,6 +90,13 @@ describe("mobile T3TeamDesktopRouteCard", () => {
     view.unmount();
   });
 
+  it("offers an internal host only Deny on the phone, and says where to approve it", () => {
+    const view = mount(card({ target: "npm.nexplore.ch", internal: true }));
+    expect(view.buttons().map((b) => b.textContent)).toEqual(["Deny"]);
+    expect(view.container.textContent).toContain("approved on your computer, not from the phone");
+    view.unmount();
+  });
+
   it("disables every action while an answer is going out", () => {
     const view = mount(card({ target: "registry.npmjs.org", internal: false }), true);
     expect(view.buttons().every((b) => b.disabled)).toBe(true);
