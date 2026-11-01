@@ -57,9 +57,12 @@ const question = {
 const card = desktopRouteCardFrom(question);
 if (card === null) throw new Error("fixture");
 
-const mount = (submitResult: unknown) => {
+const mount = (submitResult: unknown, rejects = false) => {
   const onSelectOption = vi.fn();
-  const onSubmit = vi.fn(async () => submitResult);
+  const onSubmit = vi.fn(async () => {
+    if (rejects) throw new Error("network");
+    return submitResult;
+  });
   const container = document.createElement("div");
   const root = createRoot(container);
   const render = (answers: Record<string, string> | null) =>
@@ -99,6 +102,14 @@ describe("T3TeamDesktopRouteQuestion", () => {
     const view = mount({ _tag: "Failure" });
     act(() => view.once()?.click());
     expect(view.once()?.disabled).toBe(true);
+    await act(async () => view.render({ [questionId]: DESKTOP_ROUTE_ONCE_LABEL }));
+    expect(view.onSubmit).toHaveBeenCalledOnce();
+    expect(view.once()?.disabled).toBe(false);
+  });
+
+  it("re-enables the card when the submit rejects", async () => {
+    const view = mount(undefined, true);
+    act(() => view.once()?.click());
     await act(async () => view.render({ [questionId]: DESKTOP_ROUTE_ONCE_LABEL }));
     expect(view.onSubmit).toHaveBeenCalledOnce();
     expect(view.once()?.disabled).toBe(false);

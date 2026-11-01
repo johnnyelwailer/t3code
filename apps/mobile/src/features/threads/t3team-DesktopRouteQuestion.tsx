@@ -34,17 +34,19 @@ export function T3TeamDesktopRouteQuestion(props: {
     if (chosen === null || submitted.current) return;
     if (answers?.[questionId] !== chosen) return;
     submitted.current = true;
+    // Not sent (refused, failed or rejected): let the user answer again.
+    const reset = () => {
+      submitted.current = false;
+      setChosen(null);
+    };
     void onSubmit().then((result) => {
       const ok =
         typeof result === "object" &&
         result !== null &&
         "_tag" in result &&
         result._tag === "Success";
-      if (ok) return;
-      // Not sent (refused or failed): let the user answer again.
-      submitted.current = false;
-      setChosen(null);
-    });
+      if (!ok) reset();
+    }, reset);
   }, [chosen, answers, questionId, onSubmit]);
   return (
     <T3TeamDesktopRouteCard
