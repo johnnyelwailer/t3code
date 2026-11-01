@@ -6,11 +6,13 @@ import {
   DESKTOP_ROUTE_DECLINE_LABEL,
   DESKTOP_ROUTE_ONCE_LABEL,
   DESKTOP_ROUTE_QUESTION_HEADER,
+  DESKTOP_ROUTE_QUESTION_PREFIX,
   DESKTOP_ROUTE_SESSION_LABEL,
   decodeDesktopRouteQuestionId,
   desktopRouteAcceptedFrom,
   desktopRouteQuestionLine,
   encodeDesktopRouteQuestionId,
+  isDesktopRouteQuestionIdPrefixed,
 } from "./t3team-desktopRoute.ts";
 
 const proposal = { target: "npm.nexplore.ch", internal: true };
@@ -23,6 +25,19 @@ const question = (overrides: Record<string, unknown> = {}) => ({
 const answerOf = (label: string, q = question()) => ({ [q.id]: label });
 
 describe("desktop route question", () => {
+  it("matches the namespace by prefix, case-insensitively, whatever follows", () => {
+    for (const id of [
+      DESKTOP_ROUTE_QUESTION_PREFIX,
+      `${DESKTOP_ROUTE_QUESTION_PREFIX}!!`,
+      DESKTOP_ROUTE_QUESTION_PREFIX.toUpperCase(),
+      encodeDesktopRouteQuestionId({ target: "ｅｘａｍｐｌｅ.com", internal: true }),
+    ]) {
+      expect(isDesktopRouteQuestionIdPrefixed(id)).toBe(true);
+    }
+    expect(isDesktopRouteQuestionIdPrefixed("size")).toBe(false);
+    expect(isDesktopRouteQuestionIdPrefixed(` ${DESKTOP_ROUTE_QUESTION_PREFIX}`)).toBe(false);
+  });
+
   it("round-trips a proposal through the question id", () => {
     expect(decodeDesktopRouteQuestionId(encodeDesktopRouteQuestionId(proposal))).toEqual(proposal);
   });
@@ -33,10 +48,9 @@ describe("desktop route question", () => {
       [DESKTOP_ROUTE_SESSION_LABEL, "session"],
       [DESKTOP_ROUTE_ALWAYS_LABEL, "always"],
     ] as const) {
-      expect(desktopRouteAcceptedFrom([question()], answerOf(label))).toEqual({
-        ...proposal,
-        scope,
-      });
+      expect(desktopRouteAcceptedFrom([question()], answerOf(label))).toEqual(
+        label === DESKTOP_ROUTE_ALWAYS_LABEL ? null : { ...proposal, scope },
+      );
     }
   });
 
@@ -52,6 +66,30 @@ describe("desktop route question", () => {
       ),
     ).toBeNull();
     expect(desktopRouteAcceptedFrom([question()], {})).toBeNull();
+  });
+
+  it("never applies 'Always' for an internal host, however the agent flagged it", () => {
+    for (const target of ["10.0.0.5", "intranet", "registry.corp.local"]) {
+      const p = { target, internal: false };
+      const q = {
+        id: encodeDesktopRouteQuestionId(p),
+        header: DESKTOP_ROUTE_QUESTION_HEADER,
+        question: desktopRouteQuestionLine(p),
+      };
+      expect(desktopRouteAcceptedFrom([q], { [q.id]: DESKTOP_ROUTE_ALWAYS_LABEL })).toBeNull();
+      expect(desktopRouteAcceptedFrom([q], { [q.id]: DESKTOP_ROUTE_SESSION_LABEL })).not.toBeNull();
+    }
+    expect(desktopRouteAcceptedFrom([question()], answerOf(DESKTOP_ROUTE_ALWAYS_LABEL))).toBeNull();
+    const pub = { target: "registry.npmjs.org", internal: false };
+    const q = {
+      id: encodeDesktopRouteQuestionId(pub),
+      header: DESKTOP_ROUTE_QUESTION_HEADER,
+      question: desktopRouteQuestionLine(pub),
+    };
+    expect(desktopRouteAcceptedFrom([q], { [q.id]: DESKTOP_ROUTE_ALWAYS_LABEL })).toEqual({
+      ...pub,
+      scope: "always",
+    });
   });
 
   it("applies only a card that shows what it would grant", () => {
