@@ -13,6 +13,13 @@ import { escapeMarkdownText, hasInvisibleFormat } from "./t3team-projectMachineS
 export const DESKTOP_ROUTE_QUESTION_PREFIX = "desktop-route:v1:";
 export const DESKTOP_ROUTE_QUESTION_HEADER = "Desktop route";
 
+/**
+ * Whether an id is in the desktop-route namespace, however malformed: prefix only, case-insensitive.
+ * For refusals, which must fail closed even for an id a different version would still decode.
+ */
+export const isDesktopRouteQuestionIdPrefixed = (id: string): boolean =>
+  id.toLowerCase().startsWith(DESKTOP_ROUTE_QUESTION_PREFIX);
+
 /** The four answers. Anything but the first three declines. */
 export const DESKTOP_ROUTE_ONCE_LABEL = "Once";
 export const DESKTOP_ROUTE_SESSION_LABEL = "For this session";
