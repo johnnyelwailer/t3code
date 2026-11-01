@@ -3,6 +3,7 @@ import {
   type CloudSession,
   type EnvironmentId,
   desktopRouteAcceptedFrom,
+  isInternalDesktopRouteProposal,
 } from "@t3tools/contracts";
 
 import { captureDesktopRouteApply, type DesktopRouteGrant } from "./t3team-desktopRouteCapture";
@@ -16,6 +17,8 @@ export interface DesktopRouteObserverDeps {
   /** Runs `work` once per request id to success; the submitting client shares the same one. */
   readonly once: (requestId: string, work: () => Promise<boolean>) => Promise<void>;
   readonly isClaimed: (requestId: string) => boolean;
+  /** Answered by this client's own card: its submit path grants it, never this observer. */
+  readonly isOwnSubmit: (requestId: string) => boolean;
   readonly primaryEnvironmentId: () => EnvironmentId | null;
   readonly sessions: () => Promise<
     ReadonlyArray<Pick<CloudSession, "sessionId" | "environmentId">>
@@ -23,6 +26,11 @@ export interface DesktopRouteObserverDeps {
   readonly grant: (grant: DesktopRouteGrant) => Promise<boolean>;
   readonly notify: (notice: { readonly title: string; readonly description: string }) => void;
 }
+
+const INTERNAL = {
+  title: "Internal routes are approved on this computer",
+  description: "A phone cannot approve an internal address yet. Approve it here, on the card.",
+};
 
 const EXPIRED = {
   title: "Desktop route request expired",
@@ -37,10 +45,9 @@ export const applyOwnDesktopRouteGrant = (
 ) => deps.once(requestId, () => deps.grant(grant));
 
 /**
- * Applies a desktop-route answer made elsewhere (the phone) for a cloud session, from this desktop's
- * own client only; a thread-stream seam gives it each answer once. Fails closed: acted on once
- * (by id), only if this client saw the request pending and the answer arrive, only within the TTL;
- * anything else is a visible notice, never a grant. A failed grant is not claimed.
+ * Applies a desktop-route answer made elsewhere (the phone) from this desktop's client only. Fails
+ * closed: once per request id, never for an internal address, only if seen pending then answered
+ * live and within the TTL; anything else is a notice. A failed grant is not claimed.
  */
 export async function handleDesktopRouteAnswers(
   event: ThreadAnswersResolved,
@@ -52,12 +59,18 @@ export async function handleDesktopRouteAnswers(
     ...event.live.map((a) => [a, true] as const),
     ...event.missed.map((a) => [a, false] as const),
   ]) {
-    if (desktopRouteAcceptedFrom(answered.questions, answered.answers) === null) continue;
+    const accepted = desktopRouteAcceptedFrom(answered.questions, answered.answers);
+    if (accepted === null || deps.isOwnSubmit(answered.requestId)) continue;
     const age =
       answered.resolvedAtMs === null ? Infinity : Math.max(0, deps.now() - answered.resolvedAtMs);
     if (!live && age > MISSED_NOTICE_WINDOW_MS) continue;
     if (deps.isClaimed(answered.requestId)) continue;
     await deps.once(answered.requestId, async () => {
+      // An answer given elsewhere never sets allowPrivate: only this computer's own card does.
+      if (isInternalDesktopRouteProposal(accepted)) {
+        deps.notify(INTERNAL);
+        return true;
+      }
       if (!live || age > DESKTOP_ROUTE_ANSWER_TTL_MS) {
         deps.notify(EXPIRED);
         return true;
