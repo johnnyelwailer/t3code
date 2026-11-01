@@ -6,11 +6,13 @@ import {
   DESKTOP_ROUTE_DECLINE_LABEL,
   DESKTOP_ROUTE_ONCE_LABEL,
   DESKTOP_ROUTE_QUESTION_HEADER,
+  DESKTOP_ROUTE_QUESTION_PREFIX,
   DESKTOP_ROUTE_SESSION_LABEL,
   decodeDesktopRouteQuestionId,
   desktopRouteAcceptedFrom,
   desktopRouteQuestionLine,
   encodeDesktopRouteQuestionId,
+  isDesktopRouteQuestionIdPrefixed,
 } from "./t3team-desktopRoute.ts";
 
 const proposal = { target: "npm.nexplore.ch", internal: true };
@@ -31,6 +33,19 @@ describe("desktop route question", () => {
     }
     const ok = { target: "xn--80ak6aa92e.com", internal: false };
     expect(decodeDesktopRouteQuestionId(encodeDesktopRouteQuestionId(ok))).toEqual(ok);
+  });
+
+  it("matches the namespace by prefix, case-insensitively, whatever follows", () => {
+    for (const id of [
+      DESKTOP_ROUTE_QUESTION_PREFIX,
+      `${DESKTOP_ROUTE_QUESTION_PREFIX}!!`,
+      DESKTOP_ROUTE_QUESTION_PREFIX.toUpperCase(),
+      encodeDesktopRouteQuestionId({ target: "ｅｘａｍｐｌｅ.com", internal: true }),
+    ]) {
+      expect(isDesktopRouteQuestionIdPrefixed(id)).toBe(true);
+    }
+    expect(isDesktopRouteQuestionIdPrefixed("size")).toBe(false);
+    expect(isDesktopRouteQuestionIdPrefixed(` ${DESKTOP_ROUTE_QUESTION_PREFIX}`)).toBe(false);
   });
 
   it("round-trips a proposal through the question id", () => {

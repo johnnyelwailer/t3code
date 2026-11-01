@@ -2,6 +2,8 @@ import { CredentialRequestError, credentialRequest } from "~/account/t3team-cred
 import { toastManager } from "../components/ui/toast";
 import type { DesktopRouteGrant } from "./t3team-desktopRouteCapture";
 
+/** One hung grant must not hold the claim lock for every other request. */
+const GRANT_TIMEOUT_MS = 10_000;
 const HOST_SERVICE = "/api/t3team/host-services/nexplore-global.desktop-route";
 
 /** Makes the grant on THIS desktop's host service and always says how it went; true when made. */
@@ -9,6 +11,7 @@ export async function postDesktopRouteGrant(grant: DesktopRouteGrant): Promise<b
   try {
     await credentialRequest("POST", `${HOST_SERVICE}/grant`, {
       fallbackReason: "host_service_failed",
+      timeoutMs: GRANT_TIMEOUT_MS,
       body: grant,
     });
     toastManager.add({

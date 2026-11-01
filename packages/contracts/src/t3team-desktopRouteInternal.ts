@@ -59,7 +59,10 @@ function privateIpv4([a = 0, b = 0, c = 0]: ReadonlyArray<number>): boolean {
  * It only adds caution: a plain name may still resolve privately, which this never clears.
  */
 export function looksInternalDesktopRouteTarget(target: string): boolean {
-  const host = hostOf(target);
+  // The desktop accepts a range down to /24 (IPv4) or /112 (IPv6); only a single host is public here.
+  const range = /^([^/]+)\/(\d{1,3})$/.exec(target);
+  if (range !== null && !/^(32|128)$/.test(range[2] ?? "")) return true;
+  const host = hostOf(range?.[1] ?? target);
   if (host === "" || host === "localhost") return true;
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(host)) return true;
   const labels = host.split(".");
