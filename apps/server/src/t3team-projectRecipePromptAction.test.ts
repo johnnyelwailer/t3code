@@ -21,7 +21,8 @@ import { createQueryable } from "@t3tools/project-context";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
 import { definePrompt } from "@t3team/sdk";
 import { it as effectIt } from "@effect/vitest";
-import { afterAll, describe, expect } from "vite-plus/test";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
+import { afterAll, beforeAll, describe, expect } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
 import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
@@ -88,6 +89,10 @@ const renderContext: ProjectRecipeRenderContext = {
   schema: {},
   availableContextKeys: createQueryable([]),
 };
+
+// `explain-selected-work` is a retired bundled id: discovery hides it unless the examples are on.
+beforeAll(() => replaceFeatureFlagPresetValues(new Map([["BUNDLED_RECIPE_EXAMPLES", true]])));
+afterAll(() => replaceFeatureFlagPresetValues(new Map()));
 
 describe("prompt-action recipe discovery", () => {
   effectIt.effect(

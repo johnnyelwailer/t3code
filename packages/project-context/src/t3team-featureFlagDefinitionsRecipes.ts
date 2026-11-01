@@ -35,7 +35,7 @@ export const RECIPE_FEATURE_FLAG_DEFINITIONS = {
     subgroup: "Recipes",
     label: "Work-item recipes",
     description:
-      "The fix-this-bug and implement-this recipes: added to each project and offered on work items. Off: not added and not listed.",
+      "The fix-this-bug and implement-this recipes: added to each project and offered on work items. They are bundled examples, so Bundled recipe examples must be on as well. Off: not added and not listed.",
     defaultEnabled: false,
     requiresRestart: false,
   },
