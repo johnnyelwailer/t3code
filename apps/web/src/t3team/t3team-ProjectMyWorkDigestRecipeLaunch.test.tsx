@@ -5,18 +5,44 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { T3TeamQuickStartsSection } from "~/t3team/t3team-QuickStartsSection";
+import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 import { DigestReviewSection } from "~/t3team/t3team-ProjectMyWorkDigestReviewSection";
 import { buildProjectDashboardSelectedRecipe } from "~/t3team/t3team-dashboardRecipeSelection";
 import { openDigestPullRequest, useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
 import { DigestRecipeCatalogProvider } from "~/t3team/t3team-digestRecipeCatalog";
-import { useDigestRecipeLaunchStore } from "~/t3team/t3team-digestRecipeLaunchStore";
-import type { DigestGraph, DigestSection } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import {
+  requestDigestRecipeLaunch,
+  useDigestRecipeLaunchStore,
+} from "~/t3team/t3team-digestRecipeLaunchStore";
+import { digestReviewActions } from "~/t3team/t3team-projectMyWorkDigestFacts";
+import { DIGEST_RECIPE_UNAVAILABLE_GRACE_MS } from "~/t3team/t3team-useSettleUnavailableDigestRecipe";
+import type {
+  DigestGraph,
+  DigestReviewRequest,
+  DigestSection,
+} from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecarRecipeLaunch";
 import { useDigestRecipeLaunchConsumer } from "~/t3team/t3team-useDigestRecipeLaunchConsumer";
 
-const { discovered } = vi.hoisted(() => ({
+const { discovered, toastAdd } = vi.hoisted(() => ({
   discovered: { current: [] as T3TeamSidecarRecipeQuickStart[] },
+  toastAdd: vi.fn(),
+}));
+
+vi.mock("~/components/ui/toast", () => ({ toastManager: { add: toastAdd } }));
+
+// The Quick Start list is a presentational seam here: one button that selects the first recipe.
+vi.mock("~/t3team/t3team-KickoffRecipeList", () => ({
+  T3TeamKickoffRecipeList: (props: {
+    recipes: ReadonlyArray<{ id: string }>;
+    onSelectRecipe: (recipe: unknown) => void;
+  }) => (
+    <button type="button" onClick={() => props.onSelectRecipe(props.recipes[0])}>
+      pick
+    </button>
+  ),
 }));
 
 vi.mock("~/t3team/backend/t3team-index", () => ({ useBackend: () => null }));
@@ -189,5 +215,136 @@ describe("digest review recipe pill", () => {
   it("renders no pill while the aside cannot show the kickoff composer", () => {
     render(false);
     expect(reviewButton()).toBeUndefined();
+  });
+});
+
+describe("digest recipe request whose recipe is not listed", () => {
+  const scope = digestReviewActions({
+    id: "r1",
+    projectId: "project-1",
+    host: "ghe.example.com",
+    repo: "hive/api",
+    number: 12,
+    title: "Add audit log",
+    updatedAt: "2026-10-01T00:00:00.000Z",
+  } as unknown as DigestReviewRequest)[0]!.scope!;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    toastAdd.mockReset();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("settles the request and tells the user once discovery had its grace period", () => {
+    discovered.current = [];
+    render();
+    act(() => requestDigestRecipeLaunch({ recipeId: "pr-review", scope }));
+    act(() => void vi.advanceTimersByTime(DIGEST_RECIPE_UNAVAILABLE_GRACE_MS - 1));
+    expect(useDigestRecipeLaunchStore.getState().request).not.toBeNull();
+    expect(toastAdd).not.toHaveBeenCalled();
+
+    act(() => void vi.advanceTimersByTime(1));
+    expect(useDigestRecipeLaunchStore.getState().request).toBeNull();
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        description: 'The "pr-review" recipe is not available in this project.',
+      }),
+    );
+  });
+
+  it("stages without a toast when discovery lists the recipe within the grace period", () => {
+    discovered.current = [];
+    render();
+    act(() => requestDigestRecipeLaunch({ recipeId: "pr-review", scope }));
+    act(() => void vi.advanceTimersByTime(1_000));
+    discovered.current = [prReview];
+    render();
+    act(() => void vi.advanceTimersByTime(DIGEST_RECIPE_UNAVAILABLE_GRACE_MS));
+    expect(latest.current?.selectedRecipe?.recipe.id).toBe("pr-review");
+    expect(toastAdd).not.toHaveBeenCalled();
+    expect(useDigestRecipeLaunchStore.getState().request).not.toBeNull();
+  });
+});
+
+const flush = () => act(async () => void (await Promise.resolve()));
+
+describe("Quick Start card click", () => {
+  function click(launchQuickStart: SidecarSectionHost["launchQuickStart"]) {
+    const host = { launchQuickStart, launchRecipe: vi.fn(), openThread: vi.fn() };
+    act(() =>
+      root.render(
+        <T3TeamQuickStartsSection
+          host={host as unknown as SidecarSectionHost}
+          props={{ recipeInput: { backend: null }, quickStarts: [prReview] }}
+        />,
+      ),
+    );
+    act(() => container.querySelector("button")?.click());
+  }
+
+  beforeEach(() => toastAdd.mockReset());
+
+  it("shows the error toast when the launch rejects", async () => {
+    click(() => Promise.reject(new Error("Could not reach the server.")));
+    await flush();
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error", description: "Could not reach the server." }),
+    );
+  });
+
+  it("shows no toast when the launch succeeds", async () => {
+    click(() => Promise.resolve(true));
+    await flush();
+    expect(toastAdd).not.toHaveBeenCalled();
+  });
+});
+
+describe("bundled recipe launch", () => {
+  const onLaunched = vi.fn();
+  let createThread: () => unknown;
+
+  function Harness() {
+    latest.current = useBundledSidecarRecipeLaunch({
+      backend: {} as never,
+      environmentId: "env-1",
+      projectId: project.id,
+      surface: "project.dashboard.myWork",
+      projectWorkspaceRoot: undefined,
+      openThread: () => undefined,
+      buildSelectedRecipe: (recipe) => ({ recipe }),
+      createThread,
+      onLaunched,
+    });
+    return null;
+  }
+
+  beforeEach(() => {
+    toastAdd.mockReset();
+    onLaunched.mockReset();
+    act(() => root.render(<Harness />));
+  });
+
+  it("toasts a failed launch and keeps the staged recipe so the user can retry", async () => {
+    createThread = () => {
+      throw new Error("Thread creation failed.");
+    };
+    act(() => root.render(<Harness />));
+    act(() => latest.current?.stageRecipeKickoff(prReview));
+    act(() => latest.current?.sidecarHost.launchRecipe("describe-rewrite"));
+    await flush();
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error", description: "Thread creation failed." }),
+    );
+    expect(onLaunched).not.toHaveBeenCalled();
+    expect(latest.current?.selectedRecipe?.recipe.id).toBe("pr-review");
+  });
+
+  it("toasts a launch that resolves false (no conversation was created)", async () => {
+    createThread = () => undefined;
+    act(() => root.render(<Harness />));
+    act(() => latest.current?.sidecarHost.launchRecipe("describe-rewrite"));
+    await flush();
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 });

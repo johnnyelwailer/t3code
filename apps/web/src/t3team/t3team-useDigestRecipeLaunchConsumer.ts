@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import { useStableCallback } from "~/hooks/useStableCallback";
+
 import { resolveDigestRecipe, useDigestRecipeCatalog } from "~/t3team/t3team-digestRecipeCatalog";
 import {
   buildDigestRecipeLaunchCustomization,
@@ -9,6 +11,7 @@ import {
   settleDigestRecipeLaunch,
   useDigestRecipeLaunchStore,
 } from "~/t3team/t3team-digestRecipeLaunchStore";
+import { useSettleUnavailableDigestRecipe } from "~/t3team/t3team-useSettleUnavailableDigestRecipe";
 import type {
   T3TeamRecipeQuickStartLaunchCustomization,
   T3TeamSelectedRecipeQuickStart,
@@ -38,6 +41,8 @@ export function useDigestRecipeLaunchConsumer(input: {
     if (!request || request.scope.projectId !== projectId) return;
     if (staged.current?.requestId === request.id) return;
     const quickStart = resolveDigestRecipe(catalog, request.recipeId, projectId);
+    // Unlisted for now: discovery may still be loading, and `useSettleUnavailableDigestRecipe`
+    // ends the request with a toast if the recipe never shows up.
     if (!catalog || !quickStart) return;
     staged.current = { requestId: request.id, shown: false };
     stageRecipeKickoff(
@@ -49,6 +54,19 @@ export function useDigestRecipeLaunchConsumer(input: {
       buildDigestRecipeLaunchCustomization(request.scope),
     );
   }, [catalog, projectId, request, stageRecipeKickoff]);
+
+  const alreadyStaged = useStableCallback(
+    (requestId: number) => staged.current?.requestId === requestId,
+  );
+  const requestForProject = request?.scope.projectId === projectId ? request : null;
+  useSettleUnavailableDigestRecipe({
+    requestId: requestForProject?.id ?? null,
+    recipeId: requestForProject?.recipeId ?? "",
+    unavailable:
+      requestForProject !== null &&
+      resolveDigestRecipe(catalog, requestForProject.recipeId, projectId) === null,
+    alreadyStaged,
+  });
 
   useEffect(() => {
     const current = staged.current;

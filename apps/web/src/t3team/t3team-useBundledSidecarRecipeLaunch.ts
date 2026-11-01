@@ -8,6 +8,7 @@ import {
   type T3TeamRecipeQuickStartLaunchCustomization,
   type T3TeamSelectedRecipeQuickStart,
 } from "~/t3team/t3team-recipeQuickStartLaunch";
+import { surfaceRecipeLaunchOutcome } from "~/t3team/t3team-launchFailureFeedback";
 import { type T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
 import { type T3TeamKickoffWorkItemRef } from "~/t3team/t3team-kickoffWorkItemRef";
 import {
@@ -86,7 +87,7 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
         projectId: input.projectId,
         stageKickoff: stageRecipeKickoff,
         launchRecipe: (recipeId, parameters) => {
-          void launchBundledSidecarRecipeThread({
+          const launch = launchBundledSidecarRecipeThread({
             backend: input.backend,
             environmentId: input.environmentId,
             projectId: input.projectId,
@@ -99,13 +100,14 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
               composerRef.current?.getLaunchConfig() ?? createDefaultT3TeamKickoffLaunchConfig(),
             createThread: input.createThread,
           }).then((launched) => {
-            if (!launched) {
-              return;
+            if (launched) {
+              input.onLaunched?.();
+              setSelectedRecipe(null);
             }
-
-            input.onLaunched?.();
-            setSelectedRecipe(null);
+            return launched;
           });
+          // A failed launch toasts and leaves the staged recipe in place so the user can retry.
+          surfaceRecipeLaunchOutcome(launch);
         },
         launchQuickStart: (recipe, customization) =>
           launchSidecarRecipeQuickStartThread({
