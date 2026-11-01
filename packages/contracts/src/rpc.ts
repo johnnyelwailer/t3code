@@ -402,6 +402,13 @@ import {
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import {
+  CredentialRefreshError,
+  CredentialRefreshStartInput,
+  CredentialRefreshStartResult,
+  CredentialRefreshStatusInput,
+  CredentialRefreshStatusResult,
+} from "./t3team-credentialRefresh.ts";
+import {
   CredentialSourcesError,
   CredentialSourcesProbeInput,
   CredentialSourcesProbeResult,
@@ -633,6 +640,8 @@ export const WS_METHODS = {
   secretsAnswerRequest: "secrets.answerRequest",
   credentialSourcesProbe: "credentialSources.probe",
   credentialSourcesRead: "credentialSources.read",
+  credentialSourcesRefreshStart: "credentialSources.refreshStart",
+  credentialSourcesRefreshStatus: "credentialSources.refreshStatus",
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
@@ -2248,6 +2257,18 @@ const WsCredentialSourcesReadRpc = Rpc.make(WS_METHODS.credentialSourcesRead, {
   error: Schema.Union([CredentialSourcesError, EnvironmentAuthorizationError]),
 });
 
+const WsCredentialSourcesRefreshStartRpc = Rpc.make(WS_METHODS.credentialSourcesRefreshStart, {
+  payload: CredentialRefreshStartInput,
+  success: CredentialRefreshStartResult,
+  error: Schema.Union([CredentialRefreshError, EnvironmentAuthorizationError]),
+});
+
+const WsCredentialSourcesRefreshStatusRpc = Rpc.make(WS_METHODS.credentialSourcesRefreshStatus, {
+  payload: CredentialRefreshStatusInput,
+  success: CredentialRefreshStatusResult,
+  error: Schema.Union([CredentialRefreshError, EnvironmentAuthorizationError]),
+});
+
 const WsScheduledTasksListWebhookDeliveriesRpc = Rpc.make(
   WS_METHODS.scheduledTasksListWebhookDeliveries,
   {
@@ -2357,6 +2378,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsSecretsAnswerRequestRpc,
   WsCredentialSourcesProbeRpc,
   WsCredentialSourcesReadRpc,
+  WsCredentialSourcesRefreshStartRpc,
+  WsCredentialSourcesRefreshStatusRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
   WsServerReportClientActivityRpc,

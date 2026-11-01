@@ -10,6 +10,8 @@ import { View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
+import { T3TeamCredentialAddAccess } from "./t3team-CredentialAddAccess";
+import { useT3TeamCredentialRefresh } from "./t3team-useCredentialRefresh";
 import {
   useT3TeamCredentialSources,
   type CredentialRequestSource,
@@ -26,6 +28,7 @@ export function T3TeamCredentialSourcesPicker(props: {
   readonly onValue: (value: string) => void;
 }) {
   const { machines, checked, error, reading, probe, use } = useT3TeamCredentialSources(props);
+  const refresh = useT3TeamCredentialRefresh();
   const intro = credentialRequestIntro(props.source);
   const disabled = props.busy || reading;
   return (
@@ -65,6 +68,19 @@ export function T3TeamCredentialSourcesPicker(props: {
               <Text className="font-sans text-xs text-foreground-muted" selectable>
                 This sign-in lacks a requested scope. To add it, run {option.hint}, then ask again.
               </Text>
+            )}
+            {option.canAddAccess !== true || option.host === undefined ? null : (
+              <T3TeamCredentialAddAccess
+                view={refresh.view}
+                host={option.host}
+                scopes={option.missingScopes ?? []}
+                disabled={disabled}
+                onStart={(host, scopes) =>
+                  void refresh.start(checked.environmentId, host, scopes, () =>
+                    probe(checked.environmentId),
+                  )
+                }
+              />
             )}
             {option.warning === undefined ? null : (
               <Text className="font-sans text-xs text-warning-foreground">{option.warning}</Text>

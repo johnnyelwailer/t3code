@@ -23,6 +23,9 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   // Both read this machine's own sign-in and environment: owner-level, like saving a token in Settings.
   [WS_METHODS.credentialSourcesProbe]: AuthSettingsWriteScope,
   [WS_METHODS.credentialSourcesRead]: AuthSettingsWriteScope,
+  // Runs `gh auth refresh`, which changes this machine's gh sign-in.
+  [WS_METHODS.credentialSourcesRefreshStart]: AuthSettingsWriteScope,
+  [WS_METHODS.credentialSourcesRefreshStatus]: AuthSettingsWriteScope,
   [WS_METHODS.serverSetFeatureFlag]: AuthSettingsWriteScope,
   [WS_METHODS.projectMachineSetSource]: AuthSettingsWriteScope,
   [WS_METHODS.pullRequestsRunAction]: AuthSourceControlWriteScope,

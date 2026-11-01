@@ -16,6 +16,8 @@ import { primaryEnvironmentIdAtom } from "../../state/primaryEnvironment";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
+import { T3TeamCredentialAddAccess } from "./t3team-CredentialAddAccess";
+import { useT3TeamCredentialRefresh } from "./t3team-useCredentialRefresh";
 
 export interface CredentialRequestSource {
   readonly host?: string | undefined;
@@ -48,6 +50,7 @@ export function T3TeamCredentialSourcesPicker(props: {
   const [reading, setReading] = useState<"gh" | "env" | "probe" | null>(null);
   const inFlight = useRef(false);
   const intro = credentialRequestIntro(source);
+  const refresh = useT3TeamCredentialRefresh(primaryEnvironmentId);
 
   const check = async () => {
     if (primaryEnvironmentId === null || inFlight.current) return;
@@ -138,6 +141,15 @@ export function T3TeamCredentialSourcesPicker(props: {
               This sign-in lacks a requested scope. To add it, run{" "}
               <code className="font-mono">{option.hint}</code>, then ask again.
             </p>
+          )}
+          {option.canAddAccess !== true || option.host === undefined ? null : (
+            <T3TeamCredentialAddAccess
+              view={refresh.view}
+              host={option.host}
+              scopes={option.missingScopes ?? []}
+              disabled={props.busy || reading !== null}
+              onStart={(host, scopes) => void refresh.start(host, scopes, check)}
+            />
           )}
           {option.warning === undefined ? null : (
             <p className="flex items-center gap-1 text-xs text-warning-foreground">

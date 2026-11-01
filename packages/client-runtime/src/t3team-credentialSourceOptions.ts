@@ -12,6 +12,18 @@ export interface CredentialSourceOption {
   readonly hint?: string;
   readonly warning?: string;
   readonly disabled: boolean;
+  /** A gh sign-in missing a scope can add it from the card: the host and the scopes to ask for. */
+  readonly canAddAccess?: true;
+  readonly host?: string;
+  readonly missingScopes?: ReadonlyArray<string>;
+}
+
+const PACKAGE_SCOPES = new Set(["read:packages", "write:packages"]);
+
+export function addAccessLabel(scopes: ReadonlyArray<string>): string {
+  return scopes.length > 0 && scopes.every((scope) => PACKAGE_SCOPES.has(scope))
+    ? "Add package access"
+    : "Add access";
 }
 
 function describe(source: CredentialSource): CredentialSourceOption | null {
@@ -25,6 +37,9 @@ function describe(source: CredentialSource): CredentialSourceOption | null {
           : {}),
         ...(source.refreshCommand === undefined ? {} : { hint: source.refreshCommand }),
         disabled: source.scopeCheck === "missing",
+        ...(source.scopeCheck === "missing" && source.missingScopes.length > 0
+          ? { canAddAccess: true as const, host: source.host, missingScopes: source.missingScopes }
+          : {}),
       };
     case "env":
       return {
