@@ -10,6 +10,10 @@
 import type { OrchestrationWorkflowRunStatus, ScopedThreadRef } from "@t3tools/contracts";
 import { createContext, use, useMemo } from "react";
 
+import {
+  deriveRichChoiceCardStates,
+  type RichChoiceCardState,
+} from "~/t3team/chat/t3team-richChoiceReplies";
 import type { ChatMessage } from "~/types";
 import { findActiveWorkflowInputMessageId } from "~/t3team/chat/t3team-messageDecisionCard";
 import { T3TeamSystemTimelineRow } from "~/t3team/chat/t3team-SystemTimelineRow";
@@ -35,6 +39,8 @@ export interface T3TeamTimelineRowsState {
   readonly workflowRunStatus: OrchestrationWorkflowRunStatus | undefined;
   /** Replies a decision card already shows as its answer; their own rows are hidden. */
   readonly cardAnsweredReplyMessageIds: ReadonlySet<string>;
+  /** Answered / superseded state of each rich-choice widget card, derived from the thread. */
+  readonly richChoiceCardStates: ReadonlyMap<string, RichChoiceCardState>;
   readonly callbacks: Pick<
     T3TeamTimelineRowProps,
     "onSubmitRecipeCardAction" | "dispatchWorkflowDecision" | "onControlWorkflow"
@@ -48,6 +54,7 @@ const EMPTY_STATE: T3TeamTimelineRowsState = {
   workflowStepRuns: new Map(),
   workflowRunStatus: undefined,
   cardAnsweredReplyMessageIds: new Set(),
+  richChoiceCardStates: new Map(),
   callbacks: {},
 };
 
@@ -75,6 +82,7 @@ export function useT3TeamTimelineRowsState(
       cardAnsweredReplyMessageIds: new Set(
         [...workflowDecisionAnswers.values()].map((answer) => answer.answerMessageId),
       ),
+      richChoiceCardStates: deriveRichChoiceCardStates(timelineEntries),
     };
   }, [timelineEntries]);
   const workflowStepRuns = useMemo(
