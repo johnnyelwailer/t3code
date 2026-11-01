@@ -25,6 +25,8 @@ const reactTests = [
   "src/features/settings/components/SettingsDragHandle.test.tsx",
   "src/features/threads/ThreadMarkdownImage.test.tsx",
   "src/features/threads/UsageLimitRecoveryCard.test.tsx",
+  "src/features/threads/t3team-DesktopRouteCard.test.tsx",
+  "src/features/threads/t3team-DesktopRouteQuestion.test.tsx",
   "src/features/threads/NewTaskDraftRouteScreen.test.tsx",
   "src/native/NativeHeaderToolbar.test.tsx",
   "src/native/V5StackHeader.ios.test.tsx",
