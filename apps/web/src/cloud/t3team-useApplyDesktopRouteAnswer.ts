@@ -4,8 +4,9 @@ import { toastManager } from "../components/ui/toast";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { usePrimaryEnvironmentId, useCloudSessions } from "../state/t3team-cloudSessions";
 import { captureDesktopRouteApply } from "./t3team-desktopRouteCapture";
-import { claimDesktopRouteRequest } from "./t3team-desktopRouteClaims";
+import { runDesktopRouteOnce } from "./t3team-desktopRouteClaims";
 import { postDesktopRouteGrant } from "./t3team-desktopRouteGrant";
+import { applyOwnDesktopRouteGrant } from "./t3team-desktopRouteObserver";
 
 /**
  * Grants an accepted desktop-route proposal on THIS desktop's host service; a phone, the VM or the
@@ -19,7 +20,7 @@ export function useApplyDesktopRouteAnswer(thread: { readonly environmentId: Env
     (
       questions: Parameters<typeof captureDesktopRouteApply>[0]["questions"],
       answers: Record<string, unknown>,
-      requestId?: string,
+      requestId: string,
     ) => {
       const captured = captureDesktopRouteApply({
         questions,
@@ -40,10 +41,11 @@ export function useApplyDesktopRouteAnswer(thread: { readonly environmentId: Env
         };
       }
       const { grant } = captured;
-      return async () => {
-        if (requestId !== undefined && !claimDesktopRouteRequest(requestId)) return;
-        await postDesktopRouteGrant(grant);
-      };
+      return () =>
+        applyOwnDesktopRouteGrant(requestId, grant, {
+          once: runDesktopRouteOnce,
+          grant: postDesktopRouteGrant,
+        });
     },
   );
 }

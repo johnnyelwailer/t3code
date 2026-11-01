@@ -25,6 +25,31 @@ describe("looksInternalDesktopRouteTarget", () => {
     "fd00::1",
     "2130706433",
     "10.0.0.0/24",
+    "foo.localhost",
+    "kubernetes.default.svc",
+    "foo.svc",
+    "0x7f.0.0.1",
+    "0x7f.1",
+    "2130706433",
+    "０.０.０.１",
+    "127。0。0。1",
+    "ｅｘａｍｐｌｅ.com",
+    "198.18.0.1",
+    "198.19.255.1",
+    "192.0.2.5",
+    "198.51.100.7",
+    "203.0.113.9",
+    "010.0.0.1",
+    "1.2.3",
+    "foo.test",
+    "foo.invalid",
+    "::ffff:10.0.0.1",
+    "[::ffff:7f00:1]",
+    "LOCALHOST",
+    "Registry.CORP.",
+    "10.0.0.1.",
+    "host%2e.com",
+    "a_b.com",
   ])("%s looks internal", (target) => {
     expect(looksInternalDesktopRouteTarget(target)).toBe(true);
   });
@@ -36,6 +61,10 @@ describe("looksInternalDesktopRouteTarget", () => {
     "172.32.0.1",
     "193.5.5.5",
     "npm.nexplore.ch",
+    "REGISTRY.NPMJS.ORG.",
+    "198.20.0.1",
+    "https://user.example.org:8443/x",
+    "xn--80ak6aa92e.com",
   ])("%s looks public", (target) => {
     expect(looksInternalDesktopRouteTarget(target)).toBe(false);
   });
