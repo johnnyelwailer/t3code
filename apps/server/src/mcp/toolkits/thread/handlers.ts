@@ -22,6 +22,7 @@ import {
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ScheduledTasks from "../../../scheduledTasks/ScheduledTaskService.ts";
 import { queuedRunsInDeliveryOrder } from "../../../orchestration-v2/QueuedRunOrder.ts";
+import { refuseDesktopRouteAnswerFromAgent } from "../t3team/t3team-desktopRouteRespondGuard.ts";
 import { ThreadToolkit } from "./tools.ts";
 
 function queueEntry(
@@ -242,10 +243,11 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       Effect.gen(function* () {
         const requestId = yield* required(input.requestId, "requestId");
         const answers = yield* required(input.answers, "answers");
-        const { threads, projection } = yield* readQuestion({
+        const { threads, projection, item } = yield* readQuestion({
           threadId: input.threadId,
           requestId,
         });
+        yield* refuseDesktopRouteAnswerFromAgent(item.questions);
         const result = yield* threads
           .dispatch({
             type: "runtime-request.respond",

@@ -17,7 +17,10 @@ export interface AnsweredUserInput {
 export interface ThreadAnswersResolved {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
-  /** Pending when this stream last saw the thread live, answered since: by anyone, on any device. */
+  /**
+   * Pending when this stream last saw the thread live, answered since: by anyone, on any device,
+   * possibly while the stream was disconnected (the age of the answer decides, not the stream).
+   */
   readonly live: ReadonlyArray<AnsweredUserInput>;
   /** Already resolved when first seen (a replay: another device, or while this client was away). */
   readonly missed: ReadonlyArray<AnsweredUserInput>;
