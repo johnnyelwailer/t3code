@@ -456,3 +456,51 @@ it.effect("a secret the card promised to keep from the agent is never written to
     }),
   ),
 );
+
+it.effect("a replayed answer cannot overwrite the saved value", () =>
+  withService(({ service, stored }) =>
+    Effect.gen(function* () {
+      yield* service.answer({ threadId, turnItemId, answer: { type: "save", secret: "first" } });
+      const replay = yield* service
+        .answer({ threadId, turnItemId, answer: { type: "save", secret: "attacker" } })
+        .pipe(Effect.flip);
+      assert.equal(replay.reason, "already_answered");
+      assert.deepEqual(valuesOf(stored).map((value) => value.includes("attacker")), [false]);
+      const ref = Option.getOrThrow(yield* service.savedRef({ threadId, turnItemId }));
+      assert.equal(yield* service.consume({ ref, projectId }), "first");
+    }),
+  ),
+);
+
+it.effect("another thread gets no ref for a saved answer and cannot take its file", () =>
+  withService(
+    ({ service, stored }) =>
+      Effect.gen(function* () {
+        yield* service.answer({ threadId, turnItemId, answer: { type: "save", secret: "mine" } });
+        const other = ThreadId.make("thread-other");
+        assert.isTrue(Option.isNone(yield* service.savedRef({ threadId: other, turnItemId })));
+        const stolen = yield* service.saveToFile({ threadId: other, turnItemId }).pipe(Effect.flip);
+        assert.equal(stolen.reason, "ref_unavailable");
+        assert.deepEqual(valuesOf(stored), ["mine"]);
+      }),
+    { delivery: "file", directory: "/nonexistent-secret-dir" },
+  ),
+);
+
+it.effect("a ref that is not one the server issued is refused before any store access", () =>
+  withService(({ service }) =>
+    Effect.gen(function* () {
+      for (const forged of [
+        "secret-ref:../../etc/passwd",
+        "secret-ref:secret-request-salt",
+        `secret-ref:${"A".repeat(32)}`,
+        "secret-ref:",
+      ]) {
+        const failure = yield* service
+          .consume({ ref: SecretRef.make(forged), projectId })
+          .pipe(Effect.flip);
+        assert.equal(failure.reason, "invalid_ref");
+      }
+    }),
+  ),
+);

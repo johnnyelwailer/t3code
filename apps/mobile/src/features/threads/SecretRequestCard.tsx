@@ -20,6 +20,7 @@ import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../../components/ui/Button";
+import { T3TeamCredentialSourcesPicker } from "./t3team-CredentialSourcesPicker";
 
 const LOCK_SYMBOL: AppSymbolName = { ios: "lock", android: "lock" };
 const PRIVATE_SYMBOL: AppSymbolName = { ios: "checkmark.shield", android: "lock" };
@@ -72,6 +73,9 @@ function PendingSecretRequestForm(props: {
   const [secret, setSecret] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A source read in flight: answering by hand or declining waits for it.
+  const [picking, setPicking] = useState(false);
+  const blocked = submitting || picking;
   // Submit then a tap can both run before a re-render; this guard is synchronous.
   const inFlight = useRef(false);
 
@@ -106,12 +110,21 @@ function PendingSecretRequestForm(props: {
           </Text>
         ) : null}
       </View>
+      {item.source === undefined ? null : (
+        <T3TeamCredentialSourcesPicker
+          sessionEnvironmentId={props.environmentId}
+          source={item.source}
+          busy={submitting}
+          onReadingChange={setPicking}
+          onValue={(value) => void send({ type: "save", secret: value })}
+        />
+      )}
       <TextInput
         accessibilityLabel={item.label}
         placeholder={item.placeholder ?? SECRET_REQUEST_DEFAULT_PLACEHOLDER}
         value={secret}
         onChangeText={setSecret}
-        editable={!submitting}
+        editable={!blocked}
         secureTextEntry
         autoCorrect={false}
         autoCapitalize="none"
@@ -135,7 +148,7 @@ function PendingSecretRequestForm(props: {
         label="Save securely"
         tone="primary"
         fullWidth
-        disabled={submitting || secret.trim().length === 0}
+        disabled={blocked || secret.trim().length === 0}
         onPress={() => void send({ type: "save", secret })}
       />
       <View className="flex-row items-center justify-between gap-2">
@@ -153,7 +166,7 @@ function PendingSecretRequestForm(props: {
         <Button
           label="Decline"
           tone="text"
-          disabled={submitting}
+          disabled={blocked}
           onPress={() => void send({ type: "decline" })}
         />
       </View>
