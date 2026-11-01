@@ -7,6 +7,7 @@ import {
   T3TEAM_CONTEXT_BINDING_FACT_KEY,
   T3TeamContextBinding,
   T3TeamContextBindingRecordInput,
+  classifyThreadContextBinding,
   readThreadContextBinding,
 } from "./t3team-contextBinding.ts";
 
@@ -68,5 +69,28 @@ describe("readThreadContextBinding", () => {
     assert.isNull(readThreadContextBinding({ extensions: {} }));
     assert.isNull(readThreadContextBinding(withValue({ ...binding, version: 2 })));
     assert.isNull(readThreadContextBinding(withValue("my-work")));
+  });
+});
+
+describe("classifyThreadContextBinding", () => {
+  const withValue = (value: unknown) => ({
+    extensions: { [T3TEAM_CONTEXT_BINDING_FACT_KEY]: value },
+  });
+
+  it("tells absence from a stored value this build cannot read", () => {
+    assert.deepStrictEqual(classifyThreadContextBinding(undefined), { state: "absent" });
+    assert.deepStrictEqual(classifyThreadContextBinding({ extensions: {} }), { state: "absent" });
+    assert.deepStrictEqual(
+      classifyThreadContextBinding(withValue({ version: 2, kind: "my-work" })),
+      {
+        state: "unsupported",
+      },
+    );
+    assert.deepStrictEqual(classifyThreadContextBinding(withValue(null)), { state: "unsupported" });
+    assert.strictEqual(
+      classifyThreadContextBinding(withValue({ version: 1, kind: "my-work", projectId: "p" }))
+        .state,
+      "bound",
+    );
   });
 });

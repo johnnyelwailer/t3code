@@ -115,6 +115,29 @@ describe("rightPanelStore", () => {
     expect(useClosedViewStore.getState().entries).toEqual(closedBefore);
   });
 
+  it("keeps the pinned selection, with or without tabs, through a persisted-state migration", () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "files");
+    store.activatePinned(refA);
+    store.activatePinned(refB);
+    const persisted = JSON.parse(
+      JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey }),
+    );
+    const migrated = migratePersistedRightPanelState(persisted);
+    const withTab = selectThreadRightPanelState(migrated.byThreadKey, refA);
+    const alone = selectThreadRightPanelState(migrated.byThreadKey, refB);
+
+    expect({ isOpen: withTab.isOpen, active: withTab.activeSurfaceId }).toEqual({
+      isOpen: true,
+      active: null,
+    });
+    expect(withTab.surfaces.map((surface) => surface.id)).toEqual(["files"]);
+    expect({ isOpen: alone.isOpen, active: alone.activeSurfaceId }).toEqual({
+      isOpen: true,
+      active: null,
+    });
+  });
+
   it("activatePinned on a panel with no state opens it empty", () => {
     useRightPanelStore.getState().activatePinned(refB);
     const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB);

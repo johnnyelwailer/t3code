@@ -6,7 +6,7 @@ import {
   T3TEAM_CONTEXT_BINDING_FACT_KEY,
   T3TeamContextBinding,
   T3TeamContextBindingError,
-  readThreadContextBinding,
+  classifyThreadContextBinding,
   type T3TeamContextBindingRecordInput,
   type T3TeamContextBindingRecordResult,
 } from "@t3tools/contracts";
@@ -36,14 +36,17 @@ export const recordContextBinding = Effect.fn("t3team.contextBinding.record")(fu
   if (input.binding.projectId !== project.id) {
     return yield* fail("The binding is for another project than the thread's.");
   }
-  const failStore = () => fail("Could not record the context binding.");
-  const current = yield* factsStore.get(input.threadId).pipe(Effect.mapError(failStore));
-  const existing = readThreadContextBinding(current ?? undefined);
-  if (existing !== null && !sameBinding(existing, input.binding)) {
+  const stored = yield* factsStore
+    .upsert(input.threadId, {
+      extensionsIfAbsent: { [T3TEAM_CONTEXT_BINDING_FACT_KEY]: input.binding },
+    })
+    .pipe(Effect.mapError(() => fail("Could not record the context binding.")));
+  const outcome = classifyThreadContextBinding(stored);
+  if (outcome.state !== "bound") {
+    return yield* fail("The thread has a context binding this version cannot read.");
+  }
+  if (!sameBinding(outcome.binding, input.binding)) {
     return yield* fail("The thread is already bound to another context.");
   }
-  yield* factsStore
-    .upsert(input.threadId, { extensions: { [T3TEAM_CONTEXT_BINDING_FACT_KEY]: input.binding } })
-    .pipe(Effect.mapError(failStore));
   return { binding: input.binding } satisfies T3TeamContextBindingRecordResult;
 });

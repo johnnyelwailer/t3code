@@ -7,6 +7,7 @@ import {
   type T3TeamContextBinding,
 } from "@t3tools/contracts";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { afterEach, beforeEach } from "vite-plus/test";
@@ -34,14 +35,33 @@ const projects = {
 
 const TestLayer = ThreadFactsStore.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory));
 
-const record = (threadId: ThreadId, binding: T3TeamContextBinding) =>
+const record = (
+  threadId: ThreadId,
+  binding: T3TeamContextBinding,
+  wrap: (store: ThreadFactsStore.T3TeamThreadFactsStore["Service"]) => typeof store = (store) =>
+    store,
+) =>
   Effect.gen(function* () {
     const store = yield* ThreadFactsStore.T3TeamThreadFactsStore;
-    return yield* recordContextBinding({ threadId, binding }, store).pipe(
+    return yield* recordContextBinding({ threadId, binding }, wrap(store)).pipe(
       Effect.provideService(ThreadManagementService, threads),
       Effect.provideService(ProjectStore.ProjectStoreV2, projects),
     );
   });
+
+/** Both writers read before either writes, so a read-then-write implementation always races. */
+const bothReadFirst = Effect.gen(function* () {
+  const gate = yield* Deferred.make<void>();
+  let arrivals = 0;
+  const wait = Effect.suspend(() => {
+    arrivals += 1;
+    return arrivals >= 2 ? Deferred.succeed(gate, undefined) : Deferred.await(gate);
+  }).pipe(Effect.timeout("200 millis"), Effect.ignore);
+  return (store: ThreadFactsStore.T3TeamThreadFactsStore["Service"]) => ({
+    ...store,
+    get: (id: ThreadId) => store.get(id).pipe(Effect.tap(() => wait)),
+  });
+});
 
 const storedBinding = (threadId: ThreadId) =>
   Effect.gen(function* () {
@@ -77,7 +97,50 @@ describe("recordContextBinding", () => {
     );
   });
 
+  it.layer(TestLayer)("concurrent writes", (it) => {
+    it.effect("lets only one of two concurrent conflicting writes win", () =>
+      Effect.gen(function* () {
+        const dashboard: T3TeamContextBinding = { ...MY_WORK, kind: "project-dashboard" };
+        const wrap = yield* bothReadFirst;
+        const results = yield* Effect.all(
+          [record(KNOWN, MY_WORK, wrap), record(KNOWN, dashboard, wrap)].map((write) =>
+            Effect.result(write),
+          ),
+          { concurrency: "unbounded" },
+        );
+        assert.strictEqual(results.filter((result) => result._tag === "Success").length, 1);
+        const failure = results.find((result) => result._tag === "Failure");
+        assert.strictEqual(
+          failure?._tag === "Failure" ? failure.failure.message : "",
+          "The thread is already bound to another context.",
+        );
+        const winner = results.find((result) => result._tag === "Success");
+        assert.deepStrictEqual(
+          yield* storedBinding(KNOWN),
+          winner?._tag === "Success" ? winner.success.binding : null,
+        );
+      }),
+    );
+  });
+
   it.layer(TestLayer)("refusals store nothing", (it) => {
+    it.effect.each([
+      ["a newer version", { ...MY_WORK, version: 2, kind: "inbox" }],
+      ["a malformed value", "my-work"],
+    ])("never replaces a stored binding this build cannot read (%s)", ([, stored]) =>
+      Effect.gen(function* () {
+        const store = yield* ThreadFactsStore.T3TeamThreadFactsStore;
+        yield* store.upsert(KNOWN, { extensions: { [T3TEAM_CONTEXT_BINDING_FACT_KEY]: stored } });
+        const error = yield* Effect.flip(record(KNOWN, MY_WORK));
+        assert.strictEqual(
+          error.message,
+          "The thread has a context binding this version cannot read.",
+        );
+        const facts = yield* store.get(KNOWN);
+        assert.deepStrictEqual(facts?.extensions?.[T3TEAM_CONTEXT_BINDING_FACT_KEY], stored);
+      }),
+    );
+
     it.effect("rejects an unknown thread", () =>
       Effect.gen(function* () {
         const ghost = ThreadId.make("thread:ghost");
@@ -136,5 +199,19 @@ describe("context binding fact merge", () => {
       ),
     );
     assert.deepStrictEqual(readThreadContextBinding(bound ?? undefined), MY_WORK);
+  });
+
+  it("sets an extension only while the key is absent, whatever is stored there", () => {
+    const patch = { extensionsIfAbsent: { [T3TEAM_CONTEXT_BINDING_FACT_KEY]: MY_WORK } };
+    const bound = mergeThreadFacts(KNOWN, null, patch, at);
+    assert.deepStrictEqual(bound?.extensions, { [T3TEAM_CONTEXT_BINDING_FACT_KEY]: MY_WORK });
+    assert.isNull(mergeThreadFacts(KNOWN, bound, patch, "later"));
+    const newer = mergeThreadFacts(
+      KNOWN,
+      bound,
+      { extensions: { [T3TEAM_CONTEXT_BINDING_FACT_KEY]: { version: 2 } } },
+      at,
+    );
+    assert.isNull(mergeThreadFacts(KNOWN, newer, patch, "later"));
   });
 });

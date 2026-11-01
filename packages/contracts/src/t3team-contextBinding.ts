@@ -67,12 +67,32 @@ export class T3TeamContextBindingError extends Schema.TaggedError<T3TeamContextB
 
 const decodeContextBinding = Schema.decodeUnknownOption(T3TeamContextBinding);
 
-/** The binding recorded on a thread's facts, if any (and well-formed, and a known version). */
-export function readThreadContextBinding(
-  facts: { readonly extensions?: { readonly [key: string]: unknown } | undefined } | undefined,
-): T3TeamContextBinding | null {
-  const value = facts?.extensions?.[T3TEAM_CONTEXT_BINDING_FACT_KEY];
-  if (value === undefined) return null;
-  const decoded = decodeContextBinding(value);
-  return decoded._tag === "Some" ? decoded.value : null;
+/** `unsupported`: a value is stored but this build cannot read it (newer version or malformed). */
+export type T3TeamStoredContextBinding =
+  | { readonly state: "absent" }
+  | { readonly state: "bound"; readonly binding: T3TeamContextBinding }
+  | { readonly state: "unsupported" };
+
+type FactsWithExtensions =
+  | { readonly extensions?: { readonly [key: string]: unknown } | undefined }
+  | undefined;
+
+/** Tells absence from a stored value this build cannot read, which a writer must not replace. */
+export function classifyThreadContextBinding(
+  facts: FactsWithExtensions,
+): T3TeamStoredContextBinding {
+  const extensions = facts?.extensions;
+  if (extensions === undefined || !Object.hasOwn(extensions, T3TEAM_CONTEXT_BINDING_FACT_KEY)) {
+    return { state: "absent" };
+  }
+  const decoded = decodeContextBinding(extensions[T3TEAM_CONTEXT_BINDING_FACT_KEY]);
+  return decoded._tag === "Some"
+    ? { state: "bound", binding: decoded.value }
+    : { state: "unsupported" };
+}
+
+/** The binding recorded on a thread's facts, if any and readable by this build. */
+export function readThreadContextBinding(facts: FactsWithExtensions): T3TeamContextBinding | null {
+  const stored = classifyThreadContextBinding(facts);
+  return stored.state === "bound" ? stored.binding : null;
 }

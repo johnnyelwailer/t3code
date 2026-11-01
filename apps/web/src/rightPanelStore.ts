@@ -663,14 +663,20 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                 : rawActiveSurfaceId === "pull-request"
                   ? (surfaces.find((surface) => surface.kind === "pull-request")?.id ?? null)
                   : null;
+              // An open panel with a null active surface is the pinned tab (`activatePinned`);
+              // before it existed a panel with tabs never had that shape, so it is kept as is.
+              const pinnedSelected =
+                validThreadState?.isOpen === true && rawActiveSurfaceId === null;
               const isOpen =
-                surfaces.length > 0 &&
-                (typeof validThreadState?.isOpen === "boolean"
-                  ? validThreadState.isOpen
-                  : persistedActiveSurfaceId !== null);
-              const activeSurfaceId =
-                persistedActiveSurfaceId ??
-                (isOpen || rawActiveSurfaceId === "agents" ? (surfaces[0]?.id ?? null) : null);
+                pinnedSelected ||
+                (surfaces.length > 0 &&
+                  (typeof validThreadState?.isOpen === "boolean"
+                    ? validThreadState.isOpen
+                    : persistedActiveSurfaceId !== null));
+              const activeSurfaceId = pinnedSelected
+                ? null
+                : (persistedActiveSurfaceId ??
+                  (isOpen || rawActiveSurfaceId === "agents" ? (surfaces[0]?.id ?? null) : null));
               return [
                 threadKey,
                 {
