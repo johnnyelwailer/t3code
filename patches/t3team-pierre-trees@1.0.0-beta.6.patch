@@ -1,0 +1,25 @@
+diff --git a/dist/model/publicTypes.d.ts b/dist/model/publicTypes.d.ts
+--- a/dist/model/publicTypes.d.ts
++++ b/dist/model/publicTypes.d.ts
+@@ -306 +306 @@
+-type FileTreeRowDecoration = FileTreeRowDecorationText | FileTreeRowDecorationIcon;
++type FileTreeRowDecoration = FileTreeRowDecorationText | FileTreeRowDecorationIcon | { slot: string };
+diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
+--- a/dist/render/FileTreeView.js
++++ b/dist/render/FileTreeView.js
+@@ -325,0 +326 @@
++	if ("slot" in decoration) return jsx("slot", { name: decoration.slot });
+diff --git a/dist/react/FileTree.d.ts b/dist/react/FileTree.d.ts
+--- a/dist/react/FileTree.d.ts
++++ b/dist/react/FileTree.d.ts
+@@ -8,0 +9 @@
++  children?: ReactNode;
+diff --git a/dist/react/FileTree.js b/dist/react/FileTree.js
+--- a/dist/react/FileTree.js
++++ b/dist/react/FileTree.js
+@@ -55 +55 @@
+-function FileTree({ header, id, model, preloadedData, renderContextMenu, ...hostProps }) {
++function FileTree({ children: rowSlots, header, id, model, preloadedData, renderContextMenu, ...hostProps }) {
+@@ -106 +106 @@
+-	const children = renderPreloadedShadowDom(renderFileTreeChildren(header, renderContextMenu, activeContextMenu), preloadedData);
++	const children = renderPreloadedShadowDom(jsxs(Fragment, { children: [renderFileTreeChildren(header, renderContextMenu, activeContextMenu), rowSlots] }), preloadedData);

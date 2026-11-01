@@ -1,3 +1,4 @@
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import {
   capitalizeTerm,
   sourceControlClients,
@@ -96,7 +97,7 @@ import { useDiffWorkerPool } from "../DiffWorkerPoolProvider";
 import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
 import { useCodeViewFileReveal } from "../diffs/useCodeViewFileReveal";
 import { useHideTestFiles } from "../diffs/useHideTestFiles";
-import { orderDiffFilesLikeTree } from "../diffs/diffFileTree.logic";
+import { diffFileTreeEntries, orderDiffFilesLikeTree } from "../diffs/diffFileTree.logic";
 import { StyledDiffCodeView } from "../diffs/StyledDiffCodeView";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -149,11 +150,11 @@ import {
 } from "./t3team-prCodeLayout.logic";
 import {
   diffExplorerFileInfo,
-  markAllFilesViewed,
   nextDiffExplorerFile,
   previousDiffExplorerFile,
-  toggleViewedFile,
 } from "./t3team-prDiffExplorer.logic";
+import { useClearChangedOnOpen } from "./t3team-prDiffExplorer.openClear";
+import { diffExplorerViewedActions } from "./t3team-prDiffExplorer.viewedActions";
 import { PullRequestDiffUnavailableState } from "./PullRequestDiffUnavailableState";
 import { usePullRequestFilesViewed } from "./usePullRequestFilesViewed";
 import {
@@ -216,7 +217,7 @@ function parseSlice(slice: DiffSlice, cacheKey: string, ignoreWhitespace: boolea
 
 interface FileViewedToggleState {
   readonly enabled: boolean;
-  readonly isViewed: (path: string) => boolean;
+  readonly isTicked: (path: string) => boolean;
   readonly isStale: (path: string) => boolean;
   readonly setFileViewed: (fileKey: string, viewed: boolean, extendRange: boolean) => void;
 }
@@ -235,7 +236,7 @@ function FileViewedToggle({
 }) {
   const viewedFiles = use(FileViewedToggleContext);
   if (viewedFiles === null || !viewedFiles.enabled) return stat;
-  const viewed = viewedFiles.isViewed(path);
+  const viewed = viewedFiles.isTicked(path);
   const stale = viewedFiles.isStale(path);
   return (
     <span className="flex items-center gap-3">
@@ -354,6 +355,7 @@ function PullRequestCodeTab({
   const effectiveFoldOverride =
     foldOverride ?? (settings.diffFilesCollapsed ? "folded" : "expanded");
   const diffLayout = settings.diffLayout;
+  const enhancedTreeReview = useFeatureFlag("PR_TREE_REVIEW_CONTROLS");
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   // The file tree is the diff explorer's primary navigation, so it starts open: a reader lands
@@ -513,6 +515,7 @@ function PullRequestCodeTab({
     refresh: refreshFilesViewed,
     enabled: filesViewedEnabled,
     isViewed: isFileViewed,
+    isTicked: isFileTicked,
     isStale: isFileViewedStale,
   } = filesViewed;
   const appliedRefreshToken = useRef(refreshToken);
@@ -784,6 +787,20 @@ function PullRequestCodeTab({
   useEffect(() => {
     onActiveFileChange?.(activePath);
   }, [activePath, onActiveFileChange]);
+  // Opening a file is looking at it: in one-file mode the focused file, in all-files mode the one
+  // the reader picked in the tree. A file that changed since it was viewed is re-marked then.
+  const openedKey = diffMode === "focus" ? activeKey : selectedKey;
+  const openedPath =
+    openedKey === null
+      ? null
+      : (explorerFiles.find((file) => file.key === openedKey)?.path ?? null);
+  useClearChangedOnOpen({
+    scope: `${scopeKey}:${enhancedTreeReview}`,
+    openedPath,
+    ready: filesViewed.ready,
+    isChanged: (path) => enhancedTreeReview && isFileViewedStale(path),
+    markViewed: (path) => setViewed(path, true),
+  });
   // Hand this pull request's Code tab, on the file in focus, to a window (desktop) or tab (web)
   // of its own, where it can take the whole screen. See t3team-openDetachedSurface.
   const openInNewWindow = () => {
@@ -851,7 +868,7 @@ function PullRequestCodeTab({
   };
   const fileViewedToggle = {
     enabled: filesViewedEnabled,
-    isViewed: isFileViewed,
+    isTicked: enhancedTreeReview ? isFileTicked : isFileViewed,
     isStale: isFileViewedStale,
     setFileViewed,
   };
@@ -874,36 +891,17 @@ function PullRequestCodeTab({
     },
     [diffMode, items, codeViewReveal, effectiveFoldOverride],
   );
-  // t3team: the explorer tree's ticks are the same ticks as the file headers'. Where the host keeps
-  // a viewed state, the tree reads and writes that one; the per-reader local set is only the
-  // fallback for hosts without it, so the two checkboxes can never disagree.
-  const treeViewed = useMemo(
-    () =>
-      filesViewedEnabled
-        ? new Set(explorerFiles.filter((file) => isFileViewed(file.path)).map((file) => file.key))
-        : viewed,
-    [explorerFiles, filesViewedEnabled, isFileViewed, viewed],
-  );
-  const toggleViewed = useCallback(
-    (key: string) => {
-      if (filesViewedEnabled) {
-        const file = explorerFiles.find((candidate) => candidate.key === key);
-        if (file !== undefined) setFileViewed(key, !isFileViewed(file.path), false);
-        return;
-      }
-      setViewedKeys((current) => [...toggleViewedFile(new Set(current), key)]);
-    },
-    [explorerFiles, filesViewedEnabled, isFileViewed, setFileViewed, setViewedKeys],
-  );
-  const markAllViewed = useCallback(() => {
-    if (filesViewedEnabled) {
-      for (const file of explorerFiles) {
-        if (!isFileViewed(file.path)) setFileViewed(file.key, true, false);
-      }
-      return;
-    }
-    setViewedKeys([...markAllFilesViewed(explorerFiles)]);
-  }, [explorerFiles, filesViewedEnabled, isFileViewed, setFileViewed, setViewedKeys]);
+  const { treeViewed, treeChanged, toggleViewed, markAllViewed, toggleDirectoryViewed } =
+    diffExplorerViewedActions({
+      explorerFiles,
+      host: enhancedTreeReview
+        ? filesViewed
+        : { ...filesViewed, isTicked: isFileViewed, isStale: () => false },
+      setFileViewed: (key, _path, viewed) => setFileViewed(key, viewed, false),
+      localViewed: viewed,
+      updateLocalViewed: setViewedKeys,
+    });
+
   const stepFile = useCallback(
     (direction: "previous" | "next") => {
       if (activeKey === null) return;
@@ -1900,11 +1898,15 @@ function PullRequestCodeTab({
             />
             <DiffExplorerFileTree
               files={explorerFiles}
+              entries={diffFileTreeEntries(files)}
+              reviewControlsEnabled={enhancedTreeReview}
               selectedKey={activeKey}
               viewed={treeViewed}
+              changed={treeChanged}
               onSelectFile={handleTreeSelect}
               onToggleViewed={toggleViewed}
               onMarkAllViewed={markAllViewed}
+              onToggleDirectoryViewed={toggleDirectoryViewed}
               ariaLabel={`${capitalizeTerm(term)} #${detail.number} files`}
               side={treeDock.side}
               onSwapSide={treeDock.swapSide}

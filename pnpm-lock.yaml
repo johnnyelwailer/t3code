@@ -372,6 +372,7 @@ patchedDependencies:
   '@legendapp/list@3.3.5': 6cbdacd8c380d9a5afb9f73d4198dc2cc44be6ef28a955b1183c781469307896
   '@muse-code/sdk@1.4.6': 7b495b607fc5d76b444c7c4d58821e839726a30e6f3c53564f0d59f2d5b42101
   '@pierre/diffs@1.6.1': 4645364ddf113e48e8827f3b4966b3b1ff745317011e5a3d904e2d8672dee7dc
+  '@pierre/trees@1.0.0-beta.6': 73f43ef829604a5d4b31e82ee291eafcbae743579ca40fa89df80f8a0cb985a1
   '@react-native-ai/apple@0.12.0': 2d09870c2848d185cb05b53ed823a46e12dba519324d8dd8e584e28731990f9d
   '@react-native-menu/menu@2.0.0': 910ec1bf22aa85a96fcf12299cd823bc30f702dd9b2d77b564d10b9ed709f7f6
   '@react-navigation/native-stack@7.21.0': 990d575444c4af2ce8218b3b7a8280fe244c03abbdb32b822a2e862f791dbf42
@@ -815,7 +816,7 @@ importers:
         version: 4.0.5(patch_hash=2731c9c3761c595f25ddc625a7d61ca376b389d5b3049ecb837c8940f21cfa02)(@astrojs/compiler-rs@0.5.1)(@opentelemetry/api@1.9.0)(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(@volar/typescript@2.4.28(@tsc-rs/typescript@0.8.0))(bufferutil@4.1.0)(effect@4.0.5(patch_hash=e7a35ccc065affd8707bb4eaf9af9557524cd7c122dbcca254cd52f6166c7b9d))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.12.11(@tsc-rs/typescript@0.8.0)(@types/node@24.12.4))(playwright@1.60.0)(terser@5.48.0)(tsx@4.23.15)(unrun@0.2.39)(utf-8-validate@6.0.6)(yaml@2.9.0)
       '@pierre/trees':
         specifier: 1.0.0-beta.6
-        version: 1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
+        version: 1.0.0-beta.6(patch_hash=73f43ef829604a5d4b31e82ee291eafcbae743579ca40fa89df80f8a0cb985a1)(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -1131,7 +1132,7 @@ importers:
         version: 1.6.1(patch_hash=4645364ddf113e48e8827f3b4966b3b1ff745317011e5a3d904e2d8672dee7dc)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@pierre/trees':
         specifier: 1.0.0-beta.6
-        version: 1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
+        version: 1.0.0-beta.6(patch_hash=73f43ef829604a5d4b31e82ee291eafcbae743579ca40fa89df80f8a0cb985a1)(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
       '@primer/octicons-react':
         specifier: ^19.25.0
         version: 19.42.0(react@19.3.0)
@@ -17708,7 +17709,7 @@ snapshots:
       react-dom: 19.3.0(react@19.3.0)
       shiki: 4.2.0
 
-  '@pierre/trees@1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)':
+  '@pierre/trees@1.0.0-beta.6(patch_hash=73f43ef829604a5d4b31e82ee291eafcbae743579ca40fa89df80f8a0cb985a1)(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)':
     dependencies:
       '@pierre/theming': 1.0.0(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
       preact: 11.0.0-beta.0
