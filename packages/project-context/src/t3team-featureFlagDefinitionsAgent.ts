@@ -120,6 +120,14 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: true,
     requiresRestart: false,
   },
+  UI_SIDEBAR_THREAD_DROP: {
+    group: "UI & rendering",
+    label: "Drop onto sidebar threads",
+    description:
+      "Drag a work item, activity item or thread onto a sidebar thread to open it with that item prefilled in its composer. Off: sidebar threads are not drop targets.",
+    defaultEnabled: true,
+    requiresRestart: false,
+  },
   UI_VOICE_INPUT: {
     group: "UI & rendering",
     label: "Voice input",

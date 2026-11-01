@@ -4,6 +4,7 @@ import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-Wat
 import { ProjectIconGlyph } from "../t3team-ProjectIconGlyph";
 import { InboxThreadAttribution } from "~/t3team/components/t3team-InboxSlots";
 import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFacts";
+import { useThreadRowDropTarget } from "~/t3team/hooks/t3team-useThreadRowDropTarget";
 import { withT3TeamWorkflowRunStatus } from "~/t3team/t3team-workflowRunLiveness";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
@@ -683,7 +684,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const { leaseLiveStatus, rowRef: leaseRowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const { revealRef } = props;
+  // t3team: the row takes work-item, activity and thread drops (UI_SIDEBAR_THREAD_DROP).
+  const { dropRef, rowDropProps, rowDropClassName, rowDropOverlay } = useThreadRowDropTarget({
+    threadRef,
+    projectId: thread.projectId,
+    title: thread.title,
+    layoutKey: variant,
+    onOpenThread: onThreadActivate,
+  });
   const rowRef = (row: HTMLElement | null) => {
+    dropRef.current = row;
     if (row !== null) revealRef?.(row, threadKey);
     return leaseRowRef(row);
   };
@@ -1034,6 +1044,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       "opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none",
     isFileDragOver && "ring-1 ring-inset ring-primary/70",
     isFileDragOver && !props.isActive && !isSelected && "bg-sidebar-row-hover",
+    rowDropClassName,
     props.sortable?.isDragging &&
       "bg-sidebar bg-linear-to-b from-sidebar-row-active to-sidebar-row-active text-sidebar-foreground opacity-100 shadow-lg",
   );
@@ -1310,6 +1321,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   // Lines titles up with the folder name, past its chevron and icon.
                   inFolder && "ps-9",
                 )}
+                {...rowDropProps}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
                 onKeyDown={handleKeyDown}
@@ -1317,6 +1329,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               />
             }
           >
+            {rowDropOverlay}
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
               {accessibleTitle}
@@ -1499,6 +1512,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               data-testid="sidebar-row-card"
               aria-busy={isRegeneratingTitle || undefined}
               className={rowSurfaceClassName}
+              {...rowDropProps}
               onClick={handleClick}
               onDoubleClick={handleDoubleClick}
               onKeyDown={handleKeyDown}
@@ -1507,6 +1521,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           }
         >
           {accessibleTitle}
+          {rowDropOverlay}
           <div
             className={cn(
               "relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",

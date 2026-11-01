@@ -257,6 +257,7 @@ import { hostServiceRoutes } from "./t3team-hostServiceRoutes.ts";
 import { t3teamAccountRouteLayer } from "./t3team-account-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
+import { t3teamWorkItemRecordRouteLayer } from "./t3team-work-item-record-routes.ts";
 import {
   t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
   t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
@@ -1158,6 +1159,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamStateMigrationResumeLayer,
     t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
     t3teamProjectWorkspaceWriteContextFilesRouteLayer,
+    t3teamWorkItemRecordRouteLayer,
     t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
     t3teamProjectWorkspaceRefreshWorkItemContextRouteLayer,
     t3teamProjectWorkspaceRefreshWorkItemSliceContextRouteLayer,

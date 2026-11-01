@@ -383,6 +383,7 @@
     "apps/web/src/components/ChatView.logic.test.ts",
     "apps/web/src/components/ChatView.logic.ts",
     "apps/web/src/components/ChatView.tsx",
+    "apps/web/src/components/chat/useComposerSend.ts",
     "apps/web/src/components/CommandPalette.tsx",
     "apps/web/src/components/ComposerPromptEditorTiptap.tsx",
     "apps/web/src/components/ContextChip.tsx",

@@ -65,14 +65,10 @@ export function ThreadChatViewBody({
   bootstrapProgress,
   retryThreadBootstrap,
   composerState: {
-    clearThreadAttachments,
     composerDropTarget,
-    contextAttachments,
     dispatchTurnStartOverride,
     enqueueOfflineTurnStart,
-    prepareComposerContextAttachments,
     prepareTurnStart,
-    removeContextAttachment,
     resolveWorkflowDecision,
     submitRecipeCardAction,
     onOpenThread,
@@ -82,12 +78,7 @@ export function ThreadChatViewBody({
   // Handed over unconditionally: the accessory self-gates (attachment strip, staged action card,
   // staged note rows), so this must NOT re-derive "is anything staged" from attachments alone.
   const contextAttachmentSlot = (
-    <T3TeamThreadComposerAccessory
-      projectId={projectId}
-      {...(ticketId ? { ticketId } : {})}
-      attachments={contextAttachments}
-      onRemoveAttachment={removeContextAttachment}
-    />
+    <T3TeamThreadComposerAccessory projectId={projectId} {...(ticketId ? { ticketId } : {})} />
   );
   // ChatView reads its send model from the context handle, and the app-wide one belongs to the
   // primary thread. An embedded peer thread scopes its own, or its composer hijacks the primary's.
@@ -159,9 +150,6 @@ export function ThreadChatViewBody({
           composerContextAttachmentSlot={contextAttachmentSlot}
           composerContainerProps={composerDropTarget.composerContainerProps}
           composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-          composerContextAttachments={contextAttachments}
-          prepareComposerContextAttachments={prepareComposerContextAttachments}
-          onComposerContextAttachmentsConsumed={clearThreadAttachments}
           onSubmitRecipeCardAction={submitRecipeCardAction}
           dispatchWorkflowDecision={resolveWorkflowDecision}
           {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
