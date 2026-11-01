@@ -67,6 +67,7 @@ import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { truncate } from "@t3tools/shared/String";
 import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
 import type { McpAppReference } from "@t3tools/shared/mcpApp";
+import type { T3TeamRichChoiceFeedEntry } from "./t3team-richChoiceFeed";
 import {
   compactDynamicToolOutput,
   htmlRenderFromToolItem,
@@ -197,6 +198,7 @@ export type ThreadFeedEntry = ThreadFeedEntryContent & {
 
 type ThreadFeedEntryContent =
   | Extract<RawThreadFeedEntry, { type: "message" | "html-render" | "mcp-app" }>
+  | T3TeamRichChoiceFeedEntry
   | {
       readonly type: "activity-group";
       readonly id: string;

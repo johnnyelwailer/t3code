@@ -9,7 +9,7 @@ import {
   splitRichChoiceBody,
   toggleRichChoiceSelection,
   type RichChoiceOption,
-} from "./t3team-richChoice.logic";
+} from "./t3team-richChoiceLogic.ts";
 
 const options: readonly RichChoiceOption[] = ["a", "b", "c"].map((id) => ({
   id,
