@@ -1,6 +1,6 @@
 /**
  * POST /api/t3team/thread/view-context — the web publishes what the user is looking at for the
- * thread opened beside the view. `viewContext: null` clears it. Read back by `t3_view_read`.
+ * thread opened beside the view. `viewContext: null` clears it. Read back by `t3_current_view`.
  * The thread is resolved server-side (same read as the workflow routes) and the context must be
  * for that thread's own project; a stale `sequence` is ignored.
  */

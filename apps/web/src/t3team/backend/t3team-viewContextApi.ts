@@ -2,7 +2,7 @@ import type { T3TeamThreadViewContextPublication } from "@t3tools/contracts";
 
 import { postJson } from "./t3team-t3BackendHttp";
 
-/** The view's one client write: what it shows, for the thread opened beside it (`t3_view_read`). */
+/** The view's one client write: what it shows, for the thread opened beside it (`t3_current_view`). */
 export function createViewContextApi(httpBaseUrl: string) {
   return {
     publishThreadViewContext(input: T3TeamThreadViewContextPublication): Promise<{ ok: true }> {

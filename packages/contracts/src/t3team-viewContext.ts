@@ -1,5 +1,5 @@
 /**
- * The view a thread is opened beside, published as it changes and read by `t3_view_read`.
+ * The view a thread is opened beside, published as it changes and read by `t3_current_view`.
  * Surface names follow `t3teamToolCatalogCore.ts`; selection kinds are neutral (`change-request`).
  */
 import * as Schema from "effect/Schema";

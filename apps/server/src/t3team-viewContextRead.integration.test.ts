@@ -1,7 +1,7 @@
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- HTTP route integration bridges Effect for HttpClient assertions. */
 // @effect-diagnostics missingEffectContext:off - route server boot is fully provided before runPromise.
 /**
- * publish (HTTP route) -> store -> `t3team.view.read` (what `t3_view_read` calls): the agent's
+ * publish (HTTP route) -> store -> `t3team.view.read` (what `t3_current_view` calls): the agent's
  * answer carries the view the web published, with its age, and says so when nothing was published.
  */
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -118,11 +118,11 @@ const readViaTool = Effect.gen(function* () {
 
 afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
-describe("t3_view_read", () => {
+describe("t3_current_view", () => {
   it("is offered on /mcp only while the flag is on (default off)", () => {
-    expect(isMcpToolEnabled("t3_view_read")).toBe(false);
+    expect(isMcpToolEnabled("t3_current_view")).toBe(false);
     replaceFeatureFlagPresetValues(new Map([["AGENTS_VIEW_CONTEXT", true]]));
-    expect(isMcpToolEnabled("t3_view_read")).toBe(true);
+    expect(isMcpToolEnabled("t3_current_view")).toBe(true);
   });
 
   it("returns the published view with its age, and the unpublished answer after a clear", async () => {

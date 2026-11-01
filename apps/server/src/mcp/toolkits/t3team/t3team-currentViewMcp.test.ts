@@ -20,7 +20,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 
 /**
- * `t3_view_read` through the real `/mcp` HTTP path and the real broker: listed and answered while
+ * `t3_current_view` through the real `/mcp` HTTP path and the real broker: listed and answered while
  * `AGENTS_VIEW_CONTEXT` is on, absent from `tools/list` and refused on a call while it is off.
  */
 const viewContext: T3TeamViewContext = {
@@ -120,8 +120,18 @@ const session = (publish: boolean) =>
           Effect.map(resultOf),
         );
       const listed = yield* post(2, "tools/list", {});
-      const called = yield* post(3, "tools/call", { name: "t3_view_read", arguments: {} });
+      const called = yield* post(3, "tools/call", { name: "t3_current_view", arguments: {} });
+      const calledRead = yield* post(4, "tools/call", {
+        name: "t3_current_view",
+        arguments: { op: "read" },
+      });
+      const calledBadOp = yield* post(5, "tools/call", {
+        name: "t3_current_view",
+        arguments: { op: "write" },
+      });
       return {
+        calledRead,
+        calledBadOp,
         names: listed.tools.map((tool: { readonly name: string }) => tool.name) as string[],
         called,
       };
@@ -130,11 +140,14 @@ const session = (publish: boolean) =>
 
 afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
-it.effect("flag on: t3_view_read is listed and returns the published view", () =>
+it.effect("flag on: t3_current_view is listed and returns the published view", () =>
   Effect.gen(function* () {
     replaceFeatureFlagPresetValues(new Map([["AGENTS_VIEW_CONTEXT", true]]));
-    const { names, called } = yield* session(true);
-    expect(names).toContain("t3_view_read");
+    const { names, called, calledRead, calledBadOp } = yield* session(true);
+    expect(names).toContain("t3_current_view");
+    expect(calledRead.structuredContent).toEqual(called.structuredContent);
+    expect(calledBadOp?.isError === true || calledBadOp === undefined).toBe(true);
+    expect(JSON.stringify(calledBadOp ?? {})).not.toContain("ACME-1");
     expect(JSON.stringify(called)).toContain("ACME-1");
     expect(called.isError).not.toBe(true);
     expect(called.structuredContent.viewContext).toMatchObject({
@@ -153,10 +166,10 @@ it.effect("flag on, nothing published: the answer says so", () =>
   }),
 );
 
-it.effect("flag off: t3_view_read is not listed and a call is refused", () =>
+it.effect("flag off: t3_current_view is not listed and a call is refused", () =>
   Effect.gen(function* () {
     const { names, called } = yield* session(true);
-    expect(names).not.toContain("t3_view_read");
+    expect(names).not.toContain("t3_current_view");
     expect(names).toContain("t3_show_widget");
     expect(called.isError).toBe(true);
     expect(JSON.stringify(called)).toContain("turned off");

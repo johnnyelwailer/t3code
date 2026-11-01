@@ -165,13 +165,17 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Read view",
     title: "Read current t3team view",
     description:
-      "Read what the user is looking at: the view this thread was opened beside (viewContext: surface, projectId, selection, filters, visibleItemIds, visibleItemCount, publishedAt, ageSeconds), plus this thread and its project. viewContext.published is false when no view shares its state; check ageSeconds before trusting it. Read-only.",
+      "Read what the user is looking at (op read, the default; it never changes the view): the view this thread was opened beside (viewContext: surface, projectId, selection, filters, visibleItemIds, visibleItemCount, publishedAt, ageSeconds), plus this thread and its project. viewContext.published is false when no view shares its state; check ageSeconds before trusting it. Read-only.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
     status: "implemented",
     defaultEnabled: true,
-    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { op: { type: "string", enum: ["read"] } },
+    },
   },
   "t3team.recipe.list": {
     id: "t3team.recipe.list",

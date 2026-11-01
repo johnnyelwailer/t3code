@@ -1,5 +1,5 @@
 /**
- * The published view context on the `t3team.view.read` answer (`t3_view_read`). Added only while
+ * The published view context on the `t3team.view.read` answer (`t3_current_view`). Added only while
  * `AGENTS_VIEW_CONTEXT` is on, read live on every call.
  */
 import type { T3TeamStoredViewContext, ThreadId } from "@t3tools/contracts";

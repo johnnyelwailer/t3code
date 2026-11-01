@@ -24,7 +24,7 @@ import {
   T3TeamWorkItemChangeSetTool,
   T3TeamWorkItemDraftTool,
 } from "./t3team-workItemDraftTools.ts";
-import { T3TeamViewReadTool } from "./t3team-viewReadTool.ts";
+import { T3TeamCurrentViewTool } from "./t3team-currentViewTool.ts";
 import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workItemReadTools.ts";
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
@@ -418,9 +418,25 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
     widget_code: Schema.optional(Schema.String).annotate({
       description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
     }),
-    format: Schema.optional(Schema.Literals(["html", "svg"])).annotate({
+    format: Schema.optional(Schema.Literals(["html", "svg", "rich-choice"])).annotate({
       description: T3TEAM_WIDGET_FORMAT_DESCRIPTION,
     }),
+    choice: Schema.optional(
+      Schema.Struct({
+        prompt: Schema.String,
+        options: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            title: Schema.String,
+            body: Schema.String,
+            tag: Schema.optional(Schema.String),
+            chips: Schema.optional(Schema.Array(Schema.String)),
+          }),
+        ),
+        multiple: Schema.optional(Schema.Boolean),
+        default_id: Schema.optional(Schema.String),
+      }),
+    ),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(
       Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
@@ -523,7 +539,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRecipeValidateTool,
   T3TeamMyWorkDigestTool,
   T3TeamMyWorkArrangeTool,
-  T3TeamViewReadTool,
+  T3TeamCurrentViewTool,
   T3TeamWorkItemSearchTool,
   T3TeamWorkItemGetTool,
   T3TeamWorkItemDraftTool,
