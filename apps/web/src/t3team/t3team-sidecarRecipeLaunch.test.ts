@@ -4,12 +4,13 @@ import { ProviderInstanceId } from "@t3tools/contracts";
 import { ProjectShellProjectId, type ProjectShellProject } from "@t3tools/project-context";
 
 import {
-  buildBundledSidecarRecipeKickoffMessage,
   buildBundledSidecarRecipeWorkflowLaunch,
   launchBundledSidecarRecipeThread,
   launchSidecarRecipeQuickStartThread,
   type BundledRecipeWorkflow,
 } from "~/t3team/t3team-sidecarRecipeLaunch";
+import { buildBundledSidecarRecipeKickoffMessage } from "~/t3team/t3team-sidecarRecipeLaunchMessage";
+import { DEFAULT_T3TEAM_THREAD_TOOL_IDS } from "~/t3team/t3team-threadToolContext";
 import { buildT3TeamKickoffWorkItemRef } from "~/t3team/t3team-kickoffWorkItemRef";
 import type { T3TeamKickoffLaunchConfig } from "~/t3team/t3team-kickoffLaunchConfig";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
@@ -328,5 +329,89 @@ describe("launchBundledSidecarRecipeThread work item", () => {
     expect(createdWorkflow?.parameters?.issueIdOrKey).toBe("USER-SET-9");
     // The full reference still points at the selected work item.
     expect(createdWorkflow?.parameters?.workItem).toMatchObject({ key: "PRJ-1" });
+  });
+});
+
+describe("launch tool context", () => {
+  const quickStart = {
+    id: "fix-this-bug",
+    title: "Fix this bug",
+    description: "Reproduce, fix and verify a bug.",
+    prompt: "Fix the bug.",
+    workflow: recipeWorkflow,
+  };
+
+  beforeEach(() => {
+    runThreadBootstrapKickoffMock.mockClear();
+  });
+
+  function launchedToolContext() {
+    type Bootstrap = {
+      readonly toolContext?: {
+        readonly surface: string;
+        readonly state: { readonly view: Record<string, unknown>; readonly kickoff?: unknown };
+      };
+    };
+    const call = runThreadBootstrapKickoffMock.mock.calls[0]?.[0] as unknown as Bootstrap;
+    return call.toolContext;
+  }
+
+  it("hands the bootstrap the surface's own project and ticket context instead of clearing it", async () => {
+    await launchSidecarRecipeQuickStartThread({
+      backend,
+      environmentId: "env-1",
+      projectId: "project-alpha",
+      quickStart,
+      launchConfig: { ...launchConfig, selectedToolIds: DEFAULT_T3TEAM_THREAD_TOOL_IDS },
+      createThread: async () => "thread-1",
+      toolContextSource: { project, ticketId: "ticket-7", ticketDisplayId: "PRJ-1" },
+    });
+
+    const toolContext = launchedToolContext();
+    expect(toolContext?.surface).toBe("t3team");
+    expect(toolContext?.state.view).toMatchObject({
+      kind: "thread",
+      projectId: "project-alpha",
+      projectTitle: "Alpha",
+      threadId: "thread-1",
+      displayMode: "embedded",
+      ticketId: "ticket-7",
+      ticketDisplayId: "PRJ-1",
+    });
+    expect(toolContext?.state.kickoff).toMatchObject({
+      pending: true,
+      workflow: { recipeId: "fix-this-bug" },
+    });
+  });
+
+  it("builds the same context for a bundled recipe launch", async () => {
+    await launchBundledSidecarRecipeThread({
+      backend,
+      environmentId: "env-1",
+      projectId: "project-alpha",
+      surface: "workitem.detail.sidepanel",
+      projectWorkspaceRoot: "/workspace/project-alpha",
+      recipeId: "describe-rewrite",
+      launchConfig: { ...launchConfig, selectedToolIds: DEFAULT_T3TEAM_THREAD_TOOL_IDS },
+      createThread: async () => "thread-2",
+      toolContextSource: { project },
+    });
+
+    expect(launchedToolContext()?.state.view).toMatchObject({
+      projectId: "project-alpha",
+      threadId: "thread-2",
+    });
+  });
+
+  it("leaves the tool context unset when the surface supplies no source", async () => {
+    await launchSidecarRecipeQuickStartThread({
+      backend,
+      environmentId: "env-1",
+      projectId: "project-alpha",
+      quickStart,
+      launchConfig: { ...launchConfig, selectedToolIds: DEFAULT_T3TEAM_THREAD_TOOL_IDS },
+      createThread: async () => "thread-1",
+    });
+    expect(launchedToolContext()).toBeUndefined();
   });
 });
