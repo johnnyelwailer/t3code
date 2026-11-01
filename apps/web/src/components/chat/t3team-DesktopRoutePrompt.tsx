@@ -43,7 +43,11 @@ export function T3TeamDesktopRoutePrompt(props: {
   return (
     <T3TeamDesktopRouteCard
       card={props.card}
-      sessionLabel={desktopRouteSessionLabel(props.threadRef.environmentId, sessions)}
+      sessionLabel={desktopRouteSessionLabel(
+        props.threadRef.environmentId,
+        primaryEnvironmentId,
+        sessions,
+      )}
       disabled={props.disabled || props.responding || answered}
       onAnswer={(label) => {
         setAnswered(true);

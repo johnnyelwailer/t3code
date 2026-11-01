@@ -28,6 +28,8 @@ export function DesktopRouteAnswerObserver() {
           readSessionsForBrokerAttach({ registry: appAtomRegistry, list: cloudSessionListAtom }),
         grant: postDesktopRouteGrant,
         notify: (notice) => toastManager.add({ type: "warning", ...notice }),
+      }).catch((error: unknown) => {
+        console.error("Desktop route observer failed", error);
       });
     });
     return () => void stop();

@@ -25,6 +25,11 @@ describe("looksInternalDesktopRouteTarget", () => {
     "fd00::1",
     "2130706433",
     "10.0.0.0/24",
+    "1.2.3.4/0",
+    "8.8.8.8/1",
+    "8.8.8.0/24",
+    "8.8.8.8/31",
+    "2001:4860::/32",
     "foo.localhost",
     "kubernetes.default.svc",
     "foo.svc",
@@ -65,6 +70,8 @@ describe("looksInternalDesktopRouteTarget", () => {
     "198.20.0.1",
     "https://user.example.org:8443/x",
     "xn--80ak6aa92e.com",
+    "8.8.8.8/32",
+    "https://registry.npmjs.org/v1/32",
   ])("%s looks public", (target) => {
     expect(looksInternalDesktopRouteTarget(target)).toBe(false);
   });
