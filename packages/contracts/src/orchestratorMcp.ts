@@ -8,6 +8,7 @@ import {
   CredentialScope,
   CredentialVariableName,
 } from "./t3team-credentialSources.ts";
+import { OrchestratorMcpCloudSessions } from "./t3team-environmentCloudSessions.ts";
 import {
   ContextTransferId,
   EnvironmentId,
@@ -693,6 +694,8 @@ export const OrchestratorMcpEnvironmentLinksResult = Schema.Struct({
   links: Schema.Array(OrchestratorMcpEnvironmentLink),
   /** What to do when the machine the user means is not among `links`. */
   notListed: Schema.String,
+  /** Nexi cloud sessions: only with the cloud-session placement on. */
+  cloudSessions: Schema.optional(OrchestratorMcpCloudSessions),
 });
 export type OrchestratorMcpEnvironmentLinksResult =
   typeof OrchestratorMcpEnvironmentLinksResult.Type;
