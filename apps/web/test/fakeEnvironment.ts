@@ -309,6 +309,9 @@ const json = (body: unknown, status = 200) =>
 const threadSubscribers = new Map<string, Queue.Queue<OrchestrationV2ThreadStreamItem>>();
 let threads: ReadonlyArray<FakeThread> = [];
 let sequence = 1;
+// The live shell subscription, for announcing a thread the server created after the snapshot.
+let shellSubscriber: Queue.Queue<OrchestrationV2ShellStreamItem> | null = null;
+const contextBindingCalls: Array<{ readonly threadId: ThreadId; readonly binding: unknown }> = [];
 
 const subscribe = <A>(first: ReadonlyArray<A>, register?: (queue: Queue.Queue<A>) => () => void) =>
   Stream.unwrap(
@@ -324,20 +327,38 @@ const subscribe = <A>(first: ReadonlyArray<A>, register?: (queue: Queue.Queue<A>
   );
 
 const handlers: Record<string, (input: never) => unknown> = {
+  // Answers like a server that knows the thread; a thread it has not been told about is refused.
+  [WS_METHODS.t3teamContextBindingRecord]: (input: {
+    readonly threadId: ThreadId;
+    readonly binding: unknown;
+  }) => {
+    contextBindingCalls.push(input);
+    return threads.some((thread) => thread.id === input.threadId)
+      ? Effect.succeed({ binding: input.binding })
+      : Effect.fail({ _tag: "T3TeamContextBindingError", message: "The thread was not found." });
+  },
   [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: () =>
-    subscribe<OrchestrationV2ShellStreamItem>([
-      {
-        kind: "snapshot",
-        snapshot: {
-          schemaVersion: 1,
-          snapshotSequence: sequence,
-          projects: [project],
-          threads: threads.map(shellOf),
-          archivedThreads: [],
+    subscribe<OrchestrationV2ShellStreamItem>(
+      [
+        {
+          kind: "snapshot",
+          snapshot: {
+            schemaVersion: 1,
+            snapshotSequence: sequence,
+            projects: [project],
+            threads: threads.map(shellOf),
+            archivedThreads: [],
+          },
         },
+        { kind: "synchronized" },
+      ],
+      (queue) => {
+        shellSubscriber = queue;
+        return () => {
+          if (shellSubscriber === queue) shellSubscriber = null;
+        };
       },
-      { kind: "synchronized" },
-    ]),
+    ),
   [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: (input: { readonly threadId: ThreadId }) => {
     const thread = threads.find((candidate) => candidate.id === input.threadId);
     if (!thread) return Stream.never;
@@ -431,6 +452,7 @@ export function installFakeEnvironment(fixtures: ReadonlyArray<FakeThread>): Dis
     [Symbol.dispose]: () => {
       globalThis.fetch = realFetch;
       threads = [];
+      contextBindingCalls.length = 0;
     },
   };
 }
@@ -458,6 +480,24 @@ export async function emitThreadEvent(
     } as OrchestrationV2ThreadStreamItem),
   );
 }
+
+/** The server created `thread` after the snapshot: listed in the shell and loadable. */
+export async function emitThreadCreated(thread: FakeThread): Promise<void> {
+  if (!shellSubscriber) throw new Error("No live shell subscription");
+  threads = [...threads, thread];
+  sequence += 1;
+  await Effect.runPromise(
+    Queue.offer(shellSubscriber, {
+      kind: "thread.updated",
+      sequence,
+      location: "active",
+      thread: shellOf(thread),
+    }),
+  );
+}
+
+/** Every `t3team.contextBinding.record` the fake server answered, in order. */
+export const recordedContextBindings = () => [...contextBindingCalls];
 
 export function runningRun(threadId: ThreadId, id: string, ordinal: number, userMessageId: string) {
   return {

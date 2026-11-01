@@ -16,6 +16,8 @@ import { useT3TeamMyWorkRightPanelEnabled } from "~/t3team/t3team-myWorkRightPan
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
+import { MyWorkContextChatTab } from "~/t3team/t3team-MyWorkContextChatTab";
+import { useT3TeamContextChatTabEnabled } from "~/t3team/t3team-contextChatTabFlag";
 import {
   MY_WORK_PANEL_REF,
   selectThreadRightPanelState,
@@ -48,9 +50,11 @@ export function AllProjectsMyWorkPane({
   onKickoffProjectThread: CreateProjectKickoffThread;
 }) {
   const { allProjects } = useProjectStore();
-  const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);
+  const { scratchProject, scratchEnvironmentId, startScratch } =
+    useT3TeamScratchHomeChat(allProjects);
   const backendState = useBackendState();
   const myWorkRightPanelEnabled = useT3TeamMyWorkRightPanelEnabled();
+  const contextChatTabEnabled = useT3TeamContextChatTabEnabled();
   const pullRequest = useDigestPrAsideStore((state) => state.pullRequest);
   const ticket = useDigestPrAsideStore((state) => state.ticket);
   const myWorkPanelSurfaces = useRightPanelStore(
@@ -93,6 +97,17 @@ export function AllProjectsMyWorkPane({
       projectThreads={project ? getThreadsForProject(project.id) : []}
       onRememberEmbeddedThread={onRememberEmbeddedThread}
       kickoff={defaultAside}
+      {...(contextChatTabEnabled
+        ? {
+            chatTab: (
+              <MyWorkContextChatTab
+                scratchProject={scratchProject}
+                environmentId={scratchEnvironmentId}
+                fallback={defaultAside}
+              />
+            ),
+          }
+        : {})}
     />
   ) : project ? (
     <DigestPrAside
