@@ -118,10 +118,26 @@ describe("adding access to a gh sign-in", () => {
     expect(gh?.canAddAccess).toBeUndefined();
   });
 
-  it("is named package access only when every missing scope is a packages scope", () => {
-    expect(addAccessLabel(["read:packages"])).toBe("Add package access");
-    expect(addAccessLabel(["read:packages", "write:packages"])).toBe("Add package access");
-    expect(addAccessLabel(["read:packages", "repo"])).toBe("Add access");
-    expect(addAccessLabel([])).toBe("Add access");
+  it("names the exact scopes on the button", () => {
+    expect(addAccessLabel(["read:packages"])).toBe("Add package access (read:packages)");
+    expect(addAccessLabel(["read:packages", "write:packages"])).toBe(
+      "Add package access (read:packages, write:packages)",
+    );
+  });
+
+  it("offers no add action for a missing scope outside the package scopes", () => {
+    const [gh] = credentialSourceOptions({
+      sources: [
+        {
+          kind: "gh",
+          host: "github.com",
+          account: "pj",
+          scopeCheck: "missing",
+          missingScopes: ["read:packages", "admin:org"],
+        },
+      ],
+    });
+    expect(gh?.canAddAccess).toBeUndefined();
+    expect(gh?.disabled).toBe(true);
   });
 });

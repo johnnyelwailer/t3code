@@ -56,8 +56,11 @@ it.effect("starts gh with a fixed argv and returns only the parsed code and page
 it.effect("joins several scopes into one -s value", () =>
   Effect.gen(function* () {
     const { refresh, calls } = yield* setup();
-    yield* refresh.start({ host: "github.com", scopes: ["read:packages", "repo"] });
-    assert.deepStrictEqual(calls[0]?.slice(-2), ["-s", "read:packages,repo"]);
+    yield* refresh.start({
+      host: "github.com",
+      scopes: ["write:packages", "read:packages", "read:packages"],
+    });
+    assert.deepStrictEqual(calls[0]?.slice(-2), ["-s", "read:packages,write:packages"]);
   }),
 );
 
@@ -65,7 +68,7 @@ it.effect("refuses a host that is not a forge host without spawning", () =>
   Effect.gen(function* () {
     const { refresh, calls } = yield* setup();
     const failure = yield* errorReason(
-      refresh.start({ host: "evil.example.com", scopes: ["repo"] }),
+      refresh.start({ host: "evil.example.com", scopes: ["read:packages"] }),
     );
     assert.include(failure, "not_available");
     assert.strictEqual(calls.length, 0);
@@ -74,9 +77,83 @@ it.effect("refuses a host that is not a forge host without spawning", () =>
 
 it.effect("allows the host gh is configured for through GH_HOST", () =>
   Effect.gen(function* () {
-    const { refresh, calls } = yield* setup({ env: { GH_HOST: "git.corp.example" } });
-    yield* refresh.start({ host: "git.corp.example", scopes: ["repo"] });
+    const { refresh, calls } = yield* setup({
+      env: { GH_HOST: "git.corp.example" },
+      lines: Stream.concat(
+        Stream.fromIterable([
+          "! One-time code (ABCD-1234) copied to clipboard",
+          "Open this URL to continue in your web browser: https://git.corp.example/login/device",
+        ]),
+        Stream.never,
+      ),
+    });
+    yield* refresh.start({ host: "git.corp.example", scopes: ["read:packages"] });
     assert.strictEqual(calls[0]?.[3], "git.corp.example");
+  }),
+);
+
+it.effect("only package scopes are ever passed to gh", () =>
+  Effect.gen(function* () {
+    const { refresh, calls } = yield* setup();
+    for (const scopes of [
+      ["admin:org"],
+      ["delete_repo"],
+      ["repo"],
+      [],
+      ["read:packages", "admin:org"],
+      ["--hostname"],
+      ["read:packages,repo"],
+      ["READ:PACKAGES"],
+    ]) {
+      assert.include(
+        yield* errorReason(refresh.start({ host: "github.com", scopes })),
+        "scope_not_allowed",
+      );
+    }
+    assert.strictEqual(calls.length, 0);
+  }),
+);
+
+it.effect("a different scope set starts its own flow instead of reusing the pending one", () =>
+  Effect.gen(function* () {
+    const { refresh, calls } = yield* setup();
+    const read = yield* refresh.start({ host: "github.com", scopes: ["read:packages"] });
+    const write = yield* refresh.start({ host: "github.com", scopes: ["write:packages"] });
+    assert.notStrictEqual(read.id, write.id);
+    assert.strictEqual(calls.length, 2);
+  }),
+);
+
+it.effect("only the flow host's own device page is shown, never another https line", () =>
+  Effect.gen(function* () {
+    const other = yield* setup({
+      lines: Stream.fromIterable([
+        "code (ABCD-1234)",
+        "Open https://evil.example/login/device",
+        "or https://github.com.evil.example/login/device",
+        "or https://github.com/login/device/../../x",
+      ]),
+    });
+    assert.include(
+      yield* errorReason(other.refresh.start({ host: "github.com", scopes: ["read:packages"] })),
+      "start_failed",
+    );
+    const own = yield* setup({
+      env: { GH_HOST: "ghe.example.com" },
+      lines: Stream.concat(
+        Stream.fromIterable([
+          "Visit https://evil.example/login/device",
+          "code (ABCD-1234)",
+          "Open https://ghe.example.com/login/device.",
+        ]),
+        Stream.never,
+      ),
+    });
+    const result = yield* own.refresh.start({
+      host: "ghe.example.com",
+      scopes: ["read:packages"],
+    });
+    assert.strictEqual(result.verificationUri, "https://ghe.example.com/login/device");
   }),
 );
 
@@ -132,7 +209,9 @@ it.effect("output that ends without a code fails at once and never echoes the ou
     const { refresh, kills } = yield* setup({
       lines: Stream.fromIterable([`error: not signed in ${CANARY}`]),
     });
-    const failure = yield* errorReason(refresh.start({ host: "github.com", scopes: ["repo"] }));
+    const failure = yield* errorReason(
+      refresh.start({ host: "github.com", scopes: ["read:packages"] }),
+    );
     assert.include(failure, "start_failed");
     assert.notInclude(failure, CANARY);
     assert.strictEqual(kills(), 1);
@@ -145,7 +224,7 @@ it.effect("a page that is not https is never accepted", () =>
       lines: Stream.fromIterable(["code (ABCD-1234)", "Open http://evil.example/login/device"]),
     });
     assert.include(
-      yield* errorReason(refresh.start({ host: "github.com", scopes: ["repo"] })),
+      yield* errorReason(refresh.start({ host: "github.com", scopes: ["read:packages"] })),
       "start_failed",
     );
   }),

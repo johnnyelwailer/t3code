@@ -8,6 +8,9 @@ import * as Schema from "effect/Schema";
 
 import { CredentialHost, CredentialScope } from "./t3team-credentialSources.ts";
 
+/** The only scopes the card may add: a model-chosen scope must never widen the user's token beyond these. */
+export const CREDENTIAL_ADDABLE_SCOPES = ["read:packages", "write:packages"] as const;
+
 export const CredentialRefreshStartInput = Schema.Struct({
   host: CredentialHost,
   scopes: Schema.Array(CredentialScope).check(Schema.isMinLength(1), Schema.isMaxLength(16)),
@@ -33,12 +36,16 @@ export type CredentialRefreshStatusResult = typeof CredentialRefreshStatusResult
 
 export class CredentialRefreshError extends Schema.TaggedError<CredentialRefreshError>()(
   "CredentialRefreshError",
-  { reason: Schema.Literals(["not_available", "start_failed", "unknown_id"]) },
+  {
+    reason: Schema.Literals(["not_available", "scope_not_allowed", "start_failed", "unknown_id"]),
+  },
 ) {
   override get message(): string {
     switch (this.reason) {
       case "not_available":
         return "That host has no gh sign-in this machine can refresh.";
+      case "scope_not_allowed":
+        return "Only package access (read:packages, write:packages) can be added from here.";
       case "start_failed":
         return "gh did not start a sign-in.";
       case "unknown_id":

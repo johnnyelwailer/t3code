@@ -4,7 +4,7 @@
  * page only; it is never returned or logged, and no token passes through here. One refresh runs per
  * host, and each is killed and forgotten after a fixed time. Dependencies are plain so it is host-neutral.
  */
-import { CredentialRefreshError } from "@t3tools/contracts";
+import { CREDENTIAL_ADDABLE_SCOPES, CredentialRefreshError } from "@t3tools/contracts";
 import type { CredentialRefreshStartInput, CredentialRefreshStatusInput } from "@t3tools/contracts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect's Crypto has no synchronous random bytes.
 import * as NodeCrypto from "node:crypto";
@@ -37,6 +37,7 @@ const startFailed = () => new CredentialRefreshError({ reason: "start_failed" })
 
 interface Flow {
   readonly host: string;
+  readonly scopeKey: string;
   readonly code: DeviceCode;
   state: "pending" | "done" | "failed";
 }
@@ -50,9 +51,12 @@ export function makeCredentialRefresh(deps: CredentialRefreshDeps) {
     expiresInSeconds: Duration.toSeconds(FLOW_LIFETIME),
   });
 
-  const awaitCode = Effect.fn("CredentialRefresh.awaitCode")(function* (process: GhProcess) {
+  const awaitCode = Effect.fn("CredentialRefresh.awaitCode")(function* (
+    process: GhProcess,
+    host: string,
+  ) {
     const found = yield* Deferred.make<DeviceCode, CredentialRefreshError>();
-    const read = deviceCodeReader();
+    const read = deviceCodeReader(host);
     yield* process.lines.pipe(
       Stream.runForEach((line) => {
         const code = read(line);
@@ -72,7 +76,7 @@ export function makeCredentialRefresh(deps: CredentialRefreshDeps) {
     const process = yield* deps
       .spawnGh(["auth", "refresh", "-h", host, "-s", scopes.join(",")])
       .pipe(Effect.mapError(startFailed));
-    const code = yield* awaitCode(process).pipe(
+    const code = yield* awaitCode(process, host).pipe(
       Effect.tapError(() => process.kill.pipe(Effect.ignore)),
     );
     if (Option.isNone(code)) {
@@ -87,14 +91,24 @@ export function makeCredentialRefresh(deps: CredentialRefreshDeps) {
   ) {
     const host = forgeHostFor(input.host, deps.environment.GH_HOST);
     if (host === undefined) return yield* new CredentialRefreshError({ reason: "not_available" });
+    const wanted = [...new Set(input.scopes)].sort();
+    if (
+      wanted.length === 0 ||
+      !wanted.every((scope) => (CREDENTIAL_ADDABLE_SCOPES as ReadonlyArray<string>).includes(scope))
+    ) {
+      return yield* new CredentialRefreshError({ reason: "scope_not_allowed" });
+    }
+    const scopeKey = wanted.join(",");
     return yield* startLock.withPermits(1)(
       Effect.gen(function* () {
         for (const [id, flow] of flows) {
-          if (flow.host === host && flow.state === "pending") return reply(id, flow);
+          if (flow.host === host && flow.scopeKey === scopeKey && flow.state === "pending") {
+            return reply(id, flow);
+          }
         }
-        const { process, code } = yield* launch(host, input.scopes);
+        const { process, code } = yield* launch(host, wanted);
         const id = NodeCrypto.randomBytes(16).toString("hex");
-        const flow: Flow = { host, code, state: "pending" };
+        const flow: Flow = { host, scopeKey, code, state: "pending" };
         flows.set(id, flow);
         yield* Effect.forkDetach(
           process.exited.pipe(
