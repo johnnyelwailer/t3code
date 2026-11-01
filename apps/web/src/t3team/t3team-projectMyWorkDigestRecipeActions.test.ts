@@ -78,6 +78,7 @@ function catalogOf(...ids: string[]): DigestRecipeCatalog {
     projectId: "project-1",
     catalogInput: buildDigestRecipeCatalogInput({ project, profileId: undefined }),
     recipes: new Map(ids.map((id) => [id, quickStart(id)])),
+    discovery: "settled",
   };
 }
 

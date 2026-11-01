@@ -16,18 +16,19 @@ import {
   useDigestRecipeLaunchStore,
 } from "~/t3team/t3team-digestRecipeLaunchStore";
 import { digestReviewActions } from "~/t3team/t3team-projectMyWorkDigestFacts";
-import { DIGEST_RECIPE_UNAVAILABLE_GRACE_MS } from "~/t3team/t3team-useSettleUnavailableDigestRecipe";
 import type {
   DigestGraph,
   DigestReviewRequest,
   DigestSection,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
+import { useRecipeDiscovery, type RecipeDiscoveryStatus } from "~/t3team/t3team-useRecipeDiscovery";
 import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecarRecipeLaunch";
 import { useDigestRecipeLaunchConsumer } from "~/t3team/t3team-useDigestRecipeLaunchConsumer";
 
-const { discovered, toastAdd } = vi.hoisted(() => ({
+const { discovered, discoveryStatus, toastAdd } = vi.hoisted(() => ({
   discovered: { current: [] as T3TeamSidecarRecipeQuickStart[] },
+  discoveryStatus: { current: "settled" as "pending" | "settled" | "failed" },
   toastAdd: vi.fn(),
 }));
 
@@ -49,6 +50,10 @@ vi.mock("~/t3team/backend/t3team-index", () => ({ useBackend: () => null }));
 
 // The discovery seam: what `discoverRecipes` returned for the PR-detail surface.
 vi.mock("~/t3team/t3team-sidecarRecipes", () => ({
+  useT3TeamSidecarRecipeDiscovery: (input: { surface: string }) => ({
+    quickStarts: input.surface === "github.pull_request.detail.sidepanel" ? discovered.current : [],
+    status: discoveryStatus.current,
+  }),
   useT3TeamSidecarRecipeQuickStarts: (input: { surface: string }) =>
     input.surface === "github.pull_request.detail.sidepanel" ? discovered.current : [],
 }));
@@ -156,6 +161,7 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   discovered.current = [prReview];
+  discoveryStatus.current = "settled";
   latest.current = null;
   useDigestRecipeLaunchStore.setState({ request: null });
   useDigestPrAsideStore.setState({ pullRequest: null });
@@ -235,16 +241,40 @@ describe("digest recipe request whose recipe is not listed", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it("settles the request and tells the user once discovery had its grace period", () => {
+  it("keeps a valid request alive while discovery is pending, however long it takes", () => {
     discovered.current = [];
+    discoveryStatus.current = "pending";
     render();
     act(() => requestDigestRecipeLaunch({ recipeId: "pr-review", scope }));
-    act(() => void vi.advanceTimersByTime(DIGEST_RECIPE_UNAVAILABLE_GRACE_MS - 1));
+    act(() => void vi.advanceTimersByTime(10 * 60_000));
     expect(useDigestRecipeLaunchStore.getState().request).not.toBeNull();
     expect(toastAdd).not.toHaveBeenCalled();
+  });
 
-    act(() => void vi.advanceTimersByTime(1));
+  it("stages the recipe without a toast when slow discovery then lists it", () => {
+    discovered.current = [];
+    discoveryStatus.current = "pending";
+    render();
+    act(() => requestDigestRecipeLaunch({ recipeId: "pr-review", scope }));
+    act(() => void vi.advanceTimersByTime(60_000));
+    discovered.current = [prReview];
+    discoveryStatus.current = "settled";
+    render();
+    expect(latest.current?.selectedRecipe?.recipe.id).toBe("pr-review");
+    expect(toastAdd).not.toHaveBeenCalled();
+    expect(useDigestRecipeLaunchStore.getState().request).not.toBeNull();
+  });
+
+  it("settles the request and toasts once when discovery finished without the recipe", () => {
+    discovered.current = [];
+    discoveryStatus.current = "pending";
+    render();
+    act(() => requestDigestRecipeLaunch({ recipeId: "pr-review", scope }));
+    discoveryStatus.current = "settled";
+    render();
+    render();
     expect(useDigestRecipeLaunchStore.getState().request).toBeNull();
+    expect(toastAdd).toHaveBeenCalledTimes(1);
     expect(toastAdd).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "error",
@@ -253,17 +283,16 @@ describe("digest recipe request whose recipe is not listed", () => {
     );
   });
 
-  it("stages without a toast when discovery lists the recipe within the grace period", () => {
+  it("says discovery failed, not that the recipe is missing, when discovery rejected", () => {
     discovered.current = [];
+    discoveryStatus.current = "failed";
     render();
     act(() => requestDigestRecipeLaunch({ recipeId: "pr-review", scope }));
-    act(() => void vi.advanceTimersByTime(1_000));
-    discovered.current = [prReview];
-    render();
-    act(() => void vi.advanceTimersByTime(DIGEST_RECIPE_UNAVAILABLE_GRACE_MS));
-    expect(latest.current?.selectedRecipe?.recipe.id).toBe("pr-review");
-    expect(toastAdd).not.toHaveBeenCalled();
-    expect(useDigestRecipeLaunchStore.getState().request).not.toBeNull();
+    expect(useDigestRecipeLaunchStore.getState().request).toBeNull();
+    expect(toastAdd).toHaveBeenCalledTimes(1);
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ description: "Recipes could not be loaded for this project." }),
+    );
   });
 });
 
@@ -346,5 +375,53 @@ describe("bundled recipe launch", () => {
     act(() => latest.current?.sidecarHost.launchRecipe("describe-rewrite"));
     await flush();
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+});
+
+describe("useRecipeDiscovery status", () => {
+  type Request = Parameters<typeof useRecipeDiscovery>[0]["discoveryRequest"];
+  const requestA = { context: { surface: "a" } } as unknown as Request;
+  const requestB = { context: { surface: "b" } } as unknown as Request;
+  // Stable like the memoized fallback the real caller passes; a fresh array would restart discovery.
+  const NO_QUICK_STARTS: T3TeamSidecarRecipeQuickStart[] = [];
+  let status: RecipeDiscoveryStatus | null = null;
+
+  function Probe(props: { backend: never; request: Request }) {
+    status = useRecipeDiscovery({
+      backend: props.backend,
+      discoveryRequest: props.request,
+      fallbackQuickStarts: NO_QUICK_STARTS,
+      limit: undefined,
+    }).status;
+    return null;
+  }
+  const backendWith = (discoverRecipes: () => Promise<unknown>) =>
+    ({ projectWorkspace: { discoverRecipes } }) as never;
+
+  it("is pending until discovery answers, then settled", async () => {
+    let resolve: (value: unknown) => void = () => undefined;
+    const backend = backendWith(() => new Promise((r) => (resolve = r)));
+    act(() => root.render(<Probe backend={backend} request={requestA} />));
+    expect(status).toBe("pending");
+    await act(async () => resolve({ recipes: [] }));
+    expect(status).toBe("settled");
+  });
+
+  it("is failed when discovery rejects, and pending again for a new request", async () => {
+    const backend = backendWith(() => Promise.reject(new Error("offline")));
+    act(() => root.render(<Probe backend={backend} request={requestA} />));
+    await flush();
+    expect(status).toBe("failed");
+    act(() =>
+      root.render(
+        <Probe backend={backendWith(() => new Promise(() => undefined))} request={requestB} />,
+      ),
+    );
+    expect(status).toBe("pending");
+  });
+
+  it("is settled when there is nothing to discover", () => {
+    act(() => root.render(<Probe backend={null as never} request={null as never} />));
+    expect(status).toBe("settled");
   });
 });

@@ -41,8 +41,8 @@ export function useDigestRecipeLaunchConsumer(input: {
     if (!request || request.scope.projectId !== projectId) return;
     if (staged.current?.requestId === request.id) return;
     const quickStart = resolveDigestRecipe(catalog, request.recipeId, projectId);
-    // Unlisted for now: discovery may still be loading, and `useSettleUnavailableDigestRecipe`
-    // ends the request with a toast if the recipe never shows up.
+    // Not listed yet: `useSettleUnavailableDigestRecipe` ends the request with a toast once
+    // discovery has finished without it.
     if (!catalog || !quickStart) return;
     staged.current = { requestId: request.id, shown: false };
     stageRecipeKickoff(
@@ -62,9 +62,10 @@ export function useDigestRecipeLaunchConsumer(input: {
   useSettleUnavailableDigestRecipe({
     requestId: requestForProject?.id ?? null,
     recipeId: requestForProject?.recipeId ?? "",
-    unavailable:
+    missing:
       requestForProject !== null &&
       resolveDigestRecipe(catalog, requestForProject.recipeId, projectId) === null,
+    discovery: catalog?.discovery ?? null,
     alreadyStaged,
   });
 

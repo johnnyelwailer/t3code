@@ -1,37 +1,40 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
+import type { RecipeDiscoveryStatus } from "~/t3team/t3team-useRecipeDiscovery";
 import { settleDigestRecipeLaunch } from "~/t3team/t3team-digestRecipeLaunchStore";
 import { reportRecipeLaunchFailure } from "~/t3team/t3team-launchFailureFeedback";
 
-/** How long a digest request may wait for discovery to list its recipe before it gives up. */
-export const DIGEST_RECIPE_UNAVAILABLE_GRACE_MS = 5_000;
-
 /**
- * Ends a digest recipe request whose recipe never shows up in the catalog. A request stays set
- * while the aside holds its staging (and keeps the narrow-screen drawer raised), so one that can
- * never stage would leave the drawer up with no feedback. The grace covers discovery still
- * loading; the timer is keyed by primitives so a re-render does not restart it.
+ * Ends a digest recipe request whose recipe is not in the catalog once discovery has finished.
+ * A request holds the narrow-screen drawer raised until the aside settles it, so one that can
+ * never stage would leave the drawer up with no feedback. While discovery is pending nothing
+ * happens however long it takes; a discovery that failed says so instead of blaming the recipe.
  */
 export function useSettleUnavailableDigestRecipe(input: {
   readonly requestId: number | null;
   readonly recipeId: string;
-  readonly unavailable: boolean;
-  /** Must be referentially stable, or the grace timer restarts on every render. */
+  /** The catalog has no such recipe for this request. */
+  readonly missing: boolean;
+  /** `null` when there is no catalog to wait on. */
+  readonly discovery: RecipeDiscoveryStatus | null;
   readonly alreadyStaged: (requestId: number) => boolean;
 }) {
-  const { requestId, recipeId, unavailable, alreadyStaged } = input;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a timer that ends the request in the store if its recipe never lists
+  const { requestId, recipeId, missing, discovery, alreadyStaged } = input;
+  const reported = useRef<number | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- ends the request in the store and toasts once discovery has answered
   useEffect(() => {
-    if (requestId === null || !unavailable) return;
-    const timer = window.setTimeout(() => {
-      if (alreadyStaged(requestId)) return;
-      settleDigestRecipeLaunch(requestId);
-      reportRecipeLaunchFailure(
-        "Could not start",
-        new Error(`The "${recipeId}" recipe is not available in this project.`),
-        "The recipe is not available.",
-      );
-    }, DIGEST_RECIPE_UNAVAILABLE_GRACE_MS);
-    return () => window.clearTimeout(timer);
-  }, [requestId, recipeId, unavailable, alreadyStaged]);
+    if (requestId === null || !missing || discovery === null || discovery === "pending") return;
+    if (reported.current === requestId || alreadyStaged(requestId)) return;
+    reported.current = requestId;
+    settleDigestRecipeLaunch(requestId);
+    reportRecipeLaunchFailure(
+      "Could not start",
+      new Error(
+        discovery === "failed"
+          ? "Recipes could not be loaded for this project."
+          : `The "${recipeId}" recipe is not available in this project.`,
+      ),
+      "The recipe is not available.",
+    );
+  }, [requestId, recipeId, missing, discovery, alreadyStaged]);
 }
