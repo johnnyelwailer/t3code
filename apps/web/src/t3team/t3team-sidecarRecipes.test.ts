@@ -4,9 +4,12 @@ import { queryableToReadonlyArray } from "@t3tools/project-context";
 
 import {
   buildProjectRecipeDiscoveryRequest,
-  buildT3TeamSidecarRecipeQuickStarts,
+  buildT3TeamSidecarRecipeQuickStarts as buildQuickStarts,
 } from "~/t3team/t3team-sidecarRecipes";
 
+/** These cases assert the bundled examples, so they run with `BUNDLED_RECIPE_EXAMPLES` on. */
+const buildT3TeamSidecarRecipeQuickStarts = (input: Parameters<typeof buildQuickStarts>[0]) =>
+  buildQuickStarts(input, true);
 function createProject(profileId: string, workspaceRoot?: string): ProjectShellProject {
   return {
     id: "project-alpha" as ProjectShellProject["id"],

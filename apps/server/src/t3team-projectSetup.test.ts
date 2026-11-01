@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 
 import {
@@ -29,7 +30,20 @@ describe("resolveT3TeamProjectSetupProfileId", () => {
 });
 
 describe("renderT3TeamProjectSetupFiles", () => {
+  afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
+  it("scaffolds only the authoring entry and the Rewrite control's recipe while BUNDLED_RECIPE_EXAMPLES is off (the default)", () => {
+    const recipeDirs = renderT3TeamProjectSetupFiles()
+      .map((file) => file.relativePath)
+      .filter((path) => path.startsWith(`${T3TEAM_PROJECT_RECIPES_ROOT}/`))
+      .map((path) => path.split("/").slice(-2, -1)[0]);
+    expect(new Set(recipeDirs.filter((dir) => dir !== "recipes"))).toEqual(
+      new Set(["manage-project-recipes", "describe-rewrite"]),
+    );
+  });
+
   it("renders the default setup scaffold", () => {
+    replaceFeatureFlagPresetValues(new Map([["BUNDLED_RECIPE_EXAMPLES", true]]));
     const files = renderT3TeamProjectSetupFiles();
     const agents = files.find((file) => file.relativePath === T3TEAM_PROJECT_AGENTS_PATH);
     const claude = files.find((file) => file.relativePath === T3TEAM_PROJECT_CLAUDE_PATH);

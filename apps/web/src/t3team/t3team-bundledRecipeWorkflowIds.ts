@@ -10,7 +10,7 @@
 
 export const T3TEAM_DESCRIPTION_REWRITE_RECIPE_ID = "describe-rewrite";
 
-/** Offered only while `WORKITEM_DELIVERY_RECIPES` is on (`apps/server/src/t3team-workItemDeliveryRecipesFlag.ts`). */
+/** Offered only while `WORKITEM_DELIVERY_RECIPES` and `BUNDLED_RECIPE_EXAMPLES` are both on (`apps/server/src/t3team-workItemDeliveryRecipesFlag.ts`, `t3team-sidecarRecipes.ts`). */
 export const WORK_ITEM_DELIVERY_RECIPE_IDS: ReadonlySet<string> = new Set([
   "fix-this-bug",
   "implement-this",

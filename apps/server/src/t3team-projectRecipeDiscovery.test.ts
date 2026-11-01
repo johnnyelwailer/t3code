@@ -4,7 +4,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import { describe, expect, it } from "vite-plus/test";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createQueryable } from "@t3tools/project-context";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.js";
@@ -45,6 +46,8 @@ const writeRecipe = Effect.fn("writeRecipe")(function* (input: {
 });
 
 describe("discoverProjectRecipes", () => {
+  afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
   it("discovers project-local recipes and evaluates visible.ts against the render context", async () => {
     await Effect.runPromise(
       Effect.scoped(
@@ -218,6 +221,8 @@ export function visible(ctx) {
   });
 
   it("keeps bundled applicability behavior for starter recipes copied into project scope", async () => {
+    // A copied starter keeps its retired bundled id, which discovery hides unless the examples are on.
+    replaceFeatureFlagPresetValues(new Map([["BUNDLED_RECIPE_EXAMPLES", true]]));
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
