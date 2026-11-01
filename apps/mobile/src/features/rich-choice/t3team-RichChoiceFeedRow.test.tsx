@@ -10,6 +10,7 @@ type CarouselProps = {
   readonly onChoose: (ids: ReadonlyArray<string>) => void;
 };
 
+vi.unmock("./t3team-RichChoiceFeedRow");
 vi.mock("react-native", () => ({
   View: ({ children }: Props) => <div>{children}</div>,
 }));

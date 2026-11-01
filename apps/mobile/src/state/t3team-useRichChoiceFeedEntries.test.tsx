@@ -9,6 +9,7 @@ const fixture = vi.hoisted(() => ({
   artifacts: [] as unknown[],
   items: [] as unknown[],
 }));
+vi.unmock("./t3team-useRichChoiceFeedEntries");
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => fixture.items }));
 vi.mock("./threads", () => ({
   environmentThreadDetails: { visibleTurnItemsAtom: () => ({}) },
