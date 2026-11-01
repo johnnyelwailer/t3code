@@ -4,7 +4,10 @@ import {
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
-import type { LaunchProjectRecipeWorkflowRequest } from "@t3tools/project-recipes";
+import {
+  buildRecipeLaunchArgs,
+  type LaunchProjectRecipeWorkflowRequest,
+} from "@t3tools/project-recipes";
 import { toPhysicalProjectStatePath } from "@t3tools/project-context/t3teamProjectStateDir";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
@@ -95,7 +98,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         threadId,
         recipePath,
         workflowPath,
-        args: input.launch.parameters ?? {},
+        args: buildRecipeLaunchArgs(input.launch.parameters, input.launch.launchContext),
         modelSelection,
         runtimeMode,
         interactionMode,

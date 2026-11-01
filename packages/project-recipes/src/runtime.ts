@@ -1,4 +1,5 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+import { T3TeamActionRecipeContext } from "@t3tools/project-context";
 import * as Schema from "effect/Schema";
 
 import { ProjectRecipeWorkflowCollectInputRequest } from "./input.ts";
@@ -94,6 +95,12 @@ export const ProjectRecipeWorkflowLaunch = Schema.Struct({
    */
   actionName: Schema.optional(Schema.String),
   allowedToolGroups: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * What the launching surface knew (project, work item, linked pull request, selection). The
+   * server hands it to the run beside `parameters`, under `RECIPE_LAUNCH_CONTEXT_ARG`; a recipe
+   * that does not read it is unaffected. Host-neutral: Nexi Work, Portal and automation may all send it.
+   */
+  launchContext: Schema.optional(T3TeamActionRecipeContext),
 });
 export type ProjectRecipeWorkflowLaunch = typeof ProjectRecipeWorkflowLaunch.Type;
 

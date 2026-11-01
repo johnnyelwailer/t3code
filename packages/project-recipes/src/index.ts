@@ -1,6 +1,7 @@
 export * from "./actionPlacement.ts";
 export * from "./recipe.ts";
 export * from "./kickoff.ts";
+export * from "./launchContext.ts";
 export * from "./discovery.ts";
 export * from "./input.ts";
 export * from "./message.ts";

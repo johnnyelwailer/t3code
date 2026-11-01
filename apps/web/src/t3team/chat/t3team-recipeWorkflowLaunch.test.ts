@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { launchPendingRecipeWorkflowTurn } from "~/t3team/chat/t3team-recipeWorkflowLaunch";
+import {
+  launchPendingRecipeWorkflowTurn,
+  toProjectRecipeWorkflowLaunch,
+} from "~/t3team/chat/t3team-recipeWorkflowLaunch";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { createEmptyT3TeamActionRecipeContext } from "@t3tools/project-context";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 function createBackend(): Pick<BackendApi, "launchRecipeWorkflow"> {
@@ -129,5 +133,25 @@ describe("launchPendingRecipeWorkflowTurn", () => {
     ).resolves.toBe(false);
 
     expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
+  });
+});
+
+describe("toProjectRecipeWorkflowLaunch", () => {
+  it("forwards the discovered launch context beside the parameters", () => {
+    const launchContext = createEmptyT3TeamActionRecipeContext("project.dashboard.backlog");
+    const launch = toProjectRecipeWorkflowLaunch({
+      ...TEST_WORKFLOW,
+      parameters: { issueIdOrKey: "PRJ-1" },
+      launchContext,
+    } as Extract<T3TeamKickoffWorkflow, { kind: "recipe" }>);
+    expect(launch.parameters).toEqual({ issueIdOrKey: "PRJ-1" });
+    expect(launch.launchContext).toBe(launchContext);
+  });
+
+  it("omits the launch context when the workflow has none", () => {
+    const launch = toProjectRecipeWorkflowLaunch(
+      TEST_WORKFLOW as Extract<T3TeamKickoffWorkflow, { kind: "recipe" }>,
+    );
+    expect("launchContext" in launch).toBe(false);
   });
 });
