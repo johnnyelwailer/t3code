@@ -29,7 +29,6 @@ export function toProjectRecipeWorkflowLaunch(workflow: RecipeKickoffWorkflow) {
     ...(workflow.promptPath ? { promptPath: workflow.promptPath } : {}),
     ...(workflow.workflowPath ? { workflowPath: workflow.workflowPath } : {}),
     ...(workflow.allowedToolGroups ? { allowedToolGroups: [...workflow.allowedToolGroups] } : {}),
-    ...(workflow.launchContext ? { launchContext: workflow.launchContext } : {}),
   };
 }
 

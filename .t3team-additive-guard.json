@@ -637,7 +637,6 @@
     "packages/project-context/src/t3teamToolCatalogImplementedMyWork.ts",
     "packages/project-context/src/t3teamToolCatalogItemTools.ts",
     "packages/project-context/src/t3teamWidgetGuidance.ts",
-    "packages/project-recipes/src/index.ts",
     "packages/project-recipes/src/runtime.ts",
     "packages/project-recipes/src/sidecarComposition.test.ts",
     "packages/project-recipes/src/toolGroups.ts",
