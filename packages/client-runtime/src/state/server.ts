@@ -1583,6 +1583,14 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:credential-sources:read",
       tag: WS_METHODS.credentialSourcesRead,
     }),
+    refreshCredentialStart: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:credential-sources:refresh-start",
+      tag: WS_METHODS.credentialSourcesRefreshStart,
+    }),
+    refreshCredentialStatus: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:credential-sources:refresh-status",
+      tag: WS_METHODS.credentialSourcesRefreshStatus,
+    }),
     answerSecretRequest: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:secrets:answer-request",
       tag: WS_METHODS.secretsAnswerRequest,

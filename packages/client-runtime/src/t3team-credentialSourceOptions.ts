@@ -2,7 +2,11 @@
  * What the credential-request card shows for the sources the user's own machine has: pure text and
  * state, so the card stays a thin view. A value never passes through here; a source is only described.
  */
-import type { CredentialSource, CredentialSourcesProbeResult } from "@t3tools/contracts";
+import {
+  CREDENTIAL_ADDABLE_SCOPES,
+  type CredentialSource,
+  type CredentialSourcesProbeResult,
+} from "@t3tools/contracts";
 
 export interface CredentialSourceOption {
   readonly id: "gh" | "env";
@@ -12,6 +16,19 @@ export interface CredentialSourceOption {
   readonly hint?: string;
   readonly warning?: string;
   readonly disabled: boolean;
+  /** A gh sign-in missing a scope can add it from the card: the host and the scopes to ask for. */
+  readonly canAddAccess?: true;
+  readonly host?: string;
+  readonly missingScopes?: ReadonlyArray<string>;
+}
+
+const addable = (scopes: ReadonlyArray<string>) =>
+  scopes.length > 0 &&
+  scopes.every((scope) => (CREDENTIAL_ADDABLE_SCOPES as ReadonlyArray<string>).includes(scope));
+
+/** The button text names the exact scopes it will ask GitHub for. */
+export function addAccessLabel(scopes: ReadonlyArray<string>): string {
+  return `Add package access (${scopes.join(", ")})`;
 }
 
 function describe(source: CredentialSource): CredentialSourceOption | null {
@@ -25,6 +42,9 @@ function describe(source: CredentialSource): CredentialSourceOption | null {
           : {}),
         ...(source.refreshCommand === undefined ? {} : { hint: source.refreshCommand }),
         disabled: source.scopeCheck === "missing",
+        ...(source.scopeCheck === "missing" && addable(source.missingScopes)
+          ? { canAddAccess: true as const, host: source.host, missingScopes: source.missingScopes }
+          : {}),
       };
     case "env":
       return {

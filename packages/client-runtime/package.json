@@ -67,6 +67,10 @@
       "types": "./src/t3team-credentialSourceOptions.ts",
       "default": "./src/t3team-credentialSourceOptions.ts"
     },
+    "./t3team-credentialRefreshFlow": {
+      "types": "./src/t3team-credentialRefreshFlow.ts",
+      "default": "./src/t3team-credentialRefreshFlow.ts"
+    },
     "./secret-request": {
       "types": "./src/secretRequest.ts",
       "default": "./src/secretRequest.ts"

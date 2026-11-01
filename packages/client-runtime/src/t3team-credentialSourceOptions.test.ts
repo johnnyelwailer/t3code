@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  addAccessLabel,
   credentialRequestIntro,
   credentialSourceOptions,
 } from "./t3team-credentialSourceOptions.ts";
@@ -81,5 +82,62 @@ describe("credentialRequestIntro", () => {
   });
   it("is quiet when the request names nothing", () => {
     expect(credentialRequestIntro({})).toBe("");
+  });
+});
+
+describe("adding access to a gh sign-in", () => {
+  const missing = (scopes: ReadonlyArray<string>) =>
+    credentialSourceOptions({
+      sources: [
+        {
+          kind: "gh",
+          host: "github.com",
+          account: "pj",
+          scopeCheck: "missing",
+          missingScopes: scopes,
+          refreshCommand: `gh auth refresh -h github.com -s ${scopes.join(",")}`,
+        },
+      ],
+    })[0];
+
+  it("a missing scope stays disabled but can be added, with the host and scopes to ask for", () => {
+    expect(missing(["read:packages"])).toMatchObject({
+      disabled: true,
+      canAddAccess: true,
+      host: "github.com",
+      missingScopes: ["read:packages"],
+    });
+  });
+
+  it("a usable sign-in offers no add action", () => {
+    const [gh] = credentialSourceOptions({
+      sources: [
+        { kind: "gh", host: "github.com", account: "pj", scopeCheck: "ok", missingScopes: [] },
+      ],
+    });
+    expect(gh?.canAddAccess).toBeUndefined();
+  });
+
+  it("names the exact scopes on the button", () => {
+    expect(addAccessLabel(["read:packages"])).toBe("Add package access (read:packages)");
+    expect(addAccessLabel(["read:packages", "write:packages"])).toBe(
+      "Add package access (read:packages, write:packages)",
+    );
+  });
+
+  it("offers no add action for a missing scope outside the package scopes", () => {
+    const [gh] = credentialSourceOptions({
+      sources: [
+        {
+          kind: "gh",
+          host: "github.com",
+          account: "pj",
+          scopeCheck: "missing",
+          missingScopes: ["read:packages", "admin:org"],
+        },
+      ],
+    });
+    expect(gh?.canAddAccess).toBeUndefined();
+    expect(gh?.disabled).toBe(true);
   });
 });

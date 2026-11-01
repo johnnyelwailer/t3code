@@ -127,6 +127,8 @@ import * as DocumentText from "./provider/DocumentText.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
+import { makeCredentialRefresh } from "./secrets/t3team-CredentialRefresh.ts";
+import { credentialRefreshDeps } from "./secrets/t3team-credentialRefreshDeps.ts";
 import { makeCredentialSources } from "./secrets/t3team-CredentialSources.ts";
 import { credentialSourceDeps } from "./secrets/t3team-credentialSourceDeps.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
@@ -1375,6 +1377,7 @@ export const layerWsRpc = (
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const credentialSources = makeCredentialSources(yield* credentialSourceDeps);
+      const credentialRefresh = makeCredentialRefresh(yield* credentialRefreshDeps);
       const guestShares = yield* GuestShareService.GuestShareService;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
@@ -2420,6 +2423,8 @@ export const layerWsRpc = (
           ),
         [WS_METHODS.credentialSourcesProbe]: (input) => credentialSources.probe(input),
         [WS_METHODS.credentialSourcesRead]: (input) => credentialSources.read(input),
+        [WS_METHODS.credentialSourcesRefreshStart]: (input) => credentialRefresh.start(input),
+        [WS_METHODS.credentialSourcesRefreshStatus]: (input) => credentialRefresh.status(input),
         [WS_METHODS.secretsAnswerRequest]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(secretRequests.answer(input)),
