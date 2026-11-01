@@ -125,6 +125,83 @@ describe("buildRichChoiceFeedEntries", () => {
     expect(entry?.state).toEqual({ status: "open" });
   });
 
+  it("holds a card closed as queued while its pick is only in the outbox", () => {
+    const entries = (pendingReplies: Array<{ text: string; widgetReplyId: string }>) =>
+      buildRichChoiceFeedEntries({
+        artifacts: [artifact("w1", "2026-11-01T10:00:00.000Z")],
+        messages: [],
+        pendingReplies,
+      });
+    expect(
+      entries([{ text: "Widget “x” action: Chose Beta (ids: b)", widgetReplyId: "w1" }])[0]?.state,
+    ).toEqual({ status: "queued", pickedIds: ["b"] });
+    // A pending reply for another card, or one that does not parse, keeps the card open.
+    expect(
+      entries([{ text: "Chose Beta (ids: b)", widgetReplyId: "other" }])[0]?.state.status,
+    ).toBe("open");
+    expect(entries([{ text: "Chose ??? (ids: nope)", widgetReplyId: "w1" }])[0]?.state.status).toBe(
+      "open",
+    );
+  });
+
+  it("prefers the server's answer over a queued one once the answering item arrived", () => {
+    const [entry] = buildRichChoiceFeedEntries({
+      artifacts: [artifact("w1", "2026-11-01T10:00:00.000Z")],
+      messages: [message("2026-11-01T10:01:00.000Z", "Chose Alpha (ids: a)", "w1")],
+      pendingReplies: [{ text: "Chose Beta (ids: b)", widgetReplyId: "w1" }],
+    });
+    expect(entry?.state).toEqual({ status: "answered", pickedIds: ["a"] });
+  });
+
+  describe("history window", () => {
+    const artifacts = [
+      artifact("old", "2026-11-01T08:00:00.000Z"),
+      artifact("recent", "2026-11-01T10:00:00.000Z"),
+    ];
+    const ids = (input: Parameters<typeof buildRichChoiceFeedEntries>[0]) =>
+      buildRichChoiceFeedEntries(input).map((entry) => entry.widgetId);
+
+    it("leaves out a card older than the loaded window while earlier history is unloaded", () => {
+      expect(
+        ids({
+          artifacts,
+          messages: [],
+          windowStart: "2026-11-01T09:00:00.000Z",
+          historyComplete: false,
+        }),
+      ).toEqual(["recent"]);
+    });
+
+    it("shows it again once the window reaches back or the thread is fully loaded", () => {
+      expect(
+        ids({
+          artifacts,
+          messages: [],
+          windowStart: "2026-11-01T07:00:00.000Z",
+          historyComplete: false,
+        }),
+      ).toEqual(["old", "recent"]);
+      expect(
+        ids({
+          artifacts,
+          messages: [],
+          windowStart: "2026-11-01T09:00:00.000Z",
+          historyComplete: true,
+        }),
+      ).toEqual(["old", "recent"]);
+    });
+
+    it("never shows an old answered-looking-open card as open at the top of a partial window", () => {
+      const states = buildRichChoiceFeedEntries({
+        artifacts,
+        messages: [],
+        windowStart: "2026-11-01T09:00:00.000Z",
+        historyComplete: false,
+      }).map((entry) => entry.state.status);
+      expect(states).toEqual(["open"]);
+    });
+  });
+
   it("keeps a hostile title as plain data for the view to render as text", () => {
     const hostile = "<img src=x onerror=alert(1)> **bold** [link](javascript:alert(1))";
     const [entry] = buildRichChoiceFeedEntries({

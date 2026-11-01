@@ -1,7 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import { readT3TeamMessageExt } from "@t3tools/client-runtime/state/message-framing";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, OrchestrationMessageContext, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import { useMemo } from "react";
 
 import {
   buildRichChoiceFeedEntries,
@@ -13,29 +14,60 @@ import { environmentThreadDetails } from "./threads";
 
 const NO_ENTRIES: ReadonlyArray<T3TeamRichChoiceFeedEntry> = [];
 
+/** A message that is not on the server yet: a queued outbox message or a feed row still pending. */
+interface PendingLike {
+  readonly text: string;
+  readonly context?: OrchestrationMessageContext | undefined;
+}
+
+function widgetReplies(messages: ReadonlyArray<PendingLike>) {
+  return messages.flatMap((message) => {
+    const widgetReplyId = readT3TeamMessageExt(message.context)?.widgetReply?.widgetId;
+    return widgetReplyId === undefined ? [] : [{ text: message.text, widgetReplyId }];
+  });
+}
+
 /**
- * The thread's rich-choice rows: cards from the fork thread artifacts, their open / answered /
- * superseded state from the thread's user messages (the hidden widget replies included, which the
- * feed itself drops). No rich-choice artifact means no rows and no work beyond one list scan.
+ * The thread's rich-choice rows: cards from the thread artifacts; state from the loaded user
+ * messages, picks in the outbox (`queuedMessages`) and acknowledged ones (their `feed` rows).
+ * `historyComplete` is false while earlier history is unloaded.
  */
-export function useT3TeamRichChoiceFeedEntries(
-  environmentId: EnvironmentId,
-  threadId: ThreadId,
-): ReadonlyArray<T3TeamRichChoiceFeedEntry> {
+export function useT3TeamRichChoiceFeedEntries(input: {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+  readonly queuedMessages: ReadonlyArray<PendingLike>;
+  readonly feed: ReadonlyArray<{ readonly type: string; readonly message?: PendingLike }>;
+  readonly historyComplete: boolean;
+}): ReadonlyArray<T3TeamRichChoiceFeedEntry> {
+  const { environmentId, threadId, queuedMessages, feed, historyComplete } = input;
   const artifacts = useT3TeamThreadArtifacts(environmentId, threadId);
-  const hasWidget = artifacts.some((artifact) => artifact.kind === "widget");
   const turnItems = useAtomValue(
     environmentThreadDetails.visibleTurnItemsAtom({ environmentId, threadId }),
   );
-  if (!hasWidget) return NO_ENTRIES;
-  const messages: T3TeamRichChoiceThreadMessage[] = [];
-  for (const { item } of turnItems) {
-    if (item.type !== "user_message") continue;
-    messages.push({
-      text: item.text,
-      createdAt: DateTime.formatIso(item.startedAt ?? item.updatedAt),
-      widgetReplyId: readT3TeamMessageExt(item.context)?.widgetReply?.widgetId,
+  const hasWidget = artifacts.some((artifact) => artifact.kind === "widget");
+  return useMemo(() => {
+    if (!hasWidget) return NO_ENTRIES;
+    const messages: T3TeamRichChoiceThreadMessage[] = [];
+    let windowStart: string | null = null;
+    for (const { item } of turnItems) {
+      const at = DateTime.formatIso(item.startedAt ?? item.updatedAt);
+      if (windowStart === null || at < windowStart) windowStart = at;
+      if (item.type !== "user_message") continue;
+      messages.push({
+        text: item.text,
+        createdAt: at,
+        widgetReplyId: readT3TeamMessageExt(item.context)?.widgetReply?.widgetId,
+      });
+    }
+    return buildRichChoiceFeedEntries({
+      artifacts,
+      messages,
+      pendingReplies: widgetReplies([
+        ...queuedMessages,
+        ...feed.flatMap((row) => (row.type === "message" && row.message ? [row.message] : [])),
+      ]),
+      windowStart,
+      historyComplete,
     });
-  }
-  return buildRichChoiceFeedEntries({ artifacts, messages });
+  }, [hasWidget, artifacts, turnItems, queuedMessages, feed, historyComplete]);
 }

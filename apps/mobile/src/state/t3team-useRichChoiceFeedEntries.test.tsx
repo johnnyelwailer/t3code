@@ -45,10 +45,19 @@ function userItem(text: string, at: string, context?: unknown) {
   };
 }
 
-function states() {
+function states(extra: Partial<Parameters<typeof useT3TeamRichChoiceFeedEntries>[0]> = {}) {
   const seen: Array<ReturnType<typeof useT3TeamRichChoiceFeedEntries>> = [];
   function Probe() {
-    seen.push(useT3TeamRichChoiceFeedEntries("env" as never, "t" as never));
+    seen.push(
+      useT3TeamRichChoiceFeedEntries({
+        environmentId: "env" as never,
+        threadId: "t" as never,
+        queuedMessages: [],
+        feed: [],
+        historyComplete: true,
+        ...extra,
+      }),
+    );
     return null;
   }
   const root = createRoot(document.createElement("div"));
@@ -85,5 +94,31 @@ describe("useT3TeamRichChoiceFeedEntries", () => {
     fixture.artifacts = [card];
     fixture.items = [userItem("actually, something else", "2026-11-01T10:02:00.000Z")];
     expect(states()).toEqual([{ status: "stale" }]);
+  });
+
+  it("holds the card closed while the pick is queued in the outbox or acknowledged but not projected", () => {
+    const transport = buildT3TeamWidgetPromptTransport({
+      widgetId: "w1",
+      widgetTitle: "pick",
+      text: "Chose Alpha (ids: a)",
+    });
+    const pending = {
+      text: transport.text,
+      context: withT3TeamMessageExtContext(transport.t3teamExt),
+    };
+    fixture.artifacts = [card];
+    fixture.items = [];
+    expect(states({ queuedMessages: [pending] })).toEqual([{ status: "queued", pickedIds: ["a"] }]);
+    expect(states({ feed: [{ type: "message", message: pending }] })).toEqual([
+      { status: "queued", pickedIds: ["a"] },
+    ]);
+    expect(states()).toEqual([{ status: "open" }]);
+  });
+
+  it("leaves out a card older than the loaded window while earlier history is unloaded", () => {
+    fixture.artifacts = [card];
+    fixture.items = [userItem("later", "2026-11-01T11:00:00.000Z")];
+    expect(states({ historyComplete: false })).toEqual([]);
+    expect(states({ historyComplete: true })).toEqual([{ status: "stale" }]);
   });
 });

@@ -84,7 +84,7 @@ describe("T3TeamRichChoiceFeedRow", () => {
     });
   });
 
-  it("locks while sending and says it was sent only after the send resolved", async () => {
+  it("locks while saving and says queued, not sent, once the pick is saved", async () => {
     let resolve!: () => void;
     const view = mount(
       { status: "open" },
@@ -92,10 +92,10 @@ describe("T3TeamRichChoiceFeedRow", () => {
     );
     await act(async () => view.choose().click());
     expect(view.choose().disabled).toBe(true);
-    expect(view.container.textContent).toContain("Sending your pick…");
-    expect(view.container.textContent).not.toContain("Your pick was sent.");
+    expect(view.container.textContent).toContain("Saving your pick…");
     await act(async () => resolve());
-    expect(view.container.textContent).toContain("Your pick was sent.");
+    expect(view.container.textContent).toContain("Your pick is queued.");
+    expect(view.container.textContent).not.toContain("Your pick was sent.");
     expect(view.choose().disabled).toBe(true);
     expect(view.choose().dataset.picked).toBe("a");
     await act(async () => view.choose().click());
@@ -112,7 +112,7 @@ describe("T3TeamRichChoiceFeedRow", () => {
     expect(view.choose().disabled).toBe(false);
     await act(async () => view.choose().click());
     expect(send).toHaveBeenCalledTimes(2);
-    expect(view.container.textContent).toContain("Your pick was sent.");
+    expect(view.container.textContent).toContain("Your pick is queued.");
   });
 
   it("is locked and shows the pick when the thread says it was answered", () => {
@@ -122,6 +122,24 @@ describe("T3TeamRichChoiceFeedRow", () => {
     expect(view.container.textContent).toContain("Your pick was sent.");
   });
 
+  it("stays locked and queued after a remount while the pick is still in the outbox", () => {
+    const view = mount({ status: "queued", pickedIds: ["a"] });
+    expect(view.choose().disabled).toBe(true);
+    expect(view.choose().dataset.picked).toBe("a");
+    expect(view.container.textContent).toContain("Your pick is queued.");
+    expect(view.container.textContent).not.toContain("Your pick was sent.");
+  });
+
+  it("sends once when the card is tapped twice before it re-renders", async () => {
+    const send = vi.fn(() => new Promise<void>(() => {}));
+    const view = mount({ status: "open" }, send);
+    await act(async () => {
+      view.choose().click();
+      view.choose().click();
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it("is locked and says so when superseded", () => {
     const view = mount({ status: "stale" });
     expect(view.choose().disabled).toBe(true);
@@ -129,6 +147,6 @@ describe("T3TeamRichChoiceFeedRow", () => {
   });
 
   it("has no note while open", () => {
-    expect(richChoiceNote(false, false, { status: "idle" })).toBeNull();
+    expect(richChoiceNote(false, false, false, { status: "idle" })).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ const env = vi.hoisted(() => ({
   reduced: false,
   motionCalls: [] as string[],
   announced: [] as string[],
+  os: "android" as "android" | "ios",
   panEnd: undefined as ((event: { translationX: number }) => void) | undefined,
 }));
 
@@ -46,6 +47,9 @@ vi.mock("react-native", () => ({
     announceForAccessibility: (message: string) => void env.announced.push(message),
   },
   useWindowDimensions: () => ({ width: 390, height: 844 }),
+}));
+vi.mock("./t3team-richChoiceAnnounce", () => ({
+  announcesViaLiveRegion: () => env.os === "android",
 }));
 vi.mock("react-native-reanimated", () => ({
   default: {
@@ -108,6 +112,7 @@ const mounted: Array<() => void> = [];
 afterEach(() => {
   while (mounted.length > 0) mounted.pop()?.();
   env.reduced = false;
+  env.os = "android";
   env.motionCalls.length = 0;
   env.announced.length = 0;
 });
@@ -185,7 +190,7 @@ describe("T3TeamRichChoiceCarousel", () => {
     expect(view.onChoose).toHaveBeenCalledWith(["b"]);
   });
 
-  it("steps with previous and next, the dots and a tap on a peeking card, announcing each stop", () => {
+  it("steps with previous and next, the dots and a tap on a peeking card", () => {
     const view = mount();
     expect(view.button("Previous")?.disabled).toBe(true);
     view.click("Next");
@@ -196,15 +201,24 @@ describe("T3TeamRichChoiceCarousel", () => {
     view.click("Previous");
     view.click("Show 1 of 3: Alpha");
     expect(view.live()).toBe("1 of 3: Alpha");
-    expect(env.announced).toEqual([
-      "2 of 3: Beta",
-      "3 of 3: Gamma",
-      "2 of 3: Beta",
-      "1 of 3: Alpha",
-    ]);
+    expect(env.announced).toEqual([]);
     expect(view.onChoose).not.toHaveBeenCalled();
     expect(view.button("1 of 3: Alpha")?.dataset.selected).toBe("true");
     expect(view.button("2 of 3: Beta")?.dataset.selected).toBe("false");
+  });
+
+  it("announces each move once: through the live region on Android, explicitly on iOS", () => {
+    const android = mount();
+    android.click("Next");
+    expect(android.live()).toBe("2 of 3: Beta");
+    expect(env.announced).toEqual([]);
+
+    env.os = "ios";
+    const ios = mount();
+    expect(ios.container.querySelector("[data-live]")).toBeNull();
+    ios.click("Next");
+    ios.click("Next");
+    expect(env.announced).toEqual(["2 of 3: Beta", "3 of 3: Gamma"]);
   });
 
   it("collects picks in a multiple choice and confirms them together", () => {

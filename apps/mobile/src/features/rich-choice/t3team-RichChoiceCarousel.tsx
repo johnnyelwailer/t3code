@@ -19,6 +19,7 @@ import {
   toggleRichChoiceSelection,
 } from "@t3tools/shared/t3team-richChoiceLogic";
 import type { RichChoicePayloadOption } from "@t3tools/shared/t3team-richChoicePayload";
+import { announcesViaLiveRegion } from "./t3team-richChoiceAnnounce";
 import { T3TeamRichChoiceAction } from "./t3team-RichChoiceAction";
 import { T3TeamRichChoiceControls } from "./t3team-RichChoiceControls";
 import { T3TeamRichChoiceSlide } from "./t3team-RichChoiceSlide";
@@ -66,14 +67,17 @@ export function T3TeamRichChoiceCarousel(props: {
   const cardWidth = richChoiceCardWidth(viewportWidth);
   const baseOffset = richChoiceTrackOffset(viewportWidth, cardWidth, frontIndex);
 
+  const liveRegion = announcesViaLiveRegion();
   const goTo = (next: number) => {
     const target = clampRichChoiceIndex(next, count);
     const option = options[target];
     if (target === frontIndex || !option) return;
     setIndex(target);
-    AccessibilityInfo.announceForAccessibility(
-      describeRichChoicePosition(target, count, option.title),
-    );
+    if (!liveRegion) {
+      AccessibilityInfo.announceForAccessibility(
+        describeRichChoicePosition(target, count, option.title),
+      );
+    }
   };
   const { gesture, dragX } = useRichChoicePan((translationX) =>
     goTo(resolveRichChoiceSwipe(translationX, cardWidth, frontIndex, count)),
@@ -147,9 +151,11 @@ export function T3TeamRichChoiceCarousel(props: {
           onPress={() => props.onChoose(picked)}
         />
       ) : null}
-      <Text accessibilityLiveRegion="polite" style={ANNOUNCE_STYLE}>
-        {describeRichChoicePosition(frontIndex, count, front.title)}
-      </Text>
+      {liveRegion ? (
+        <Text accessibilityLiveRegion="polite" style={ANNOUNCE_STYLE}>
+          {describeRichChoicePosition(frontIndex, count, front.title)}
+        </Text>
+      ) : null}
     </View>
   );
 }
