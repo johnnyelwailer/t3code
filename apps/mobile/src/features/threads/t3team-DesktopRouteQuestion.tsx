@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useEnvironmentPresentation } from "../../state/presentation";
 import { T3TeamDesktopRouteCard } from "./t3team-DesktopRouteCard";
+import { desktopRouteSessionLabel } from "./t3team-desktopRouteSessionLabel";
 
 /**
  * One tap answers: select the option through the ordinary draft path, then submit once the draft
@@ -48,7 +49,7 @@ export function T3TeamDesktopRouteQuestion(props: {
   return (
     <T3TeamDesktopRouteCard
       card={props.card}
-      sessionLabel={presentation?.entry.target.label ?? "This cloud session"}
+      sessionLabel={desktopRouteSessionLabel(presentation?.entry.target)}
       disabled={props.disabled || chosen !== null}
       onAnswer={(label) => {
         setChosen(label);

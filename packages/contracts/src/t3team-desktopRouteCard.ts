@@ -70,3 +70,11 @@ export function desktopRouteCardFrom(question: {
     },
   };
 }
+
+/** The card for a request that is exactly one desktop-route question; any other request is generic. */
+export function desktopRouteCardOf(
+  questions: ReadonlyArray<Parameters<typeof desktopRouteCardFrom>[0]>,
+): DesktopRouteCard | null {
+  const [only] = questions;
+  return questions.length === 1 && only !== undefined ? desktopRouteCardFrom(only) : null;
+}

@@ -1,10 +1,6 @@
 import { Button } from "../../components/ui/Button";
 import { QuestionAttachments } from "./QuestionAttachments";
-import {
-  desktopRouteCardFrom,
-  type EnvironmentId,
-  type RuntimeRequestId,
-} from "@t3tools/contracts";
+import { desktopRouteCardOf, type EnvironmentId, type RuntimeRequestId } from "@t3tools/contracts";
 import type { ThreadUserInputQuestion } from "@t3tools/client-runtime/state/thread-requests";
 import { useRef } from "react";
 import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
@@ -83,6 +79,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   const questionCount = props.pendingUserInput.questions.length;
   const canRespond = props.pendingUserInput.responseCapability !== "not_resumable";
   const isResponding = props.respondingUserInputId === props.pendingUserInput.requestId;
+  const routeCard = desktopRouteCardOf(props.pendingUserInput.questions);
   const responseDisabled = !canRespond || isResponding;
 
   const cardCoverage = props.cardCoverage;
@@ -220,8 +217,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
         ) : null}
         {props.pendingUserInput.questions.map((question) => {
           const draft = props.drafts[question.id];
-          const routeCard = desktopRouteCardFrom(question);
-          if (routeCard !== null && props.pendingUserInput.questions.length === 1) {
+          if (routeCard !== null) {
             return (
               <T3TeamDesktopRouteQuestion
                 key={question.id}
@@ -303,13 +299,15 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           );
         })}
       </ScrollView>
-      <Button
-        label="Submit answers"
-        fullWidth
-        tone={props.answers ? "primary" : "secondary"}
-        disabled={!props.canOperateThread || responseDisabled || props.answers === null}
-        onPress={() => void props.onSubmit()}
-      />
+      {routeCard === null ? (
+        <Button
+          label="Submit answers"
+          fullWidth
+          tone={props.answers ? "primary" : "secondary"}
+          disabled={!props.canOperateThread || responseDisabled || props.answers === null}
+          onPress={() => void props.onSubmit()}
+        />
+      ) : null}
       {props.pendingUserInput.dismissible ? (
         <Button
           label="Dismiss without answering"
