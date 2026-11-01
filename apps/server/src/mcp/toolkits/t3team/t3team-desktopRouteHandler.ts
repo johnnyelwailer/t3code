@@ -53,7 +53,7 @@ export const requestDesktopRoute = Effect.fn("T3TeamMcpToolkit.requestDesktopRou
     const questionId = encodeDesktopRouteQuestionId(proposal);
     if (target.length === 0 || decodeDesktopRouteQuestionId(questionId) === null) {
       return yield* refuse(
-        "The target must be one host name, URL, IP address or small range: no wildcards, no spaces, no credentials.",
+        "The target must be one ASCII host name (punycode for international names), URL, IP address or small range: no wildcards, no spaces, no credentials.",
       );
     }
     if (reason.length === 0) return yield* refuse("Say why in 'reason': the user reads it.");

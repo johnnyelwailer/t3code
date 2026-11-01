@@ -43,6 +43,11 @@ describe("desktopRouteCardFrom", () => {
     });
   });
 
+  it("carries nothing about the session: the app names it from the thread's environment", () => {
+    const card = desktopRouteCardFrom(question({ target: "registry.npmjs.org", internal: false }));
+    expect(Object.keys(card ?? {}).sort()).toEqual(["actions", "internal", "reason", "target"]);
+  });
+
   it("marks an internal host and never offers Always, whatever the options carry", () => {
     const flagged = desktopRouteCardFrom(question({ target: "npm.nexplore.ch", internal: true }));
     expect(flagged).toMatchObject({ internal: true, actions: { always: null } });
