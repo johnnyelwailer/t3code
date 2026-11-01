@@ -1,4 +1,8 @@
-import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  type RuntimeRequestId,
+  type ScopedThreadRef,
+  desktopRouteCardFrom,
+} from "@t3tools/contracts";
 import { memo, use, useEffect, useEffectEvent, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { useStableCallback } from "~/hooks/useStableCallback";
@@ -11,6 +15,7 @@ import { Kbd } from "../ui/kbd";
 import { cn } from "~/lib/utils";
 import { isInSideChatPane } from "~/lib/sideChatPane";
 import { ComposerBanner } from "./ComposerBanner";
+import { T3TeamDesktopRoutePrompt } from "./t3team-DesktopRoutePrompt";
 import { T3TeamPendingQuestionMarkdown } from "./t3team-pendingQuestionMarkdown";
 
 interface PendingUserInputPanelProps {
@@ -41,6 +46,26 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
   if (!activePrompt) return null;
+  const [onlyQuestion] = activePrompt.questions;
+  const routeCard =
+    activePrompt.questions.length === 1 && onlyQuestion ? desktopRouteCardFrom(onlyQuestion) : null;
+  if (routeCard !== null && onlyQuestion) {
+    return (
+      <T3TeamDesktopRoutePrompt
+        key={activePrompt.requestId}
+        card={routeCard}
+        questionId={onlyQuestion.id}
+        threadRef={threadRef}
+        disabled={
+          disabled ||
+          respondingRequestIds.includes(activePrompt.requestId) ||
+          activePrompt.responseCapability === "not_resumable"
+        }
+        onToggleOption={onToggleOption}
+        onAdvance={onAdvance}
+      />
+    );
+  }
 
   return (
     <ComposerPendingUserInputCard
