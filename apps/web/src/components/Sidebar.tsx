@@ -270,6 +270,8 @@ import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadR
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import { useT3TeamScopeRouteSync } from "~/t3team/hooks/t3team-useScopeRouteSync";
 import { T3TeamSidebarProjectScopePills } from "./sidebar/t3team-SidebarProjectScopePills";
+import { T3TeamSidebarEnvironmentFilter } from "./sidebar/t3team-SidebarEnvironmentFilter";
+import { useT3TeamSidebarEnvironmentFilter } from "~/t3team/hooks/t3team-useSidebarEnvironmentFilter";
 import { VoiceSidebarRow } from "~/t3team/voice/t3team-VoiceSidebarRow";
 import { VOICE_THREAD_TITLE } from "~/t3team/voice/t3team-voiceRolePrompt";
 import { useVoiceThreadStore } from "~/t3team/voice/t3team-voiceThreadStore";
@@ -1178,6 +1180,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // loaded. The stored keys are left alone, so the scope returns with its project.
   // An archived project's scope reads as all projects, matching the menu.
   const scopeGroups = pickableProjectGroups(projectGroups);
+  // t3team: the environment filter narrows the project scope below to one environment.
+  const environmentFilter = useT3TeamSidebarEnvironmentFilter({
+    threads: listedThreads,
+    pickableGroups: scopeGroups,
+  });
+  const selectEnvironment = environmentFilter.select;
   const archivedProjectKeys = new Set(
     projectGroups.filter((project) => project.archived).map((project) => project.projectKey),
   );
@@ -1190,7 +1198,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const chosenProjectGroups = scopeGroups.filter((project) =>
     chosenProjectScopeKeys.includes(project.projectKey),
   );
-  const chosenScopeProjectKeys =
+  const chosenScopeProjectKeys = environmentFilter.narrowScopeKeys(
     chosenProjectGroups.length === 0
       ? null
       : new Set(
@@ -1199,7 +1207,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
             ),
           ),
-        );
+        ),
+    projects,
+  );
   const routeRowThreadKey =
     effectiveRouteThreadRef === null
       ? null
@@ -1244,7 +1254,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     if (!revealWidensScope) return;
     clearSelection();
     setPersistedProjectScopeKeys([]);
-  }, [clearSelection, revealWidensScope, setPersistedProjectScopeKeys]);
+    selectEnvironment(null);
+  }, [clearSelection, revealWidensScope, selectEnvironment, setPersistedProjectScopeKeys]);
   const revealActiveRow = useActiveRowReveal(routeReveal, routeRowThreadKey);
   const showProjectEnvironments = projectGroupsSpanEnvironments(projectGroups);
   const scratchMachineLabelFor = (
@@ -1313,7 +1324,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     (settings) => settings.t3teamProjectScopePillsEnabled,
   );
   const threadSearch = useThreadSearch(
-    connectedEnvironmentIds,
+    environmentFilter.narrowEnvironmentIds(connectedEnvironmentIds),
     threadSearchQuery,
     scopedProjectGroups.length === 0
       ? {}
@@ -1469,7 +1480,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     folderGroups: boringSidebarEnabled
       ? scopedProjectGroups.length === 0
         ? // An archived project keeps a folder for its active threads, below the rest.
-          [...scopeGroups, ...projectGroups.filter((project) => project.archived)]
+          environmentFilter.narrowGroups([
+            ...scopeGroups,
+            ...projectGroups.filter((project) => project.archived),
+          ])
         : scopedProjectGroups
       : null,
     keepEmptyFolders: (group) =>
@@ -3396,7 +3410,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 search glyph when everything fits) is the searchable picker. */}
             {projectScopePillsEnabled && projectGroups.length > 0 ? (
               <T3TeamSidebarProjectScopePills
-                groups={projectGroups}
+                groups={environmentFilter.narrowGroups(projectGroups)}
                 activeScopeKey={t3teamScope.group?.projectKey ?? null}
                 onSelectScope={(scopeKey) =>
                   setProjectScopeKeys(scopeKey === null ? [] : [scopeKey])
@@ -3404,6 +3418,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 onProjectContextMenu={handleProjectSettings}
               />
             ) : null}
+            {/* t3team: one-click environment pills; nothing while only one environment lists. */}
+            <T3TeamSidebarEnvironmentFilter
+              pills={environmentFilter.pills}
+              onSelect={(environmentId) => {
+                selectEnvironment(environmentId);
+                setProjectScopeKeys(
+                  environmentFilter.projectScopeKeysFor(
+                    projectGroups,
+                    projectScopeKeys,
+                    environmentId,
+                  ),
+                );
+              }}
+            />
           </SidebarGroup>
         }
       >
