@@ -36,6 +36,10 @@ import * as SqlitePersistence from "./persistence/Sqlite.ts";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as ServerSettingsModule from "./serverSettings.ts";
 import { withPackProviderOverlay } from "./t3team-packProviderOverlayTestUtils.ts";
+import {
+  resetDistributionModelPolicy,
+  setDistributionModelPolicy,
+} from "./t3team-configuredDefaultModelSelection.ts";
 import * as ManagedPolicy from "./policy/ManagedPolicy.ts";
 import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.ts";
 
@@ -2227,6 +2231,40 @@ it.layer(NodeServices.layer)("server settings under a managed policy", (it) => {
       yield* service.updateSettings({ defaultAutoPull: true });
       assert.include(yield* fs.readFileString(config.settingsPath), '"approval-required"');
     }).pipe(Effect.provide(layerServerSettings(policy))),
+  );
+
+  it.effect(
+    "a policy's text-generation default wins over the distribution's, even the built-in one",
+    () => {
+      const builtInModel = DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model;
+      const readModel = Effect.gen(function* () {
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        return (yield* service.getSettings).textGenerationModelSelection.model;
+      }).pipe(
+        Effect.provide(
+          layerServerSettings({
+            schemaVersion: 1,
+            organization: "Example Corp",
+            settings: {
+              "textGenerationModelSelection.model": { value: builtInModel, locked: false },
+            },
+          }),
+        ),
+      );
+      // The distribution policy is read when the settings layer is built, so it is set first.
+      return Effect.acquireRelease(
+        Effect.sync(() =>
+          setDistributionModelPolicy({
+            defaultModelSelection: { instanceId: "codex", model: "gpt-distribution" },
+          }),
+        ),
+        () => Effect.sync(resetDistributionModelPolicy),
+      ).pipe(
+        Effect.andThen(readModel),
+        Effect.map((model) => assert.equal(model, builtInModel)),
+        Effect.scoped,
+      );
+    },
   );
 
   it.effect("keeps stored values under whole-object policy defaults, and only the user's", () =>
