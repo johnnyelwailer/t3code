@@ -36,7 +36,7 @@ const candidateOf = (repository: string, planned: PlannedRef, machine: ScannedMa
     ref: planned.ref,
     where: planned.where,
     path,
-    kind: pointer ? ".nexi/machine.json" : "devcontainer",
+    kind: pointer ? "machine.json" : "devcontainer",
     author: planned.author,
     summary: pointer
       ? `${path} (devcontainer ${machine.devcontainerPath}) on ${planned.describe}`

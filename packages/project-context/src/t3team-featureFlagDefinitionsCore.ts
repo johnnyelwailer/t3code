@@ -22,9 +22,9 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
   },
   NEXI_STATE_DIR: {
     group: "Platform",
-    label: "Project state in .nexi",
+    label: "Project state in .agents/nexi",
     description:
-      "Store project state in .nexi instead of .t3team. Decided by the release so two installs never split project state.",
+      "Store project state in .agents/nexi (the legacy .nexi is still read) instead of .t3team. Decided by the release so two installs never split project state.",
     defaultEnabled: true,
     requiresRestart: true,
     userToggleable: false,

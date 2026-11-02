@@ -72,7 +72,8 @@ function memoryFs(
 }
 
 function nexiGate(files: Map<string, string>, directories: Set<string>) {
-  const hit = (entry: string) => entry === "/repo/.nexi" || entry.startsWith("/repo/.nexi/");
+  const hit = (entry: string) =>
+    entry === "/repo/.agents/nexi" || entry.startsWith("/repo/.agents/nexi/");
   return [...files.keys()].some(hit) || [...directories].some(hit);
 }
 
@@ -109,20 +110,20 @@ it.effect(
           ]),
         ),
       ).toEqual([{ url: "local/repo", checkoutPath: "/repo" }]);
-      expect(JSON.parse(files.get("/repo/.nexi/context/entrypoint.json")!)).toEqual({
-        paths: { manifest: ".nexi/context/m.json" },
+      expect(JSON.parse(files.get("/repo/.agents/nexi/context/entrypoint.json")!)).toEqual({
+        paths: { manifest: ".agents/nexi/context/m.json" },
       });
-      expect(files.get("/repo/.nexi/references/reference-repositories.json")).toBe("{}");
-      expect(files.has("/repo/.nexi/references/clone/heavy")).toBe(false);
-      expect(files.has("/repo/.nexi/child-session-worktrees/child/heavy")).toBe(false);
+      expect(files.get("/repo/.agents/nexi/references/reference-repositories.json")).toBe("{}");
+      expect(files.has("/repo/.agents/nexi/references/clone/heavy")).toBe(false);
+      expect(files.has("/repo/.agents/nexi/child-session-worktrees/child/heavy")).toBe(false);
       expect(files.has("/repo/.t3team/context/entrypoint.json")).toBe(true);
       files.set("/repo/.t3team/context/new.json", "new");
       expect(yield* run(ensureNexiProjectStateDir("/repo"))).toEqual([]);
-      expect(files.has("/repo/.nexi/context/new.json")).toBe(false);
+      expect(files.has("/repo/.agents/nexi/context/new.json")).toBe(false);
     }),
 );
 
-it.effect("keeps an existing .nexi target and skips normalization when flag-off", () =>
+it.effect("keeps an existing .agents/nexi target and skips normalization when flag-off", () =>
   Effect.gen(function* () {
     for (const flag of ["1", "0"] as const) {
       const enabled = flag === "1";
@@ -133,18 +134,20 @@ it.effect("keeps an existing .nexi target and skips normalization when flag-off"
       );
       const { files, fileSystem } = memoryFs({
         "/repo/.t3team/context/a.json": "old",
-        ...(enabled ? { "/repo/.nexi/context/a.json": "committed" } : {}),
+        ...(enabled ? { "/repo/.agents/nexi/context/a.json": "committed" } : {}),
       });
       yield* ensureNexiProjectStateDir("/repo").pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provide(Path.layer),
       );
-      expect(files.get("/repo/.nexi/context/a.json")).toBe(enabled ? "committed" : undefined);
+      expect(files.get("/repo/.agents/nexi/context/a.json")).toBe(
+        enabled ? "committed" : undefined,
+      );
     }
   }),
 );
 
-it.effect("does not publish an empty .nexi gate when every copy fails, then retries", () =>
+it.effect("does not publish an empty .agents/nexi gate when every copy fails, then retries", () =>
   Effect.gen(function* () {
     vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
     vi.resetModules();
@@ -178,47 +181,49 @@ it.effect("does not publish an empty .nexi gate when every copy fails, then retr
       "context/entrypoint.json",
       "references/reference-repositories.json",
     ]);
-    expect(JSON.parse(files.get("/repo/.nexi/context/entrypoint.json")!)).toEqual({
-      paths: { manifest: ".nexi/context/m.json" },
+    expect(JSON.parse(files.get("/repo/.agents/nexi/context/entrypoint.json")!)).toEqual({
+      paths: { manifest: ".agents/nexi/context/m.json" },
     });
-    expect(files.get("/repo/.nexi/references/reference-repositories.json")).toBe("{}");
+    expect(files.get("/repo/.agents/nexi/references/reference-repositories.json")).toBe("{}");
     const copiesAfterSuccess = control.copies;
     expect(yield* run()).toEqual([]);
     expect(control.copies).toBe(copiesAfterSuccess);
   }),
 );
 
-it.effect("drops a partial .nexi when a context rewrite fails so the next call can retry", () =>
-  Effect.gen(function* () {
-    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
-    vi.resetModules();
-    const { ensureNexiProjectStateDir } = yield* Effect.promise(
-      () => import("./t3team-projectMainRepositoryState.ts"),
-    );
-    const source = '{"paths":{"manifest":".t3team/context/m.json"}}';
-    const control = { failCopies: false, failWrites: true, copies: 0 };
-    const { files, directories, fileSystem } = memoryFs(
-      {
-        "/repo/.t3team/context/entrypoint.json": source,
-        "/repo/.t3team/references/reference-repositories.json": "{}",
-      },
-      control,
-    );
-    const run = () =>
-      ensureNexiProjectStateDir("/repo").pipe(
-        Effect.provideService(FileSystem.FileSystem, fileSystem),
-        Effect.provide(Path.layer),
+it.effect(
+  "drops a partial .agents/nexi when a context rewrite fails so the next call can retry",
+  () =>
+    Effect.gen(function* () {
+      vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+      vi.resetModules();
+      const { ensureNexiProjectStateDir } = yield* Effect.promise(
+        () => import("./t3team-projectMainRepositoryState.ts"),
       );
-    expect(yield* run()).toEqual([]);
-    expect(nexiGate(files, directories)).toBe(false);
-    expect(files.get("/repo/.t3team/context/entrypoint.json")).toBe(source);
-    control.failWrites = false;
-    expect(yield* run()).toEqual([
-      "context/entrypoint.json",
-      "references/reference-repositories.json",
-    ]);
-    expect(JSON.parse(files.get("/repo/.nexi/context/entrypoint.json")!)).toEqual({
-      paths: { manifest: ".nexi/context/m.json" },
-    });
-  }),
+      const source = '{"paths":{"manifest":".t3team/context/m.json"}}';
+      const control = { failCopies: false, failWrites: true, copies: 0 };
+      const { files, directories, fileSystem } = memoryFs(
+        {
+          "/repo/.t3team/context/entrypoint.json": source,
+          "/repo/.t3team/references/reference-repositories.json": "{}",
+        },
+        control,
+      );
+      const run = () =>
+        ensureNexiProjectStateDir("/repo").pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provide(Path.layer),
+        );
+      expect(yield* run()).toEqual([]);
+      expect(nexiGate(files, directories)).toBe(false);
+      expect(files.get("/repo/.t3team/context/entrypoint.json")).toBe(source);
+      control.failWrites = false;
+      expect(yield* run()).toEqual([
+        "context/entrypoint.json",
+        "references/reference-repositories.json",
+      ]);
+      expect(JSON.parse(files.get("/repo/.agents/nexi/context/entrypoint.json")!)).toEqual({
+        paths: { manifest: ".agents/nexi/context/m.json" },
+      });
+    }),
 );

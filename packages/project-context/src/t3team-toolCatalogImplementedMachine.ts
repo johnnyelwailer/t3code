@@ -1,3 +1,4 @@
+import { NEXI_PROJECT_STATE_DIR } from "./t3teamProjectStateDir.ts";
 import type { T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
 
 /**
@@ -14,7 +15,7 @@ export const IMPLEMENTED_T3TEAM_MACHINE_TOOL_CATALOG = {
     title: "Find existing machine definitions in this project's repositories",
     description:
       "Looks in this project's own repository and its linked repositories for a machine " +
-      "definition someone already wrote: .nexi/machine.json or a devcontainer, on the default " +
+      `definition someone already wrote: ${NEXI_PROJECT_STATE_DIR}/machine.json (or the legacy .nexi/) or a devcontainer, on the default ` +
       "branch, on other branches, on open pull requests and on pull requests closed in the last " +
       "30 days (at most 20 refs per repository). Call it before asking the user which repository " +
       "or branch holds their machine, and propose what it finds. Read-only, through the user's " +

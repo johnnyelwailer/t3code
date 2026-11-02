@@ -1952,7 +1952,7 @@ export const layerWsRpc = (
           }),
           newProjectsRoot: managedFolders.namedProjectsRoot,
           // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
-          // default on): project main repository, and the `.nexi` state dir name.
+          // default on): project main repository, and the `.agents/nexi` state dir name.
           mainRepository: isMainRepositoryEnabled(),
           machineSetup: isMachineSetupEnabled(),
           // Runtime feature flag (env NEXI_FF_WORK_PROFILE_CHOOSER, default off): the work

@@ -16,6 +16,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import { machineRepositoryFromRemote } from "../cloud/t3team-cloudSessionMachineNames.ts";
+import { projectStateReadPaths } from "../t3team-projectStateReadRoots.ts";
 
 export const MACHINE_SOURCE_FILE = "machine-source.json";
 
@@ -85,6 +86,9 @@ export function normalizeMachineSource(
 
 const settingPath = (workspaceRoot: string, path: Path.Path) =>
   path.join(workspaceRoot, PROJECT_STATE_DIR, MACHINE_SOURCE_FILE);
+/** Every state dir's copy, newest first: the first that exists is the setting. */
+const settingReadPaths = (workspaceRoot: string, path: Path.Path) =>
+  projectStateReadPaths(path, workspaceRoot, MACHINE_SOURCE_FILE);
 
 const SettingDoc = Schema.Struct({
   version: Schema.Literal(1),
@@ -99,8 +103,12 @@ export const readMachineSource = Effect.fn("projectMachine.readSource")(function
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const text = yield* fs.readFileString(settingPath(workspaceRoot, path)).pipe(Effect.option);
-  if (text._tag === "None") return null;
+  let text: Option.Option<string> = Option.none();
+  for (const file of settingReadPaths(workspaceRoot, path)) {
+    text = yield* fs.readFileString(file).pipe(Effect.option);
+    if (Option.isSome(text)) break;
+  }
+  if (Option.isNone(text)) return null;
   const doc = Option.getOrNull(decodeDoc(text.value));
   if (doc === null) return null;
   const url = doc.url !== undefined && doc.url.length > 0 ? doc.url : undefined;
@@ -122,7 +130,10 @@ export const writeMachineSource = Effect.fn("projectMachine.writeSource")(functi
   const path = yield* Path.Path;
   const file = settingPath(workspaceRoot, path);
   if (choice === null || (choice.url === undefined && choice.branch === undefined)) {
-    yield* fs.remove(file, { force: true });
+    // A reset removes every state dir's copy, or the legacy one would resurface.
+    for (const candidate of settingReadPaths(workspaceRoot, path)) {
+      yield* fs.remove(candidate, { force: true });
+    }
     return;
   }
   yield* fs.makeDirectory(path.dirname(file), { recursive: true });

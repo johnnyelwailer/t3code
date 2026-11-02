@@ -131,7 +131,7 @@ it.layer(NodeServices.layer)("project machine source", (it) => {
       }).pipe(Effect.provide(fixture.layer));
       expect(result.source).toBeNull();
       expect(result.sourceFailure).toBe(
-        "No machine definition was found in acme/tools on branch setup. Checked .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json.",
+        "No machine definition was found in acme/tools on branch setup. Checked .agents/nexi/machine.json, .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json.",
       );
     }),
   );

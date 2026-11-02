@@ -1,6 +1,6 @@
 import {
   DEVCONTAINER_CANDIDATE_PATHS,
-  PROJECT_MACHINE_FILE_PATH,
+  PROJECT_MACHINE_FILE_PATHS,
   ProjectMachineFile,
   RepositoryRelativePath,
   type ProjectMachineDefinition,
@@ -79,18 +79,25 @@ export const scanDefinition = Effect.fn("projectMachine.scanDefinition")(functio
       rejected: [{ repository: input.repository, path: candidatePath, reason: error.reason }],
     } satisfies ProjectMachineScan);
 
-  const pointerRead = yield* read(PROJECT_MACHINE_FILE_PATH).pipe(Effect.result);
-  if (pointerRead._tag === "Failure") {
-    if (pointerRead.failure._tag === "RemoteUnavailable") return yield* pointerRead.failure;
-    return yield* rejectedAt(PROJECT_MACHINE_FILE_PATH)(pointerRead.failure);
+  // The first location that exists wins, even when it is invalid: a broken `.agents/nexi` file is
+  // reported, never silently replaced by a stale legacy one.
+  let pointer: { readonly path: string; readonly contents: string } | null = null;
+  for (const candidatePath of PROJECT_MACHINE_FILE_PATHS) {
+    const pointerRead = yield* read(candidatePath).pipe(Effect.result);
+    if (pointerRead._tag === "Failure") {
+      if (pointerRead.failure._tag === "RemoteUnavailable") return yield* pointerRead.failure;
+      return yield* rejectedAt(candidatePath)(pointerRead.failure);
+    }
+    pointer = pointerRead.success;
+    if (pointer !== null) break;
   }
-  const pointer = pointerRead.success;
   if (pointer !== null) {
+    const found = pointer;
     return yield* Effect.gen(function* () {
-      const decoded = decodeMachineFile(pointer.contents);
+      const decoded = decodeMachineFile(found.contents);
       if (decoded._tag === "Failure") {
         return yield* new Rejected({
-          reason: `${PROJECT_MACHINE_FILE_PATH} is not a valid machine file.`,
+          reason: `${found.path} is not a valid machine file.`,
         });
       }
       const machine = decoded.success;
@@ -100,16 +107,16 @@ export const scanDefinition = Effect.fn("projectMachine.scanDefinition")(functio
           {
             repository: input.repository,
             devcontainerPath: files[0]?.path ?? machine.devcontainer,
-            machineFilePath: PROJECT_MACHINE_FILE_PATH,
+            machineFilePath: found.path,
             healthCheck: machine.healthCheck ?? null,
             secrets: machine.secrets ?? [],
-            hash: hashDefinitionFiles([pointer, ...files]),
-            files: [pointer.path, ...files.map((f) => f.path)],
+            hash: hashDefinitionFiles([found, ...files]),
+            files: [found.path, ...files.map((f) => f.path)],
           },
         ],
         rejected: [],
       } satisfies ProjectMachineScan;
-    }).pipe(Effect.catchTags({ Rejected: rejectedAt(PROJECT_MACHINE_FILE_PATH) }));
+    }).pipe(Effect.catchTags({ Rejected: rejectedAt(found.path) }));
   }
 
   const nested = yield* input.reader.nestedPaths;

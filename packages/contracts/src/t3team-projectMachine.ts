@@ -8,12 +8,21 @@ import { ProjectMachineSourceReadout } from "./t3team-projectMachineSource.ts";
  * through the repository (issue #562 in the distribution). "Machine", not "environment": an
  * environment here is a running T3 server, which the machine hosts once it is built. The definition itself is a
  * standard `devcontainer.json`, so the same file also works in VS Code and Codespaces; the
- * committed `.nexi/machine.json` points at it and carries what devcontainers have no field for
+ * committed `.agents/nexi/machine.json` points at it and carries what devcontainers have no field for
  * (a health check, the secrets the machine needs — by name only).
  */
 
-/** The committed pointer file, relative to the repository root. */
-export const PROJECT_MACHINE_FILE_PATH = ".nexi/machine.json";
+/** The committed pointer file, relative to the repository root. New files are written here. */
+export const PROJECT_MACHINE_FILE_PATH = ".agents/nexi/machine.json";
+
+/** The pointer file's location before `.agents/nexi`: still found, never written. */
+export const LEGACY_PROJECT_MACHINE_FILE_PATH = ".nexi/machine.json";
+
+/** Where the pointer file is looked for, in order: the first one that exists is the definition. */
+export const PROJECT_MACHINE_FILE_PATHS = [
+  PROJECT_MACHINE_FILE_PATH,
+  LEGACY_PROJECT_MACHINE_FILE_PATH,
+] as const;
 
 /**
  * Where a devcontainer is looked for when no pointer file names one (the spec's own locations).
@@ -65,7 +74,7 @@ const ProjectMachineSecrets = Schema.Array(ProjectMachineSecret).check(
   ),
 );
 
-/** `.nexi/machine.json` as committed. Values never appear here, only secret names. */
+/** `.agents/nexi/machine.json` (or the legacy `.nexi/machine.json`) as committed. Values never appear here, only secret names. */
 export const ProjectMachineFile = Schema.Struct({
   version: Schema.Literal(1),
   /** The `devcontainer.json` this machine builds. */
@@ -81,7 +90,7 @@ export const ProjectMachineDefinition = Schema.Struct({
   /** The repository it was found in: `owner/repo` for a linked repository, `.` for the project's own. */
   repository: TrimmedNonEmptyString,
   devcontainerPath: RepositoryRelativePath,
-  /** Null when only a plain devcontainer was found, without a `.nexi/machine.json`. */
+  /** Null when only a plain devcontainer was found, without a `machine.json`. */
   machineFilePath: Schema.NullOr(RepositoryRelativePath),
   healthCheck: Schema.NullOr(TrimmedNonEmptyString),
   secrets: ProjectMachineSecrets,
@@ -127,7 +136,7 @@ export type ProjectMachineRejectedCandidate = typeof ProjectMachineRejectedCandi
 
 /**
  * What a project's checkouts hold. `status` carries the default template: the first candidate,
- * preferring a committed `.nexi/machine.json` over a plain devcontainer, the project's own
+ * preferring a committed `machine.json` over a plain devcontainer, the project's own
  * repository over linked ones. A rejected file is reported rather than skipped, so a typo in a
  * committed definition can be shown and fixed instead of looking like "this project has none".
  */

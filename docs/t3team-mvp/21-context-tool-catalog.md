@@ -216,7 +216,7 @@ Notes:
   `context/linked-repositories.json` lists each with its checkout state. The agent clones or
   fetches the one it needs; delegating into an uncloned linked repository clones it too.
 - `t3team.machine.find_definitions` is implemented (MCP `t3_machine_find_definitions`). It is
-  read-only: it looks for `.nexi/machine.json` and devcontainer definitions in the project's own
+  read-only: it looks for `.agents/nexi/machine.json` (or the legacy `.nexi/machine.json`) and devcontainer definitions in the project's own
   and linked repositories (default branch, other branches, open and recently closed pull
   requests) so a machine-setup agent proposes an existing one instead of asking for a repository
   and branch. It is a direct MCP tool like `t3_linked_repository_sync`, not a broker tool, and

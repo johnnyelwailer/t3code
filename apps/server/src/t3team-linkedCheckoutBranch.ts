@@ -1,12 +1,13 @@
 /**
  * Keeps a linked reference checkout on the branch the project chose for it, instead of whatever the
  * remote's default branch was when it was cloned. Never destroys work: the only things it deletes
- * or reverts are T3's own scaffold files (`AGENTS.md`, `CLAUDE.md`, the `.nexi/` and `.t3team/`
- * state, and its entries in `.gitignore`), and only when git says they block the switch. Anything
+ * or reverts are T3's own scaffold files (`AGENTS.md`, `CLAUDE.md`, the `.agents/nexi/`, `.nexi/` and
+ * `.t3team/` state, and its entries in `.gitignore`), and only when git says they block the switch. Anything
  * else that blocks it is reported and left alone.
  *
  * @module t3team-linkedCheckoutBranch
  */
+import { isProjectStatePath } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -26,10 +27,7 @@ const T3_GITIGNORE_LINES: ReadonlySet<string> = new Set([
 ]);
 
 const isScaffoldPath = (relativePath: string): boolean =>
-  relativePath === "AGENTS.md" ||
-  relativePath === "CLAUDE.md" ||
-  relativePath.startsWith(".nexi/") ||
-  relativePath.startsWith(".t3team/");
+  relativePath === "AGENTS.md" || relativePath === "CLAUDE.md" || isProjectStatePath(relativePath);
 
 /** The paths git lists under "untracked working tree files would be overwritten by checkout". */
 const untrackedBlockers = (stderr: string): ReadonlyArray<string> => {

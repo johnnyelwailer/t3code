@@ -78,6 +78,7 @@ it.layer(NodeServices.layer)("remote machine scan", (it) => {
         expect(result?.candidates).toEqual([]);
         expect(result?.rejected).toEqual([]);
         expect(fixture.reads.map((read) => read.path)).toEqual([
+          ".agents/nexi/machine.json",
           ".nexi/machine.json",
           ".devcontainer/devcontainer.json",
           ".devcontainer.json",

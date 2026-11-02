@@ -18,7 +18,7 @@ import {
 
 /**
  * "Machine definition from" in a project's settings: the repository and branch a cloud session's
- * machine (devcontainer, `.nexi/machine.json`) is read from. Empty means the project's own
+ * machine (devcontainer, `.agents/nexi/machine.json`) is read from. Empty means the project's own
  * repository at its default branch. The choice is kept by the environment that holds the project.
  */
 export function T3TeamProjectMachineSourceSection({
@@ -73,7 +73,7 @@ export function T3TeamProjectMachineSourceSection({
           <>
             <span className="block">{describeMachineSource(discovery?.source)}</span>
             <span className="block">
-              The repository and branch a cloud session reads .nexi/machine.json and the
+              The repository and branch a cloud session reads .agents/nexi/machine.json and the
               devcontainer from. Leave empty for this project's repository at its default branch.
             </span>
             {error === null ? null : <span className="block text-destructive">{error}</span>}

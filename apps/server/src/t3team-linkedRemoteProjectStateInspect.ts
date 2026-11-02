@@ -1,6 +1,6 @@
 /**
- * Targeted remote queries for a linked repository's committed project-state tree (`.nexi` /
- * `.t3team`) without materializing a full reference checkout. Uses a shallow fetch of the
+ * Targeted remote queries for a linked repository's committed project-state tree (`.agents/nexi` /
+ * `.nexi` / `.t3team`) without materializing a full reference checkout. Uses a shallow fetch of the
  * default branch tip and `git ls-tree` on the remote ref — no blob checkout.
  *
  * **Committed-only:** this sees what is on the remote default branch, not uncommitted local
@@ -10,6 +10,7 @@
  * @module t3team-linkedRemoteProjectStateInspect
  */
 import {
+  LEGACY_NEXI_PROJECT_STATE_DIR,
   NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
   T3TEAM_PROJECT_STATE_DIR,
@@ -38,10 +39,15 @@ export type RemoteProjectStateInspectResult = {
 
 const REMOTE_FETCH_TIMEOUT_MS = INSPECT_TIMEOUT_MS;
 
+/** The active dir first, then every dir this product ever used: a committed legacy `.nexi` still
+ * counts as project state. */
 const STATE_DIR_CANDIDATES: ReadonlyArray<string> = [
-  PROJECT_STATE_DIR,
-  T3TEAM_PROJECT_STATE_DIR,
-  NEXI_PROJECT_STATE_DIR,
+  ...new Set([
+    PROJECT_STATE_DIR,
+    NEXI_PROJECT_STATE_DIR,
+    LEGACY_NEXI_PROJECT_STATE_DIR,
+    T3TEAM_PROJECT_STATE_DIR,
+  ]),
 ];
 
 /** Committed project-state paths under `stateDirName`; machine-local bookkeeping that a repository
@@ -73,7 +79,7 @@ export class RemoteProjectStateInspectError extends Schema.TaggedError<RemotePro
   }
 }
 
-/** Shallow-fetch `url`'s default branch in a temp git dir and count `.nexi`/`.t3team` entries.
+/** Shallow-fetch `url`'s default branch in a temp git dir and count `.agents/nexi`, `.nexi` and `.t3team` entries.
  * Authenticates exactly as a linked clone does: the same prepared clone URL and the clone's env
  * (`CLONE_ENV`, git's own credential helper). A remote that cannot be read FAILS — only a read
  * that worked can say "no project state here". The temp dir is released on every exit. */

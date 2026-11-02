@@ -84,7 +84,7 @@ describe("effectiveRecipeTriggerSettings", () => {
         workspaceRoot: "/repo",
         pathService: { join: (...parts: string[]) => parts.join("/") },
       }),
-    ).toMatch(/\/(\.t3team|\.nexi)\/recipe-triggers\.json$/);
+    ).toMatch(/\/(\.t3team|\.agents\/nexi)\/recipe-triggers\.json$/);
     expect(RECIPE_TRIGGER_SETTINGS_FILE).toBe("recipe-triggers.json");
   });
 });

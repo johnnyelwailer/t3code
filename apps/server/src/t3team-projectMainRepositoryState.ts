@@ -6,6 +6,7 @@
  * @module t3team-projectMainRepositoryState
  */
 import {
+  LEGACY_NEXI_PROJECT_STATE_DIR,
   NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
   T3TEAM_PROJECT_STATE_DIR,
@@ -18,9 +19,9 @@ import * as Path from "effect/Path";
 import { T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS } from "./t3team-context-blob-store-utils.ts";
 import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 
+import { projectStateReadPaths } from "./t3team-projectStateReadRoots.ts";
 import {
   CHILD_WORKTREES_DIR_NAME,
-  HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
   hasProjectStateEntries,
@@ -47,9 +48,15 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
       yield* ensureNexiProjectStateDir(checkoutPath);
       const isClone = yield* exists(path.join(checkoutPath, ".git"));
       if (!isClone) continue;
-      const stateEntries = yield* fileSystem
-        .readDirectory(path.join(checkoutPath, HIDDEN_T3TEAM_DIR))
-        .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
+      // A legacy `.nexi` that still holds project state makes the checkout a candidate too.
+      const stateEntries: string[] = [];
+      for (const stateRoot of projectStateReadPaths(path, checkoutPath)) {
+        stateEntries.push(
+          ...(yield* fileSystem
+            .readDirectory(stateRoot)
+            .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []))),
+        );
+      }
       if (hasProjectStateEntries(stateEntries)) {
         candidates.push({ url: entry.url, checkoutPath });
       }
@@ -63,7 +70,7 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
  * git worktree would orphan it. The context blob cache is skipped too: it is re-creatable,
  * purgeable cache that can hold tens of thousands of files and gigabytes (a real project had
  * 70k blobs / 5.5 GB), and copying it inline made every switch outlast the request. */
-const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): boolean => {
+export const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): boolean => {
   const [top, second] = relativeSegments;
   if (top === CHILD_WORKTREES_DIR_NAME) return true;
   if (top === T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS[0] && second === T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS[1])
@@ -136,17 +143,38 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   return { copied, failed };
 });
 
-/** One-time additive normalization when a process selects .nexi. An existing target wins;
- * a failed attempt is removed so the next call retries instead of reading an empty dir. */
+/** One-time additive normalization when a process selects `.agents/nexi`. An existing target
+ * wins; the sources are untouched. A failed attempt is removed so the next call retries instead of
+ * reading an empty dir.
+ *
+ * - A legacy `.nexi` is READ in place (`projectStateReadPaths`), so nothing of it is copied, except
+ *   the reference manifest: it is machine-local and rewritten in place by many callers.
+ * - A `.t3team` is copied forward when the project has no `.nexi` and no `.agents/nexi` yet. */
 export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(function* (
   workspaceRoot: string,
 ) {
   if (PROJECT_STATE_DIR !== NEXI_PROJECT_STATE_DIR) return [];
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const exists = (target: string) =>
+    fileSystem.exists(target).pipe(Effect.orElseSucceed(() => false));
   const nexiDir = path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR);
-  if (yield* fileSystem.exists(nexiDir)) return [];
-  if (!(yield* fileSystem.exists(path.join(workspaceRoot, T3TEAM_PROJECT_STATE_DIR)))) return [];
+  const legacyDir = path.join(workspaceRoot, LEGACY_NEXI_PROJECT_STATE_DIR);
+  const manifest = path.join(REFERENCES_DIR_NAME, MANIFEST_FILE_NAME);
+  const adopted: string[] = [];
+  if (yield* exists(path.join(legacyDir, manifest))) {
+    const target = path.join(nexiDir, manifest);
+    if (!(yield* exists(target))) {
+      const done = yield* fileSystem.makeDirectory(path.dirname(target), { recursive: true }).pipe(
+        Effect.andThen(fileSystem.copyFile(path.join(legacyDir, manifest), target)),
+        Effect.as(true),
+        Effect.orElseSucceed(() => false),
+      );
+      if (done) adopted.push(manifest);
+    }
+  }
+  if ((yield* exists(legacyDir)) || (yield* exists(nexiDir))) return adopted;
+  if (!(yield* exists(path.join(workspaceRoot, T3TEAM_PROJECT_STATE_DIR)))) return adopted;
   const outcome = yield* copyProjectStateDir({
     fromRoot: workspaceRoot,
     toRoot: workspaceRoot,
@@ -155,7 +183,7 @@ export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(
   });
   if (!outcome.failed && outcome.copied.length > 0) return outcome.copied;
   yield* fileSystem.remove(nexiDir, { recursive: true, force: true }).pipe(Effect.ignore);
-  return [];
+  return adopted;
 });
 
 export const migrateProjectStateDir = Effect.fn("migrateProjectStateDir")(function* (input: {

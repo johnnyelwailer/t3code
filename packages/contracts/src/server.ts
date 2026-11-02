@@ -695,7 +695,7 @@ export const ServerConfig = Schema.Struct({
    */
   transientAutoResume: Schema.optionalKey(Schema.Boolean),
   /**
-   * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
+   * Whether this server names the project state dir `.agents/nexi` (legacy `.nexi` still read) instead of `.t3team`. Runtime
    * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.
    */
   nexiStateDir: Schema.optionalKey(Schema.Boolean),

@@ -128,7 +128,7 @@ export const FORK_TOOL_DOCS: ToolDocsTable = {
   },
   t3_machine_find_definitions: {
     description:
-      "- Find machine definitions (read-only): .nexi/machine.json or devcontainer in project+linked repos, on branches, open PRs, PRs closed <30d\n- Call before asking user; propose result\n- Returns candidates, checked, unreadable, setupHints(Dockerfile etc)",
+      "- Find machine definitions (read-only): .agents/nexi/machine.json (or legacy .nexi/) or devcontainer in project+linked repos, on branches, open PRs, PRs closed <30d\n- Call before asking user; propose result\n- Returns candidates, checked, unreadable, setupHints(Dockerfile etc)",
     fields: { projectId: "default: this thread's project" },
   },
   t3_work_item_search: {

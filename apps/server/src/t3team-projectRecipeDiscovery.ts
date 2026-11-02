@@ -12,7 +12,7 @@ import {
 import { discoverPackRecipes } from "./t3team-projectRecipeDiscoveryPack.ts";
 import { discoverProjectRecipeAtPath, sortRecipes } from "./t3team-projectRecipeDiscoveryRecipe.ts";
 import { mergeRecipesByPrecedence } from "./t3team-projectRecipeOrigin.ts";
-import { T3TEAM_PROJECT_RECIPES_ROOT } from "./t3team-projectSetupShared.ts";
+import { projectStateReadPaths } from "./t3team-projectStateReadRoots.ts";
 import { offeredRecipes } from "./t3team-workItemDeliveryRecipesFlag.ts";
 
 function normalizeRenderContext(context: ProjectRecipeRenderContext): ProjectRecipeRenderContext {
@@ -53,58 +53,64 @@ export const discoverProjectRecipes = Effect.fn("discoverProjectRecipes")(functi
   const workspaceRoot = pathService.resolve(input.workspaceRoot);
   const context = normalizeRenderContext(input.context);
   // Pack-provided recipes are the same concept with a different source (Epic 16 §Recipe Sources
-  // And Precedence), so they are discovered even when the workspace has no `.t3team/recipes/`.
+  // And Precedence), so they are discovered even when the workspace has no project recipes.
   const packDiscovery = yield* discoverPackRecipes({ workspaceRoot, context });
 
-  const recipesRoot = pathService.join(workspaceRoot, T3TEAM_PROJECT_RECIPES_ROOT);
-  if (!(yield* fileSystem.exists(recipesRoot).pipe(Effect.orElseSucceed(() => false)))) {
-    return finalize({
-      workspaceRoot,
-      hasProjectLocalRecipes: false,
-      recipes: packDiscovery.recipes,
-      diagnostics: packDiscovery.diagnostics,
-    });
-  }
-
-  const recipeEntries = yield* fileSystem.readDirectory(recipesRoot, { recursive: false });
+  // Every state dir is read, newest first; a recipe directory of the same name in an older one
+  // is shadowed by the newer (listed in diagnostics, never loaded).
+  const recipesRoots = projectStateReadPaths(pathService, workspaceRoot, "recipes");
   const discoveredRecipes: ProjectRecipeDiscovered[] = [];
+  const shadowed: string[] = [];
+  const seenEntries = new Set<string>();
   let hasProjectLocalRecipes = false;
 
-  for (const entry of recipeEntries) {
-    const recipePath = pathService.join(recipesRoot, entry);
-    const entryStat = yield* fileSystem
-      .stat(recipePath)
-      .pipe(Effect.catch(() => Effect.succeed(null)));
-    if (!entryStat || entryStat.type !== "Directory") {
+  for (const recipesRoot of recipesRoots) {
+    if (!(yield* fileSystem.exists(recipesRoot).pipe(Effect.orElseSucceed(() => false)))) {
       continue;
     }
-    const maybeRecipe = yield* discoverProjectRecipeAtPath({
-      workspaceRoot,
-      recipePath,
-      context,
-    }).pipe(Effect.catch(() => Effect.succeed(Option.none<ProjectRecipeDiscovered>())));
+    const recipeEntries = yield* fileSystem.readDirectory(recipesRoot, { recursive: false });
+    for (const entry of recipeEntries) {
+      const recipePath = pathService.join(recipesRoot, entry);
+      const entryStat = yield* fileSystem
+        .stat(recipePath)
+        .pipe(Effect.catch(() => Effect.succeed(null)));
+      if (!entryStat || entryStat.type !== "Directory") {
+        continue;
+      }
+      if (seenEntries.has(entry)) {
+        shadowed.push(
+          `Recipe directory ${recipePath} is shadowed by the same recipe in a newer state directory.`,
+        );
+        continue;
+      }
+      seenEntries.add(entry);
+      const maybeRecipe = yield* discoverProjectRecipeAtPath({
+        workspaceRoot,
+        recipePath,
+        context,
+      }).pipe(Effect.catch(() => Effect.succeed(Option.none<ProjectRecipeDiscovered>())));
 
-    if (
-      (yield* fileSystem
-        .exists(pathService.join(recipePath, "recipe.json"))
-        .pipe(Effect.orElseSucceed(() => false))) ||
-      (yield* fileSystem
-        .exists(pathService.join(recipePath, "recipe.ts"))
-        .pipe(Effect.orElseSucceed(() => false)))
-    ) {
-      hasProjectLocalRecipes = true;
-    }
+      if (
+        (yield* fileSystem
+          .exists(pathService.join(recipePath, "recipe.json"))
+          .pipe(Effect.orElseSucceed(() => false))) ||
+        (yield* fileSystem
+          .exists(pathService.join(recipePath, "recipe.ts"))
+          .pipe(Effect.orElseSucceed(() => false)))
+      ) {
+        hasProjectLocalRecipes = true;
+      }
 
-    if (Option.isSome(maybeRecipe)) {
-      discoveredRecipes.push(maybeRecipe.value);
+      if (Option.isSome(maybeRecipe)) {
+        discoveredRecipes.push(maybeRecipe.value);
+      }
     }
   }
-
   return finalize({
     workspaceRoot,
     hasProjectLocalRecipes,
     // Pack recipes first so a project-local recipe of the same id wins the merge below.
     recipes: [...packDiscovery.recipes, ...discoveredRecipes],
-    diagnostics: packDiscovery.diagnostics,
+    diagnostics: [...packDiscovery.diagnostics, ...shadowed],
   });
 });
