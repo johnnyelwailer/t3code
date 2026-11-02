@@ -1,5 +1,7 @@
 {
   "allowedModifiedFiles": [
+    "apps/server/src/resourceTelemetry/HostResources.ts",
+    "packages/contracts/src/resourceTelemetry.ts",
     "apps/web/src/hooks/useThreadActions.permissions.test.ts",
     "apps/web/src/hooks/useThreadActionMenu.test.ts",
     "apps/mobile/src/features/home/useThreadListActions.test.ts",

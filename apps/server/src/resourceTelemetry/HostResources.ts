@@ -8,6 +8,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { parseWindowsCommitMemory } from "./t3team-windowsCommitMemory.ts";
+import { isResourcePressureEnabled } from "../t3team-resourcePressureFlag.ts";
 
 export class HostResources extends Context.Service<
   HostResources,
@@ -53,6 +55,27 @@ const make = Effect.fn("makeHostResources")(function* () {
         ? Math.min(1, Math.max(0, 1 - idleDelta / totalDelta))
         : null;
     const totalMemoryBytes = NodeOS.totalmem();
+    const commit =
+      platform === "win32" && isResourcePressureEnabled()
+        ? yield* spawner
+            .string(
+              ChildProcess.make(
+                "powershell.exe",
+                [
+                  "-NoProfile",
+                  "-NonInteractive",
+                  "-Command",
+                  "Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory | Select-Object CommittedBytes,CommitLimit | ConvertTo-Json -Compress",
+                ],
+                { stdin: "ignore", stderr: "ignore" },
+              ),
+            )
+            .pipe(
+              Effect.timeout("2 seconds"),
+              Effect.map(parseWindowsCommitMemory),
+              Effect.orElseSucceed(() => null),
+            )
+        : null;
     // On Windows libuv returns GlobalMemoryStatusEx.ullAvailPhys, including standby memory.
     let availableMemoryBytes = NodeOS.freemem();
     if (platform === "linux") {
@@ -76,6 +99,7 @@ const make = Effect.fn("makeHostResources")(function* () {
       cpuCount: cpu.count,
       availableMemoryBytes: Math.min(totalMemoryBytes, Math.max(0, availableMemoryBytes)),
       totalMemoryBytes,
+      ...(commit ?? {}),
     };
   });
 

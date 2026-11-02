@@ -52,6 +52,7 @@ import {
   ProviderDriverKind,
 } from "./providerInstance.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
+import { ResourcePressureThresholds } from "./t3team-resourcePressureSettings.ts";
 
 export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"]);
 export type TimestampFormat = typeof TimestampFormat.Type;
@@ -1220,6 +1221,9 @@ export const AgentInstructions = Schema.String.pipe(
 export type AgentInstructions = typeof AgentInstructions.Type;
 
 export const ServerSettings = Schema.Struct({
+  resourcePressureThresholds: ResourcePressureThresholds.pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   /**
    * Global "Personality / Instructions" override for agent sessions.
    * Empty (default) = the provider driver's built-in default; a non-empty
@@ -1657,6 +1661,7 @@ const ModelSelectionPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  resourcePressureThresholds: Schema.optionalKey(ResourcePressureThresholds),
   setModelFavorites: Schema.optionalKey(
     Schema.Array(Schema.Struct({ ...ModelFavorite.fields, favorite: Schema.Boolean })),
   ),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { DEFAULT_RESOURCE_PRESSURE_THRESHOLDS } from "@t3tools/contracts";
 
 import {
   applyHysteresis,
@@ -28,22 +29,89 @@ describe("classifyPressure", () => {
     );
   });
 
-  it("applies the non-darwin available-memory thresholds (15% warn, 7% critical)", () => {
+  it("uses available GiB scaled to the machine's RAM", () => {
     const at = (available: number) =>
       classifyPressure({ host: host(available, 100), osLevel: null, appTreeRssBytes: 0 }).level;
-    expect(at(15)).toBe("ok");
-    expect(at(14.9)).toBe("warn");
-    expect(at(7)).toBe("warn");
-    expect(at(6.9)).toBe("critical");
+    expect(at(6)).toBe("ok");
+    expect(at(5.9)).toBe("warn");
+    expect(at(3)).toBe("warn");
+    expect(at(2.9)).toBe("critical");
+    expect(classifyPressure({ host: host(1.2, 8), osLevel: null, appTreeRssBytes: 0 }).level).toBe(
+      "ok",
+    );
+    expect(classifyPressure({ host: host(0.79, 8), osLevel: null, appTreeRssBytes: 0 }).level).toBe(
+      "critical",
+    );
   });
 
-  it("applies the app-tree share thresholds (25% warn, 40% critical)", () => {
+  it("holds warnings inside the recovery margin and clears after two recovered samples", () => {
+    const at = (available: number, previousLevel: "ok" | "warn" | "critical") =>
+      classifyPressure({
+        host: host(available, 64),
+        osLevel: null,
+        appTreeRssBytes: 0,
+        previousLevel,
+      }).level;
+    expect(at(12.8, "ok")).toBe("ok");
+    expect(at(5.9, "ok")).toBe("warn");
+    expect(at(2.9, "ok")).toBe("critical");
+    expect(at(3.9, "critical")).toBe("critical");
+    expect(at(6.9, "warn")).toBe("warn");
+    const state = applyHysteresis({ level: "warn", lowerStreak: 0 }, at(7, "warn"));
+    expect(state.level).toBe("warn");
+    expect(applyHysteresis(state, at(7, "warn")).level).toBe("ok");
+  });
+
+  it("does not treat process memory consumption as non-darwin host pressure", () => {
     const at = (appGib: number) =>
       classifyPressure({ host: host(50, 100), osLevel: null, appTreeRssBytes: appGib * GIB }).level;
     expect(at(24.9)).toBe("ok");
-    expect(at(25)).toBe("warn");
-    expect(at(39.9)).toBe("warn");
-    expect(at(40)).toBe("critical");
+    expect(at(25)).toBe("ok");
+    expect(at(39.9)).toBe("ok");
+    expect(at(40)).toBe("ok");
+  });
+
+  it("warns about commit headroom even when physical RAM is available", () => {
+    const at = (commitGiB: number) =>
+      classifyPressure({
+        host: { ...host(16, 64), commitHeadroomBytes: commitGiB * GIB },
+        osLevel: null,
+        appTreeRssBytes: 0,
+      });
+    expect(at(7).level).toBe("ok");
+    expect(at(5).level).toBe("warn");
+    expect(at(2).level).toBe("critical");
+    expect(at(2).reasons).toContain("host commit headroom 2.0 GiB");
+  });
+
+  it("uses configured headroom limits", () => {
+    expect(
+      classifyPressure({
+        host: host(5, 64),
+        osLevel: null,
+        appTreeRssBytes: 0,
+        thresholds: {
+          ...DEFAULT_RESOURCE_PRESSURE_THRESHOLDS,
+          warningAvailableGiB: 4,
+          criticalAvailableGiB: 2,
+        },
+      }).level,
+    ).toBe("ok");
+  });
+
+  it("clears the Windows warning from Phil's recorded sample after two healthy readings", () => {
+    const candidate = classifyPressure({
+      host: { totalMemoryBytes: 68016312320, availableMemoryBytes: 15158763520 },
+      osLevel: null,
+      appTreeRssBytes: 25078063104,
+      darwin: false,
+    });
+    expect(candidate.level).toBe("ok");
+    let state = applyHysteresis(INITIAL_HYSTERESIS, "warn");
+    state = applyHysteresis(state, candidate.level);
+    expect(state.level).toBe("warn");
+    state = applyHysteresis(state, candidate.level);
+    expect(state.level).toBe("ok");
   });
 
   it("flags the reported 7 GB app on a 16 GB Mac as critical even with a normal kernel verdict", () => {
@@ -115,7 +183,7 @@ describe("topConsumers / buildPressureSnapshot", () => {
     const build = (level: "ok" | "warn" | "critical") =>
       buildPressureSnapshot({
         sampledAt: 1,
-        host: host(8),
+        host: { ...host(8), commitHeadroomBytes: 2 * GIB, commitLimitBytes: 32 * GIB },
         osLevel: null,
         telemetry: snapshotTelemetry,
         level,
@@ -133,6 +201,8 @@ describe("topConsumers / buildPressureSnapshot", () => {
     expect(critical.recommendation).toContain("held at their next turn boundary");
     expect(critical.appTreeRssBytes).toBe(11 * GIB);
     expect(critical.appTreeProcessCount).toBe(4);
+    expect(critical.commitHeadroomBytes).toBe(2 * GIB);
+    expect(critical.commitLimitBytes).toBe(32 * GIB);
   });
 });
 

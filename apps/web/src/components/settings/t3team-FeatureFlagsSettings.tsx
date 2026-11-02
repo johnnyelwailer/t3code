@@ -3,6 +3,7 @@ import { Navigate } from "@tanstack/react-router";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { SettingsPageContainer } from "./settingsLayout";
 import { FeatureFlagGroup } from "./t3team-FeatureFlagGroup";
+import { PressureThresholdSettings } from "./t3team-PressureThresholdSettings";
 import { groupFeatureFlags } from "./t3team-featureFlagsSettings.logic";
 import {
   useFeatureFlagsSettings,
@@ -44,7 +45,12 @@ export function FeatureFlagsSettings({
 }
 
 function FeatureFlagsSettingsPanel() {
-  return <FeatureFlagsSettings controller={useFeatureFlagsSettings()} />;
+  return (
+    <>
+      <FeatureFlagsSettings controller={useFeatureFlagsSettings()} />
+      <PressureThresholdSettings />
+    </>
+  );
 }
 
 export function FeatureFlagsSettingsPage() {
