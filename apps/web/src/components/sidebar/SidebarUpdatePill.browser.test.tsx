@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
-import { act, render } from "../../../test/render";
+import { act, render, stubGlobal } from "../../../test/render";
 import { toastManager } from "../ui/toast";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
 
@@ -147,8 +147,7 @@ describe("Nexi failed update check", () => {
     setup(state, { hasUpdates: true });
     const checkForUpdate = vi.fn().mockResolvedValue({ checked: false, state });
     const toast = vi.spyOn(toastManager, "add");
-    const previous = window.desktopBridge;
-    window.desktopBridge = { ...previous, checkForUpdate } as typeof previous;
+    using _bridge = stubGlobal("desktopBridge", { checkForUpdate });
     try {
       await using screen = await render(<SidebarUpdatePill />);
       const button = screen.getByRole("button", { name: /Could not check for updates/ });
@@ -159,7 +158,6 @@ describe("Nexi failed update check", () => {
       expect(document.querySelector('[role="alertdialog"]')).toBeNull();
       expect(toast).not.toHaveBeenCalled();
     } finally {
-      window.desktopBridge = previous;
       toast.mockRestore();
     }
   });
