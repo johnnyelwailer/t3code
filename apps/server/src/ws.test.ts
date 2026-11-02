@@ -701,6 +701,7 @@ it.effect.each(["pending", "cached"] as const)(
       const targets = [{ kind: "mdns" as const, host: "test.local" }];
       const responses = yield* Queue.unbounded<ServerConfigStreamEvent>();
       const configRpcServices = Layer.mergeAll(
+        layerUnusedConfigRpcServices,
         Layer.mock(ExternalLauncher.ExternalLauncher)({
           resolveAvailableEditors: () =>
             Deferred.succeed(discoveryStarted, undefined).pipe(

@@ -767,13 +767,15 @@ const make = Effect.gen(function* () {
   const watcherScope = yield* Scope.make("sequential");
   // t3team: the distribution's configured text-generation default sits on upstream's managed-policy
   // defaults; a policy that sets its own text-generation default keeps it.
+  const policyTextGeneration = managed.defaults.textGenerationModelSelection;
+  const builtInTextGeneration = DEFAULT_SERVER_SETTINGS.textGenerationModelSelection;
   const configuredDefaultServerSettings: ServerSettings = {
     ...managed.defaults,
     textGenerationModelSelection:
-      JSON.stringify(managed.defaults.textGenerationModelSelection) ===
-      JSON.stringify(DEFAULT_SERVER_SETTINGS.textGenerationModelSelection)
+      policyTextGeneration.instanceId === builtInTextGeneration.instanceId &&
+      policyTextGeneration.model === builtInTextGeneration.model
         ? getConfiguredDefaultModelSelection(DEFAULT_TEXT_GENERATION_MODEL)
-        : managed.defaults.textGenerationModelSelection,
+        : policyTextGeneration,
   };
   // Sparse-write defaults: the distribution-configured text-generation selection is stripped from
   // the persisted file (otherwise the user file would pin it and defeat the load-time policy).
