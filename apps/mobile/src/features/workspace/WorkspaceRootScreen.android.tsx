@@ -38,13 +38,19 @@ export function WorkspaceRootScreen() {
   const enabled = useEnabledNavigationTabs();
   const insets = useSafeAreaInsets();
   const { fabClearance, fabSize } = useAndroidControlSizing();
+  const extraTab = useWorkspaceExtraTab();
+  const { state, dispatch } = workspace;
+  const extraSelected = extraTabSelected(state, extraTab);
+  // The pane on show; while the extra tab is selected, `selectedTab` keeps its last stock value.
+  const pane: WorkspacePane = extraSelected ? EXTRA_WORKSPACE_TAB : state.selectedTab;
+  const tabs: readonly WorkspacePane[] = extraTab === null ? TABS : [...TABS, EXTRA_WORKSPACE_TAB];
   const context = {
     ...workspace,
     bottomClearance: layout.usesSplitView
       ? workspace.bottomClearance
       : floatingTabsEnabled
         ? insets.bottom + FLOATING_TABS.bottom + FLOATING_TABS.edge + fabSize
-        : workspace.state.selectedTab === "threads"
+        : pane === "threads"
           ? fabClearance + 16
           : 16,
   };
