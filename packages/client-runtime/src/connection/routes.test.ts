@@ -8,7 +8,7 @@ import {
   type ConnectionRoute,
 } from "./catalog.ts";
 import { pullRequestRoutingConnectionKey } from "./pullRequestRoutingPermissions.ts";
-import { BearerConnectionTarget, RelayConnectionTarget } from "./model.ts";
+import { BearerConnectionTarget, BrokerConnectionTarget, RelayConnectionTarget } from "./model.ts";
 import {
   connectionRouteId,
   connectionRouteKind,
@@ -92,6 +92,20 @@ describe("connection routes", () => {
   it("puts a newly paired route ahead of saved routes of the same kind", () => {
     const pasted = direct("lan-2", "http://192.168.1.11:3773/");
     expect(upsertRoute([LAN, TAILNET], pasted)).toEqual([pasted, LAN, TAILNET]);
+  });
+
+  it("queues a new cloud session's broker route behind the saved ones", () => {
+    const broker = (sessionId: string): ConnectionRoute => ({
+      target: new BrokerConnectionTarget({
+        environmentId: ENVIRONMENT_ID,
+        label: "Cloud",
+        sessionId,
+      }),
+      profile: Option.none(),
+    });
+    const ended = broker("run-ended");
+    const fresh = broker("run-new");
+    expect(upsertRoute([ended], fresh)).toEqual([ended, fresh]);
   });
 
   it("keeps a newly paired route behind a different kind of the same rank", () => {

@@ -566,6 +566,7 @@
     "packages/client-runtime/src/connection/registry.ts",
     "packages/client-runtime/src/connection/resolver.test.ts",
     "packages/client-runtime/src/connection/resolver.ts",
+    "packages/client-runtime/src/connection/routes.test.ts",
     "packages/client-runtime/src/connection/routes.ts",
     "packages/client-runtime/src/delayedStatus.test.ts",
     "packages/client-runtime/src/delayedStatus.ts",

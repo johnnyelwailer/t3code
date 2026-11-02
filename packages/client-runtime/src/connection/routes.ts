@@ -140,7 +140,11 @@ export function upsertRoute(
     ? routes.map((existing) => (connectionRouteId(existing.target) === id ? route : existing))
     : // A route paired at a new address, such as localhost beside a saved
       // 127.0.0.1, goes first among its kind so its fresh credential connects.
-      insertRoute(routes, route, { aheadOfSameKind: true });
+      // t3team: a cloud session's broker route queues behind the ended session's, which the
+      // distribution removes once the new one registers.
+      insertRoute(routes, route, {
+        aheadOfSameKind: route.target._tag !== "BrokerConnectionTarget",
+      });
 }
 
 export function findRouteToSameAddress(
