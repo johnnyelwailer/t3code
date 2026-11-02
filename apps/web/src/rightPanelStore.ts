@@ -215,6 +215,8 @@ interface RightPanelStoreState {
   activateSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
   /** Selects the host's pinned tab (`RightPanelTabs` `pinnedTab`): no surface is active, tabs stay. */
   activatePinned: (ref: ScopedThreadRef) => void;
+  /** Agent-driven activation. Not a user action, so it does not move keyboard focus. */
+  revealSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeOtherSurfaces: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeSurfacesToRight: (ref: ScopedThreadRef, surfaceId: string) => void;
@@ -536,6 +538,11 @@ const userActionOnThread = (
       }
     : {}),
 });
+
+const activated = (current: ThreadRightPanelState, surfaceId: string): ThreadRightPanelState =>
+  current.surfaces.some((surface) => surface.id === surfaceId)
+    ? { ...current, isOpen: true, activeSurfaceId: surfaceId }
+    : current;
 
 const closeAction = (
   state: RightPanelStoreState,
@@ -1069,11 +1076,11 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
         ),
       activateSurface: (ref, surfaceId) =>
         set((state) =>
-          userAction(state, scopedThreadKey(ref), (current) =>
-            current.surfaces.some((surface) => surface.id === surfaceId)
-              ? { ...current, isOpen: true, activeSurfaceId: surfaceId }
-              : current,
-          ),
+          userAction(state, scopedThreadKey(ref), (current) => activated(current, surfaceId)),
+        ),
+      revealSurface: (ref, surfaceId) =>
+        set((state) =>
+          automaticUpdate(state, scopedThreadKey(ref), (current) => activated(current, surfaceId)),
         ),
       activatePinned: (ref) =>
         set((state) =>
