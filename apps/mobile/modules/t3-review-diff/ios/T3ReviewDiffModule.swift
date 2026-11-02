@@ -73,6 +73,10 @@ public class T3ReviewDiffModule: Module {
         view.setBounces(bounces)
       }
 
+      Prop("imageUrisJson") { (view: T3ReviewDiffView, imageUrisJson: String) in
+        view.setImageUrisJson(imageUrisJson)
+      }
+
       Prop("refreshEnabled") { (view: T3ReviewDiffView, enabled: Bool) in
         view.setRefreshEnabled(enabled)
       }
@@ -88,6 +92,7 @@ public class T3ReviewDiffModule: Module {
         "onToggleViewedFile",
         "onPressLine",
         "onToggleComment",
+        "onPressImage",
         "onPullToRefresh"
       )
 

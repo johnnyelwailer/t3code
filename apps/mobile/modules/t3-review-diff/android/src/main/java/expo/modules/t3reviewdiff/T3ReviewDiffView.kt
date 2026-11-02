@@ -31,6 +31,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
   private val onToggleViewedFile by EventDispatcher()
   private val onPressLine by EventDispatcher()
   private val onToggleComment by EventDispatcher()
+  private val onPressImage by EventDispatcher()
   private var rows: List<DiffRow> = emptyList()
   private var visibleRows: List<DiffRow> = emptyList()
   private var visibleRowIndices = IntArray(0)
@@ -139,6 +140,10 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
     rebuildVisibleRows()
   }
 
+  fun setImageUrisJson(value: String) {
+    canvasView.images.setUris(parseImageUris(value))
+  }
+
   fun setAppearanceScheme(value: String) {
     canvasView.theme = DiffTheme.fallback(value)
   }
@@ -240,6 +245,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
 
   fun cleanup() {
     payloadDecodeExecutor.shutdownNow()
+    canvasView.images.release()
   }
 
   fun scrollToFile(fileId: String, animated: Boolean) {
@@ -426,6 +432,14 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
         }
       }
       "comment" -> onToggleComment(mapOf("commentId" to row.id))
+      "image" -> {
+        val side = when (target) {
+          RowTapTarget.IMAGE_OLD -> "old"
+          RowTapTarget.IMAGE_NEW -> "new"
+          else -> return
+        }
+        onPressImage(mapOf("fileId" to row.resolvedFileId, "side" to side))
+      }
       "line" -> {
         val payload = mutableMapOf<String, Any>(
           "rowId" to row.id,
@@ -498,7 +512,9 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
 
 private enum class RowTapTarget {
   ROW,
-  VIEWED_CHECKBOX
+  VIEWED_CHECKBOX,
+  IMAGE_OLD,
+  IMAGE_NEW
 }
 
 private enum class HorizontalPanKind {
@@ -528,7 +544,8 @@ internal data class DiffRow(
   val wordDiffRanges: List<DiffWordDiffRange>,
   val commentText: String,
   val commentRangeLabel: String,
-  val commentSectionTitle: String
+  val commentSectionTitle: String,
+  val imageSides: List<String> = emptyList()
 ) {
   val resolvedFileId: String get() = fileId.ifEmpty { id }
   val isPlainAscii: Boolean = content.all { it in ' '..'~' }
@@ -740,6 +757,13 @@ private class DiffCanvasView(context: Context) : View(context) {
 
       override fun onSingleTapUp(event: MotionEvent): Boolean {
         rowHitAt(event.y)?.let { hit ->
+          if (hit.row.kind == "image") {
+            when (imageSideAt(hit.row.imageSides, event.x, width, density)) {
+              "old" -> onRowTap?.invoke(hit.row, "tap", RowTapTarget.IMAGE_OLD)
+              "new" -> onRowTap?.invoke(hit.row, "tap", RowTapTarget.IMAGE_NEW)
+            }
+            return true
+          }
           val target = if (
             hit.row.kind == "file" &&
             drawing.fileHeaderCheckboxRect(
@@ -833,6 +857,7 @@ private class DiffCanvasView(context: Context) : View(context) {
       rebuildOffsets()
     }
   var onRowTap: ((DiffRow, String, RowTapTarget) -> Unit)? = null
+  val images = ReviewDiffImages(density) { invalidate() }
   var onVisibleRowsChanged: ((Int, Int) -> Unit)? = null
   var onContentHeightChanged: ((Int) -> Unit)? = null
   var onVerticalAnchorRestored: (() -> Unit)? = null
@@ -978,6 +1003,7 @@ private class DiffCanvasView(context: Context) : View(context) {
   private fun rowHeight(row: DiffRow): Int = when (row.kind) {
     "file" -> style.fileHeaderHeightPx.toInt()
     "notice" -> max((style.rowHeightPx * 2f).toInt(), (44 * density).toInt())
+    "image" -> (IMAGE_ROW_HEIGHT_DP * density).toInt()
     "comment" -> if (collapsedCommentIds.contains(row.id)) {
       (44 * density).toInt()
     } else {
@@ -1030,6 +1056,7 @@ private class DiffCanvasView(context: Context) : View(context) {
       "file" -> drawFileRow(canvas, row, top, bottom)
       "hunk" -> drawHunkRow(canvas, row, top, bottom)
       "notice" -> drawNoticeRow(canvas, row, top, bottom)
+      "image" -> drawImageRow(canvas, row, top, bottom)
       "comment" -> drawCommentRow(canvas, row, top, bottom)
       else -> drawLineRow(canvas, row, top, bottom)
     }
@@ -1179,6 +1206,19 @@ private class DiffCanvasView(context: Context) : View(context) {
         textPaint,
       )
     }
+  }
+
+  private fun drawImageRow(canvas: Canvas, row: DiffRow, top: Int, bottom: Int) {
+    fill(canvas, theme.background, 0f, top.toFloat(), width.toFloat(), bottom.toFloat())
+    drawing.configureUiPaint(
+      paint = textPaint,
+      color = theme.mutedText,
+      size = style.fileHeaderSubtextFontSizePx,
+      weight = style.fileHeaderSubtextFontWeight,
+    )
+    val bounds = RectF(0f, top.toFloat(), width.toFloat(), bottom.toFloat())
+    images.drawRow(canvas, row, bounds, theme, textPaint)
+    drawBottomBorder(canvas, bottom)
   }
 
   private fun drawNoticeRow(canvas: Canvas, row: DiffRow, top: Int, bottom: Int) {
@@ -1481,6 +1521,9 @@ private fun parseRows(value: String, isCancelled: () -> Boolean): List<DiffRow> 
         commentText = row.optString("commentText"),
         commentRangeLabel = row.optString("commentRangeLabel"),
         commentSectionTitle = row.optString("commentSectionTitle"),
+        imageSides = row.optJSONArray("imageSides")?.let { sides ->
+          List(sides.length()) { sides.optString(it) }
+        }.orEmpty(),
       )
     }
   } catch (_: Exception) {

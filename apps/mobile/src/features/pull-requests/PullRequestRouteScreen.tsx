@@ -41,6 +41,9 @@ import {
   pullRequestDiffInitialPosition,
 } from "./pullRequestDiffDebug";
 import { usePullRequestDiffHighlightFiles } from "./usePullRequestDiffHighlightFiles";
+import { usePullRequestDiffImages } from "./usePullRequestDiffImages";
+import { withPullRequestImageRows } from "./pullRequestDiffImages";
+import { FilePreviewModal } from "../../components/FilePreviewModal";
 import { isTestChangedFile } from "@t3tools/shared/changedFileKind";
 import { useFocusEffect, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -979,15 +982,17 @@ function PullRequestFileRouteContent({ route }: PullRequestFileRouteProps) {
   const activity = useEnvironmentQuery(composerPullRequests.activity(requestTarget(route.params)));
   const baseData = useMemo(() => getCachedNativeReviewDiffData({ parsedDiff: parsed }), [parsed]);
   const highlightFiles = usePullRequestDiffHighlightFiles(route.params, parsed, baseData.files);
+  const diffImages = usePullRequestDiffImages(route.params, parsed);
   const data = useMemo(
     () =>
       annotatePullRequestDiff(
-        { ...baseData, files: highlightFiles },
+        withPullRequestImageRows({ ...baseData, files: highlightFiles }, diffImages.images),
         staleDiff || commit ? [] : (activity.data?.reviewThreads ?? []),
         commit ? [] : reviewDraft.draft.comments,
         diffHead.sha ?? undefined,
       ),
     [
+      diffImages.images,
       baseData,
       highlightFiles,
       staleDiff,
@@ -1343,6 +1348,8 @@ function PullRequestFileRouteContent({ route }: PullRequestFileRouteProps) {
                 }
               }}
               onToggleFile={onToggleFile}
+              imageUrisJson={diffImages.imageUrisJson}
+              onPressImage={diffImages.onPressImage}
               onVisibleFileChange={(event) => setVisibleFileId(event.nativeEvent.fileId ?? null)}
               appearanceScheme={themeAppearance}
               rowHeight={nativeReviewDiffStyle.rowHeight}
@@ -1394,6 +1401,7 @@ function PullRequestFileRouteContent({ route }: PullRequestFileRouteProps) {
         onOpenFiles={() => navigation.navigate("PullRequestFiles", route.params)}
         onHeightChange={setToolbarHeight}
       />
+      <FilePreviewModal source={diffImages.preview} onRequestClose={diffImages.closePreview} />
     </View>
   );
 }

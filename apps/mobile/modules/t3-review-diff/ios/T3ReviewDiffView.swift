@@ -19,6 +19,7 @@ private struct ReviewDiffNativeRow: Decodable, Sendable {
   let commentText: String?
   let commentRangeLabel: String?
   let commentSectionTitle: String?
+  let imageSides: [String]?
 }
 
 private struct ReviewDiffNativeWordDiffRange: Decodable, Sendable {
@@ -348,6 +349,7 @@ public final class T3ReviewDiffView: ExpoView, UIScrollViewDelegate {
   let onToggleViewedFile = EventDispatcher()
   let onPressLine = EventDispatcher()
   let onToggleComment = EventDispatcher()
+  let onPressImage = EventDispatcher()
   let onPullToRefresh = EventDispatcher()
 
   private let pullRefreshControl = UIRefreshControl()
@@ -380,6 +382,9 @@ public final class T3ReviewDiffView: ExpoView, UIScrollViewDelegate {
     }
     contentView.onToggleComment = { [weak self] commentId in
       self?.onToggleComment(["commentId": commentId])
+    }
+    contentView.onPressImage = { [weak self] fileId, side in
+      self?.onPressImage(["fileId": fileId, "side": side])
     }
     contentView.onDrawMetrics = { [weak self] metrics in
       self?.emitDebug("draw-metrics", metrics)
@@ -649,6 +654,10 @@ public final class T3ReviewDiffView: ExpoView, UIScrollViewDelegate {
 
   func setSelectedRowIdsJson(_ selectedRowIdsJson: String) {
     contentView.selectedRowIds = decodeFileIdSet(selectedRowIdsJson)
+  }
+
+  func setImageUrisJson(_ imageUrisJson: String) {
+    contentView.imageUris = decodeReviewDiffImageUris(imageUrisJson)
   }
 
   func setCollapsedCommentIdsJson(_ collapsedCommentIdsJson: String) {
@@ -1038,6 +1047,7 @@ private struct ReviewDiffGeometryConfiguration: Equatable {
     if row.kind == "file" { return style.fileHeaderHeight }
     if collapsedFileIds.contains(row.resolvedFileId) { return 0 }
     if row.kind == "notice" { return max(style.rowHeight * 2, 44) }
+    if row.kind == "image" { return reviewDiffImageRowHeight }
     if row.kind == "comment" { return collapsedCommentIds.contains(row.id) ? 44 : 124 }
     return style.rowHeight
   }
@@ -1194,7 +1204,12 @@ private final class ReviewDiffContentView: UIView, UIGestureRecognizerDelegate {
   var onToggleViewedFile: ((String) -> Void)?
   var onPressLine: (([String: Any]) -> Void)?
   var onToggleComment: ((String) -> Void)?
+  var onPressImage: ((String, String) -> Void)?
   var onDrawMetrics: (([String: Any]) -> Void)?
+  var imageUris: [String: [String: String]] = [:] {
+    didSet { setNeedsDisplay() }
+  }
+  private lazy var imageLoader = ReviewDiffImageLoader { [weak self] in self?.setNeedsDisplay() }
 
   private var stickyWidth: CGFloat {
     style.changeBarWidth + style.gutterWidth
@@ -1537,6 +1552,13 @@ private final class ReviewDiffContentView: UIView, UIGestureRecognizerDelegate {
 
     if row.kind == "line" {
       onPressLine?(linePressPayload(for: row, gesture: "tap"))
+      return
+    }
+
+    if row.kind == "image" {
+      if let side = reviewDiffImageSide(sides: row.imageSides ?? [], x: point.x, width: viewportWidth) {
+        onPressImage?(resolvedFileId(for: row), side)
+      }
       return
     }
 
@@ -2101,6 +2123,8 @@ private final class ReviewDiffContentView: UIView, UIGestureRecognizerDelegate {
       drawHunkRow(row, rect: fullRect, context: context)
     case "notice":
       drawNoticeRow(row, rect: fullRect, context: context)
+    case "image":
+      drawImageRow(row, rect: fullRect, context: context)
     case "comment":
       drawCommentRow(row, rect: fullRect, context: context)
     default:
@@ -2173,6 +2197,31 @@ private final class ReviewDiffContentView: UIView, UIGestureRecognizerDelegate {
       horizontalOffset: pathOffset
     )
     drawFileHeaderPathScrollFade(row, pathRect: pathLayout.rect, horizontalOffset: pathOffset, context: context)
+  }
+
+  private func drawImageRow(_ row: ReviewDiffNativeRow, rect: CGRect, context: CGContext) {
+    guard !collapsedFileIds.contains(resolvedFileId(for: row)) else {
+      return
+    }
+
+    theme.background.setFill()
+    context.fill(rect)
+    let panels = reviewDiffImagePanels(
+      sides: row.imageSides ?? [],
+      rect: CGRect(x: 0, y: rect.minY, width: viewportWidth, height: rect.height)
+    )
+    let uris = imageUris[row.id]
+    drawReviewDiffImageRow(
+      panels: panels,
+      states: panels.map { imageLoader.state(for: uris?[$0.side]) },
+      colors: ReviewDiffImageRowColors(
+        panel: theme.hunkBackground,
+        mutedText: theme.mutedText,
+        beforeText: theme.deleteText,
+        afterText: theme.addText
+      ),
+      font: fileHeaderSubtextFont
+    )
   }
 
   private func drawNoticeRow(_ row: ReviewDiffNativeRow, rect: CGRect, context: CGContext) {

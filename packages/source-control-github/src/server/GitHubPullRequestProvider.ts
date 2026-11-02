@@ -613,6 +613,8 @@ export const make = Effect.gen(function* () {
 
     getDiffFileContents: (input) =>
       cli.getPullRequestDiffFileContents(input).pipe(Effect.mapError(fail("getDiffFileContents"))),
+    getDiffFileBytes: (input) =>
+      cli.getPullRequestDiffFileBytes(input).pipe(Effect.mapError(fail("getDiffFileBytes"))),
 
     readFileAtRevision: (input) =>
       cli.readFileAtRevision(input).pipe(Effect.mapError(fail("readFileAtRevision"))),

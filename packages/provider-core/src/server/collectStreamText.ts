@@ -9,6 +9,11 @@ export interface CollectedUint8StreamText {
   readonly invalidUtf8: boolean;
 }
 
+export interface CollectedUint8StreamBytes {
+  readonly data: Uint8Array;
+  readonly truncated: boolean;
+}
+
 export const decodeUtf8 = (
   bytes: Uint8Array,
 ): Pick<CollectedUint8StreamText, "text" | "invalidUtf8"> => ({
@@ -22,13 +27,11 @@ interface CollectState {
   readonly truncated: boolean;
 }
 
-export const collectUint8StreamText = <E>(input: {
+export const collectUint8StreamBytes = <E>(input: {
   readonly stream: Stream.Stream<Uint8Array, E>;
   readonly maxBytes?: number | undefined;
-  readonly truncatedMarker?: string | null | undefined;
-}): Effect.Effect<CollectedUint8StreamText, E> => {
+}): Effect.Effect<CollectedUint8StreamBytes, E> => {
   const maxBytes = input.maxBytes ?? Number.POSITIVE_INFINITY;
-  const truncatedMarker = input.truncatedMarker ?? "";
 
   return input.stream.pipe(
     Stream.runFold(
@@ -64,15 +67,30 @@ export const collectUint8StreamText = <E>(input: {
         };
       },
     ),
-    Effect.map((state): CollectedUint8StreamText => {
-      const decoded = decodeUtf8(Buffer.concat(state.chunks, state.bytes));
+    Effect.map((state): CollectedUint8StreamBytes => ({
+      data: Buffer.concat(state.chunks, state.bytes),
+      truncated: state.truncated,
+    })),
+  );
+};
+
+export const collectUint8StreamText = <E>(input: {
+  readonly stream: Stream.Stream<Uint8Array, E>;
+  readonly maxBytes?: number | undefined;
+  readonly truncatedMarker?: string | null | undefined;
+}): Effect.Effect<CollectedUint8StreamText, E> => {
+  const truncatedMarker = input.truncatedMarker ?? "";
+
+  return collectUint8StreamBytes(input).pipe(
+    Effect.map((collected): CollectedUint8StreamText => {
+      const decoded = decodeUtf8(collected.data);
       return {
         text:
-          state.truncated && truncatedMarker.length > 0
+          collected.truncated && truncatedMarker.length > 0
             ? `${decoded.text}${truncatedMarker}`
             : decoded.text,
-        bytes: state.bytes,
-        truncated: state.truncated,
+        bytes: collected.data.byteLength,
+        truncated: collected.truncated,
         invalidUtf8: decoded.invalidUtf8,
       };
     }),

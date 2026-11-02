@@ -454,6 +454,23 @@ export interface PullRequestProviderApi {
   ) => Effect.Effect<ProviderDiffFileContents, PullRequestProviderError>;
 
   /**
+   * One side of a changed file as raw bytes, for files a text diff cannot show, such as images.
+   * Null when that side does not exist (the old side of a new file). Optional: a host without it
+   * shows no preview.
+   */
+  readonly getDiffFileBytes?: (
+    input: ProviderRepositoryRef & {
+      readonly number: number;
+      readonly commit?: string | undefined;
+      readonly changeType: "change" | "rename-pure" | "rename-changed" | "new" | "deleted";
+      readonly oldPath: string;
+      readonly newPath: string;
+      readonly side: "old" | "new";
+      readonly maxBytes: number;
+    },
+  ) => Effect.Effect<Uint8Array | null, PullRequestProviderError>;
+
+  /**
    * t3team: one file at one commit sha, for any path rather than only the ones the diff carries.
    * Null is "nothing readable there" (absent at that commit, a directory, a symlink). Optional:
    * a host that cannot read a file at a revision omits it, and the service refuses typed.

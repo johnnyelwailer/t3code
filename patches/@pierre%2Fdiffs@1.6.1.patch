@@ -695,7 +695,7 @@ index 0000000000..29370adf88
 +
 +//# sourceMappingURL=CodeViewSearch.js.map
 diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
-index 12f4f8949f..e33a5ed319 100644
+index 12f4f8949f..7a4dfd57d3 100644
 --- a/dist/components/FileDiff.js
 +++ b/dist/components/FileDiff.js
 @@ -1,6 +1,7 @@
@@ -716,9 +716,11 @@ index 12f4f8949f..e33a5ed319 100644
  		const { disableErrorHandling = false, disableFileHeader = false } = this.options;
  		if (disableFileHeader) {
  			if (this.headerElement != null) {
-@@ -740,11 +741,22 @@ var FileDiff = class {
+@@ -739,12 +740,24 @@ var FileDiff = class {
+ 		if (collapsed) {
  			this.removeRenderedCode();
  			this.clearAuxiliaryNodes();
++			this.syncEmptyBodySlot(fileContainer, false);
  			try {
 -				const hunksResult = this.hunksRenderer.renderDiff(workingDiff, EMPTY_RENDER_RANGE);
 -				if (hunksResult != null) this.applyThemeState(fileContainer, hunksResult.themeStyles, themeType, hunksResult.baseThemeType);
@@ -743,6 +745,43 @@ index 12f4f8949f..e33a5ed319 100644
  				this.injectUnsafeCSS();
  			} catch (error) {
  				if (disableErrorHandling) throw error;
+@@ -774,6 +787,7 @@ var FileDiff = class {
+ 					this.pre.remove();
+ 					this.pre = void 0;
+ 				}
++				this.syncEmptyBodySlot(fileContainer, this.pre == null);
+ 				this.renderSeparators(hunksResult.hunkData);
+ 				this.adoptRenderData(hunksResult.fileDiff);
+ 			} else {
+@@ -1286,6 +1300,8 @@ var FileDiff = class {
+ 		this.headerMetadata?.remove();
+ 		this.headerCustom?.remove();
+ 		this.pre?.remove();
++		this.emptyBodySlot?.remove();
++		this.emptyBodySlot = void 0;
+ 		this.spriteSVG?.remove();
+ 		this.themeCSSStyle?.remove();
+ 		this.unsafeCSSStyle?.remove();
+@@ -1435,6 +1451,19 @@ var FileDiff = class {
+ 		}
+ 		if (this.spriteSVG != null && this.spriteSVG.parentNode !== shadowRoot) shadowRoot.appendChild(this.spriteSVG);
+ 	}
++	syncEmptyBodySlot(container, visible) {
++		if (!visible) {
++			this.emptyBodySlot?.remove();
++			this.emptyBodySlot = void 0;
++			return;
++		}
++		const shadowRoot = container.shadowRoot ?? container.attachShadow({ mode: "open" });
++		if (this.emptyBodySlot == null) {
++			this.emptyBodySlot = document.createElement("slot");
++			this.emptyBodySlot.name = "empty-diff-body";
++		}
++		if (this.emptyBodySlot.parentNode !== shadowRoot) shadowRoot.appendChild(this.emptyBodySlot);
++	}
+ 	getOrCreatePreNode(container) {
+ 		const shadowRoot = container.shadowRoot ?? container.attachShadow({ mode: "open" });
+ 		if (this.pre == null) {
 diff --git a/dist/components/VirtualizedFile.d.ts b/dist/components/VirtualizedFile.d.ts
 index 90ef575932..0fd262cbb7 100644
 --- a/dist/components/VirtualizedFile.d.ts
@@ -964,10 +1003,10 @@ index 9724cb1e34..14145d8329 100644
  	}
  	applyAnnotationUpdates(annotationUpdates) {
 diff --git a/dist/react/CodeView.d.ts b/dist/react/CodeView.d.ts
-index 12e12c50cd..684c7a89fa 100644
+index 12e12c50cd..9762af0df4 100644
 --- a/dist/react/CodeView.d.ts
 +++ b/dist/react/CodeView.d.ts
-@@ -57,6 +57,8 @@ interface CodeViewBaseProps<LAnnotation, Caret> {
+@@ -57,10 +57,14 @@ interface CodeViewBaseProps<LAnnotation, Caret> {
     * is frozen; re-key the accepted value in place before accepting.
     */
    onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation, Caret>;
@@ -976,8 +1015,14 @@ index 12e12c50cd..684c7a89fa 100644
    renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
    renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
    renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
+   renderHeaderMetadata?(item: CodeViewItem<LAnnotation>): ReactNode;
++  /** Shown in place of the code of a diff item that has no lines, such as a binary file's. */
++  renderEmptyDiffBody?(item: CodeViewItem<LAnnotation>): ReactNode;
+   renderAnnotation?(...args: CodeViewAnnotationArgs<LAnnotation>): ReactNode;
+   renderGutterUtility?(getHoveredLine: CodeViewGutterUtilityGetter, item: CodeViewItem<LAnnotation>): ReactNode;
+ }
 diff --git a/dist/react/CodeView.js b/dist/react/CodeView.js
-index 4dfed6bd0a..ac35a5a455 100644
+index 4dfed6bd0a..54a734a156 100644
 --- a/dist/react/CodeView.js
 +++ b/dist/react/CodeView.js
 @@ -24,7 +24,7 @@ function createDefaultCache(controlled) {
@@ -985,10 +1030,19 @@ index 4dfed6bd0a..ac35a5a455 100644
  }
  function CodeViewInner(props, ref) {
 -	const { className, containerRef, disableWorkerPool = false, editorOptions, getEditStateKey, initialItems, items: controlledItems, onItemEditChange, onItemEditComplete, onScroll, onSelectedLinesChange, options, renderAnnotation, renderCodeViewFooter, renderCodeViewHeader, renderCustomHeader, renderGutterUtility, renderHeaderFilenameSuffix, renderHeaderMetadata, renderHeaderPrefix, selectedLines, style } = props;
-+	const { className, containerRef, disableWorkerPool = false, editorOptions, getEditStateKey, initialItems, items: controlledItems, onItemEditChange, onItemEditComplete, onRevealSearchMatch, onScroll, onSelectedLinesChange, options, renderAnnotation, renderCodeViewFooter, renderCodeViewHeader, renderCustomHeader, renderGutterUtility, renderHeaderFilenameSuffix, renderHeaderMetadata, renderHeaderPrefix, selectedLines, style } = props;
++	const { className, containerRef, disableWorkerPool = false, editorOptions, getEditStateKey, initialItems, items: controlledItems, onItemEditChange, onItemEditComplete, onRevealSearchMatch, onScroll, onSelectedLinesChange, options, renderAnnotation, renderCodeViewFooter, renderCodeViewHeader, renderCustomHeader, renderEmptyDiffBody, renderGutterUtility, renderHeaderFilenameSuffix, renderHeaderMetadata, renderHeaderPrefix, selectedLines, style } = props;
  	const controlled = controlledItems !== void 0;
  	const contextCreateEditor = useCreateEditor();
  	const poolManager = useContext(WorkerPoolContext);
+@@ -33,7 +33,7 @@ function CodeViewInner(props, ref) {
+ 	const hasAnnotationRenderer = renderAnnotation != null;
+ 	const hasGutterRenderer = renderGutterUtility != null;
+ 	const hasHeaderRenderers = hasCustomHeader || renderHeaderPrefix != null || renderHeaderFilenameSuffix != null || renderHeaderMetadata != null;
+-	const hasRenderers = hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer;
++	const hasRenderers = hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer || renderEmptyDiffBody != null;
+ 	const hasCodeViewHeader = renderCodeViewHeader != null;
+ 	const hasCodeViewFooter = renderCodeViewFooter != null;
+ 	const emitSelectedLinesChange = useStableCallback((selection) => {
 @@ -52,6 +52,9 @@ function CodeViewInner(props, ref) {
  		onItemEditChange?.(event, item);
  	});
@@ -1024,7 +1078,15 @@ index 4dfed6bd0a..ac35a5a455 100644
  		onSelectedLinesChange,
  		options
  	]);
-@@ -302,7 +308,7 @@ function createSlotContentStore() {
+@@ -260,6 +266,7 @@ function CodeViewInner(props, ref) {
+ 		renderHeaderPrefix,
+ 		renderHeaderFilenameSuffix,
+ 		renderHeaderMetadata,
++		renderEmptyDiffBody,
+ 		renderAnnotation,
+ 		renderGutterUtility,
+ 		renderCodeViewHeader,
+@@ -302,7 +309,7 @@ function createSlotContentStore() {
  		}
  	};
  }
@@ -1033,7 +1095,7 @@ index 4dfed6bd0a..ac35a5a455 100644
  	const managedOptions = {
  		...options,
  		controlledSelection,
-@@ -312,6 +318,7 @@ function createManagedCodeViewOptions({ options, hasCustomHeader, hasGutterRende
+@@ -312,13 +319,14 @@ function createManagedCodeViewOptions({ options, hasCustomHeader, hasGutterRende
  	if (getEditStateKey != null) managedOptions.getEditStateKey = getEditStateKey;
  	if (onItemEditChange != null) managedOptions.onItemEditChange = onItemEditChange;
  	if (onItemEditComplete != null) managedOptions.onItemEditComplete = onItemEditComplete;
@@ -1041,6 +1103,98 @@ index 4dfed6bd0a..ac35a5a455 100644
  	if (hasCustomHeader) managedOptions.renderCustomHeader = noopRender;
  	if (hasGutterRenderer) managedOptions.renderGutterUtility = noopRender;
  	if (hasCodeViewHeader) managedOptions.renderCodeViewHeader = noopRender;
+ 	if (hasCodeViewFooter) managedOptions.renderCodeViewFooter = noopRender;
+ 	return managedOptions;
+ }
+-const SlotPortals = memo(function SlotPortals({ managedContentStore, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderAnnotation, renderGutterUtility, renderCodeViewHeader, renderCodeViewFooter }) {
++const SlotPortals = memo(function SlotPortals({ managedContentStore, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderEmptyDiffBody, renderAnnotation, renderGutterUtility, renderCodeViewHeader, renderCodeViewFooter }) {
+ 	"use no memo";
+ 	const subscribe = useStableCallback((listener) => managedContentStore.subscribe(listener));
+ 	const getSnapshot = useStableCallback(() => managedContentStore.getSnapshot());
+@@ -329,6 +337,7 @@ const SlotPortals = memo(function SlotPortals({ managedContentStore, renderCusto
+ 			renderHeaderPrefix,
+ 			renderHeaderFilenameSuffix,
+ 			renderHeaderMetadata,
++			renderEmptyDiffBody,
+ 			renderAnnotation,
+ 			renderGutterUtility
+ 		};
+@@ -352,6 +361,7 @@ const SlotPortals = memo(function SlotPortals({ managedContentStore, renderCusto
+ 		renderHeaderPrefix,
+ 		renderHeaderFilenameSuffix,
+ 		renderHeaderMetadata,
++		renderEmptyDiffBody,
+ 		renderAnnotation,
+ 		renderGutterUtility,
+ 		snapshot?.items
+@@ -368,13 +378,14 @@ const SlotPortals = memo(function SlotPortals({ managedContentStore, renderCusto
+ 		renderedFooter
+ 	] });
+ });
+-const DiffItemSlots = memo(function DiffItemSlots({ item, fileDiff, lineAnnotations, getHoveredLine, getAnnotationSlotName, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderAnnotation, renderGutterUtility }) {
++const DiffItemSlots = memo(function DiffItemSlots({ item, fileDiff, lineAnnotations, getHoveredLine, getAnnotationSlotName, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderEmptyDiffBody, renderAnnotation, renderGutterUtility }) {
+ 	return renderDiffChildren({
+ 		fileDiff,
+ 		renderCustomHeader: renderCustomHeader != null ? () => renderCustomHeader(item) : void 0,
+ 		renderHeaderPrefix: renderHeaderPrefix != null ? () => renderHeaderPrefix(item) : void 0,
+ 		renderHeaderFilenameSuffix: renderHeaderFilenameSuffix != null ? () => renderHeaderFilenameSuffix(item) : void 0,
+ 		renderHeaderMetadata: renderHeaderMetadata != null ? () => renderHeaderMetadata(item) : void 0,
++		renderEmptyDiffBody: renderEmptyDiffBody != null ? () => renderEmptyDiffBody(item) : void 0,
+ 		renderAnnotation: renderAnnotation != null ? (annotation, fileDiff) => renderAnnotation(annotation, fileDiff, item) : void 0,
+ 		lineAnnotations,
+ 		renderGutterUtility: renderGutterUtility != null ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item) : void 0,
+diff --git a/dist/react/utils/renderDiffChildren.d.ts b/dist/react/utils/renderDiffChildren.d.ts
+index 1bab7dc924..54f4367961 100644
+--- a/dist/react/utils/renderDiffChildren.d.ts
++++ b/dist/react/utils/renderDiffChildren.d.ts
+@@ -11,6 +11,8 @@ interface RenderDiffChildrenProps<LAnnotation, Caret, T> {
+   renderHeaderPrefix: DiffBasePropsReact<LAnnotation, Caret>['renderHeaderPrefix'];
+   renderHeaderFilenameSuffix?: DiffBasePropsReact<LAnnotation, Caret>['renderHeaderFilenameSuffix'];
+   renderHeaderMetadata: DiffBasePropsReact<LAnnotation, Caret>['renderHeaderMetadata'];
++  /** Shown in place of the code when the diff has no lines, such as a binary file's. */
++  renderEmptyDiffBody?(fileDiff: FileDiffMetadata): ReactNode;
+   renderAnnotation: DiffBasePropsReact<LAnnotation, Caret>['renderAnnotation'];
+   renderGutterUtility: DiffBasePropsReact<LAnnotation, Caret>['renderGutterUtility'];
+   renderMergeConflictUtility?(action: MergeConflictDiffAction, getInstance: () => T | undefined): ReactNode;
+@@ -19,7 +21,7 @@ interface RenderDiffChildrenProps<LAnnotation, Caret, T> {
+   getInstance?(): T | undefined;
+   getAnnotationSlotName?(annotation: DiffLineAnnotation<LAnnotation>): string;
+ }
+-declare function renderDiffChildren<LAnnotation, Caret, T>({ fileDiff, actions, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderAnnotation, renderGutterUtility, renderMergeConflictUtility, lineAnnotations, getHoveredLine, getInstance, getAnnotationSlotName }: RenderDiffChildrenProps<LAnnotation, Caret, T>): ReactNode;
++declare function renderDiffChildren<LAnnotation, Caret, T>({ fileDiff, actions, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderEmptyDiffBody, renderAnnotation, renderGutterUtility, renderMergeConflictUtility, lineAnnotations, getHoveredLine, getInstance, getAnnotationSlotName }: RenderDiffChildrenProps<LAnnotation, Caret, T>): ReactNode;
+ //#endregion
+ export { renderDiffChildren };
+ //# sourceMappingURL=renderDiffChildren.d.ts.map
+\ No newline at end of file
+diff --git a/dist/react/utils/renderDiffChildren.js b/dist/react/utils/renderDiffChildren.js
+index 69e852ee5c..727f5a7e75 100644
+--- a/dist/react/utils/renderDiffChildren.js
++++ b/dist/react/utils/renderDiffChildren.js
+@@ -5,11 +5,12 @@ import { getMergeConflictActionAnchor } from "../../utils/parseMergeConflictDiff
+ import { GutterUtilitySlotStyles, MergeConflictSlotStyles } from "../constants.js";
+ import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+ //#region src/react/utils/renderDiffChildren.tsx
+-function renderDiffChildren({ fileDiff, actions, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderAnnotation, renderGutterUtility, renderMergeConflictUtility, lineAnnotations, getHoveredLine, getInstance, getAnnotationSlotName = getLineAnnotationName }) {
++function renderDiffChildren({ fileDiff, actions, renderCustomHeader, renderHeaderPrefix, renderHeaderFilenameSuffix, renderHeaderMetadata, renderEmptyDiffBody, renderAnnotation, renderGutterUtility, renderMergeConflictUtility, lineAnnotations, getHoveredLine, getInstance, getAnnotationSlotName = getLineAnnotationName }) {
+ 	const customHeader = renderCustomHeader?.(fileDiff);
+ 	const prefix = renderHeaderPrefix?.(fileDiff);
+ 	const suffix = renderHeaderFilenameSuffix?.(fileDiff);
+ 	const metadata = renderHeaderMetadata?.(fileDiff);
++	const emptyBody = fileDiff.hunks.length === 0 ? renderEmptyDiffBody?.(fileDiff) : void 0;
+ 	return /* @__PURE__ */ jsxs(Fragment, { children: [
+ 		customHeader != null ? /* @__PURE__ */ jsx("div", {
+ 			slot: CUSTOM_HEADER_SLOT_ID,
+@@ -28,6 +29,10 @@ function renderDiffChildren({ fileDiff, actions, renderCustomHeader, renderHeade
+ 				children: metadata
+ 			})
+ 		] }),
++		emptyBody != null && /* @__PURE__ */ jsx("div", {
++			slot: "empty-diff-body",
++			children: emptyBody
++		}),
+ 		renderAnnotation != null && lineAnnotations?.map((annotation, index) => /* @__PURE__ */ jsx("div", {
+ 			slot: getAnnotationSlotName(annotation),
+ 			children: renderAnnotation(annotation, fileDiff)
 diff --git a/dist/utils/createFileHeaderElement.js b/dist/utils/createFileHeaderElement.js
 index 39fe30e47b..600442e3eb 100644
 --- a/dist/utils/createFileHeaderElement.js

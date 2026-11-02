@@ -342,6 +342,8 @@ export const make = Effect.gen(function* () {
 
     getDiffFileContents: (input) =>
       cli.getMergeRequestDiffFileContents(input).pipe(Effect.mapError(fail("getDiffFileContents"))),
+    getDiffFileBytes: (input) =>
+      cli.getMergeRequestDiffFileBytes(input).pipe(Effect.mapError(fail("getDiffFileBytes"))),
 
     readFileAtRevision: (input) =>
       cli.readFileAtRevision(input).pipe(Effect.mapError(fail("readFileAtRevision"))),

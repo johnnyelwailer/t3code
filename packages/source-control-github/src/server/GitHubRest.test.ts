@@ -168,6 +168,23 @@ describe("GitHubRest", () => {
     }).pipe(Effect.provide(layer));
   });
 
+  it.effect("keeps a binary body undecoded for a bytes read, and decodes its errors", () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe]);
+    let call = 0;
+    const { layer } = harness(() =>
+      ++call === 1 ? new Response(png) : json({ message: "Not Found" }, { status: 422 }),
+    );
+    return Effect.gen(function* () {
+      const api = yield* GitHubRest.GitHubRest;
+      const read = { host: "github.com", operation: "raw", path: "repos/acme/web/contents/a.png" };
+      const answer = yield* api.rest({ ...read, responseType: "bytes" });
+      expect(Buffer.from(answer.bytes ?? [])).toEqual(Buffer.from(png));
+      expect(answer.body).toBe("");
+      const error = yield* Effect.flip(api.rest({ ...read, responseType: "bytes" }));
+      expect(error).toMatchObject({ status: 422, githubErrors: ["Not Found"] });
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("maps REST 403 with an exhausted quota to a rate limit, and 304 to an answer", () => {
     let call = 0;
     const { layer } = harness(() =>

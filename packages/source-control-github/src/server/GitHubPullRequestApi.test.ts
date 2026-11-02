@@ -2948,6 +2948,33 @@ layer("GitHubPullRequestApi.layer", (it) => {
     }),
   );
 
+  it.effect("reads one side of a changed binary file as bytes at its revision", () =>
+    Effect.gen(function* () {
+      const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00]);
+      mockedExecute.mockReturnValueOnce(Effect.succeed(output(pullRequestRefs)));
+      mockedExecute.mockReturnValueOnce(Effect.succeed({ ...output(""), bytes: png }));
+      const cli = yield* GitHubPullRequestApi.GitHubPullRequestApi;
+      const read = (side: "old" | "new") =>
+        cli.getPullRequestDiffFileBytes({
+          cwd: "/w",
+          repository: "acme/web",
+          host: "github.com",
+          number: 7,
+          changeType: "new",
+          oldPath: "assets/logo.png",
+          newPath: "assets/logo.png",
+          side,
+          maxBytes: 1024,
+        });
+
+      expect(yield* read("new")).toEqual(png);
+      expect(yield* read("old")).toBeNull();
+      expect(restCallsTo("/contents/")).toMatchObject([
+        { path: "repos/acme/web/contents/assets/logo.png?ref=b1c2d3e", responseType: "bytes" },
+      ]);
+    }),
+  );
+
   it.effect("returns valid text containing a literal replacement character", () =>
     Effect.gen(function* () {
       mockedExecute.mockReturnValueOnce(Effect.succeed(output(pullRequestRefs)));

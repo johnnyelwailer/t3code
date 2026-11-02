@@ -6,6 +6,7 @@ import {
   PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES,
 } from "./chatAttachment.ts";
 import { ProjectFaviconPath } from "./project.ts";
+import { PullRequestDiffFileContentsInput } from "./pullRequest.ts";
 import { ToolActivityNativeAppReference } from "./providerRuntime.ts";
 
 const ASSET_PATH_MAX_LENGTH = 1024;
@@ -15,6 +16,16 @@ const ASSET_PATH_MAX_LENGTH = 1024;
  * it first, and servers and clients of different releases must keep understanding each other.
  */
 export const SOURCE_CONTROL_MEDIA_ASSET = "github-media" as const;
+
+export const CHANGE_REQUEST_FILE_ASSET = "change-request-file";
+
+// One side of a file a change request changes, read from its host, for files a text diff cannot
+// show. The server serves only files the change request touches.
+export const ChangeRequestFileAssetResource = Schema.TaggedStruct(CHANGE_REQUEST_FILE_ASSET, {
+  ...PullRequestDiffFileContentsInput.fields,
+  side: Schema.Literals(["old", "new"]),
+});
+export type ChangeRequestFileAssetResource = typeof ChangeRequestFileAssetResource.Type;
 
 export const AssetResource = Schema.Union([
   Schema.TaggedStruct("workspace-file", {
@@ -58,6 +69,7 @@ export const AssetResource = Schema.Union([
     cwd: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
     url: TrimmedNonEmptyString.check(Schema.isMaxLength(2048)),
   }),
+  ChangeRequestFileAssetResource,
 ]);
 export type AssetResource = typeof AssetResource.Type;
 

@@ -355,6 +355,10 @@
       "types": "./src/previewViewport.ts",
       "import": "./src/previewViewport.ts"
     },
+    "./diffImage": {
+      "types": "./src/diffImage.ts",
+      "import": "./src/diffImage.ts"
+    },
     "./mediaPreview": {
       "types": "./src/mediaPreview.ts",
       "import": "./src/mediaPreview.ts"

@@ -553,6 +553,20 @@ export class GitHubPullRequestApi extends Context.Service<
       GitHubPullRequestApiError
     >;
 
+    /** One side of a changed file, undecoded. Null when that side does not exist. */
+    readonly getPullRequestDiffFileBytes: (input: {
+      readonly cwd: string;
+      readonly repository: string;
+      readonly host: string;
+      readonly number: number;
+      readonly commit?: string | undefined;
+      readonly changeType: "change" | "rename-pure" | "rename-changed" | "new" | "deleted";
+      readonly oldPath: string;
+      readonly newPath: string;
+      readonly side: "old" | "new";
+      readonly maxBytes: number;
+    }) => Effect.Effect<Uint8Array | null, GitHubPullRequestApiError>;
+
     /** t3team: one file at one commit sha, whether or not the pull request touches it. */
     readonly readFileAtRevision: (
       input: FileAtRevisionRequest,
@@ -1289,72 +1303,86 @@ export const make = Effect.gen(function* () {
   };
 
   const diffFileGate = Semaphore.makeUnsafe(DIFF_FILE_CONCURRENCY);
+  const resolveDiffFileRevisions = Effect.fn("GitHubPullRequestApi.resolveDiffFileRevisions")(
+    function* (
+      input: Parameters<GitHubPullRequestApi["Service"]["getPullRequestDiffFileContents"]>[0],
+      operation: string,
+      readsOldSide = true,
+    ) {
+      if (input.commit !== undefined && !isCommitSha(input.commit)) {
+        return yield* new GitHubDiffCommitError({ cwd: input.cwd });
+      }
+      const { owner, name } = parseRepositorySelector(input.repository);
+      const refsResponse = yield* api.rest({
+        host: input.host,
+        operation,
+        path:
+          input.commit === undefined
+            ? `repos/${owner}/${name}/pulls/${input.number}`
+            : `repos/${owner}/${name}/commits/${input.commit}`,
+        timeout: DIFF_TIMEOUT,
+        coalesce: DIFF_REFS_COALESCE,
+      });
+      const refs = decodeRevisionRefs(refsResponse.body);
+      // A root commit has no parent, which is an absent old revision. Every file in it is new,
+      // so that is a usable answer whenever the caller does not need the old side.
+      const baseRef = Option.isSome(refs)
+        ? input.commit === undefined
+          ? refs.value.base?.sha
+          : (refs.value.parents?.[0]?.sha ?? "")
+        : undefined;
+      const headRef = Option.isSome(refs)
+        ? input.commit === undefined
+          ? refs.value.head?.sha
+          : refs.value.sha
+        : undefined;
+      const rootCommitNewFile =
+        input.commit !== undefined && input.changeType === "new" && baseRef === "";
+      if (
+        headRef === undefined ||
+        (!rootCommitNewFile && (baseRef === undefined || !isCommitSha(baseRef))) ||
+        !isCommitSha(headRef)
+      ) {
+        return yield* new GitHubDiffRevisionsUnavailableError({
+          cwd: input.cwd,
+          number: input.number,
+          ...(input.commit === undefined ? {} : { commit: input.commit }),
+        });
+      }
+      // A pull request's patch runs from the merge base, and the base branch may have moved on
+      // since, so its old side is read there. Page 2 of a compare leaves out the file list; a
+      // failed read falls back to the base branch tip.
+      const oldRef =
+        input.commit === undefined && input.changeType !== "new" && readsOldSide
+          ? yield* api
+              .rest({
+                host: input.host,
+                operation,
+                path: `repos/${owner}/${name}/compare/${baseRef}...${headRef}?per_page=1&page=2`,
+                timeout: DIFF_TIMEOUT,
+              })
+              .pipe(
+                Effect.map((response) =>
+                  decodeMergeBase(response.body).pipe(
+                    Option.map((compare) => compare.merge_base_commit.sha),
+                    Option.filter(isCommitSha),
+                    Option.getOrElse(() => baseRef ?? ""),
+                  ),
+                ),
+                Effect.orElseSucceed(() => baseRef ?? ""),
+              )
+          : (baseRef ?? "");
+      return { owner, name, oldRef, headRef };
+    },
+  );
+
   const getPullRequestDiffFileContents: GitHubPullRequestApi["Service"]["getPullRequestDiffFileContents"] =
     Effect.fn("GitHubPullRequestApi.getPullRequestDiffFileContents")(
       function* (input) {
-        if (input.commit !== undefined && !isCommitSha(input.commit)) {
-          return yield* new GitHubDiffCommitError({ cwd: input.cwd });
-        }
-        const { owner, name } = parseRepositorySelector(input.repository);
-        const refsResponse = yield* api.rest({
-          host: input.host,
-          operation: "getPullRequestDiffFileContents",
-          path:
-            input.commit === undefined
-              ? `repos/${owner}/${name}/pulls/${input.number}`
-              : `repos/${owner}/${name}/commits/${input.commit}`,
-          timeout: DIFF_TIMEOUT,
-          coalesce: DIFF_REFS_COALESCE,
-        });
-        const refs = decodeRevisionRefs(refsResponse.body);
-        // A root commit has no parent, which is an absent old revision. Every file in it is new,
-        // so that is a usable answer whenever the caller does not need the old side.
-        const baseRef = Option.isSome(refs)
-          ? input.commit === undefined
-            ? refs.value.base?.sha
-            : (refs.value.parents?.[0]?.sha ?? "")
-          : undefined;
-        const headRef = Option.isSome(refs)
-          ? input.commit === undefined
-            ? refs.value.head?.sha
-            : refs.value.sha
-          : undefined;
-        const rootCommitNewFile =
-          input.commit !== undefined && input.changeType === "new" && baseRef === "";
-        if (
-          headRef === undefined ||
-          (!rootCommitNewFile && (baseRef === undefined || !isCommitSha(baseRef))) ||
-          !isCommitSha(headRef)
-        ) {
-          return yield* new GitHubDiffRevisionsUnavailableError({
-            cwd: input.cwd,
-            number: input.number,
-            ...(input.commit === undefined ? {} : { commit: input.commit }),
-          });
-        }
-        // A pull request's patch runs from the merge base, and the base branch may have moved on
-        // since, so its old side is read there. Page 2 of a compare leaves out the file list; a
-        // failed read falls back to the base branch tip.
-        const oldRef =
-          input.commit === undefined && input.changeType !== "new"
-            ? yield* api
-                .rest({
-                  host: input.host,
-                  operation: "getPullRequestDiffFileContents",
-                  path: `repos/${owner}/${name}/compare/${baseRef}...${headRef}?per_page=1&page=2`,
-                  timeout: DIFF_TIMEOUT,
-                })
-                .pipe(
-                  Effect.map((response) =>
-                    decodeMergeBase(response.body).pipe(
-                      Option.map((compare) => compare.merge_base_commit.sha),
-                      Option.filter(isCommitSha),
-                      Option.getOrElse(() => baseRef ?? ""),
-                    ),
-                  ),
-                  Effect.orElseSucceed(() => baseRef ?? ""),
-                )
-            : (baseRef ?? "");
+        const { owner, name, oldRef, headRef } = yield* resolveDiffFileRevisions(
+          input,
+          "getPullRequestDiffFileContents",
+        );
 
         const readFile = (revision: string, filePath: string) =>
           api
@@ -1392,6 +1420,42 @@ export const make = Effect.gen(function* () {
           { concurrency: 2 },
         );
         return { oldContents, newContents };
+      },
+      (effect) => diffFileGate.withPermit(effect),
+    );
+
+  const getPullRequestDiffFileBytes: GitHubPullRequestApi["Service"]["getPullRequestDiffFileBytes"] =
+    Effect.fn("GitHubPullRequestApi.getPullRequestDiffFileBytes")(
+      function* (input) {
+        if (input.side === "old" ? input.changeType === "new" : input.changeType === "deleted") {
+          return null;
+        }
+        const { owner, name, oldRef, headRef } = yield* resolveDiffFileRevisions(
+          input,
+          "getPullRequestDiffFileBytes",
+          input.side === "old",
+        );
+        const filePath = input.side === "old" ? input.oldPath : input.newPath;
+        const response = yield* api.rest({
+          host: input.host,
+          operation: "getPullRequestDiffFileBytes",
+          accept: "application/vnd.github.raw+json",
+          path: `repos/${owner}/${name}/contents/${filePath
+            .split("/")
+            .map(encodeURIComponent)
+            .join("/")}?ref=${encodeURIComponent(input.side === "old" ? oldRef : headRef)}`,
+          maxResponseBytes: input.maxBytes,
+          responseType: "bytes",
+          timeout: DIFF_TIMEOUT,
+        });
+        if (response.truncated) {
+          return yield* new GitHubDiffFileContentsUnavailableError({
+            cwd: input.cwd,
+            path: filePath,
+            reason: "oversized",
+          });
+        }
+        return response.bytes ?? new Uint8Array();
       },
       (effect) => diffFileGate.withPermit(effect),
     );
@@ -2158,6 +2222,7 @@ export const make = Effect.gen(function* () {
     }),
 
     getPullRequestDiffFileContents,
+    getPullRequestDiffFileBytes,
     readFileAtRevision: (input) =>
       readGitHubFileAtRevision(api, input).pipe(
         Effect.flatMap((file) =>

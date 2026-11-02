@@ -24,7 +24,7 @@ interface ExpoGlobalWithViewConfig {
 }
 
 export interface NativeReviewDiffRow {
-  readonly kind: "file" | "hunk" | "line" | "notice" | "comment";
+  readonly kind: "file" | "hunk" | "line" | "notice" | "comment" | "image";
   readonly id: string;
   readonly fileId?: string;
   readonly filePath?: string;
@@ -47,6 +47,8 @@ export interface NativeReviewDiffRow {
   readonly commentText?: string;
   readonly commentRangeLabel?: string;
   readonly commentSectionTitle?: string;
+  /** The sides an `image` row shows, in order; their URLs arrive in `imageUrisJson`. */
+  readonly imageSides?: ReadonlyArray<"old" | "new">;
 }
 
 export interface NativeReviewDiffWordDiffRange {
@@ -121,6 +123,8 @@ export interface NativeReviewDiffViewProps extends ViewProps {
   readonly viewedFileIdsJson?: string;
   readonly selectedRowIdsJson?: string;
   readonly collapsedCommentIdsJson?: string;
+  /** `{ [imageRowId]: { old?: url, new?: url } }`; a side without a URL draws as loading. */
+  readonly imageUrisJson?: string;
   readonly appearanceScheme: "light" | "dark";
   readonly themeJson: string;
   readonly styleJson?: string;
@@ -151,6 +155,9 @@ export interface NativeReviewDiffViewProps extends ViewProps {
     }>,
   ) => void;
   readonly onToggleComment?: (event: NativeSyntheticEvent<{ readonly commentId?: string }>) => void;
+  readonly onPressImage?: (
+    event: NativeSyntheticEvent<{ readonly fileId?: string; readonly side?: "old" | "new" }>,
+  ) => void;
 }
 
 export interface NativeReviewDiffViewHandle {
