@@ -511,14 +511,6 @@
       "types": "./src/promptLinks.ts",
       "import": "./src/promptLinks.ts"
     },
-    "./AgentScope": {
-      "types": "./src/AgentScope.ts",
-      "import": "./src/AgentScope.ts"
-    },
-    "./HostProcess": {
-      "types": "./src/HostProcess.ts",
-      "import": "./src/HostProcess.ts"
-    },
     "./orchestrationV2BoundedSnapshot": {
       "types": "./src/orchestrationV2BoundedSnapshot.ts",
       "import": "./src/orchestrationV2BoundedSnapshot.ts"
