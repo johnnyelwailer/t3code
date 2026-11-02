@@ -404,20 +404,19 @@ export const make = Effect.gen(function* () {
     Effect.flatMap((state) => electronWindow.sendAll(IpcChannels.UPDATE_STATE_CHANNEL, state)),
   );
 
-  const setState = (state: DesktopUpdateState): Effect.Effect<void> =>
-    Effect.gen(function* () {
-      const issue = yield* Ref.get(updateIssueRef);
-      const nextCheckAt = yield* Ref.get(nextCheckAtRef);
-      const next = withUpdateIssue(
-        nexiFeedActive ? { ...state, nextCheckAt } : state,
-        issue,
-        nexiFeedActive,
-      );
-      yield* stateMutex.withPermits(1)(
-        Ref.set(updateStateRef, next).pipe(Effect.andThen(PubSub.publish(stateChanges, next))),
-      );
-      yield* emitState;
-    });
+  const setState = Effect.fn("desktop.updates.setState")(function* (state: DesktopUpdateState) {
+    const issue = yield* Ref.get(updateIssueRef);
+    const nextCheckAt = yield* Ref.get(nextCheckAtRef);
+    const next = withUpdateIssue(
+      nexiFeedActive ? { ...state, nextCheckAt } : state,
+      issue,
+      nexiFeedActive,
+    );
+    yield* stateMutex.withPermits(1)(
+      Ref.set(updateStateRef, next).pipe(Effect.andThen(PubSub.publish(stateChanges, next))),
+    );
+    yield* emitState;
+  });
 
   const updateState = (
     f: (state: DesktopUpdateState) => DesktopUpdateState,
@@ -907,7 +906,7 @@ export const make = Effect.gen(function* () {
       const now = yield* DateTime.now;
       yield* Ref.set(
         nextCheckAtRef,
-        new Date(DateTime.toEpochMillis(now) + Duration.toMillis(delay)).toISOString(),
+        DateTime.formatIso(DateTime.add(now, { milliseconds: Duration.toMillis(delay) })),
       );
       if (nexiFeedActive) yield* updateState((state) => state);
       yield* Effect.sleep(delay);
