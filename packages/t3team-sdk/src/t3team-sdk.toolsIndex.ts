@@ -24,6 +24,7 @@ export type {
 export type {
   GetWorkItemToolResult,
   SearchWorkItemsToolResult,
+  WorkItemFreshness,
   WorkItemSummary,
 } from "./tools/t3team-sdk.workItemRead.ts";
 export {

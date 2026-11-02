@@ -35,6 +35,19 @@ export const WorkItemSummary = Schema.Struct({
 });
 export type WorkItemSummary = typeof WorkItemSummary.Type;
 
+/**
+ * How current an answer is: the host's synced copy (`mirror`) or the tracker itself (`live`). Optional
+ * on every result, so a caller built before it existed keeps decoding.
+ */
+export const WorkItemFreshness = Schema.Struct({
+  source: Schema.Literals(["mirror", "live"]),
+  /** ISO time of the mirror's last successful sync; absent for a live answer or an unsynced mirror. */
+  syncedAt: Schema.optional(Schema.String),
+  /** True when the mirror has failed since that sync, so its rows may be older than `syncedAt` says. */
+  stale: Schema.optional(Schema.Boolean),
+});
+export type WorkItemFreshness = typeof WorkItemFreshness.Type;
+
 export const SearchWorkItemsToolArgs = Schema.Struct({
   /** Any of these workflow states. */
   status: Schema.optional(Schema.Array(Schema.String)),
@@ -65,6 +78,7 @@ export const SearchWorkItemsToolResult = Schema.Struct({
   source: Schema.Literals(["mirror", "live"]),
   items: Schema.Array(WorkItemSummary),
   nextCursor: Schema.optional(Schema.String),
+  freshness: Schema.optional(WorkItemFreshness),
 });
 export type SearchWorkItemsToolResult = typeof SearchWorkItemsToolResult.Type;
 
@@ -99,6 +113,8 @@ export const GetWorkItemToolResult = Schema.Struct({
   /** `issueKey` here and `item.parentKey` may name work items outside the bound project (key only). */
   links: Schema.Array(WorkItemLink),
   children: Schema.Array(WorkItemSummary),
+  /** Where `item` came from: the mirror row, or the tracker's row when that one is newer. */
+  freshness: Schema.optional(WorkItemFreshness),
 });
 export type GetWorkItemToolResult = typeof GetWorkItemToolResult.Type;
 

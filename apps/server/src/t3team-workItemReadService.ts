@@ -21,6 +21,11 @@ import type {
 import * as Effect from "effect/Effect";
 
 import { makeProjectScope, scoped } from "./t3team-workItemProjectScope.ts";
+import {
+  liveFreshness,
+  mirrorAnswerFreshness,
+  type MirrorFreshness,
+} from "./t3team-workItemReadFreshness.ts";
 import type { MirrorFilters } from "./t3team-workItemReadMirror.ts";
 import {
   decodeCursor,
@@ -45,6 +50,8 @@ export interface WorkItemComment {
 
 export interface WorkItemReadPort {
   readonly mirrorReady: (binding: JiraMirrorBinding) => Effect.Effect<boolean, string>;
+  /** When the mirror last finished a catch-up, and whether it has failed since. */
+  readonly mirrorFreshness: (binding: JiraMirrorBinding) => Effect.Effect<MirrorFreshness, string>;
   readonly mirrorSearch: (
     binding: JiraMirrorBinding,
     filters: MirrorFilters,
@@ -109,6 +116,7 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
         ok: true,
         source: "mirror",
         items: summaries(rows.slice(0, limit)),
+        freshness: mirrorAnswerFreshness(yield* port.mirrorFreshness(binding)),
         ...(rows.length > limit ? { nextCursor: encodeMirrorCursor(offset + limit) } : {}),
       } satisfies SearchWorkItemsToolResult;
     }
@@ -128,6 +136,7 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
       ok: true,
       source: "live",
       items: summaries(page.items),
+      freshness: liveFreshness,
       ...(page.nextCursor === undefined ? {} : { nextCursor: encodeLiveCursor(page.nextCursor) }),
     } satisfies SearchWorkItemsToolResult;
   });
@@ -141,7 +150,7 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
     const key = parseIssueKey(args.issueKey);
     if (key === null) return yield* Effect.fail(`'${args.issueKey}' is not a work item key.`);
     const found = yield* findInProject(binding, key);
-    const item = found === null ? null : toWorkItemSummary(found);
+    const item = found === null ? null : toWorkItemSummary(found.row);
     if (found === null || item === null) {
       return yield* Effect.fail(`Work item ${key} is not in this project.`);
     }
@@ -154,8 +163,13 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
           CHILD_LIMIT,
           undefined,
         )).items;
-    const description = typeof found["description"] === "string" ? found["description"] : undefined;
-    const links = Array.isArray(found["links"]) ? found["links"] : [];
+    const description =
+      typeof found.row["description"] === "string" ? found.row["description"] : undefined;
+    const links = Array.isArray(found.row["links"]) ? found.row["links"] : [];
+    const freshness =
+      found.source === "live"
+        ? liveFreshness
+        : mirrorAnswerFreshness(yield* port.mirrorFreshness(binding));
     return {
       ok: true,
       item: { ...item, ...(description === undefined ? {} : { description }) },
@@ -168,6 +182,7 @@ export const makeWorkItemReadService = (port: WorkItemReadPort) => {
           : [];
       }),
       children: summaries(childRows),
+      freshness,
     } satisfies GetWorkItemToolResult;
   });
 
