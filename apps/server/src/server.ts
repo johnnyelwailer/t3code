@@ -343,6 +343,7 @@ import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
 import { T3TeamAskUserWriterLive } from "./mcp/toolkits/t3team/t3team-askUserWriter.ts";
 import { T3TeamDelegatedTaskPreparationLive } from "./t3team-delegateTaskPreparationLive.ts";
 import { T3TeamDelegateCloudSessionsLayer } from "./t3team-delegateTaskCloudSessionLayer.ts";
+import { layer as T3TeamEnvironmentLinksCloudLayer } from "./t3team-environmentLinksCloud.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -1212,9 +1213,15 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(PreviewBrowser.layer),
   // Links to other environments, shared by Settings (WebSocket) and agents (/mcp).
   Layer.provide(
-    PeerForwarding.layer.pipe(
-      Layer.provideMerge(PeerMcpClient.layer),
-      Layer.provideMerge(PeerLinks.layer),
+    // t3team: t3_environment_links also lists Nexi cloud sessions (flag DELEGATE_CLOUD).
+    T3TeamEnvironmentLinksCloudLayer.pipe(
+      Layer.provide(T3TeamDelegateCloudSessionsLayer),
+      Layer.provideMerge(
+        PeerForwarding.layer.pipe(
+          Layer.provideMerge(PeerMcpClient.layer),
+          Layer.provideMerge(PeerLinks.layer),
+        ),
+      ),
     ),
   ),
   Layer.provide(PreviewAutomationBroker.layer),
