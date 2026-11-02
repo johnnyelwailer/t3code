@@ -141,7 +141,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
   }
 
   fun setImageUrisJson(value: String) {
-    canvasView.imageUris = parseImageUris(value)
+    canvasView.images.setUris(parseImageUris(value))
   }
 
   fun setAppearanceScheme(value: String) {
@@ -245,7 +245,7 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
 
   fun cleanup() {
     payloadDecodeExecutor.shutdownNow()
-    canvasView.releaseImages()
+    canvasView.images.release()
   }
 
   fun scrollToFile(fileId: String, animated: Boolean) {
@@ -857,17 +857,7 @@ private class DiffCanvasView(context: Context) : View(context) {
       rebuildOffsets()
     }
   var onRowTap: ((DiffRow, String, RowTapTarget) -> Unit)? = null
-  private val imageLoader = ReviewDiffImageLoader { invalidate() }
-  private val imageRowDrawing = ReviewDiffImageRowDrawing(density)
-  var imageUris: Map<String, Map<String, String>> = emptyMap()
-    set(value) {
-      field = value
-      invalidate()
-    }
-
-  fun releaseImages() {
-    imageLoader.shutdown()
-  }
+  val images = ReviewDiffImages(density) { invalidate() }
   var onVisibleRowsChanged: ((Int, Int) -> Unit)? = null
   var onContentHeightChanged: ((Int) -> Unit)? = null
   var onVerticalAnchorRestored: (() -> Unit)? = null
@@ -1220,21 +1210,13 @@ private class DiffCanvasView(context: Context) : View(context) {
 
   private fun drawImageRow(canvas: Canvas, row: DiffRow, top: Int, bottom: Int) {
     fill(canvas, theme.background, 0f, top.toFloat(), width.toFloat(), bottom.toFloat())
-    val panels = imagePanels(row.imageSides, top, bottom, width, density)
-    val uris = imageUris[row.id]
     drawing.configureUiPaint(
       paint = textPaint,
       color = theme.mutedText,
       size = style.fileHeaderSubtextFontSizePx,
       weight = style.fileHeaderSubtextFontWeight,
     )
-    imageRowDrawing.draw(
-      canvas,
-      panels,
-      panels.map { (side) -> imageLoader.state(uris?.get(side)) },
-      theme,
-      textPaint,
-    )
+    images.drawRow(canvas, row, top, bottom, width, theme, textPaint)
     drawBottomBorder(canvas, bottom)
   }
 

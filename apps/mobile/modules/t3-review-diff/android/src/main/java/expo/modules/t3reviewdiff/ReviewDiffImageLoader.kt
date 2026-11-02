@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
@@ -26,9 +27,16 @@ internal class ReviewDiffImageLoader(private val onLoaded: () -> Unit) {
   }
 
   fun state(url: String?): ReviewDiffImageState {
-    if (url == null) return ReviewDiffImageState.Loading
-    cache.get(url)?.let { return ReviewDiffImageState.Ready(it) }
-    if (failed.contains(url)) return ReviewDiffImageState.Unavailable
+    val cached = url?.let { cache.get(it) }
+    return when {
+      url == null -> ReviewDiffImageState.Loading
+      cached != null -> ReviewDiffImageState.Ready(cached)
+      failed.contains(url) -> ReviewDiffImageState.Unavailable
+      else -> startLoad(url)
+    }
+  }
+
+  private fun startLoad(url: String): ReviewDiffImageState {
     if (pending.add(url)) executor.execute { load(url) }
     return ReviewDiffImageState.Loading
   }
@@ -53,20 +61,22 @@ internal class ReviewDiffImageLoader(private val onLoaded: () -> Unit) {
     connection.readTimeout = TIMEOUT_MS
     try {
       check(connection.responseCode in 200..299)
-      return connection.inputStream.use { input ->
-        val output = ByteArrayOutputStream()
-        val buffer = ByteArray(64 * 1024)
-        while (true) {
-          val read = input.read(buffer)
-          if (read < 0) break
-          output.write(buffer, 0, read)
-          check(output.size() <= MAX_IMAGE_BYTES)
-        }
-        output.toByteArray()
-      }
+      return connection.inputStream.use { readCapped(it) }
     } finally {
       connection.disconnect()
     }
+  }
+
+  private fun readCapped(input: InputStream): ByteArray {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(64 * 1024)
+    while (true) {
+      val read = input.read(buffer)
+      if (read < 0) break
+      output.write(buffer, 0, read)
+      check(output.size() <= MAX_IMAGE_BYTES)
+    }
+    return output.toByteArray()
   }
 
   private fun decode(bytes: ByteArray): Bitmap? {

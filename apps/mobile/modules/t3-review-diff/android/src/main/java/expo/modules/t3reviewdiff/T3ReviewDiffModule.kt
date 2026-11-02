@@ -27,9 +27,7 @@ class T3ReviewDiffModule : Module() {
       Prop("collapsedCommentIdsJson") { view: T3ReviewDiffView, collapsedCommentIdsJson: String ->
         view.setCollapsedCommentIdsJson(collapsedCommentIdsJson)
       }
-      Prop("imageUrisJson") { view: T3ReviewDiffView, imageUrisJson: String ->
-        view.setImageUrisJson(imageUrisJson)
-      }
+      Prop("imageUrisJson") { view: T3ReviewDiffView, json: String -> view.setImageUrisJson(json) }
       Prop("appearanceScheme") { view: T3ReviewDiffView, appearanceScheme: String ->
         view.setAppearanceScheme(appearanceScheme)
       }
