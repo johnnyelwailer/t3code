@@ -20,6 +20,8 @@ const FIELDS = [
   ["recoveryRamPercent", "Recovery margin (% of RAM)"],
 ] as const;
 
+const isThresholds = Schema.is(ResourcePressureThresholds);
+
 export function PressureThresholdForm({
   saved,
   onSave,
@@ -31,7 +33,7 @@ export function PressureThresholdForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
   const values = { ...saved, ...draft };
-  const valid = Schema.is(ResourcePressureThresholds)(values);
+  const valid = isThresholds(values);
   const changed = FIELDS.some(([key]) => values[key] !== saved[key]);
   const save = () => {
     setPending(true);

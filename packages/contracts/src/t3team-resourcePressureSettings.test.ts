@@ -5,14 +5,14 @@ import {
   ResourcePressureThresholds,
 } from "./t3team-resourcePressureSettings.ts";
 
+const decode = Schema.decodeSync(ResourcePressureThresholds);
+const valid = Schema.is(ResourcePressureThresholds);
+
 describe("resource pressure settings", () => {
   it("defaults old settings to scaled headroom", () => {
-    expect(Schema.decodeSync(ResourcePressureThresholds)({})).toEqual(
-      DEFAULT_RESOURCE_PRESSURE_THRESHOLDS,
-    );
+    expect(decode({})).toEqual(DEFAULT_RESOURCE_PRESSURE_THRESHOLDS);
   });
   it("rejects inverted thresholds and invalid numbers", () => {
-    const valid = Schema.is(ResourcePressureThresholds);
     expect(valid({ ...DEFAULT_RESOURCE_PRESSURE_THRESHOLDS, criticalAvailableGiB: 7 })).toBe(false);
     expect(valid({ ...DEFAULT_RESOURCE_PRESSURE_THRESHOLDS, criticalRamPercent: 20 })).toBe(false);
     expect(valid({ ...DEFAULT_RESOURCE_PRESSURE_THRESHOLDS, recoveryGiB: Number.NaN })).toBe(false);

@@ -99,7 +99,7 @@ const make = Effect.fn("makeHostResources")(function* () {
       cpuCount: cpu.count,
       availableMemoryBytes: Math.min(totalMemoryBytes, Math.max(0, availableMemoryBytes)),
       totalMemoryBytes,
-      ...(commit ?? {}),
+      ...commit,
     };
   });
 
