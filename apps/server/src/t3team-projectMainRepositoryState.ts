@@ -5,6 +5,7 @@
  *
  * @module t3team-projectMainRepositoryState
  */
+import { LEGACY_NEXI_PROJECT_STATE_DIR } from "@t3tools/project-context/t3team-projectStateLayout";
 import {
   NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
@@ -18,9 +19,10 @@ import * as Path from "effect/Path";
 import { T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS } from "./t3team-context-blob-store-utils.ts";
 import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 
+import { projectStateDirIsContained } from "./t3team-projectStateContainment.ts";
+import { projectStateReadPaths } from "./t3team-projectStateReadRoots.ts";
 import {
   CHILD_WORKTREES_DIR_NAME,
-  HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
   hasProjectStateEntries,
@@ -47,9 +49,15 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
       yield* ensureNexiProjectStateDir(checkoutPath);
       const isClone = yield* exists(path.join(checkoutPath, ".git"));
       if (!isClone) continue;
-      const stateEntries = yield* fileSystem
-        .readDirectory(path.join(checkoutPath, HIDDEN_T3TEAM_DIR))
-        .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
+      // A legacy `.nexi` that still holds project state makes the checkout a candidate too.
+      const stateEntries: string[] = [];
+      for (const stateRoot of projectStateReadPaths(path, checkoutPath)) {
+        stateEntries.push(
+          ...(yield* fileSystem
+            .readDirectory(stateRoot)
+            .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []))),
+        );
+      }
       if (hasProjectStateEntries(stateEntries)) {
         candidates.push({ url: entry.url, checkoutPath });
       }
@@ -136,17 +144,29 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   return { copied, failed };
 });
 
-/** One-time additive normalization when a process selects .nexi. An existing target wins;
- * a failed attempt is removed so the next call retries instead of reading an empty dir. */
+/** One-time additive normalization when a process selects `.agents/nexi`: a `.t3team` is copied
+ * forward when the project has no `.nexi` and no `.agents/nexi` yet. An existing target wins; the
+ * source is untouched; a failed attempt is removed so the next call retries. A legacy `.nexi` is
+ * never copied: it is read in place (`projectStateReadPaths`), so a pull of committed `.nexi`
+ * files is never shadowed by a stale copy. Nothing is written when the state dir resolves
+ * outside the workspace or through a symlink. */
 export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(function* (
   workspaceRoot: string,
 ) {
   if (PROJECT_STATE_DIR !== NEXI_PROJECT_STATE_DIR) return [];
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const exists = (target: string) =>
+    fileSystem.exists(target).pipe(Effect.orElseSucceed(() => false));
   const nexiDir = path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR);
-  if (yield* fileSystem.exists(nexiDir)) return [];
-  if (!(yield* fileSystem.exists(path.join(workspaceRoot, T3TEAM_PROJECT_STATE_DIR)))) return [];
+  if (
+    (yield* exists(path.join(workspaceRoot, LEGACY_NEXI_PROJECT_STATE_DIR))) ||
+    (yield* exists(nexiDir))
+  ) {
+    return [];
+  }
+  if (!(yield* exists(path.join(workspaceRoot, T3TEAM_PROJECT_STATE_DIR)))) return [];
+  if (!(yield* projectStateDirIsContained(workspaceRoot))) return [];
   const outcome = yield* copyProjectStateDir({
     fromRoot: workspaceRoot,
     toRoot: workspaceRoot,

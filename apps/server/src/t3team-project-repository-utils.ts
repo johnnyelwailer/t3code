@@ -101,6 +101,8 @@ export const HIDDEN_T3TEAM_DIR = PROJECT_STATE_DIR;
 export const REFERENCES_DIR_NAME = "references";
 export const MANIFEST_FILE_NAME = "reference-repositories.json";
 export const CHILD_WORKTREES_DIR_NAME = "child-session-worktrees";
+/** The reference manifest, relative to the workspace root; read it through `resolveStateReadPathWith`. */
+export const REFERENCE_MANIFEST_RELATIVE_PATH = `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}/${MANIFEST_FILE_NAME}`;
 export const GITIGNORE_ENTRY = `${HIDDEN_T3TEAM_DIR}/`;
 /** Top-level state-dir entries that are machine-local bookkeeping, not project state: the
  * reference clones and their manifest, and child worktrees. A checkout whose state dir holds only

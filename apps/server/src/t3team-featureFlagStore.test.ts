@@ -65,14 +65,14 @@ describe("feature flag layering", () => {
   test("state dir follows env and the release preset, never a user value", () => {
     const startup = PROJECT_STATE_DIR;
     replaceFeatureFlagDatabaseValues(new Map());
-    expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
-    expect(resolveProjectStateDirName(() => "")).toBe(".nexi");
+    expect(resolveProjectStateDirName(noEnv)).toBe(".agents/nexi");
+    expect(resolveProjectStateDirName(() => "")).toBe(".agents/nexi");
     expect(resolveProjectStateDirName(() => "off")).toBe(".t3team");
     replaceFeatureFlagDatabaseValues(new Map([["NEXI_STATE_DIR", false]]));
-    expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
+    expect(resolveProjectStateDirName(noEnv)).toBe(".agents/nexi");
     replaceFeatureFlagPresetValues(new Map([["NEXI_STATE_DIR", false]]));
     expect(resolveProjectStateDirName(noEnv)).toBe(".t3team");
-    expect(resolveProjectStateDirName(() => "1")).toBe(".nexi");
+    expect(resolveProjectStateDirName(() => "1")).toBe(".agents/nexi");
     replaceFeatureFlagPresetValues(new Map());
     expect(PROJECT_STATE_DIR).toBe(startup);
     // Looked up by key, not by position: a flag added to the registry must not break this test.

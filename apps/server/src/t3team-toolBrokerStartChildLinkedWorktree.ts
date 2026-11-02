@@ -14,10 +14,8 @@ import * as Schema from "effect/Schema";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { syncLinkedRepositoryOnDemand } from "./t3team-linkedRepositoryOnDemand.ts";
 import {
-  HIDDEN_T3TEAM_DIR,
-  MANIFEST_FILE_NAME,
+  REFERENCE_MANIFEST_RELATIVE_PATH,
   isLinkedRepositoryReady,
-  REFERENCES_DIR_NAME,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 import {
@@ -25,8 +23,10 @@ import {
   findLinkedRepository,
   readLinkedRepositories,
 } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { assertProjectStateDirContained } from "./t3team-projectStateContainment.ts";
 import { createOrReuseChildWorktree } from "./t3team-toolBrokerStartChildLocalWorktree.ts";
 import type { T3TeamStartChildLinkedRepositoryServices } from "./t3team-toolBrokerStartChildContext.ts";
+import { resolveStateReadPathWith } from "./t3team-projectStateReadRoots.ts";
 
 const LinkedRepositoryManifestJson = Schema.Struct({
   linkedRepositories: Schema.optional(Schema.Array(Schema.Unknown)),
@@ -44,11 +44,11 @@ export const resolveLinkedRepositoryWorktree = (input: {
   readonly worktreeKey: string;
 }) =>
   Effect.gen(function* () {
-    const manifestPath = input.services.path.join(
+    const manifestPath = yield* resolveStateReadPathWith(
+      input.services.fileSystem,
+      input.services.path,
       input.projectWorkspaceRoot,
-      HIDDEN_T3TEAM_DIR,
-      REFERENCES_DIR_NAME,
-      MANIFEST_FILE_NAME,
+      REFERENCE_MANIFEST_RELATIVE_PATH,
     );
     const manifestExists = yield* input.services.fileSystem
       .exists(manifestPath)
@@ -104,6 +104,11 @@ export const resolveLinkedRepositoryWorktree = (input: {
       worktreeKey: input.worktreeKey,
     });
 
+    yield* assertProjectStateDirContained(input.projectWorkspaceRoot).pipe(
+      Effect.mapError((error) => error.message),
+      Effect.provideService(FileSystem.FileSystem, input.services.fileSystem),
+      Effect.provideService(Path.Path, input.services.path),
+    );
     yield* input.services.fileSystem.makeDirectory(
       input.services.path.dirname(scopedWorktreePath),
       {

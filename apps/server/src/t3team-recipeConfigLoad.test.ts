@@ -2,7 +2,7 @@
 import * as NodeTimersPromises from "node:timers/promises";
 import * as NodeURL from "node:url";
 
-import { assert, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
@@ -224,4 +224,77 @@ it.layer(NodeServices.layer)("recipe config loader", (it) => {
       assert.notStrictEqual(yield* load, first, "a deep edit invalidates the cached layers");
     }),
   );
+
+  describe("the legacy .nexi dir", () => {
+    const configText = (model: string) =>
+      `import { defineRecipeConfig } from "@t3team/sdk";\nexport default defineRecipeConfig("pr-watch", { defaults: { model: "${model}" } });`;
+    const writeLegacy = Effect.fn("writeLegacy")(function* (
+      workspaceRoot: string,
+      relative: string,
+      text: string,
+    ) {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const target = path.join(workspaceRoot, ".nexi", relative);
+      yield* fileSystem.makeDirectory(path.dirname(target), { recursive: true });
+      yield* fileSystem.writeFileString(target, text);
+      return target;
+    });
+
+    it.effect("loads a config only the legacy dir holds", () =>
+      Effect.gen(function* () {
+        const { workspaceRoot } = yield* setUp();
+        const file = yield* writeLegacy(
+          workspaceRoot,
+          "recipes/pr-watch.config.ts",
+          configText("legacy"),
+        );
+        const layers = yield* loadRecipeConfigLayers({
+          workspaceRoot,
+          recipeId: "pr-watch",
+          recipePath: undefined,
+        });
+        assert.strictEqual(layers.file, file);
+        assert.strictEqual(layers.defaults.model, "legacy");
+      }),
+    );
+
+    it.effect("the new dir's config wins when both exist", () =>
+      Effect.gen(function* () {
+        const { workspaceRoot, write } = yield* setUp();
+        yield* writeLegacy(workspaceRoot, "recipes/pr-watch.config.ts", configText("legacy"));
+        const file = yield* write("recipes/pr-watch.config.ts", configText("new"));
+        const layers = yield* loadRecipeConfigLayers({
+          workspaceRoot,
+          recipeId: "pr-watch",
+          recipePath: undefined,
+        });
+        assert.strictEqual(layers.file, file);
+        assert.strictEqual(layers.defaults.model, "new");
+      }),
+    );
+
+    it.effect("a legacy config never imports from the new dir, nor the other way round", () =>
+      Effect.gen(function* () {
+        const { workspaceRoot, write } = yield* setUp();
+        yield* write("policies/p.ts", `export default "p";`);
+        yield* writeLegacy(
+          workspaceRoot,
+          "recipes/pr-watch.config.ts",
+          [
+            `import { defineRecipeConfig } from "@t3team/sdk";`,
+            `import p from "../../../.agents/nexi/policies/p.ts";`,
+            `export default defineRecipeConfig("pr-watch", { defaults: { model: p } });`,
+          ].join("\n"),
+        );
+        const layers = yield* loadRecipeConfigLayers({
+          workspaceRoot,
+          recipeId: "pr-watch",
+          recipePath: undefined,
+        });
+        assert.deepStrictEqual(layers.defaults, {});
+        assert.isAbove(layers.warnings.length, 0);
+      }),
+    );
+  });
 });

@@ -23,6 +23,7 @@ import {
   RECIPE_TRIGGER_DEFAULT_SETTINGS,
   type RecipeTriggerEffectiveSettings,
 } from "./t3team-recipeTriggerRunnerCore.ts";
+import { projectStateReadPaths } from "./t3team-projectStateReadRoots.ts";
 import { parseRecipeTriggerSettingsJson } from "./t3team-recipeTriggerSettingsJson.ts";
 
 /** One entry of the settings doc, keyed `${recipeId}:${triggerId}`. A type alias (not an
@@ -62,8 +63,16 @@ export const readRecipeTriggerSettings = Effect.fn("readRecipeTriggerSettings")(
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
-  const file = recipeTriggerSettingsPath({ workspaceRoot: input.workspaceRoot, pathService });
-  const readResult = yield* fileSystem.readFileString(file).pipe(Effect.option);
+  // The newest state dir that holds the file wins; writes always go to `recipeTriggerSettingsPath`.
+  let readResult: Option.Option<string> = Option.none();
+  for (const file of projectStateReadPaths(
+    pathService,
+    input.workspaceRoot,
+    RECIPE_TRIGGER_SETTINGS_FILE,
+  )) {
+    readResult = yield* fileSystem.readFileString(file).pipe(Effect.option);
+    if (Option.isSome(readResult)) break;
+  }
   if (Option.isNone(readResult)) return {} as Record<string, RecipeTriggerSetting>;
   let parsed: unknown;
   try {

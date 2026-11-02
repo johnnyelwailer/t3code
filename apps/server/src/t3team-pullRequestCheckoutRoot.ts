@@ -16,10 +16,8 @@ import * as Schema from "effect/Schema";
 
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import {
-  HIDDEN_T3TEAM_DIR,
+  REFERENCE_MANIFEST_RELATIVE_PATH,
   isLinkedRepositoryReady,
-  MANIFEST_FILE_NAME,
-  REFERENCES_DIR_NAME,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
@@ -30,6 +28,7 @@ import {
   readLinkedRepositories,
   repositoryLookupCandidates,
 } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { resolveStateReadPathWith } from "./t3team-projectStateReadRoots.ts";
 
 const WEB_URL = /^https?:\/\//i;
 
@@ -64,11 +63,11 @@ const readLinkedRepositoriesAt = (workspaceRoot: string) =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     yield* ensureNexiProjectStateDir(workspaceRoot).pipe(Effect.ignore);
-    const manifestPath = path.join(
+    const manifestPath = yield* resolveStateReadPathWith(
+      fileSystem,
+      path,
       workspaceRoot,
-      HIDDEN_T3TEAM_DIR,
-      REFERENCES_DIR_NAME,
-      MANIFEST_FILE_NAME,
+      REFERENCE_MANIFEST_RELATIVE_PATH,
     );
     const exists = yield* fileSystem.exists(manifestPath).pipe(Effect.orElseSucceed(() => false));
     if (!exists) return [];

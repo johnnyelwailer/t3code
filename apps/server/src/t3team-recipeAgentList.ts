@@ -13,31 +13,41 @@ import * as Path from "effect/Path";
 import type { ListRecipesToolResult } from "@t3team/sdk";
 
 import { mergeRecipesByPrecedence, PROJECT_LOCAL_ORIGIN } from "./t3team-projectRecipeOrigin.ts";
-import { T3TEAM_PROJECT_RECIPES_ROOT } from "./t3team-projectSetupShared.ts";
+import { projectStateReadPaths } from "./t3team-projectStateReadRoots.ts";
 import { listRecipeAtPath, type MutableListResult } from "./t3team-recipeAgentListEntry.ts";
 import { listPackRecipesForAgent } from "./t3team-recipeAgentListPack.ts";
 import { offeredRecipes } from "./t3team-workItemDeliveryRecipesFlag.ts";
 
-/** Enumerate `<workspaceRoot>/.t3team/recipes/*`, appending each recipe directory to `out`. */
+/** Enumerate `<workspaceRoot>/<state dir>/recipes/*` (every read dir), appending each recipe directory to `out`. */
 const listProjectLocalRecipes = Effect.fn("listProjectLocalRecipes")(function* (input: {
   readonly workspaceRoot: string;
   readonly out: MutableListResult;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const pathService = yield* Path.Path;
-  const recipesRoot = pathService.join(input.workspaceRoot, T3TEAM_PROJECT_RECIPES_ROOT);
-  if (!(yield* fileSystem.exists(recipesRoot).pipe(Effect.orElseSucceed(() => false)))) {
-    return;
-  }
-  for (const entry of yield* fileSystem.readDirectory(recipesRoot, { recursive: false })) {
-    const recipePath = pathService.join(recipesRoot, entry);
-    const entryStat = yield* fileSystem
-      .stat(recipePath)
-      .pipe(Effect.catch(() => Effect.succeed(null)));
-    if (!entryStat || entryStat.type !== "Directory") {
+  const seenEntries = new Set<string>();
+  // Every state dir is read, newest first; a same-named recipe directory in an older one is shadowed.
+  for (const recipesRoot of projectStateReadPaths(pathService, input.workspaceRoot, "recipes")) {
+    if (!(yield* fileSystem.exists(recipesRoot).pipe(Effect.orElseSucceed(() => false)))) {
       continue;
     }
-    yield* listRecipeAtPath({ recipePath, origin: PROJECT_LOCAL_ORIGIN, out: input.out });
+    for (const entry of yield* fileSystem.readDirectory(recipesRoot, { recursive: false })) {
+      const recipePath = pathService.join(recipesRoot, entry);
+      const entryStat = yield* fileSystem
+        .stat(recipePath)
+        .pipe(Effect.catch(() => Effect.succeed(null)));
+      if (!entryStat || entryStat.type !== "Directory") {
+        continue;
+      }
+      if (seenEntries.has(entry)) {
+        input.out.diagnostics.push(
+          `Recipe directory ${recipePath} is shadowed by the same recipe in a newer state directory.`,
+        );
+        continue;
+      }
+      seenEntries.add(entry);
+      yield* listRecipeAtPath({ recipePath, origin: PROJECT_LOCAL_ORIGIN, out: input.out });
+    }
   }
 });
 

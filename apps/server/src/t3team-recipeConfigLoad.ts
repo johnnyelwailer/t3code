@@ -9,13 +9,13 @@
  * The layers are cached by the modification times of the config, everything it imports and the
  * recipe module, so an unchanged config is not re-imported on every pass.
  */
-import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import { checkRecipeConfigSource, type RecipeConfigWarning } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
+import { projectStateReadPaths } from "./t3team-projectStateReadRoots.ts";
 import { loadRecipeDefaults } from "./t3team-recipeConfigDefaults.ts";
 import { importCheckedConfig } from "./t3team-recipeConfigImport.ts";
 import { collectConfigImports } from "./t3team-recipeConfigImports.ts";
@@ -25,9 +25,6 @@ import type { RecipeConfigLayers } from "./t3team-recipeConfigResolve.ts";
 export { recipeDefaultsAsData } from "./t3team-recipeConfigDefaults.ts";
 
 const cache = new Map<string, { readonly version: string; readonly layers: RecipeConfigLayers }>();
-
-const recipeConfigPath = (path: Path.Path, workspaceRoot: string, recipeId: string) =>
-  path.join(workspaceRoot, PROJECT_STATE_DIR, "recipes", `${recipeId}.config.ts`);
 
 export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(function* (input: {
   readonly workspaceRoot: string;
@@ -39,8 +36,30 @@ export const loadRecipeConfigLayers = Effect.fn("loadRecipeConfigLayers")(functi
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const stateRoot = path.join(input.workspaceRoot, PROJECT_STATE_DIR);
-  const file = input.file ?? recipeConfigPath(path, input.workspaceRoot, input.recipeId);
+  // The newest state dir that holds the config is the one it is read from, and the one its
+  // imports must stay under; a config in `.agents/nexi` never reaches into the legacy dir.
+  const stateRoots = projectStateReadPaths(path, input.workspaceRoot);
+  const configName = path.join("recipes", `${input.recipeId}.config.ts`);
+  let stateRoot = stateRoots[0]!;
+  let file = input.file ?? path.join(stateRoot, configName);
+  if (input.file === undefined) {
+    for (const root of stateRoots) {
+      if (
+        yield* fileSystem
+          .exists(path.join(root, configName))
+          .pipe(Effect.orElseSucceed(() => false))
+      ) {
+        stateRoot = root;
+        file = path.join(root, configName);
+        break;
+      }
+    }
+  } else {
+    const owner = stateRoots.find(
+      (root) => path.relative(root, input.file!).split(/[\\/]/)[0] !== "..",
+    );
+    if (owner !== undefined) stateRoot = owner;
+  }
   const mtime = (target: string) =>
     fileSystem.stat(target).pipe(
       Effect.map((info) =>

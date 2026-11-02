@@ -11,6 +11,8 @@ import {
   resolveT3TeamProjectSetupWriteDecision,
   T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
 } from "./t3team-projectSetup.ts";
+import { assertProjectStateDirContained } from "./t3team-projectStateContainment.ts";
+import { resolveProjectStateReadPath } from "./t3team-projectStateReadRoots.ts";
 import {
   errorResponse,
   okJson,
@@ -48,12 +50,18 @@ const bootstrapRouteLayer = HttpRouter.add(
     if (workspaceRootInput.length === 0)
       return yield* new T3TeamAtlassianError({ message: "workspaceRoot is required." });
     const workspaceRoot = yield* normalizeT3TeamWorkspaceRoot(workspaceRootInput);
+    yield* assertProjectStateDirContained(workspaceRoot).pipe(
+      Effect.mapError((error) => new T3TeamAtlassianError({ message: error.message })),
+    );
 
     yield* fileSystem
       .makeDirectory(workspaceRoot, { recursive: true })
       .pipe(Effect.mapError(toAtlassianError("Failed to ensure workspace directory exists.")));
 
-    const persistedProfilePath = path.join(workspaceRoot, T3TEAM_PROJECT_PROFILE_MANIFEST_PATH);
+    const persistedProfilePath = yield* resolveProjectStateReadPath(
+      workspaceRoot,
+      T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
+    );
     const persistedProfileExists = yield* fileSystem
       .exists(persistedProfilePath)
       .pipe(Effect.orElseSucceed(() => false));

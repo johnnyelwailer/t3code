@@ -8,6 +8,7 @@ import * as Schema from "effect/Schema";
 
 import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
+import { assertProjectStateDirContained } from "./t3team-projectStateContainment.ts";
 import { writeT3TeamContextCasFiles } from "./t3team-context-blob-store.ts";
 import { scheduleOrphanT3TeamContextBlobSweep } from "./t3team-context-blob-sweep.ts";
 import { withLinkedRepositoryCheckouts } from "./t3team-linkedRepositoryContextFile.ts";
@@ -72,6 +73,7 @@ function writeT3TeamWorkspaceContextFilesUnlocked(input: {
     const workspacePaths = yield* WorkspacePaths;
 
     yield* ensureNexiProjectStateDir(input.workspaceRoot);
+    yield* assertProjectStateDirContained(input.workspaceRoot);
     yield* fileSystem.makeDirectory(input.workspaceRoot, { recursive: true });
     yield* ensureT3TeamContextCacheTables();
 

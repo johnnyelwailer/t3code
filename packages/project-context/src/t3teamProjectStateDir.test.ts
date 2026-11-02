@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   isNexiStateDirEnabled,
+  NEXI_PROJECT_STATE_DIR,
   NEXI_STATE_DIR_FLAG_ENV,
   PROJECT_STATE_DIR,
   resolveProjectStateDirName,
@@ -15,10 +16,10 @@ const env =
     key === NEXI_STATE_DIR_FLAG_ENV ? value : undefined;
 
 describe("project state dir resolver", () => {
-  it("names the state dir .nexi by default and for any value that is not an explicit off", () => {
+  it("names the state dir .agents/nexi by default and for any value that is not an explicit off", () => {
     for (const value of [undefined, "", "   ", "yes", "1", "true", "ON", " on "]) {
       expect(isNexiStateDirEnabled(env(value))).toBe(true);
-      expect(resolveProjectStateDirName(env(value))).toBe(".nexi");
+      expect(resolveProjectStateDirName(env(value))).toBe(".agents/nexi");
     }
   });
 
@@ -80,5 +81,45 @@ describe("project state dir resolver", () => {
         ".nexi",
       ),
     ).toBe("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts");
+  });
+});
+
+describe("two-segment state dir", () => {
+  const NEW = ".agents/nexi";
+
+  it("writes the two-segment dir", () => {
+    expect(NEXI_PROJECT_STATE_DIR).toBe(NEW);
+    expect(PROJECT_STATE_DIR).toBe(NEW);
+  });
+
+  it("maps canonical paths onto the two-segment dir, idempotently", () => {
+    expect(toPhysicalProjectStatePath(".t3team/recipes/x", NEW)).toBe(".agents/nexi/recipes/x");
+    expect(toPhysicalProjectStatePath(".t3team", NEW)).toBe(NEW);
+    expect(toPhysicalProjectStatePath("/ws/.t3team/recipes/r", NEW)).toBe(
+      "/ws/.agents/nexi/recipes/r",
+    );
+    expect(toPhysicalProjectStatePath("C:\\ws\\.t3team\\recipes\\r", NEW)).toBe(
+      "C:\\ws\\.agents\\nexi\\recipes\\r",
+    );
+    // Already physical, in either spelling: untouched.
+    for (const physical of ["/ws/.agents/nexi/recipes/r", "/ws/.nexi/recipes/r", ".nexi/x"]) {
+      expect(toPhysicalProjectStatePath(physical, NEW)).toBe(physical);
+    }
+    // A relative Windows path keeps its backslashes all the way through.
+    expect(toPhysicalProjectStatePath(".t3team\\recipes\\x", NEW)).toBe(
+      ".agents\\nexi\\recipes\\x",
+    );
+    expect(toPhysicalProjectStatePath(toPhysicalProjectStatePath(".t3team/a", NEW), NEW)).toBe(
+      ".agents/nexi/a",
+    );
+  });
+
+  it("keeps an ancestor named .t3team out of the way of the physical state dir", () => {
+    expect(
+      toPhysicalProjectStatePath("/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/p.ts", NEW),
+    ).toBe("/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/p.ts");
+    expect(
+      toPhysicalProjectStatePath("/anc/.t3team/worktrees/ws/.t3team/recipes/r/p.ts", NEW),
+    ).toBe("/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/p.ts");
   });
 });

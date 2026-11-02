@@ -2,15 +2,17 @@
  * The ONE owner of the project state dir name — the hidden directory in a project workspace
  * that holds context, setup, recipes, skills, the reference manifest and child worktrees.
  *
- * `.nexi` is the default. The physical dir is `.t3team` only when `NEXI_FF_NEXI_STATE_DIR` is
+ * `.agents/nexi` is the default and the only place new state is written. The legacy `.nexi` is
+ * still READ (`projectStateReadDirNames` in `t3team-projectStateLayout`; the new location wins
+ * on conflict). The physical dir is `.t3team` only when `NEXI_FF_NEXI_STATE_DIR` is
  * explicitly off. The boolean comes from `readFeatureFlag` (env > feature_flags snapshot > code
  * default on): explicit `0`/`false`/`off` or a snapshot value of false selects `.t3team`;
- * otherwise the name is `.nexi`. Unset and blank env are not an override. Every state-path
- * constant (server, web, shared packages) derives from `PROJECT_STATE_DIR`, and all detection
- * reads it.
+ * otherwise the name is `.agents/nexi`. Unset and blank env are not an override. Every
+ * state-path constant (server, web, shared packages) derives from `PROJECT_STATE_DIR`, and all
+ * detection reads it. The name has TWO segments: join it, never compare it to one segment.
  *
  * The env is read through `globalThis.process` so the module stays browser-safe: a browser has
- * no env and therefore resolves the default `.nexi`. Paths a client addresses with the canonical
+ * no env and therefore resolves the default `.agents/nexi`. Paths a client addresses with the canonical
  * name are mapped onto the physical one by the server with `toPhysicalProjectStatePath`
  * (idempotent), so the wire vocabulary stays stable across hosts. The workflow journal
  * (`.t3team-runs/`) is a separate directory and is not affected.
@@ -20,9 +22,9 @@ import { readFeatureFlag } from "./t3teamFeatureFlags.ts";
 
 /** Canonical state dir name: the wire vocabulary, and the physical dir when the flag is explicitly off. */
 export const T3TEAM_PROJECT_STATE_DIR = ".t3team";
-/** Pack-build state dir name. */
-export const NEXI_PROJECT_STATE_DIR = ".nexi";
-/** Environment override. Explicit `0`/`false`/`off` selects `.t3team`; `1`/`true`/`on` selects `.nexi`. */
+/** Pack-build state dir name, relative to the project root (two segments, `/` on every OS). */
+export const NEXI_PROJECT_STATE_DIR = ".agents/nexi";
+/** Environment override. Explicit `0`/`false`/`off` selects `.t3team`; `1`/`true`/`on` selects `.agents/nexi`. */
 export const NEXI_STATE_DIR_FLAG_ENV = "NEXI_FF_NEXI_STATE_DIR";
 
 type ReadEnv = (key: string) => string | undefined;
@@ -47,7 +49,7 @@ export function isNexiStateDirSelectedAtStartup(): boolean {
 }
 
 const CANONICAL_STATE_DIR_SEGMENT = /(^|[\\/])\.t3team(?=[\\/]|$)/g;
-const PHYSICAL_STATE_DIR_SEGMENT = /(^|[\\/])\.nexi(?=[\\/]|$)/;
+const PHYSICAL_STATE_DIR_SEGMENT = /(^|[\\/])(?:\.agents[\\/]nexi|\.nexi)(?=[\\/]|$)/;
 
 /** Maps a path addressed with the canonical state dir name onto the physical one: a
  * workspace-relative path (`.t3team/recipes/x`) or an absolute one (`/ws/.t3team/recipes/x`).
@@ -67,5 +69,8 @@ export function toPhysicalProjectStatePath(
   const last = matches[matches.length - 1]!;
   const tail = normalized.slice(last.index! + last[0].length);
   if (PHYSICAL_STATE_DIR_SEGMENT.test(tail)) return statePath;
-  return normalized.slice(0, last.index! + (last[1]?.length ?? 0)) + stateDirName + tail;
+  // The separator the path itself uses: before the match (absolute) or after it (relative).
+  const separator = last[1] === "\\" || (last[1] === "" && tail.startsWith("\\")) ? "\\" : "/";
+  const physicalName = separator === "/" ? stateDirName : stateDirName.replaceAll("/", separator);
+  return normalized.slice(0, last.index! + (last[1]?.length ?? 0)) + physicalName + tail;
 }

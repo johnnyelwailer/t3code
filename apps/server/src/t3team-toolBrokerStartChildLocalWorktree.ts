@@ -10,11 +10,10 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import { ensureWorkspaceGitignore } from "./t3team-project-repository-services.ts";
+import { assertProjectStateDirContained } from "./t3team-projectStateContainment.ts";
 import {
-  HIDDEN_T3TEAM_DIR,
-  MANIFEST_FILE_NAME,
+  REFERENCE_MANIFEST_RELATIVE_PATH,
   MAIN_REPOSITORY_GITIGNORE_ENTRIES,
-  REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 import {
   buildChildBranchName,
@@ -27,6 +26,7 @@ import {
 } from "./t3team-toolBrokerStartChildContext.ts";
 
 import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+import { resolveStateReadPathWith } from "./t3team-projectStateReadRoots.ts";
 
 /** Creates a dedicated worktree of the LOCAL repository (or submodule) at the project
  * workspace root — the isolation path for workspaces without a linked-repository manifest, and
@@ -65,11 +65,11 @@ export const resolveLocalRepositoryWorktree = (input: {
 
     // An adopted main repository keeps only its machine-local subpaths ignored so committed team
     // state under `.t3team/` survives (GHE #42); legacy workspaces keep the full entry.
-    const mainRepositoryManifestPath = path.join(
+    const mainRepositoryManifestPath = yield* resolveStateReadPathWith(
+      fileSystem,
+      path,
       workspaceRoot,
-      HIDDEN_T3TEAM_DIR,
-      REFERENCES_DIR_NAME,
-      MANIFEST_FILE_NAME,
+      REFERENCE_MANIFEST_RELATIVE_PATH,
     );
     const mainRepositoryManifestExists = yield* fileSystem
       .exists(mainRepositoryManifestPath)
@@ -101,6 +101,11 @@ export const resolveLocalRepositoryWorktree = (input: {
       worktreeKey: input.worktreeKey,
     });
 
+    yield* assertProjectStateDirContained(workspaceRoot).pipe(
+      Effect.mapError((error) => error.message),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
     yield* fileSystem.makeDirectory(path.dirname(scopedWorktreePath), { recursive: true });
 
     const worktree = yield* createOrReuseChildWorktree({

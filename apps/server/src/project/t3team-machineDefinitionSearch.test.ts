@@ -12,7 +12,7 @@ const NOW = "2026-10-29T00:00:00Z";
 const sha = (n: number) => n.toString(16).padStart(40, "0");
 const DEVCONTAINER = { ".devcontainer/devcontainer.json": '{"image":"node:24"}' };
 const POINTER = {
-  ".nexi/machine.json": '{"version":1,"devcontainer":".devcontainer/devcontainer.json"}',
+  ".agents/nexi/machine.json": '{"version":1,"devcontainer":".devcontainer/devcontainer.json"}',
   ...DEVCONTAINER,
 };
 const TOOLS_URL = "https://nexplore.ghe.com/acme/tools.git";
@@ -94,7 +94,7 @@ it.layer(NodeServices.layer)("machine definition search", (it) => {
     }),
   );
 
-  it.effect("finds a .nexi/machine.json on another branch", () =>
+  it.effect("finds a .agents/nexi/machine.json on another branch", () =>
     Effect.gen(function* () {
       const { result } = yield* find({
         filesByRevision: { [sha(2)]: POINTER },
@@ -102,8 +102,8 @@ it.layer(NodeServices.layer)("machine definition search", (it) => {
       });
       expect(result.candidates).toHaveLength(1);
       expect(result.candidates[0]).toMatchObject({
-        kind: ".nexi/machine.json",
-        path: ".nexi/machine.json",
+        kind: "machine.json",
+        path: ".agents/nexi/machine.json",
         where: "other branch",
         ref: { kind: "branch", name: "setup", state: "open" },
         commit: sha(2),
@@ -115,7 +115,7 @@ it.layer(NodeServices.layer)("machine definition search", (it) => {
   it.effect("says when a branch has a definition file that is unusable", () =>
     Effect.gen(function* () {
       const { result } = yield* find({
-        filesByRevision: { [sha(2)]: { ".nexi/machine.json": '{"version":2}' } },
+        filesByRevision: { [sha(2)]: { ".agents/nexi/machine.json": '{"version":2}' } },
         gitOutput: refsOutput({ main: 1, branches: { setup: 2 } }),
       });
       expect(result.candidates).toEqual([]);
@@ -123,7 +123,7 @@ it.layer(NodeServices.layer)("machine definition search", (it) => {
         {
           repository: "acme/api",
           reason:
-            "setup has .nexi/machine.json, but it is unusable: .nexi/machine.json is not a valid machine file.",
+            "setup has .agents/nexi/machine.json, but it is unusable: .agents/nexi/machine.json is not a valid machine file.",
         },
       ]);
     }),

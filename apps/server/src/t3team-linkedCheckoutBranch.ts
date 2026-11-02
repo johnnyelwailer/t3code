@@ -1,35 +1,50 @@
 /**
  * Keeps a linked reference checkout on the branch the project chose for it, instead of whatever the
  * remote's default branch was when it was cloned. Never destroys work: the only things it deletes
- * or reverts are T3's own scaffold files (`AGENTS.md`, `CLAUDE.md`, the `.nexi/` and `.t3team/`
- * state, and its entries in `.gitignore`), and only when git says they block the switch. Anything
+ * or reverts are T3's own scaffold files (`AGENTS.md`, `CLAUDE.md`, the `.agents/nexi/`, `.nexi/` and
+ * `.t3team/` state, and its entries in `.gitignore`), and only when git says they block the switch. Anything
  * else that blocks it is reported and left alone.
  *
  * @module t3team-linkedCheckoutBranch
  */
+import {
+  isProjectStatePath,
+  LEGACY_NEXI_PROJECT_STATE_DIR,
+} from "@t3tools/project-context/t3team-projectStateLayout";
+import { T3TEAM_PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import { INSPECT_TIMEOUT_MS, linkedCheckoutGit as git } from "./t3team-linkedCheckoutGit.ts";
+import { T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS } from "./t3team-context-blob-store-utils.ts";
 import {
+  CHILD_WORKTREES_DIR_NAME,
   GITIGNORE_ENTRY,
   MAIN_REPOSITORY_GITIGNORE_ENTRIES,
+  REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 
 const SWITCH_TIMEOUT_MS = 5 * 60_000;
 
-/** Every line T3 writes into a workspace `.gitignore`. */
-const T3_GITIGNORE_LINES: ReadonlySet<string> = new Set([
+/** The lines an older build wrote for a state dir it named differently (`.nexi`, `.t3team`). */
+const legacyGitignoreLines = (stateDir: string): ReadonlyArray<string> => [
+  `${stateDir}/`,
+  `${stateDir}/${REFERENCES_DIR_NAME}/`,
+  `${stateDir}/${CHILD_WORKTREES_DIR_NAME}/`,
+  `${stateDir}/${T3TEAM_CONTEXT_BLOB_DIR_SEGMENTS.join("/")}/`,
+];
+
+/** Every line T3 writes into a workspace `.gitignore`, now or in an older build. */
+export const T3_GITIGNORE_LINES: ReadonlySet<string> = new Set([
   GITIGNORE_ENTRY,
   ...MAIN_REPOSITORY_GITIGNORE_ENTRIES,
+  ...legacyGitignoreLines(LEGACY_NEXI_PROJECT_STATE_DIR),
+  ...legacyGitignoreLines(T3TEAM_PROJECT_STATE_DIR),
 ]);
 
-const isScaffoldPath = (relativePath: string): boolean =>
-  relativePath === "AGENTS.md" ||
-  relativePath === "CLAUDE.md" ||
-  relativePath.startsWith(".nexi/") ||
-  relativePath.startsWith(".t3team/");
+export const isScaffoldPath = (relativePath: string): boolean =>
+  relativePath === "AGENTS.md" || relativePath === "CLAUDE.md" || isProjectStatePath(relativePath);
 
 /** The paths git lists under "untracked working tree files would be overwritten by checkout". */
 const untrackedBlockers = (stderr: string): ReadonlyArray<string> => {

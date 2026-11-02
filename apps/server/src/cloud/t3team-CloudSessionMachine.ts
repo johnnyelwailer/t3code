@@ -41,7 +41,7 @@ export interface CloudSessionMachine {
   readonly token: string;
   /** The user's commit identity, so the machine's commits carry their name like their pushes do. */
   readonly author: MachineGitAuthor;
-  /** Team secret names from `.nexi/machine.json`. Values stay on the repository. */
+  /** Team secret names from `machine.json`. Values stay on the repository. */
   readonly teamSecretNames: ReadonlyArray<string>;
 }
 

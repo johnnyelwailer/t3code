@@ -14,38 +14,25 @@ import { inspectRemoteProjectStateOnDefaultBranch } from "./t3team-linkedRemoteP
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 describe("inspectRemoteProjectStateOnDefaultBranch", () => {
-  it.effect("reports committed .nexi entries from ls-tree (committed-only)", () => {
+  /** A git stand-in whose `ls-tree <ref>:<dir>` answers only for the dirs in `trees`. */
+  const inspect = (trees: Readonly<Record<string, string>>) => {
     const calls: Array<ReadonlyArray<string>> = [];
+    const ok = (stdout: string, exitCode = 0) => ({
+      exitCode: exitCode as never,
+      stdout,
+      stderr: "",
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
     const vcs = Layer.succeed(VcsProcess, {
       run: (input) =>
         Effect.sync(() => {
           calls.push(input.args);
-          const op = input.args.join(" ");
-          if (op.includes("fetch")) {
-            return {
-              exitCode: 0 as never,
-              stdout: "",
-              stderr: "",
-              stdoutTruncated: false,
-              stderrTruncated: false,
-            };
+          if (input.args.includes("ls-tree")) {
+            const dir = (input.args.at(-1) ?? "").split(":").slice(1).join(":");
+            return dir in trees ? ok(trees[dir]!) : ok("", 128);
           }
-          if (op.includes("ls-tree") && op.includes(".nexi")) {
-            return {
-              exitCode: 0 as never,
-              stdout: ".nexi/context/a.json\n.nexi/machine.json\n",
-              stderr: "",
-              stdoutTruncated: false,
-              stderrTruncated: false,
-            };
-          }
-          return {
-            exitCode: 0 as never,
-            stdout: "main",
-            stderr: "",
-            stdoutTruncated: false,
-            stderrTruncated: false,
-          };
+          return ok("main");
         }),
     });
     const sourceControl = Layer.succeed(SourceControlRepositoryService, {
@@ -61,13 +48,43 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
       const result = yield* inspectRemoteProjectStateOnDefaultBranch(
         "https://example.test/acme/repo.git",
       );
+      return { result, calls };
+    }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
+  };
+
+  it.effect("reports committed .agents/nexi entries from ls-tree (committed-only)", () =>
+    Effect.gen(function* () {
+      const { result, calls } = yield* inspect({
+        ".agents/nexi": "context/a.json\nmachine.json\n",
+      });
       expect(result.hasProjectStateDir).toBe(true);
       expect(result.entryCount).toBe(2);
+      expect(result.stateDirName).toBe(".agents/nexi");
       expect(result.committedOnly).toBe(true);
       expect(result.source).toBe("remote");
       expect(calls.some((args) => args.includes("ls-tree"))).toBe(true);
-    }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
-  });
+    }),
+  );
+
+  it.effect("a committed legacy .nexi still counts as project state", () =>
+    Effect.gen(function* () {
+      const { result } = yield* inspect({ ".nexi": "recipes/a/recipe.ts\nmachine.json\n" });
+      expect(result.hasProjectStateDir).toBe(true);
+      expect(result.entryCount).toBe(2);
+      expect(result.stateDirName).toBe(".nexi");
+    }),
+  );
+
+  it.effect("prefers the new dir when both are committed", () =>
+    Effect.gen(function* () {
+      const { result } = yield* inspect({
+        ".agents/nexi": "machine.json\n",
+        ".nexi": "recipes/a/recipe.ts\nmachine.json\n",
+      });
+      expect(result.stateDirName).toBe(".agents/nexi");
+      expect(result.entryCount).toBe(1);
+    }),
+  );
 
   it.effect("a committed reference manifest alone is not project state", () => {
     const ok = (stdout: string) => ({

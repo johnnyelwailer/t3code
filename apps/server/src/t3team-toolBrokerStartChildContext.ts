@@ -9,9 +9,7 @@ import type { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunne
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import type { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import {
-  HIDDEN_T3TEAM_DIR,
-  MANIFEST_FILE_NAME,
-  REFERENCES_DIR_NAME,
+  REFERENCE_MANIFEST_RELATIVE_PATH,
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 
@@ -21,6 +19,7 @@ import {
 } from "./t3team-referenceManifestNormalization.ts";
 
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
+import { resolveStateReadPathWith } from "./t3team-projectStateReadRoots.ts";
 
 const MAIN_REPOSITORY_STATUSES: ReadonlyArray<MainRepositoryBootstrapResult["status"]> = [
   "adopted",
@@ -68,11 +67,11 @@ export const readMainRepositoryFromWorkspace = (input: {
       Effect.provideService(FileSystem.FileSystem, input.services.fileSystem),
       Effect.provideService(Path.Path, input.services.path),
     );
-    const manifestPath = input.services.path.join(
+    const manifestPath = yield* resolveStateReadPathWith(
+      input.services.fileSystem,
+      input.services.path,
       input.projectWorkspaceRoot,
-      HIDDEN_T3TEAM_DIR,
-      REFERENCES_DIR_NAME,
-      MANIFEST_FILE_NAME,
+      REFERENCE_MANIFEST_RELATIVE_PATH,
     );
     const exists = yield* input.services.fileSystem
       .exists(manifestPath)
@@ -105,15 +104,14 @@ export const linkedRepositoryManifestExists = (input: {
       Effect.provideService(FileSystem.FileSystem, input.services.fileSystem),
       Effect.provideService(Path.Path, input.services.path),
     );
+    const manifestPath = yield* resolveStateReadPathWith(
+      input.services.fileSystem,
+      input.services.path,
+      input.projectWorkspaceRoot,
+      REFERENCE_MANIFEST_RELATIVE_PATH,
+    );
     return yield* input.services.fileSystem
-      .exists(
-        input.services.path.join(
-          input.projectWorkspaceRoot,
-          HIDDEN_T3TEAM_DIR,
-          REFERENCES_DIR_NAME,
-          MANIFEST_FILE_NAME,
-        ),
-      )
+      .exists(manifestPath)
       .pipe(Effect.orElseSucceed(() => false));
   });
 
