@@ -1132,7 +1132,8 @@ describe("composer fallback to another instance of the same driver", () => {
 
     it.each([
       ["5.4", "gpt-5.4"],
-      ["gpt-5-codex", "gpt-5.4"],
+      // t3team: this fork aliases gpt-5-codex to gpt-5.3-codex (contracts model.ts).
+      ["gpt-5-codex", "gpt-5.3-codex"],
       ["gpt-5.4", "5.4"],
     ])("keeps the effort from %s on fallback %s", (savedModel, fallbackModel) => {
       const disabledCodex = ProviderInstanceId.make("codex");

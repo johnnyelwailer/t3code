@@ -494,6 +494,7 @@
     "apps/web/src/lib/composerContextRecords.ts",
     "apps/web/src/lib/diffRendering.ts",
     "apps/web/src/lib/discardComposerDraft.ts",
+    "apps/web/src/modelSelection.test.ts",
     "apps/web/src/localApi.ts",
     "apps/web/src/providerInstances.ts",
     "apps/web/src/reviewCommentContext.test.ts",
