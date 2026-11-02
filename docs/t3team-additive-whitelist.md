@@ -22,7 +22,12 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261102` → the 2026-11-02 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261102b` → the 2026-11-02 sync branch after it absorbed the
+  10 upstream commits (`d01b92c061..7cf653bca6`) and fork main `8c8e38d5a5` that landed after the
+  first merge. Grandfathered: everything in `t3team/fork-baseline-20261102` below, plus those
+  merges. The fork's Android extra-tab slot on top of upstream's reworked floating tabs is
+  re-applied after this baseline, so it is measured.
+- Before that: `t3team/fork-baseline-20261102` → the 2026-11-02 upstream sync merge commit
   `7b0e95cbeb` (351 upstream commits absorbed, `79f1fadfc6..d01b92c061`, on top of fork main
   `8d16c7f944`). Grandfathered: upstream's tree (managed policy, child approvals in parent
   threads, migration 077 at fork id 127) plus the conflict resolutions that port the fork
