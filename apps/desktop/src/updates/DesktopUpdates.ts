@@ -416,6 +416,7 @@ export const make = Effect.gen(function* () {
 
   // The named reason behind the current error, shown only while the state is in error.
   const updateIssueRef = yield* Ref.make<DesktopUpdateIssue | null>(null);
+  const nextCheckAtRef = yield* Ref.make<string | null>(null);
   const stateChanges = yield* PubSub.sliding<DesktopUpdateState>(16);
   // Serialize writes and publishes against subscription so snapshots cannot overlap the first change.
   const stateMutex = yield* Semaphore.make(1);
@@ -424,16 +425,19 @@ export const make = Effect.gen(function* () {
     Effect.flatMap((state) => electronWindow.sendAll(IpcChannels.UPDATE_STATE_CHANNEL, state)),
   );
 
-  const setState = (state: DesktopUpdateState): Effect.Effect<void> =>
-    Ref.get(updateIssueRef).pipe(
-      Effect.flatMap((issue) => {
-        const next = withUpdateIssue(state, issue, nexiFeedActive);
-        return stateMutex.withPermits(1)(
-          Ref.set(updateStateRef, next).pipe(Effect.andThen(PubSub.publish(stateChanges, next))),
-        );
-      }),
-      Effect.andThen(emitState),
+  const setState = Effect.fn("desktop.updates.setState")(function* (state: DesktopUpdateState) {
+    const issue = yield* Ref.get(updateIssueRef);
+    const nextCheckAt = yield* Ref.get(nextCheckAtRef);
+    const next = withUpdateIssue(
+      nexiFeedActive ? { ...state, nextCheckAt } : state,
+      issue,
+      nexiFeedActive,
     );
+    yield* stateMutex.withPermits(1)(
+      Ref.set(updateStateRef, next).pipe(Effect.andThen(PubSub.publish(stateChanges, next))),
+    );
+    yield* emitState;
+  });
 
   const updateState = (
     f: (state: DesktopUpdateState) => DesktopUpdateState,
@@ -935,11 +939,22 @@ export const make = Effect.gen(function* () {
       }),
       Effect.forkScoped,
     );
-    yield* Ref.get(updateIssueRef).pipe(
-      Effect.flatMap((issue) =>
-        Effect.sleep(updatePollDelay(nexiFeedActive, issue) as Duration.Input),
-      ),
-      Effect.andThen(checkForUpdates("poll")),
+    yield* Effect.gen(function* () {
+      const issue = yield* Ref.get(updateIssueRef);
+      const delay = Duration.fromInputUnsafe(
+        updatePollDelay(nexiFeedActive, issue) as Duration.Input,
+      );
+      const now = yield* DateTime.now;
+      yield* Ref.set(
+        nextCheckAtRef,
+        DateTime.formatIso(DateTime.add(now, { milliseconds: Duration.toMillis(delay) })),
+      );
+      if (nexiFeedActive) yield* updateState((state) => state);
+      yield* Effect.sleep(delay);
+      yield* Ref.set(nextCheckAtRef, null);
+      if (nexiFeedActive) yield* updateState((state) => state);
+      yield* checkForUpdates("poll");
+    }).pipe(
       Effect.forever,
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
