@@ -786,6 +786,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
           const ca = resolveExtraCaCerts(environment.homeDirectory, environment.resourcesPath);
           return ca !== undefined ? { NODE_EXTRA_CA_CERTS: ca } : {};
         })(),
+        T3CODE_DESKTOP_SHELL_DISCOVERY_PENDING: "1",
         T3CODE_CLI_PATH: Option.getOrUndefined(input.cliPath),
       },
       extendEnv: true,

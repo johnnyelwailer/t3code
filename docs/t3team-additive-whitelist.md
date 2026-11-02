@@ -22,7 +22,17 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261031` → the 2026-10-31 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261102b` → the 2026-11-02 sync branch after it absorbed the
+  10 upstream commits (`d01b92c061..7cf653bca6`) and fork main `8c8e38d5a5` that landed after the
+  first merge. Grandfathered: everything in `t3team/fork-baseline-20261102` below, plus those
+  merges. The fork's Android extra-tab slot on top of upstream's reworked floating tabs is
+  re-applied after this baseline, so it is measured.
+- Before that: `t3team/fork-baseline-20261102` → the 2026-11-02 upstream sync merge commit
+  `7b0e95cbeb` (351 upstream commits absorbed, `79f1fadfc6..d01b92c061`, on top of fork main
+  `8d16c7f944`). Grandfathered: upstream's tree (managed policy, child approvals in parent
+  threads, migration 077 at fork id 127) plus the conflict resolutions that port the fork
+  features into it (47 conflicted files). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261031` → the 2026-10-31 upstream sync merge commit
   `c9bb891a26` (429 upstream commits absorbed, `52f4ec6f9..79f1fadfc6`, on top of fork main
   `20ca81b84a`). Grandfathered: upstream's tree (side chats beside the main thread, #26901)
   plus the conflict resolutions that port the fork features into it (74 conflicted files).
@@ -646,3 +656,4 @@ A draft can wait for an environment the catalog does not list yet (a cloud sessi
 - `apps/mobile/src/features/threads/thread-list-v2-items.tsx` — a draft row shows the distribution's live status (`PendingDraftRowStatus`) instead of the static "Draft", and its project title when the catalog has none.
 
 - `apps/server/src/usage/UsageService.test.ts` — one test (`reports saved usage of a removed directory only for windows it reaches`) pins the clock with `TestClock` because its 2026-08-01 fixtures fall out of the 92-day usage cache retention on 2026-11-01T10:00Z; three lines, test only. Upstream will hit the same date dependence: remove this entry when the sync brings an upstream fix. Awaits human approval.
+- `packages/provider-cursor/src/server/driver.test.ts` — fork test updated for upstream's HttpClient-based Cursor catalog (`CursorSdkCatalog`, upstream #28718/#24639): the test that keeps an explicit API key's account out of the CLI login's Limits now answers `/v1/me` and the models list through an HttpClient mock like the neighbouring tests, instead of mocking `Cursor.me`/`Cursor.models.list`. Test only; removable once upstreamed. Approved by Phil 2026-11-02.
