@@ -47,14 +47,19 @@ const card = (proposal: { target: string; internal: boolean }) => {
   return built;
 };
 
-const mount = (c: ReturnType<typeof card>, disabled = false, onAnswer = vi.fn()) => {
+const mount = (
+  c: ReturnType<typeof card>,
+  disabled = false,
+  onAnswer = vi.fn(),
+  sessionLabel: string | null = "acme-api (#4242)",
+) => {
   const container = document.createElement("div");
   const root = createRoot(container);
   act(() =>
     root.render(
       <T3TeamDesktopRouteCard
         card={c}
-        sessionLabel="acme-api (#4242)"
+        sessionLabel={sessionLabel}
         disabled={disabled}
         onAnswer={onAnswer}
       />,
@@ -65,20 +70,35 @@ const mount = (c: ReturnType<typeof card>, disabled = false, onAnswer = vi.fn())
 };
 
 describe("mobile T3TeamDesktopRouteCard", () => {
-  it("shows Always only when the card offers it, and each button answers with its label", () => {
+  it("leads with Approve (once), then the wider scopes and Deny, each answering its own label", () => {
     const view = mount(card({ target: "registry.npmjs.org", internal: false }));
     expect(view.buttons().map((b) => b.textContent)).toEqual([
-      "Approve once",
+      "Approve",
       "Approve for this session",
-      "Deny",
       "Always for this host",
+      "Deny",
     ]);
-    act(() => view.buttons()[0]?.click());
-    act(() => view.buttons()[3]?.click());
+    for (const button of view.buttons()) act(() => button.click());
     expect(view.onAnswer.mock.calls.map((c) => c[0])).toEqual([
       DESKTOP_ROUTE_ONCE_LABEL,
+      DESKTOP_ROUTE_SESSION_LABEL,
       DESKTOP_ROUTE_ALWAYS_LABEL,
+      DESKTOP_ROUTE_DECLINE_LABEL,
     ]);
+    view.unmount();
+  });
+
+  it("offers no approval on a thread that is not in a cloud session, only Dismiss", () => {
+    const view = mount(
+      card({ target: "registry.npmjs.org", internal: false }),
+      false,
+      vi.fn(),
+      null,
+    );
+    expect(view.container.textContent).toContain("Nothing to route");
+    expect(view.buttons().map((b) => b.textContent)).toEqual(["Dismiss"]);
+    act(() => view.buttons()[0]?.click());
+    expect(view.onAnswer).toHaveBeenCalledWith(DESKTOP_ROUTE_DECLINE_LABEL);
     view.unmount();
   });
 

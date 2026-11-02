@@ -13,10 +13,10 @@ describe("desktopRouteSessionLabel", () => {
     ).toBe("acme-api (#4242)");
   });
 
-  it("says a thread on any other environment is not a cloud session", () => {
-    expect(desktopRouteSessionLabel({ _tag: "RelayConnectionTarget", label: "My desktop" })).toBe(
-      "My desktop (not a cloud session)",
-    );
-    expect(desktopRouteSessionLabel(undefined)).toBe("Unknown environment (not a cloud session)");
+  it("is null for a thread on any other environment: nothing to route there", () => {
+    expect(
+      desktopRouteSessionLabel({ _tag: "RelayConnectionTarget", label: "My desktop" }),
+    ).toBeNull();
+    expect(desktopRouteSessionLabel(undefined)).toBeNull();
   });
 });

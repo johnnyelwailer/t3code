@@ -69,3 +69,26 @@ export const InternalHost: Story = {
 };
 
 export const Answering: Story = { args: { ...PublicHost.args, disabled: true } };
+
+/** A thread that already runs on this computer: nothing to route, so no approval, only Dismiss. */
+export const ThreadOnThisComputer: Story = {
+  args: {
+    sessionLabel: null,
+    card: cardFor(
+      { target: "polassist.switzerlandnorth.cloudapp.azure.com", internal: false },
+      "The documented production host returns ERR_NAME_NOT_RESOLVED from the browser session.",
+    ),
+  },
+};
+
+/** The composer on a narrow window: the split button and Deny wrap instead of overflowing. */
+export const Narrow: Story = {
+  args: PublicHost.args,
+  decorators: [
+    (Story) => (
+      <div className="w-[320px]">
+        <Story />
+      </div>
+    ),
+  ],
+};

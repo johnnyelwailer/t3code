@@ -6,6 +6,7 @@ import {
   DESKTOP_ROUTE_SESSION_LABEL,
   decodeDesktopRouteQuestionId,
   desktopRouteQuestionLine,
+  type DesktopRouteScope,
 } from "./t3team-desktopRoute.ts";
 import { isInternalDesktopRouteProposal } from "./t3team-desktopRouteInternal.ts";
 
@@ -68,6 +69,42 @@ export function desktopRouteCardFrom(question: {
       always: internal ? null : offered(DESKTOP_ROUTE_ALWAYS_LABEL),
       decline: offered(DESKTOP_ROUTE_DECLINE_LABEL),
     },
+  };
+}
+
+/** One approval the card offers: the scope it grants, the option label it answers, the button text. */
+export interface DesktopRouteChoice {
+  readonly scope: DesktopRouteScope;
+  readonly label: string;
+  readonly text: string;
+}
+
+const CHOICE_TEXT: Record<DesktopRouteScope, string> = {
+  once: "Approve once",
+  session: "Approve for this session",
+  always: "Always for this host",
+};
+
+/**
+ * The approvals as web and mobile lay them out: the narrowest offered scope is the primary
+ * "Approve", the wider ones follow in order, and declining stays separate.
+ */
+export function desktopRouteChoices(card: DesktopRouteCard): {
+  readonly primary: DesktopRouteChoice | null;
+  readonly more: ReadonlyArray<DesktopRouteChoice>;
+  readonly decline: string | null;
+} {
+  const offered = (["once", "session", "always"] as const).flatMap((scope) => {
+    const label = card.actions[scope];
+    return label === null ? [] : [{ scope, label, text: CHOICE_TEXT[scope] }];
+  });
+  const [first, ...more] = offered;
+  return {
+    // A bare "Approve" only ever means once; a wider primary keeps naming its scope.
+    primary:
+      first === undefined ? null : first.scope === "once" ? { ...first, text: "Approve" } : first,
+    more,
+    decline: card.actions.decline,
   };
 }
 
