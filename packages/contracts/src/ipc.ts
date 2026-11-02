@@ -306,6 +306,7 @@ export interface DesktopUpdateState {
   omittedReleaseCount: number;
   downloadPercent: number | null;
   checkedAt: string | null;
+  nextCheckAt?: string | null;
   message: string | null;
   errorContext: "check" | "download" | "install" | null;
   canRetry: boolean;
@@ -350,6 +351,7 @@ export const DesktopUpdateStateSchema = Schema.Struct({
   omittedReleaseCount: Schema.Number,
   downloadPercent: Schema.NullOr(Schema.Number),
   checkedAt: Schema.NullOr(Schema.String),
+  nextCheckAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
   message: Schema.NullOr(Schema.String),
   errorContext: Schema.NullOr(Schema.Literals(["check", "download", "install"])),
   canRetry: Schema.Boolean,
