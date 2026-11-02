@@ -386,6 +386,16 @@ describe("ServerSettings usage-limit recovery", () => {
   });
 });
 
+describe("ServerSettings linked environments", () => {
+  it("is on unless a stored value says otherwise", () => {
+    expect(decodeServerSettings({}).linkedEnvironmentsEnabled).toBe(true);
+    expect(DEFAULT_SERVER_SETTINGS.linkedEnvironmentsEnabled).toBe(true);
+    expect(
+      decodeServerSettings({ linkedEnvironmentsEnabled: false }).linkedEnvironmentsEnabled,
+    ).toBe(false);
+  });
+});
+
 describe("ServerSettings sidebar pin persistence", () => {
   it("defaults to undefined so server config stays sparse", () => {
     expect(DEFAULT_SERVER_SETTINGS.t3teamStoredSidebarPinsJson).toBeUndefined();

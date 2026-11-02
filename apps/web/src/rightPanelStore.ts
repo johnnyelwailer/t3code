@@ -213,6 +213,8 @@ interface RightPanelStoreState {
   activateTerminal: (ref: ScopedThreadRef, surfaceId: string, terminalId: string) => void;
   closeTerminal: (ref: ScopedThreadRef, surfaceId: string, terminalId: string) => void;
   activateSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
+  /** Selects the host's pinned tab (`RightPanelTabs` `pinnedTab`): no surface is active, tabs stay. */
+  activatePinned: (ref: ScopedThreadRef) => void;
   closeSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeOtherSurfaces: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeSurfacesToRight: (ref: ScopedThreadRef, surfaceId: string) => void;
@@ -661,14 +663,20 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                 : rawActiveSurfaceId === "pull-request"
                   ? (surfaces.find((surface) => surface.kind === "pull-request")?.id ?? null)
                   : null;
+              // An open panel with a null active surface is the pinned tab (`activatePinned`);
+              // before it existed a panel with tabs never had that shape, so it is kept as is.
+              const pinnedSelected =
+                validThreadState?.isOpen === true && rawActiveSurfaceId === null;
               const isOpen =
-                surfaces.length > 0 &&
-                (typeof validThreadState?.isOpen === "boolean"
-                  ? validThreadState.isOpen
-                  : persistedActiveSurfaceId !== null);
-              const activeSurfaceId =
-                persistedActiveSurfaceId ??
-                (isOpen || rawActiveSurfaceId === "agents" ? (surfaces[0]?.id ?? null) : null);
+                pinnedSelected ||
+                (surfaces.length > 0 &&
+                  (typeof validThreadState?.isOpen === "boolean"
+                    ? validThreadState.isOpen
+                    : persistedActiveSurfaceId !== null));
+              const activeSurfaceId = pinnedSelected
+                ? null
+                : (persistedActiveSurfaceId ??
+                  (isOpen || rawActiveSurfaceId === "agents" ? (surfaces[0]?.id ?? null) : null));
               return [
                 threadKey,
                 {
@@ -1065,6 +1073,14 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             current.surfaces.some((surface) => surface.id === surfaceId)
               ? { ...current, isOpen: true, activeSurfaceId: surfaceId }
               : current,
+          ),
+        ),
+      activatePinned: (ref) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            current.isOpen && current.activeSurfaceId === null
+              ? current
+              : { ...current, isOpen: true, activeSurfaceId: null },
           ),
         ),
       closeSurface: (ref, surfaceId) =>

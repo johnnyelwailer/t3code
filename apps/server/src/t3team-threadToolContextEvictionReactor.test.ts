@@ -47,6 +47,13 @@ const deleted = (threadId: ThreadId) =>
     payload: { id: threadId },
   }) as unknown as OrchestrationV2DomainEvent;
 
+const archived = (threadId: ThreadId) =>
+  ({
+    type: "thread.archived",
+    threadId,
+    payload: { id: threadId },
+  }) as unknown as OrchestrationV2DomainEvent;
+
 const runWith = (
   events: ReadonlyArray<OrchestrationV2DomainEvent>,
   seed: ReadonlyArray<readonly [ThreadId, T3TeamTurnToolContext]>,
@@ -57,6 +64,20 @@ const runWith = (
     const artifacts = yield* ThreadArtifactsStore.T3TeamThreadArtifactsStore;
     for (const [threadId, toolContext] of seed) {
       yield* store.put({ threadId, toolContext });
+      yield* store.putViewContext({
+        threadId,
+        sequence: 1,
+        nowMs: 1,
+        viewContext: {
+          version: 1,
+          surface: "my-work",
+          projectId: "project-1",
+          selection: null,
+          filters: {},
+          visibleItemIds: [],
+          visibleItemCount: 0,
+        },
+      });
       yield* facts.upsert(threadId, { retention: "ephemeral" });
       yield* artifacts.upsert({ id: `widget:${threadId}`, threadId, kind: "widget", payload: {} });
     }
@@ -70,6 +91,8 @@ const runWith = (
     );
     return {
       source: yield* store.get(source),
+      sourceView: yield* store.getViewContext(source),
+      forkView: yield* store.getViewContext(fork),
       fork: yield* store.get(fork),
       sourceFacts: yield* facts.get(source),
       sourceArtifacts: yield* artifacts.listByThread(source),
@@ -101,10 +124,28 @@ describe("T3TeamThreadToolContextEvictionReactorLayer", () => {
     ).pipe(
       Effect.map((result) => {
         expect(result.source).toBeUndefined();
+        expect(result.sourceView).toBeUndefined();
+        expect(result.forkView?.publishedAtMs).toBe(1);
         expect(result.sourceFacts).toBeNull();
         expect(result.sourceArtifacts).toEqual([]);
         // Other threads keep theirs.
         expect(result.forkFacts?.retention).toBe("ephemeral");
+      }),
+    ),
+  );
+
+  it.effect("drops only the published view of an archived thread", () =>
+    runWith(
+      [archived(source)],
+      [
+        [source, context],
+        [fork, context],
+      ],
+    ).pipe(
+      Effect.map((result) => {
+        expect(result.sourceView).toBeUndefined();
+        expect(result.source).toEqual(context);
+        expect(result.forkView?.publishedAtMs).toBe(1);
       }),
     ),
   );

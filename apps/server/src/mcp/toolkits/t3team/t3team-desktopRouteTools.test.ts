@@ -140,7 +140,6 @@ it.effect("posts one question whose id carries the proposal, and grants nothing"
       expect(question?.options.map((option) => option.label)).toEqual([
         DESKTOP_ROUTE_ONCE_LABEL,
         DESKTOP_ROUTE_SESSION_LABEL,
-        DESKTOP_ROUTE_ALWAYS_LABEL,
         DESKTOP_ROUTE_DECLINE_LABEL,
       ]);
       expect(result.isError).toBeFalsy();
@@ -149,6 +148,42 @@ it.effect("posts one question whose id carries the proposal, and grants nothing"
         requestId: "request-desktop-route",
         target: "npm.nexplore.ch",
       });
+    }),
+  );
+});
+
+it.effect("offers 'Always for this host' only for a public host, never an internal one", () => {
+  const publicAsked: Array<T3TeamAskUserAskInput> = [];
+  const hiddenAsked: Array<T3TeamAskUserAskInput> = [];
+  const labels = (asked: Array<T3TeamAskUserAskInput>) =>
+    asked[0]?.questions?.[0]?.options.map((option) => option.label) ?? [];
+  return withFlag(
+    true,
+    Effect.gen(function* () {
+      yield* callTool(
+        { ...ARGS, target: "registry.npmjs.org", internal: false },
+        { asked: publicAsked },
+      );
+      // The agent says public, the address says private: the address wins.
+      yield* callTool({ ...ARGS, target: "10.1.2.3", internal: false }, { asked: hiddenAsked });
+      expect(labels(publicAsked)).toContain(DESKTOP_ROUTE_ALWAYS_LABEL);
+      expect(labels(hiddenAsked)).not.toContain(DESKTOP_ROUTE_ALWAYS_LABEL);
+    }),
+  );
+});
+
+it.effect("normalises internal from the address, so the card and the grant agree", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  return withFlag(
+    true,
+    Effect.gen(function* () {
+      yield* callTool({ ...ARGS, target: "10.0.0.5", internal: false }, { asked });
+      const [question] = asked[0]?.questions ?? [];
+      expect(decodeDesktopRouteQuestionId(question?.id ?? "")).toEqual({
+        target: "10.0.0.5",
+        internal: true,
+      });
+      expect(question?.question).toContain("internal address");
     }),
   );
 });

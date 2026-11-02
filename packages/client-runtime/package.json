@@ -87,6 +87,10 @@
       "types": "./src/state/t3team-localThreadOverrides.ts",
       "default": "./src/state/t3team-localThreadOverrides.ts"
     },
+    "./state/thread-answers": {
+      "types": "./src/state/t3team-threadAnswers.ts",
+      "default": "./src/state/t3team-threadAnswers.ts"
+    },
     "./state/cloud-sessions": {
       "types": "./src/state/t3team-cloudSessions.ts",
       "default": "./src/state/t3team-cloudSessions.ts"

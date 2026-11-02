@@ -337,7 +337,11 @@ export function usePendingThreadRequests(input: {
       attachmentsByQuestionId.set(question.id, uploaded as UserInputAttachments[string]);
     }
     // Captured at submit: the composer may show another thread when the answer lands.
-    const saveMachineSource = applyMachineSourceAnswer(pendingInput.questions, providerAnswers);
+    const saveMachineSource = applyMachineSourceAnswer(
+      pendingInput.questions,
+      providerAnswers,
+      requestId,
+    );
     userInputResponsesInFlight.current.add(responseKey);
 
     setRespondingUserInputRequestIds((existing) =>

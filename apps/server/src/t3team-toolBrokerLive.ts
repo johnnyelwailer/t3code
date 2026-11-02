@@ -29,6 +29,7 @@ import { makeMyWorkToolHandlers } from "./t3team-toolBrokerMyWorkLive.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeT3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
+import { withPublishedViewContext } from "./t3team-toolBrokerViewContext.ts";
 import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeT3TeamDraftMutationPublisherBinder } from "./t3team-draftMutationPublish.ts";
@@ -112,7 +113,10 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         ? undefined
         : (threadId, messageId) =>
             mailbox.find(threadId, messageId).pipe(Effect.mapError((error) => error.operation)),
-    loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
+    loadThreadView: withPublishedViewContext(
+      makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
+      contextStore,
+    ),
     manageChildren,
     myWorkTools,
     workItemReadTools,

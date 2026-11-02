@@ -289,6 +289,7 @@ import {
   t3teamStateMigrationResumeLayer,
 } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
+import { t3teamThreadViewContextRouteLayer } from "./t3team-thread-view-context-routes.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamVoiceRouteLayer } from "./t3team-voice-routes.ts";
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
@@ -1168,6 +1169,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamThreadDraftMutationStatusRouteLayer,
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
+    t3teamThreadViewContextRouteLayer,
     t3teamThreadPlacementRouteLayer,
     t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,

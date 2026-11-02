@@ -18,6 +18,8 @@ import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digest
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
+import { useReportMyWorkVisibleItems } from "~/t3team/t3team-useReportMyWorkView";
+import { digestVisibleTicketIds } from "~/t3team/t3team-viewContextBuild";
 import { useDigestVariantFlags } from "~/t3team/t3team-digestVariantFlags";
 import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
@@ -85,6 +87,11 @@ export function ProjectMyWorkDigestContent({
     hasGraph: effectiveGraph !== null,
     ticketCount: graph?.tickets.length ?? 0,
   });
+  // What the user sees is the resolved plan's rows, not the filtered graph's tickets.
+  useReportMyWorkVisibleItems(
+    project.id,
+    renderState === "content" && plan ? digestVisibleTicketIds(plan) : [],
+  );
   // The greeting is timed by the swap (no flash for a quick answer, a minimum dwell once shown,
   // a cross-fade into the content); everything past "loading" is the body below.
   const renderBody = (): ReactNode => {
