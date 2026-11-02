@@ -10,7 +10,8 @@ import {
 } from "./project/t3team-projectMachineSourceSetting.ts";
 import { MANIFEST_FILE_NAME, REFERENCES_DIR_NAME } from "./t3team-project-repository-utils.ts";
 import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
-import { migrateLegacyProjectStateDir } from "./t3team-projectLegacyStateMigration.ts";
+import { readPreservedReferenceManifest } from "./t3team-project-repository-routesBootstrap.ts";
+import { projectStateDirIsContained } from "./t3team-projectStateContainment.ts";
 import { resolveProjectStateReadPath } from "./t3team-projectStateReadRoots.ts";
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { readRecipeTriggerSettings } from "./t3team-recipeTriggerSettings.ts";
@@ -149,40 +150,6 @@ it.layer(NodeServices.layer)("project state is read from both dirs", (it) => {
   });
 
   describe("ensureNexiProjectStateDir", () => {
-    const manifest = `${REFERENCES_DIR_NAME}/${MANIFEST_FILE_NAME}`;
-
-    it.effect("adopts only the reference manifest from a legacy .nexi", () =>
-      Effect.gen(function* () {
-        const fileSystem = yield* FileSystem.FileSystem;
-        const path = yield* Path.Path;
-        const workspaceRoot = yield* makeWorkspace({
-          [`${LEGACY}/${manifest}`]: `{"linked":1}`,
-          [`${LEGACY}/recipes/a/recipe.json`]: "{}",
-        });
-        expect(yield* ensureNexiProjectStateDir(workspaceRoot)).toEqual([manifest]);
-        expect(yield* fileSystem.readFileString(path.join(workspaceRoot, NEW, manifest))).toBe(
-          `{"linked":1}`,
-        );
-        // Shared state is read in place, not copied: a pull of .nexi can never be shadowed.
-        expect(yield* fileSystem.exists(path.join(workspaceRoot, NEW, "recipes"))).toBe(false);
-      }),
-    );
-
-    it.effect("never overwrites an existing new manifest", () =>
-      Effect.gen(function* () {
-        const fileSystem = yield* FileSystem.FileSystem;
-        const path = yield* Path.Path;
-        const workspaceRoot = yield* makeWorkspace({
-          [`${LEGACY}/${manifest}`]: `{"from":"legacy"}`,
-          [`${NEW}/${manifest}`]: `{"from":"new"}`,
-        });
-        expect(yield* ensureNexiProjectStateDir(workspaceRoot)).toEqual([]);
-        expect(yield* fileSystem.readFileString(path.join(workspaceRoot, NEW, manifest))).toBe(
-          `{"from":"new"}`,
-        );
-      }),
-    );
-
     it.effect("copies a .t3team forward only when neither .nexi nor .agents/nexi exists", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
@@ -198,92 +165,123 @@ it.layer(NodeServices.layer)("project state is read from both dirs", (it) => {
         expect(yield* fileSystem.exists(path.join(migratedBefore, NEW))).toBe(false);
       }),
     );
-  });
 
-  describe("migrateLegacyProjectStateDir", () => {
-    it.effect("moves legacy files, keeps conflicts and machine-local entries", () =>
+    it.effect("never copies a legacy .nexi: it is read in place", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const workspaceRoot = yield* makeWorkspace({
-          [`${LEGACY}/recipes/a/recipe.json`]: "legacy a",
-          [`${LEGACY}/recipes/b/recipe.json`]: "legacy b",
-          [`${LEGACY}/machine.json`]: "legacy machine",
-          [`${LEGACY}/child-session-worktrees/w/file`]: "worktree",
-          [`${LEGACY}/references/clone/file`]: "clone",
-          [`${NEW}/recipes/a/recipe.json`]: "new a",
-        });
-        const outcome = yield* migrateLegacyProjectStateDir(workspaceRoot);
-        expect(outcome.status).toBe("migrated");
-        expect([...outcome.moved].toSorted()).toEqual(["machine.json", "recipes/b/recipe.json"]);
-        expect(outcome.conflicts).toEqual(["recipes/a/recipe.json"]);
-        expect([...outcome.kept].toSorted()).toEqual([
-          "child-session-worktrees",
-          "references/clone",
-        ]);
-        const read = (relative: string) =>
-          fileSystem.readFileString(path.join(workspaceRoot, relative));
-        expect(yield* read(`${NEW}/recipes/a/recipe.json`)).toBe("new a");
-        expect(yield* read(`${NEW}/recipes/b/recipe.json`)).toBe("legacy b");
-        expect(yield* read(`${NEW}/machine.json`)).toBe("legacy machine");
-        expect(yield* read(`${LEGACY}/recipes/a/recipe.json`)).toBe("legacy a");
-        expect(yield* fileSystem.exists(path.join(workspaceRoot, LEGACY, "recipes/b"))).toBe(false);
-        expect(yield* read(`${LEGACY}/references/clone/file`)).toBe("clone");
+        const workspaceRoot = yield* makeWorkspace({ [`${LEGACY}/recipes/a/recipe.json`]: "{}" });
+        expect(yield* ensureNexiProjectStateDir(workspaceRoot)).toEqual([]);
+        expect(yield* fileSystem.exists(path.join(workspaceRoot, NEW))).toBe(false);
       }),
     );
+  });
 
-    it.effect("removes the legacy dir once it is empty and is a no-op afterwards", () =>
+  describe("recipes shadowed in the agent list", () => {
+    it.effect("reports a legacy recipe the new dir shadows, like discovery does", () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* makeWorkspace({
+          ...under(LEGACY, recipe("same", "Legacy title")),
+          ...under(NEW, recipe("same", "New title")),
+        });
+        const result = yield* listProjectRecipesForAgent({ workspaceRoot });
+        expect(result.diagnostics).toEqual([
+          expect.stringContaining("/.nexi/recipes/same is shadowed by the same recipe in a newer"),
+        ]);
+      }),
+    );
+  });
+
+  describe("the reference manifest", () => {
+    const manifest = `${REFERENCES_DIR_NAME}/${MANIFEST_FILE_NAME}`;
+    const body = JSON.stringify({ linkedRepositories: [{ url: "https://h/o/r" }] });
+
+    it.effect("is read from the legacy dir in place, never copied or rewritten", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const workspaceRoot = yield* makeWorkspace({ [`${LEGACY}/skills/s/SKILL.md`]: "skill" });
-        expect((yield* migrateLegacyProjectStateDir(workspaceRoot)).status).toBe("migrated");
-        expect(yield* fileSystem.exists(path.join(workspaceRoot, LEGACY))).toBe(false);
-        expect((yield* migrateLegacyProjectStateDir(workspaceRoot)).status).toBe(
-          "nothing-to-migrate",
+        const workspaceRoot = yield* makeWorkspace({ [`${LEGACY}/${manifest}`]: body });
+        const read = yield* readPreservedReferenceManifest(path.join(workspaceRoot, NEW, manifest));
+        expect(read.linkedRepositories.map((entry) => entry.url)).toEqual(["https://h/o/r"]);
+        expect(yield* fileSystem.exists(path.join(workspaceRoot, NEW))).toBe(false);
+        expect(yield* fileSystem.readFileString(path.join(workspaceRoot, LEGACY, manifest))).toBe(
+          body,
         );
       }),
     );
 
-    it.effect("refuses a legacy dir that is a symlink out of the workspace", () =>
+    it.effect("the new manifest wins over the legacy one", () =>
       Effect.gen(function* () {
-        const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const outside = yield* makeWorkspace({ "recipes/x/recipe.json": "outside" });
-        const workspaceRoot = yield* makeWorkspace({});
-        yield* fileSystem.symlink(outside, path.join(workspaceRoot, LEGACY));
-        const outcome = yield* migrateLegacyProjectStateDir(workspaceRoot);
-        expect(outcome.status).toBe("refused");
-        expect(yield* fileSystem.exists(path.join(outside, "recipes/x/recipe.json"))).toBe(true);
+        const workspaceRoot = yield* makeWorkspace({
+          [`${LEGACY}/${manifest}`]: body,
+          [`${NEW}/${manifest}`]: JSON.stringify({
+            linkedRepositories: [{ url: "https://h/o/new" }],
+          }),
+        });
+        const read = yield* readPreservedReferenceManifest(path.join(workspaceRoot, NEW, manifest));
+        expect(read.linkedRepositories.map((entry) => entry.url)).toEqual(["https://h/o/new"]);
       }),
     );
+  });
 
-    it.effect("refuses to write through a symlinked .agents", () =>
-      Effect.gen(function* () {
-        const fileSystem = yield* FileSystem.FileSystem;
-        const path = yield* Path.Path;
-        const outside = yield* makeWorkspace({});
-        const workspaceRoot = yield* makeWorkspace({ [`${LEGACY}/a.json`]: "a" });
-        yield* fileSystem.symlink(outside, path.join(workspaceRoot, ".agents"));
-        const outcome = yield* migrateLegacyProjectStateDir(workspaceRoot);
-        expect(outcome.status).toBe("refused");
-        expect(yield* fileSystem.exists(path.join(outside, "nexi"))).toBe(false);
-        expect(yield* fileSystem.exists(path.join(workspaceRoot, LEGACY, "a.json"))).toBe(true);
-      }),
+  describe("writers refuse a state dir that is a symlink", () => {
+    const linkInto = Effect.fn("linkInto")(function* (
+      kind: "outside" | "in-workspace-claude" | "git",
+    ) {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const outside = yield* makeWorkspace({});
+      const workspaceRoot = yield* makeWorkspace({ ".claude/keep": "k", ".git/keep": "k" });
+      const target =
+        kind === "outside"
+          ? outside
+          : path.join(workspaceRoot, kind === "git" ? ".git" : ".claude");
+      yield* fileSystem.symlink(target, path.join(workspaceRoot, ".agents"));
+      return { workspaceRoot, target, outside };
+    });
+
+    const kinds = ["outside", "in-workspace-claude", "git"] as const;
+
+    it.effect.each(kinds)(
+      "machine source is not written through a symlinked .agents (%s)",
+      (kind) =>
+        Effect.gen(function* () {
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const { workspaceRoot, target } = yield* linkInto(kind);
+          const outcome = yield* Effect.result(writeMachineSource(workspaceRoot, { branch: "x" }));
+          expect(outcome._tag).toBe("Failure");
+          expect(yield* fileSystem.exists(path.join(target, "nexi"))).toBe(false);
+        }),
     );
 
-    it.effect("leaves a symlink inside the legacy dir where it is", () =>
+    it.effect.each(kinds)(
+      "ensureNexiProjectStateDir copies nothing through a symlinked .agents (%s)",
+      (kind) =>
+        Effect.gen(function* () {
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const { workspaceRoot, target } = yield* linkInto(kind);
+          yield* fileSystem.makeDirectory(path.join(workspaceRoot, ".t3team/recipes"), {
+            recursive: true,
+          });
+          yield* fileSystem.writeFileString(path.join(workspaceRoot, ".t3team/recipes/a"), "x");
+          expect(yield* ensureNexiProjectStateDir(workspaceRoot)).toEqual([]);
+          expect(yield* fileSystem.exists(path.join(target, "nexi"))).toBe(false);
+        }),
+    );
+
+    it.effect("a symlinked .agents/nexi (not .agents) is refused too, a real chain is fine", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const outside = yield* makeWorkspace({ "secret.txt": "outside" });
-        const workspaceRoot = yield* makeWorkspace({ [`${LEGACY}/keep.json`]: "k" });
-        yield* fileSystem.symlink(outside, path.join(workspaceRoot, LEGACY, "link"));
-        const outcome = yield* migrateLegacyProjectStateDir(workspaceRoot);
-        expect(outcome.moved).toEqual(["keep.json"]);
-        expect(outcome.kept).toEqual(["link"]);
-        expect(yield* fileSystem.exists(path.join(outside, "secret.txt"))).toBe(true);
-        expect(yield* fileSystem.exists(path.join(workspaceRoot, NEW, "link"))).toBe(false);
+        const real = yield* makeWorkspace({ ".agents/nexi/x": "x" });
+        expect(yield* projectStateDirIsContained(real)).toBe(true);
+        expect(yield* projectStateDirIsContained(yield* makeWorkspace({}))).toBe(true);
+        const linked = yield* makeWorkspace({ ".agents/keep": "k", ".git/keep": "k" });
+        yield* fileSystem.symlink(path.join(linked, ".git"), path.join(linked, ".agents/nexi"));
+        expect(yield* projectStateDirIsContained(linked)).toBe(false);
       }),
     );
   });

@@ -2,12 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   isNexiStateDirEnabled,
-  isProjectStatePath,
-  LEGACY_NEXI_PROJECT_STATE_DIR,
   NEXI_PROJECT_STATE_DIR,
   NEXI_STATE_DIR_FLAG_ENV,
   PROJECT_STATE_DIR,
-  projectStateReadDirNames,
   resolveProjectStateDirName,
   toPhysicalProjectStatePath,
 } from "./t3teamProjectStateDir.ts";
@@ -90,34 +87,9 @@ describe("project state dir resolver", () => {
 describe("two-segment state dir", () => {
   const NEW = ".agents/nexi";
 
-  it("reads the new dir first, then the legacy one, and only writes the new one", () => {
+  it("writes the two-segment dir", () => {
     expect(NEXI_PROJECT_STATE_DIR).toBe(NEW);
-    expect(LEGACY_NEXI_PROJECT_STATE_DIR).toBe(".nexi");
     expect(PROJECT_STATE_DIR).toBe(NEW);
-    expect(projectStateReadDirNames(NEW)).toEqual([NEW, ".nexi"]);
-    expect(projectStateReadDirNames(".t3team")).toEqual([".t3team"]);
-  });
-
-  it("recognises a path inside any state dir this product has used", () => {
-    for (const path of [
-      ".agents/nexi/a",
-      ".nexi/a",
-      ".t3team/a",
-      "./.agents/nexi/a",
-      ".agents\\nexi\\a",
-    ]) {
-      expect(isProjectStatePath(path)).toBe(true);
-    }
-    // Neighbours are not the state dir: a sibling under .agents, a lookalike prefix, a nested one.
-    for (const path of [
-      ".agents/skills/a",
-      ".agents/nexi-x/a",
-      ".nexi-dev/a",
-      "src/.nexi/a",
-      "AGENTS.md",
-    ]) {
-      expect(isProjectStatePath(path)).toBe(false);
-    }
   });
 
   it("maps canonical paths onto the two-segment dir, idempotently", () => {
@@ -133,6 +105,10 @@ describe("two-segment state dir", () => {
     for (const physical of ["/ws/.agents/nexi/recipes/r", "/ws/.nexi/recipes/r", ".nexi/x"]) {
       expect(toPhysicalProjectStatePath(physical, NEW)).toBe(physical);
     }
+    // A relative Windows path keeps its backslashes all the way through.
+    expect(toPhysicalProjectStatePath(".t3team\\recipes\\x", NEW)).toBe(
+      ".agents\\nexi\\recipes\\x",
+    );
     expect(toPhysicalProjectStatePath(toPhysicalProjectStatePath(".t3team/a", NEW), NEW)).toBe(
       ".agents/nexi/a",
     );

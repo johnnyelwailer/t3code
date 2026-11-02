@@ -19,19 +19,7 @@ const makeAccess = Effect.fn("makeAccess")(function* () {
 });
 
 it.layer(NodeServices.layer)("workspace file access and the state dir", (it) => {
-  describe("writable paths", () => {
-    it.effect("writes under .agents/nexi and the legacy .nexi", () =>
-      Effect.gen(function* () {
-        const { access, root, fileSystem, pathService } = yield* makeAccess();
-        yield* Effect.promise(() => access.writeText(".agents/nexi/machine.json", "{}"));
-        yield* Effect.promise(() => access.writeText(".nexi/machine.json", "{}"));
-        expect(yield* fileSystem.exists(pathService.join(root, ".agents/nexi/machine.json"))).toBe(
-          true,
-        );
-        expect(yield* Effect.promise(() => access.exists(".nexi/machine.json"))).toBe(true);
-      }),
-    );
-
+  describe("reserved and escaping paths", () => {
     it.effect("still refuses the reserved top-level entries, even through .agents", () =>
       Effect.gen(function* () {
         const { access } = yield* makeAccess();

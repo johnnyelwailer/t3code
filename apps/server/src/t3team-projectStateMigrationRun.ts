@@ -18,6 +18,7 @@
  *
  * @module t3team-projectStateMigrationRun
  */
+import { projectStateDirIsContainedNode } from "./t3team-projectStateContainment.ts";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
@@ -59,6 +60,8 @@ export const runStateMigration = Effect.fn("runStateMigration")(function* (
   const withLock = options.withJournalLock ?? (<A, E, R>(effect: Effect.Effect<A, E, R>) => effect);
   const throttleEvery = options.throttleEvery ?? 200;
   const throttleMs = options.throttleMs ?? 25;
+  // A state dir that is a symlink never receives the copy.
+  if (!(yield* Effect.promise(() => projectStateDirIsContainedNode(toRoot)))) return undefined;
   const targetRoot = NodePath.join(toRoot, HIDDEN_T3TEAM_DIR);
   let journal = yield* readStateMigrationJournal(toRoot);
   if (!journal) return undefined;

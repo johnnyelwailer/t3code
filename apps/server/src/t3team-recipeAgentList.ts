@@ -36,7 +36,13 @@ const listProjectLocalRecipes = Effect.fn("listProjectLocalRecipes")(function* (
       const entryStat = yield* fileSystem
         .stat(recipePath)
         .pipe(Effect.catch(() => Effect.succeed(null)));
-      if (!entryStat || entryStat.type !== "Directory" || seenEntries.has(entry)) {
+      if (!entryStat || entryStat.type !== "Directory") {
+        continue;
+      }
+      if (seenEntries.has(entry)) {
+        input.out.diagnostics.push(
+          `Recipe directory ${recipePath} is shadowed by the same recipe in a newer state directory.`,
+        );
         continue;
       }
       seenEntries.add(entry);

@@ -6,9 +6,13 @@
  * @module t3team-projectStateReadRoots
  */
 import {
+  NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
-  projectStateReadDirNames,
 } from "@t3tools/project-context/t3teamProjectStateDir";
+import {
+  LEGACY_NEXI_PROJECT_STATE_DIR,
+  projectStateReadDirNames,
+} from "@t3tools/project-context/t3team-projectStateLayout";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -41,12 +45,12 @@ const projectStateReadCandidates = (
 
 /** The first existing candidate for `workspaceRelative`; when none exists, the write-dir one, so
  * a caller that creates the file lands in the new location. */
-export const resolveProjectStateReadPath = Effect.fn("resolveProjectStateReadPath")(function* (
+export const resolveStateReadPathWith = Effect.fn("resolveStateReadPathWith")(function* (
+  fileSystem: FileSystem.FileSystem,
+  pathService: Path.Path,
   workspaceRoot: string,
   workspaceRelative: string,
 ) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const pathService = yield* Path.Path;
   const candidates = projectStateReadCandidates(pathService, workspaceRoot, workspaceRelative);
   for (const candidate of candidates) {
     if (yield* fileSystem.exists(candidate).pipe(Effect.orElseSucceed(() => false))) {
@@ -55,3 +59,30 @@ export const resolveProjectStateReadPath = Effect.fn("resolveProjectStateReadPat
   }
   return candidates[0]!;
 });
+
+export const resolveProjectStateReadPath = Effect.fn("resolveProjectStateReadPath")(function* (
+  workspaceRoot: string,
+  workspaceRelative: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  return yield* resolveStateReadPathWith(fileSystem, pathService, workspaceRoot, workspaceRelative);
+});
+
+const NEW_SEGMENT = /^(.*)([\\/])\.agents[\\/]nexi(?=[\\/])/s;
+const LEGACY_SEGMENT = /[\\/]\.nexi[\\/]/;
+
+/** The legacy sibling of an absolute path inside the new state dir (`/ws/.agents/nexi/x` becomes
+ * `/ws/.nexi/x`); undefined for any other path, and when `.agents/nexi` is not the write dir. */
+export const legacyStatePathOf = (absolutePath: string): string | undefined => {
+  if (PROJECT_STATE_DIR !== NEXI_PROJECT_STATE_DIR) return undefined;
+  const match = NEW_SEGMENT.exec(absolutePath);
+  if (match === null) return undefined;
+  return `${match[1]}${match[2]}${LEGACY_NEXI_PROJECT_STATE_DIR}${absolutePath.slice(match[0].length)}`;
+};
+
+/** Whether the path is a legacy `.nexi` file the product only reads, never rewrites in place. */
+export const isLegacyStatePath = (absolutePath: string): boolean =>
+  PROJECT_STATE_DIR === NEXI_PROJECT_STATE_DIR &&
+  LEGACY_SEGMENT.test(absolutePath) &&
+  legacyStatePathOf(absolutePath) === undefined;

@@ -9,8 +9,8 @@
  *
  * @module t3team-linkedRemoteProjectStateInspect
  */
+import { LEGACY_NEXI_PROJECT_STATE_DIR } from "@t3tools/project-context/t3team-projectStateLayout";
 import {
-  LEGACY_NEXI_PROJECT_STATE_DIR,
   NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
   T3TEAM_PROJECT_STATE_DIR,

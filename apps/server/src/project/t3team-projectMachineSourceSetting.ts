@@ -16,6 +16,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import { machineRepositoryFromRemote } from "../cloud/t3team-cloudSessionMachineNames.ts";
+import { assertProjectStateDirContained } from "../t3team-projectStateContainment.ts";
 import { projectStateReadPaths } from "../t3team-projectStateReadRoots.ts";
 
 export const MACHINE_SOURCE_FILE = "machine-source.json";
@@ -129,6 +130,7 @@ export const writeMachineSource = Effect.fn("projectMachine.writeSource")(functi
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = settingPath(workspaceRoot, path);
+  yield* assertProjectStateDirContained(workspaceRoot);
   if (choice === null || (choice.url === undefined && choice.branch === undefined)) {
     // A reset removes every state dir's copy, or the legacy one would resurface.
     for (const candidate of settingReadPaths(workspaceRoot, path)) {

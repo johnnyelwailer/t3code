@@ -32,6 +32,10 @@
       "types": "./src/t3teamProjectStateDir.ts",
       "import": "./src/t3teamProjectStateDir.ts"
     },
+    "./t3team-projectStateLayout": {
+      "types": "./src/t3team-projectStateLayout.ts",
+      "import": "./src/t3team-projectStateLayout.ts"
+    },
     "./t3teamFeatureFlags": {
       "types": "./src/t3teamFeatureFlags.ts",
       "import": "./src/t3teamFeatureFlags.ts"

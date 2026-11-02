@@ -92,8 +92,52 @@ it.layer(NodeServices.layer)("scanCheckout finds machine.json at either location
         expect(result.candidates).toEqual([]);
         expect(result.rejected[0]).toMatchObject({
           path: NEW,
-          reason: `${NEW} is not a valid machine file.`,
+          reason: `${NEW} is not a valid machine file. ${LEGACY} exists and was not used.`,
         });
+      }),
+    );
+
+    it.effect("an unreadable new file says a legacy file exists and was not used", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          [NEW]: " ".repeat(1024 * 1024 + 1),
+          [LEGACY]: machine(".devcontainer/devcontainer.json"),
+          ".devcontainer/devcontainer.json": devcontainer,
+        });
+        expect(result.candidates).toEqual([]);
+        expect(result.rejected[0]?.reason).toBe(
+          `${NEW} is larger than 1 MB. ${LEGACY} exists and was not used.`,
+        );
+      }),
+    );
+
+    it.effect("without a legacy file the rejection says nothing about one", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({ [NEW]: `{ "version": 2 }` });
+        expect(result.rejected[0]?.reason).toBe(`${NEW} is not a valid machine file.`);
+      }),
+    );
+
+    it.effect("a definition that shadows a different legacy file carries a note", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          [NEW]: machine(".devcontainer/devcontainer.json"),
+          [LEGACY]: machine(".devcontainer.json"),
+          ".devcontainer/devcontainer.json": devcontainer,
+        });
+        expect(result.candidates[0]?.note).toBe(`${NEW} shadows ${LEGACY}, which is not used.`);
+      }),
+    );
+
+    it.effect("no note when the legacy file is identical, absent, or the only one", () =>
+      Effect.gen(function* () {
+        const same = machine(".devcontainer/devcontainer.json");
+        const files = { ".devcontainer/devcontainer.json": devcontainer };
+        expect(
+          (yield* scan({ ...files, [NEW]: same, [LEGACY]: same })).candidates[0]?.note,
+        ).toBeUndefined();
+        expect((yield* scan({ ...files, [NEW]: same })).candidates[0]?.note).toBeUndefined();
+        expect((yield* scan({ ...files, [LEGACY]: same })).candidates[0]?.note).toBeUndefined();
       }),
     );
 
@@ -132,7 +176,7 @@ it.layer(NodeServices.layer)("scanCheckout finds machine.json at either location
         },
       });
 
-    it.effect("asks for the new location first and stops at the first hit", () =>
+    it.effect("asks for the new location first; the legacy one is read only to note a shadow", () =>
       Effect.gen(function* () {
         const reads: string[] = [];
         const result = yield* remote(
@@ -140,8 +184,7 @@ it.layer(NodeServices.layer)("scanCheckout finds machine.json at either location
           reads,
         );
         expect(result.candidates[0]).toMatchObject({ machineFilePath: NEW });
-        expect(reads[0]).toBe(NEW);
-        expect(reads).not.toContain(LEGACY);
+        expect(reads.slice(0, 2)).toEqual([NEW, LEGACY]);
       }),
     );
 

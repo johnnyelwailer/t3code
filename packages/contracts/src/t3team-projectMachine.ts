@@ -100,6 +100,8 @@ export const ProjectMachineDefinition = Schema.Struct({
    * so an image cache keyed on this alone would serve a stale image after such a file changes.
    */
   hash: TrimmedNonEmptyString,
+  /** Something to show with it, for example that it shadows a legacy `.nexi/machine.json`. */
+  note: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(500))),
 });
 export type ProjectMachineDefinition = typeof ProjectMachineDefinition.Type;
 

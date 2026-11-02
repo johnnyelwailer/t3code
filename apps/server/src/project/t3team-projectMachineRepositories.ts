@@ -1,3 +1,4 @@
+import { resolveStateReadPathWith } from "../t3team-projectStateReadRoots.ts";
 import { type Project, TrimmedNonEmptyString } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -5,11 +6,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import {
-  HIDDEN_T3TEAM_DIR,
-  MANIFEST_FILE_NAME,
-  REFERENCES_DIR_NAME,
-} from "../t3team-project-repository-utils.ts";
+import { REFERENCE_MANIFEST_RELATIVE_PATH } from "../t3team-project-repository-utils.ts";
 import { repositoryLookupCandidates } from "../t3team-toolBrokerStartChildLinkedRepository.ts";
 
 const decodeManifest = Schema.decodeUnknownOption(
@@ -42,11 +39,13 @@ export const machineRepositories = Effect.fn("projectMachine.repositories")(func
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const exists = (file: string) => fs.exists(file).pipe(Effect.orElseSucceed(() => false));
-  const text = yield* fs
-    .readFileString(
-      path.join(project.workspaceRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME, MANIFEST_FILE_NAME),
-    )
-    .pipe(Effect.orElseSucceed(() => ""));
+  const manifestPath = yield* resolveStateReadPathWith(
+    fs,
+    path,
+    project.workspaceRoot,
+    REFERENCE_MANIFEST_RELATIVE_PATH,
+  );
+  const text = yield* fs.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""));
   const manifest = Option.getOrUndefined(decodeManifest(text));
   const ownLocal = yield* exists(path.join(project.workspaceRoot, ".git"));
   const ownUrl = project.repositoryIdentity?.locator.remoteUrl ?? manifest?.mainRepository?.url;

@@ -1,4 +1,5 @@
 /** One-time canonical normalization of manifests written before the main-repository rename. */
+import { isLegacyStatePath, legacyStatePathOf } from "./t3team-projectStateReadRoots.ts";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 
@@ -34,9 +35,17 @@ export const readNormalizedReferenceManifest = (
   manifestPath: string,
 ) =>
   Effect.gen(function* () {
-    const raw = yield* fileSystem.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""));
+    // A manifest only the legacy `.nexi` holds is read in place and never rewritten: the first
+    // real write (a bootstrap) lands in the new dir.
+    const legacyPath = legacyStatePathOf(manifestPath);
+    let raw = yield* fileSystem.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""));
+    let persist = !isLegacyStatePath(manifestPath);
+    if (raw.length === 0 && legacyPath !== undefined) {
+      raw = yield* fileSystem.readFileString(legacyPath).pipe(Effect.orElseSucceed(() => ""));
+      persist = false;
+    }
     const normalized = normalizeReferenceManifestJson(raw);
-    if (normalized !== raw) {
+    if (persist && normalized !== raw) {
       yield* fileSystem.writeFileString(manifestPath, normalized).pipe(
         Effect.catch((error) =>
           Effect.logWarning("reference manifest normalization was not persisted", {

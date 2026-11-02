@@ -38,9 +38,11 @@ const candidateOf = (repository: string, planned: PlannedRef, machine: ScannedMa
     path,
     kind: pointer ? "machine.json" : "devcontainer",
     author: planned.author,
-    summary: pointer
-      ? `${path} (devcontainer ${machine.devcontainerPath}) on ${planned.describe}`
-      : `${path} on ${planned.describe}`,
+    summary:
+      (pointer
+        ? `${path} (devcontainer ${machine.devcontainerPath}) on ${planned.describe}`
+        : `${path} on ${planned.describe}`) +
+      (machine.note === undefined ? "" : `. ${machine.note}`),
     commit: planned.commit,
     hash: machine.hash,
   };

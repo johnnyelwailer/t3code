@@ -30,6 +30,7 @@ function memoryFs(
   for (const file of files.keys()) mkdir(file.slice(0, file.lastIndexOf("/")));
   const fileSystem = FileSystem.makeNoop({
     exists: (target) => Effect.succeed(files.has(target) || directories.has(target)),
+    realPath: (target) => Effect.succeed(target),
     stat: (target) =>
       Effect.succeed({
         type: directories.has(target) ? "Directory" : "File",
