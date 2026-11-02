@@ -13,6 +13,14 @@ import {
   type T3TeamKickoffWorkItemRef,
   buildT3TeamKickoffWorkItemParameters,
 } from "~/t3team/t3team-kickoffWorkItemRef";
+import {
+  buildBundledSidecarRecipeKickoffMessage,
+  withWorkItemParameters,
+} from "~/t3team/t3team-sidecarRecipeLaunchMessage";
+import {
+  buildSidecarLaunchToolContext,
+  type SidecarLaunchToolContextSource,
+} from "~/t3team/t3team-sidecarLaunchToolContext";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
@@ -49,46 +57,11 @@ export function buildBundledSidecarRecipeWorkflowLaunch(input: {
   };
 }
 
-export function buildBundledSidecarRecipeKickoffMessage(input: {
-  readonly recipeId: string;
-  readonly parameters?: Record<string, unknown> | undefined;
-}): string {
-  const recipe = getBundledT3TeamRecipe(input.recipeId);
-  if (!recipe) {
-    return "";
-  }
-
-  if (recipe.id === "manage-project-recipes") {
-    const targetPath =
-      typeof input.parameters?.targetPath === "string" && input.parameters.targetPath.length > 0
-        ? input.parameters.targetPath
-        : undefined;
-    if (targetPath) {
-      return `Edit the recipe or plugin module at ${targetPath}. Make the smallest coherent change needed, keep the current ids and structure stable, show the diff, and write it back only after the user approves.`;
-    }
-  }
-
-  return recipe.promptTemplate ?? recipe.shortDescription;
-}
-
 type CreateSidecarRecipeThread = (input: {
   kickoffMessage: string;
   kickoffWorkflow?: BundledRecipeWorkflow;
   launchConfig: T3TeamKickoffLaunchConfig;
 }) => unknown | Promise<unknown>;
-
-function withWorkItemParameters(
-  workflow: BundledRecipeWorkflow,
-  workItem: T3TeamKickoffWorkItemRef | undefined,
-): BundledRecipeWorkflow {
-  const parameters = buildT3TeamKickoffWorkItemParameters(workItem);
-  if (Object.keys(parameters).length === 0) {
-    return workflow;
-  }
-  // Explicit parameters (user customization) win over the auto-injected work item, matching the
-  // bundled path; the `workItem` reference has no counterpart so it is always added.
-  return { ...workflow, parameters: { ...parameters, ...workflow.parameters } };
-}
 
 /**
  * Creates the thread through the host's composer path, then runs the bootstrap kickoff that
@@ -104,6 +77,7 @@ async function launchSidecarRecipeThread(input: {
   readonly kickoffWorkflow: BundledRecipeWorkflow | null;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly createThread: CreateSidecarRecipeThread;
+  readonly toolContextSource?: SidecarLaunchToolContextSource | undefined;
 }): Promise<boolean> {
   if (!input.backend || !input.environmentId) {
     return false;
@@ -139,7 +113,17 @@ async function launchSidecarRecipeThread(input: {
     kickoffInteractionMode: input.launchConfig.interactionMode,
     kickoffBranch: null,
     kickoffWorkflow: kickoffWorkflow ?? undefined,
-    toolContext: undefined,
+    // The surface's own context, so the launch's tool-context sync does not clear the thread's.
+    toolContext: input.toolContextSource
+      ? buildSidecarLaunchToolContext({
+          source: input.toolContextSource,
+          threadId,
+          title: input.title,
+          kickoffMessage: input.kickoffMessage,
+          kickoffWorkflow: kickoffWorkflow ?? undefined,
+          selectedToolIds: input.launchConfig.selectedToolIds,
+        })
+      : undefined,
     createdAt: new Date().toISOString(),
     onInitialUserMessageSent: undefined,
   });
@@ -158,6 +142,7 @@ export async function launchBundledSidecarRecipeThread(input: {
   readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly createThread: CreateSidecarRecipeThread;
+  readonly toolContextSource?: SidecarLaunchToolContextSource;
 }): Promise<boolean> {
   const recipe = getBundledT3TeamRecipe(input.recipeId);
   if (!recipe) {
@@ -185,6 +170,7 @@ export async function launchBundledSidecarRecipeThread(input: {
     }),
     launchConfig: input.launchConfig,
     createThread: input.createThread,
+    toolContextSource: input.toolContextSource,
   });
 }
 
@@ -203,6 +189,7 @@ export async function launchSidecarRecipeQuickStartThread(input: {
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly workItem?: T3TeamKickoffWorkItemRef;
   readonly createThread: CreateSidecarRecipeThread;
+  readonly toolContextSource?: SidecarLaunchToolContextSource;
 }): Promise<boolean> {
   const recipe = input.customization
     ? applyT3TeamRecipeQuickStartLaunchCustomization(input.quickStart, input.customization)
@@ -218,5 +205,6 @@ export async function launchSidecarRecipeQuickStartThread(input: {
     kickoffWorkflow: recipeWorkflow ? withWorkItemParameters(recipeWorkflow, input.workItem) : null,
     launchConfig: input.launchConfig,
     createThread: input.createThread,
+    toolContextSource: input.toolContextSource,
   });
 }

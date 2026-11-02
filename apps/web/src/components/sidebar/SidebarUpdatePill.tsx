@@ -220,10 +220,12 @@ function SidebarUpdateControl() {
 
   const action = state ? resolveDesktopUpdateButtonAction(state) : "none";
   const isDownloading = state?.status === "downloading";
+  const checkFailed =
+    state?.feed === "nexi-ghe" && state.status === "error" && state.errorContext === "check";
   const localUpdateVersion =
     state && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
   const everything = useUpdateEverything(localUpdateVersion);
-  const runsEverything = everything.hasUpdates && !isDownloading;
+  const runsEverything = everything.hasUpdates && !isDownloading && !checkFailed;
   const run = useUpdateEverythingRun();
   const isRunningEverything = run !== null;
   const showCheckIcon = shouldShowDesktopUpdateCheckIcon({
@@ -321,7 +323,7 @@ function SidebarUpdateControl() {
     void bridge
       .checkForUpdate()
       .then((result) => {
-        if (result.checked) return;
+        if (result.checked || state.feed === "nexi-ghe") return;
         toastManager.add(
           stackedThreadToast({
             type: "error",
@@ -332,6 +334,7 @@ function SidebarUpdateControl() {
         );
       })
       .catch((error) => {
+        if (state.feed === "nexi-ghe") return;
         toastManager.add(
           stackedThreadToast({
             type: "error",
@@ -390,7 +393,7 @@ function SidebarUpdateControl() {
       downloadPercent={state?.downloadPercent ?? null}
       isCheckAnimating={showCheckIcon && !prefersReducedMotion}
       onCheckAnimationIteration={handleCheckAnimationIteration}
-      status={iconStatus}
+      status={checkFailed && !showCheckIcon ? "error" : iconStatus}
     />
   );
   const confirmDialog = (

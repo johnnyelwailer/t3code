@@ -81,6 +81,74 @@ describe("rightPanelStore", () => {
     ).toEqual(["device", "diff", pr.id]);
   });
 
+  it("activatePinned selects no surface, opens the panel and keeps every tab", () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "files");
+    store.open(refA, "diff");
+    store.activatePinned(refA);
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+
+    expect(state.isOpen).toBe(true);
+    expect(state.activeSurfaceId).toBeNull();
+    expect(state.surfaces.map((surface) => surface.id)).toEqual(["files", "diff"]);
+    expect(useClosedViewStore.getState().entries).toEqual([]);
+
+    store.activateSurface(refA, "files");
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).activeSurfaceId,
+    ).toBe("files");
+  });
+
+  it("activatePinned reopens a hidden panel and does not touch closed-view history", () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "files");
+    store.open(refA, "diff");
+    store.closeSurface(refA, "diff");
+    const closedBefore = useClosedViewStore.getState().entries;
+    store.close(refA);
+    store.activatePinned(refA);
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+
+    expect(state.isOpen).toBe(true);
+    expect(state.activeSurfaceId).toBeNull();
+    expect(state.surfaces.map((surface) => surface.id)).toEqual(["files"]);
+    expect(useClosedViewStore.getState().entries).toEqual(closedBefore);
+  });
+
+  it("keeps the pinned selection, with or without tabs, through a persisted-state migration", () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "files");
+    store.activatePinned(refA);
+    store.activatePinned(refB);
+    const persisted = JSON.parse(
+      JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey }),
+    );
+    const migrated = migratePersistedRightPanelState(persisted);
+    const withTab = selectThreadRightPanelState(migrated.byThreadKey, refA);
+    const alone = selectThreadRightPanelState(migrated.byThreadKey, refB);
+
+    expect({ isOpen: withTab.isOpen, active: withTab.activeSurfaceId }).toEqual({
+      isOpen: true,
+      active: null,
+    });
+    expect(withTab.surfaces.map((surface) => surface.id)).toEqual(["files"]);
+    expect({ isOpen: alone.isOpen, active: alone.activeSurfaceId }).toEqual({
+      isOpen: true,
+      active: null,
+    });
+  });
+
+  it("activatePinned on a panel with no state opens it empty", () => {
+    useRightPanelStore.getState().activatePinned(refB);
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB);
+
+    expect({ isOpen: state.isOpen, active: state.activeSurfaceId, tabs: state.surfaces }).toEqual({
+      isOpen: true,
+      active: null,
+      tabs: [],
+    });
+  });
+
   it("reopens the active tab first after a bulk close", () => {
     const store = useRightPanelStore.getState();
     store.open(refA, "files");

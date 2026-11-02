@@ -41,6 +41,7 @@ const makePort = (input: {
   const mirror = input.mirror === "unsynced" ? [] : (input.mirror ?? []);
   const port: WorkItemReadPort = {
     mirrorReady: () => Effect.succeed(input.mirror !== "unsynced"),
+    mirrorFreshness: () => Effect.succeed({ syncedAtMs: undefined, stale: false }),
     mirrorSearch: (_b, filters, limit, offset) => {
       mirrorQueries.push(filters);
       return Effect.succeed(mirror.slice(offset, offset + limit));

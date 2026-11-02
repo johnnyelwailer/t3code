@@ -261,6 +261,7 @@ import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
 import type { WsRpcHandlerServices } from "./t3team-wsRpcServices.ts";
+import { recordContextBinding } from "./t3team-contextBinding.ts";
 import { prepareThreadHandoff, recordThreadHandoff } from "./t3team-threadHandoff.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { makeSettleParkedWorkflowStop } from "./t3team-settleParkedWorkflowStopLive.ts";
@@ -2386,6 +2387,14 @@ export const layerWsRpc = (
             ),
           ),
         [WS_METHODS.t3teamThreadHandoffRecord]: (input) => recordThreadHandoff(input, threadFacts),
+        [WS_METHODS.t3teamContextBindingRecord]: (input) =>
+          recordContextBinding(input, threadFacts).pipe(
+            Effect.provideService(
+              ThreadManagementService.ThreadManagementService,
+              threadManagement,
+            ),
+            Effect.provideService(ProjectStore.ProjectStoreV2, projectStore),
+          ),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),

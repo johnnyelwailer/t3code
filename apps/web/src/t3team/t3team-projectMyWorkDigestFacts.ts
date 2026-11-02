@@ -9,8 +9,6 @@ import {
 import { digestChangeRequestScope } from "~/t3team/t3team-digestRecipeAction";
 import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 
-const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
-
 /**
  * The PR's page on its own host. A GitHub Enterprise PR links to its GHE install; a PR without a
  * host (older server payloads, blocker mentions) falls back to github.com.
@@ -88,7 +86,6 @@ export function digestActionLine(graph: DigestGraph, ticketId: string): DigestAc
 export function digestItemActions(
   graph: DigestGraph,
   ticketId: string,
-  nowMs: number,
 ): readonly DigestItemAction[] {
   const actions: DigestItemAction[] = [];
   const blocker = graph.blockers.find((entry) => entry.ticketId === ticketId);
@@ -156,11 +153,6 @@ export function digestItemActions(
     actions.push(onPr(named("Handle comments", commented), "pr-handle-comments", commented));
     return actions;
   }
-  const stale = graph.claims.some(
-    (claim) =>
-      claim.ticketId === ticketId && nowMs - Date.parse(claim.lastActivityAt) > STALE_AFTER_MS,
-  );
-  if (stale) actions.push({ label: "Nudge", recipe: "nudge-agent-thread" });
   return actions;
 }
 
