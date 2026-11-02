@@ -16,23 +16,21 @@ private const val PANEL_RADIUS_DP = 6f
 /** Each side's panel, left to right, inside an image row. */
 internal fun imagePanels(
   sides: List<String>,
-  top: Int,
-  bottom: Int,
-  width: Int,
+  bounds: RectF,
   density: Float
 ): List<Pair<String, RectF>> {
   if (sides.isEmpty()) return emptyList()
   val padding = PANEL_PADDING_DP * density
   val gap = PANEL_GAP_DP * density
-  val panelWidth = (width - padding * 2 - gap * (sides.size - 1)) / sides.size
+  val panelWidth = (bounds.width() - padding * 2 - gap * (sides.size - 1)) / sides.size
   return sides.mapIndexed { index, side ->
-    val left = padding + index * (panelWidth + gap)
-    side to RectF(left, top + padding, left + panelWidth, bottom - padding)
+    val left = bounds.left + padding + index * (panelWidth + gap)
+    side to RectF(left, bounds.top + padding, left + panelWidth, bounds.bottom - padding)
   }
 }
 
 internal fun imageSideAt(sides: List<String>, x: Float, width: Int, density: Float): String? =
-  imagePanels(sides, 0, 1, width, density).firstOrNull { (_, rect) ->
+  imagePanels(sides, RectF(0f, 0f, width.toFloat(), 1f), density).firstOrNull { (_, rect) ->
     x >= rect.left && x <= rect.right
   }?.first
 

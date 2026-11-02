@@ -1216,7 +1216,8 @@ private class DiffCanvasView(context: Context) : View(context) {
       size = style.fileHeaderSubtextFontSizePx,
       weight = style.fileHeaderSubtextFontWeight,
     )
-    images.drawRow(canvas, row, top, bottom, width, theme, textPaint)
+    val bounds = RectF(0f, top.toFloat(), width.toFloat(), bottom.toFloat())
+    images.drawRow(canvas, row, bounds, theme, textPaint)
     drawBottomBorder(canvas, bottom)
   }
 
