@@ -153,8 +153,27 @@ export function getDesktopUpdateDisabledReason(
 }
 
 export function getDesktopUpdateIdleTooltip(
-  state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
+  state:
+    | (Pick<DesktopUpdateState, "enabled" | "status" | "message"> &
+        Partial<Pick<DesktopUpdateState, "feed" | "errorContext" | "nextCheckAt">>)
+    | null,
 ) {
+  if (
+    state?.enabled &&
+    state.feed === "nexi-ghe" &&
+    state.status === "error" &&
+    state.errorContext === "check"
+  ) {
+    const next = state.nextCheckAt ? new Date(state.nextCheckAt) : null;
+    const retry =
+      next && Number.isFinite(next.getTime())
+        ? `Next automatic check: ${next.toLocaleString()}.`
+        : "The next automatic check is being scheduled.";
+    return {
+      title: "Could not check for updates",
+      detail: `${state.message ?? "The update feed did not answer."} ${retry} Click to try now.`,
+    };
+  }
   const disabledReason = getDesktopUpdateDisabledReason(state);
   return disabledReason
     ? { title: "Updates unavailable", detail: disabledReason }

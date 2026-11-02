@@ -799,7 +799,12 @@
     "apps/web/src/components/chat/MessagesTimeline.browser.test.tsx",
     "apps/web/src/components/ChatView.browser.test.tsx",
     "apps/web/src/components/chat/ThreadRelationshipsControl.browser.test.tsx",
-    "apps/server/src/usage/UsageService.test.ts"
+    "apps/server/src/usage/UsageService.test.ts",
+    "apps/web/src/components/desktopUpdate.logic.ts",
+    "apps/web/src/components/desktopUpdate.logic.test.ts",
+    "apps/web/src/components/sidebar/SidebarUpdatePill.tsx",
+    "apps/web/src/components/sidebar/SidebarUpdatePill.browser.test.tsx",
+    "apps/web/src/components/sidebar/DesktopUpdateStatusIcon.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

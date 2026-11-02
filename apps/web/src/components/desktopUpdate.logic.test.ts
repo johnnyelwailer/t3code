@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 
 import {
+  getDesktopUpdateIdleTooltip,
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
   getDesktopUpdateReleaseHistoryUrl,
@@ -88,5 +89,33 @@ describe("canCheckForUpdate", () => {
         downloadedVersion: "1.1.0",
       }),
     ).toBe(true);
+  });
+});
+
+describe("Nexi failed-check tooltip", () => {
+  it("keeps the failure and the scheduler's time with a retry instruction", () => {
+    const nextCheckAt = "2026-11-02T13:45:00.000Z";
+    const tooltip = getDesktopUpdateIdleTooltip({
+      ...baseState,
+      status: "error",
+      feed: "nexi-ghe",
+      errorContext: "check",
+      message: "Feed timed out.",
+      nextCheckAt,
+    });
+    expect(tooltip.title).toBe("Could not check for updates");
+    expect(tooltip.detail).toContain("Feed timed out.");
+    expect(tooltip.detail).toContain(new Date(nextCheckAt).toLocaleString());
+    expect(tooltip.detail).toContain("Click to try now.");
+  });
+  it("does not invent a deadline when one is absent", () => {
+    const tooltip = getDesktopUpdateIdleTooltip({
+      ...baseState,
+      status: "error",
+      feed: "nexi-ghe",
+      errorContext: "check",
+    });
+    expect(tooltip.detail).toContain("being scheduled");
+    expect(getDesktopUpdateIdleTooltip(baseState).title).toBe("Check for updates");
   });
 });
