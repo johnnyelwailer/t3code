@@ -1,7 +1,7 @@
 import {
   type RuntimeRequestId,
   type ScopedThreadRef,
-  desktopRouteCardFrom,
+  desktopRouteCardOf,
 } from "@t3tools/contracts";
 import { memo, use, useEffect, useEffectEvent, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
@@ -47,8 +47,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   const activePrompt = pendingUserInputs[0];
   if (!activePrompt) return null;
   const [onlyQuestion] = activePrompt.questions;
-  const routeCard =
-    activePrompt.questions.length === 1 && onlyQuestion ? desktopRouteCardFrom(onlyQuestion) : null;
+  const routeCard = desktopRouteCardOf(activePrompt.questions);
   if (routeCard !== null && onlyQuestion) {
     return (
       <T3TeamDesktopRoutePrompt

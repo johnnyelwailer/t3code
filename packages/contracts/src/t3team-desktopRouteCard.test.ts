@@ -9,7 +9,7 @@ import {
   desktopRouteQuestionLine,
   encodeDesktopRouteQuestionId,
 } from "./t3team-desktopRoute.ts";
-import { desktopRouteCardFrom } from "./t3team-desktopRouteCard.ts";
+import { desktopRouteCardFrom, desktopRouteCardOf } from "./t3team-desktopRouteCard.ts";
 
 const options = [
   DESKTOP_ROUTE_ONCE_LABEL,
@@ -75,5 +75,13 @@ describe("desktopRouteCardFrom", () => {
       always: null,
       decline: DESKTOP_ROUTE_DECLINE_LABEL,
     });
+  });
+
+  it("is a card only for a request that is exactly one desktop-route question", () => {
+    const q = question({ target: "registry.npmjs.org", internal: false });
+    expect(desktopRouteCardOf([q])).not.toBeNull();
+    expect(desktopRouteCardOf([q, q])).toBeNull();
+    expect(desktopRouteCardOf([])).toBeNull();
+    expect(desktopRouteCardOf([{ ...q, id: "other" }])).toBeNull();
   });
 });
