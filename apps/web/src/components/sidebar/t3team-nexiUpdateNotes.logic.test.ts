@@ -12,9 +12,19 @@ describe("plainReleaseNotes", () => {
       `fix(nexi-work): a phone cloud session starts behind an open draft, never ending in an error by @pj in ${GHE}/816`,
     ];
     expect(plainReleaseNotes(raw)).toEqual([
-      "Do not bundle ffi-rs into the server tarball; a smoke step that shows its errors",
       "A phone cloud session starts behind an open draft, never ending in an error",
     ]);
+  });
+
+  it("drops build-tooling lines with the publish scope, whatever the type", () => {
+    expect(
+      plainReleaseNotes([
+        `fix(publish): do not bundle ffi-rs into the server tarball; a smoke step that shows its errors by @pj in ${GHE}/984`,
+        "feat(publish)!: sign the installer",
+        "fix(web): publish dialog closes on Escape",
+        "fix(publisher): keeps its scope",
+      ]),
+    ).toEqual(["Publish dialog closes on Escape", "Keeps its scope"]);
   });
 
   it("drops maintenance lines, PR numbers and the changelog footer from a whole release", () => {

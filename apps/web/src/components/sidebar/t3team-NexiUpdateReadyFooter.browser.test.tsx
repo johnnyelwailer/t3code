@@ -103,7 +103,7 @@ describe("Nexi ready update in the footer", () => {
       await expect.element(page.getByText("Nexi Work 0.1.2-rc.8 is ready")).toBeVisible();
       const text = popover()?.textContent ?? "";
       expect(text).toContain("A phone cloud session starts behind an open draft");
-      expect(text).toContain("Do not bundle ffi-rs into the server tarball");
+      expect(text).not.toContain("ffi-rs");
       expect(text).not.toMatch(/chore|pin vendor|@pj|https?:/);
       await userEvent.click(page.getByRole("button", { name: "Install now" }));
       await vi.waitFor(() => expect(installUpdate).toHaveBeenCalledWith("0.1.2-rc.8"));

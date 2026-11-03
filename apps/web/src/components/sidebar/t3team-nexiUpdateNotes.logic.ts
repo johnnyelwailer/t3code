@@ -1,7 +1,7 @@
 const MAX_NOTES = 5;
 
 const CONVENTIONAL_PREFIX =
-  /^(feat|fix|perf|revert|chore|ci|docs|refactor|test|tests|build|style)(?:\([^)]*\))?!?:\s*/iu;
+  /^(feat|fix|perf|revert|chore|ci|docs|refactor|test|tests|build|style)(?:\(([^)]*)\))?!?:\s*/iu;
 const MAINTENANCE_TYPES = new Set([
   "chore",
   "ci",
@@ -12,6 +12,7 @@ const MAINTENANCE_TYPES = new Set([
   "build",
   "style",
 ]);
+const TOOLING_SCOPES = new Set(["publish"]);
 const MAINTENANCE_LEAD = /^(pin|bump)\b/iu;
 const CHANGELOG_LINE = /full changelog|\/compare\//iu;
 
@@ -19,6 +20,16 @@ const AUTHOR_AND_LINK = /\s+by\s+@[\w.-]+(?:\s+in\s+https?:\/\/\S+)?/gu;
 const LINK_MARKDOWN = /\[([^\]]+)\]\([^)]*\)/gu;
 const BARE_URL = /https?:\/\/\S+/gu;
 const PR_REFERENCE = /\s*\(#\d+(?:,\s*#\d+)*\)|\s#\d+\b/gu;
+
+function isMaintenancePrefix(type: string, scope: string): boolean {
+  return (
+    MAINTENANCE_TYPES.has(type.toLowerCase()) ||
+    scope
+      .toLowerCase()
+      .split(",")
+      .some((part) => TOOLING_SCOPES.has(part.trim()))
+  );
+}
 
 function plainLine(raw: string): string | null {
   const line = raw.trim().replace(/^[-*]\s+/u, "");
@@ -30,7 +41,7 @@ function plainLine(raw: string): string | null {
     .replace(BARE_URL, "")
     .replace(PR_REFERENCE, "");
   const prefix = CONVENTIONAL_PREFIX.exec(withoutNoise);
-  if (prefix !== null && MAINTENANCE_TYPES.has((prefix[1] ?? "").toLowerCase())) return null;
+  if (prefix !== null && isMaintenancePrefix(prefix[1] ?? "", prefix[2] ?? "")) return null;
   const human = withoutNoise.replace(CONVENTIONAL_PREFIX, "").replace(/\s+/gu, " ").trim();
   if (human === "" || MAINTENANCE_LEAD.test(human)) return null;
   return human.charAt(0).toUpperCase() + human.slice(1);
@@ -39,7 +50,7 @@ function plainLine(raw: string): string | null {
 /**
  * Release notes for a person: the PR titles of a generated "What's changed" list reduced to their
  * human part, without author, link, PR number or conventional-commit prefix. Maintenance lines
- * (chore, pin, ci, docs, ...) are dropped, repeats collapse, and at most five remain.
+ * (chore, pin, ci, docs, ..., or the publish scope) are dropped, repeats collapse, and at most five remain.
  */
 export function plainReleaseNotes(items: ReadonlyArray<string>): ReadonlyArray<string> {
   const seen = new Set<string>();
