@@ -98,6 +98,7 @@ import { appAtomRegistry } from "../../state/atom-registry";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { pendingDraftSendBlock } from "../../extensions/t3team-pendingDraft";
 import { PendingDraftCardSlot } from "../../extensions/t3team-PendingDraftCardSlot";
+import { PendingDraftFallbackNotice } from "../../extensions/t3team-PendingDraftFallbackNotice";
 
 function NewTaskWorkspaceIcon(props: {
   readonly workspaceMode: "local" | "worktree";
@@ -871,9 +872,11 @@ export function NewTaskDraftScreen(props: {
       >
         <View className="flex-1 justify-end gap-3 p-4">
           {environmentControl}
-          <Text className="text-foreground-muted">
-            Your draft is saved on this device. Connect to an environment to choose its first model.
-          </Text>
+          <PendingDraftFallbackNotice
+            pendingDraft={flow.pendingDraft}
+            draftKey={flow.draftKey}
+            stockText="Your draft is saved on this device. Connect to an environment to choose its first model."
+          />
           <ComposerEditor
             draftKey={flow.draftKey}
             value={flow.prompt}

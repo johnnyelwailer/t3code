@@ -31,6 +31,7 @@ const reactTests = [
   "src/features/threads/t3team-DesktopRouteQuestion.test.tsx",
   "src/features/threads/NewTaskDraftRouteScreen.test.tsx",
   "src/extensions/t3team-draftModel.test.tsx",
+  "src/extensions/t3team-PendingDraftFallbackNotice.test.tsx",
   "src/native/NativeHeaderToolbar.test.tsx",
   "src/native/V5StackHeader.ios.test.tsx",
   "src/native/useRestingTopOffset.test.tsx",
