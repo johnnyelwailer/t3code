@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
-import { act, render } from "../../../test/render";
+import { act, render, stubGlobal } from "../../../test/render";
+import { toastManager } from "../ui/toast";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
 
 const mocks = vi.hoisted(() => {
@@ -139,5 +140,36 @@ describe("SidebarUpdatePill update everything", () => {
 
     await userEvent.keyboard("{Escape}");
     await vi.waitFor(() => expect(document.activeElement).toBe(button.element()));
+  });
+});
+
+describe("Nexi failed update check", () => {
+  it("retries the check even when providers have updates", async () => {
+    const state: DesktopUpdateState = {
+      ...nightlyUpdate([]),
+      status: "error",
+      feed: "nexi-ghe",
+      errorContext: "check",
+      issue: "unreachable",
+      message: "Feed timed out.",
+      nextCheckAt: "2026-11-02T13:45:00.000Z",
+      availableVersion: null,
+    };
+    setup(state, { hasUpdates: true });
+    const checkForUpdate = vi.fn().mockResolvedValue({ checked: false, state });
+    const toast = vi.spyOn(toastManager, "add");
+    using _bridge = stubGlobal("desktopBridge", { checkForUpdate });
+    try {
+      await using screen = await render(<SidebarUpdatePill />);
+      const button = screen.getByRole("button", { name: /Could not check for updates/ });
+      expect(button.element().getAttribute("aria-label")).toContain("Feed timed out.");
+      expect(button.element().getAttribute("aria-label")).toContain("Click to try now.");
+      await userEvent.click(button);
+      await vi.waitFor(() => expect(checkForUpdate).toHaveBeenCalledOnce());
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(toast).not.toHaveBeenCalled();
+    } finally {
+      toast.mockRestore();
+    }
   });
 });

@@ -205,19 +205,21 @@ it.layer(layerTest)("CursorDriver", (it) => {
 
   it.effect("keeps an explicit API key's account out of the CLI login's Limits", () =>
     Effect.gen(function* () {
-      const me = vi.spyOn(Cursor, "me").mockResolvedValue({
-        apiKeyName: "Configured",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        userEmail: "cursor@example.com",
-      });
-      const models = vi
-        .spyOn(Cursor.models, "list")
-        .mockResolvedValue([{ id: "auto", displayName: "Auto" }]);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          me.mockRestore();
-          models.mockRestore();
-        }),
+      const client = HttpClient.make((request) =>
+        Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            Response.json(
+              request.url.endsWith("/v1/me")
+                ? {
+                    apiKeyName: "Configured",
+                    createdAt: "2026-01-01T00:00:00.000Z",
+                    userEmail: "cursor@example.com",
+                  }
+                : { items: [{ id: "auto", displayName: "Auto" }] },
+            ),
+          ),
+        ),
       );
       const instance = yield* CursorDriver.create({
         instanceId: ProviderInstanceId.make("cursor-explicit-key"),
@@ -229,7 +231,7 @@ it.layer(layerTest)("CursorDriver", (it) => {
           { name: "CURSOR_AUTH_TOKEN", value: "", sensitive: true },
         ],
         config: CursorDriver.defaultConfig(),
-      });
+      }).pipe(Effect.provideService(HttpClient.HttpClient, client));
       const snapshot = yield* instance.snapshot.refresh;
       expect(snapshot.auth).toMatchObject({ status: "authenticated", type: "api-key" });
       expect(snapshot.usageLimits?.unavailable).toEqual({ reason: "unsupported" });
