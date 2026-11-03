@@ -9,12 +9,12 @@
  * | signal                                   | warn        | critical    |
  * |------------------------------------------|-------------|-------------|
  * | macOS `kern.memorystatus_vm_pressure_level` | 2 (warn) | 4 (critical) |
- * | host available / total (non-darwin only) | < 15 %      | < 7 %       |
- * | T3 app-tree RSS / host total             | >= 25 %     | >= 40 %     |
+ * | host available (non-darwin) | < min(6 GiB, 15% RAM) | < min(3 GiB, 10% RAM) |
+ * | T3 app-tree RSS / host total (darwin only) | >= 25 % | >= 40 % |
  *
  * On darwin the kernel verdict replaces the available-fraction rule: the
  * `vm_stat` free+inactive+speculative estimate ignores the compressor and
- * reads "low" on a healthy Mac. The app-tree rule applies everywhere — it is
+ * reads "low" on a healthy Mac. The app-tree rule applies on darwin — it is
  * the one that would have caught the 7 GB episode on a 16 GB host.
  *
  * Hysteresis: a higher level applies on the first sample; a lower level only
@@ -28,13 +28,14 @@ import type {
   ResourcePressureLevel,
   ResourcePressureSnapshot,
   ResourceTelemetrySnapshot,
+  ResourcePressureThresholds,
 } from "@t3tools/contracts";
+import { DEFAULT_RESOURCE_PRESSURE_THRESHOLDS } from "@t3tools/contracts";
 
 import { canSignalCategory } from "./diagnostics/ProcessDiagnostics.ts";
 import { bucketByClass, descendsFrom, indexByPid } from "./t3team-resourcePressureClasses.ts";
 
-const HOST_WARN_AVAILABLE_FRACTION = 0.15;
-const HOST_CRITICAL_AVAILABLE_FRACTION = 0.07;
+const GIB = 1024 ** 3;
 const APP_WARN_TOTAL_FRACTION = 0.25;
 const APP_CRITICAL_TOTAL_FRACTION = 0.4;
 export const DEESCALATE_SAMPLES = 2;
@@ -52,6 +53,8 @@ export const RECOMMENDATIONS: Record<ResourcePressureLevel, string> = {
 export interface HostMemoryReading {
   readonly totalMemoryBytes: number;
   readonly availableMemoryBytes: number;
+  readonly commitHeadroomBytes?: number;
+  readonly commitLimitBytes?: number;
 }
 
 /** Maps `kern.memorystatus_vm_pressure_level` output (1/2/4) to the OS verdict. */
@@ -73,6 +76,8 @@ export function classifyPressure(input: {
   readonly appTreeRssBytes: number;
   /** On darwin the vm_stat fraction is never used, even when the kernel read failed. */
   readonly darwin?: boolean;
+  readonly previousLevel?: ResourcePressureLevel;
+  readonly thresholds?: ResourcePressureThresholds;
 }): { readonly level: ResourcePressureLevel; readonly reasons: ReadonlyArray<string> } {
   const reasons: string[] = [];
   let level: ResourcePressureLevel = "ok";
@@ -81,17 +86,35 @@ export function classifyPressure(input: {
     reasons.push(reason);
   };
   const total = input.host.totalMemoryBytes;
+  const thresholds = input.thresholds ?? DEFAULT_RESOURCE_PRESSURE_THRESHOLDS;
   if (input.osLevel === "critical") raise("critical", "macOS reports critical memory pressure");
   else if (input.osLevel === "warn") raise("warn", "macOS reports memory pressure (warn)");
   if (input.osLevel === null && input.darwin === true) {
     reasons.push("macOS memory-pressure level unavailable this sample");
   } else if (input.osLevel === null && total > 0) {
-    const available = input.host.availableMemoryBytes / total;
-    const reason = `host memory ${percent(available)} available`;
-    if (available < HOST_CRITICAL_AVAILABLE_FRACTION) raise("critical", reason);
-    else if (available < HOST_WARN_AVAILABLE_FRACTION) raise("warn", reason);
+    const physical = input.host.availableMemoryBytes;
+    const commit = input.host.commitHeadroomBytes;
+    const available = commit === undefined ? physical : Math.min(physical, commit);
+    const recovery = Math.min(
+      thresholds.recoveryGiB * GIB,
+      (total * thresholds.recoveryRamPercent) / 100,
+    );
+    const warning =
+      Math.min(thresholds.warningAvailableGiB * GIB, (total * thresholds.warningRamPercent) / 100) +
+      (input.previousLevel === "warn" || input.previousLevel === "critical" ? recovery : 0);
+    const critical =
+      Math.min(
+        thresholds.criticalAvailableGiB * GIB,
+        (total * thresholds.criticalRamPercent) / 100,
+      ) + (input.previousLevel === "critical" ? recovery : 0);
+    const reason =
+      commit !== undefined && commit < physical
+        ? `host commit headroom ${gib(commit)}`
+        : `host memory ${gib(available)} (${percent(available / total)}) available`;
+    if (available < critical) raise("critical", reason);
+    else if (available < warning) raise("warn", reason);
   }
-  if (total > 0) {
+  if (total > 0 && (input.darwin === true || input.osLevel !== null)) {
     const share = input.appTreeRssBytes / total;
     const reason = `T3 app tree uses ${gib(input.appTreeRssBytes)} (${percent(share)} of RAM)`;
     if (share >= APP_CRITICAL_TOTAL_FRACTION) raise("critical", reason);
@@ -169,6 +192,12 @@ export function buildPressureSnapshot(input: {
     osLevel: input.osLevel,
     totalMemoryBytes: input.host.totalMemoryBytes,
     availableMemoryBytes: input.host.availableMemoryBytes,
+    ...(input.host.commitHeadroomBytes === undefined
+      ? {}
+      : { commitHeadroomBytes: input.host.commitHeadroomBytes }),
+    ...(input.host.commitLimitBytes === undefined
+      ? {}
+      : { commitLimitBytes: input.host.commitLimitBytes }),
     appTreeRssBytes: input.telemetry.groups.allT3.currentRssBytes,
     appTreeProcessCount: input.telemetry.groups.allT3.processCount,
     classes: bucketByClass({ telemetry: input.telemetry, ...input.host }),

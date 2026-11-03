@@ -30,7 +30,7 @@ const host: HostResourcesSnapshot = {
   sampledAt: 1_000,
   cpuUtilization: 0.5,
   cpuCount: 8,
-  availableMemoryBytes: 4 * GIB,
+  availableMemoryBytes: 0.5 * GIB,
   totalMemoryBytes: 16 * GIB,
 };
 const telemetrySnapshot = {
@@ -115,12 +115,11 @@ describe("ResourcePressureMonitor", () => {
       const snapshot = report.snapshot!;
       assert.strictEqual(snapshot.topConsumers[0]?.pid, 4242);
       assert.strictEqual(snapshot.classes.appSpawned.agentSessionCount, 1);
-      // used = 16 - 4 = 12 GiB; T3 tree = 7 GiB; the rest of the machine = 5 GiB.
-      assert.strictEqual(snapshot.classes.restOfMachineBytes, 5 * GIB);
+      assert.strictEqual(snapshot.classes.restOfMachineBytes, 8.5 * GIB);
       // What agents see instead of polling: the pushed line on pressure-impacting results.
       assert.strictEqual(
         pressureLine(snapshot),
-        "[host] memory pressure: critical · app tree 7.0 GiB · machine: 25% available · " +
+        "[host] memory pressure: critical · app tree 7.0 GiB · machine: 3% available · " +
           `critical: ${PRESSURE_ADVISORY.critical}`,
       );
     }).pipe(Effect.scoped, Effect.provide(stubs)),

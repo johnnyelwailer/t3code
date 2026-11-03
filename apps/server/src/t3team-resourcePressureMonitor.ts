@@ -27,7 +27,9 @@ import type {
   OsMemoryPressureLevel,
   ResourcePressureReport,
   ResourcePressureSnapshot,
+  ResourcePressureThresholds,
 } from "@t3tools/contracts";
+import { DEFAULT_RESOURCE_PRESSURE_THRESHOLDS } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -42,6 +44,7 @@ import { ResourcePressureEventRepository } from "./persistence/t3team-ResourcePr
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as FeatureFlags from "./t3team-FeatureFlags.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
+import { ServerSettingsService } from "./serverSettings.ts";
 import {
   isResourcePressureEnabled,
   resolveResourcePressureIntervalMs,
@@ -73,7 +76,10 @@ export const DISABLED_REPORT: ResourcePressureReport = {
   recentEvents: [],
 };
 
-const makeEnabled = (sampleIntervalMs: number) =>
+const makeEnabled = (
+  sampleIntervalMs: number,
+  readThresholds?: Effect.Effect<ResourcePressureThresholds>,
+) =>
   Effect.gen(function* () {
     const hostResources = yield* HostResources.HostResources;
     const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
@@ -119,6 +125,7 @@ const makeEnabled = (sampleIntervalMs: number) =>
       sampleIntervalMs,
       latest,
       hysteresis,
+      ...(readThresholds === undefined ? {} : { readThresholds }),
     });
 
     yield* Effect.gen(function* () {
@@ -149,9 +156,10 @@ const makeEnabled = (sampleIntervalMs: number) =>
 export const makeResourcePressureMonitor = (options: {
   readonly enabled: boolean;
   readonly sampleIntervalMs: number;
+  readonly readThresholds?: Effect.Effect<ResourcePressureThresholds>;
 }) =>
   options.enabled
-    ? makeEnabled(options.sampleIntervalMs)
+    ? makeEnabled(options.sampleIntervalMs, options.readThresholds)
     : Effect.succeed(ResourcePressureMonitor.of({ report: Effect.succeed(DISABLED_REPORT) }));
 
 /** The flag is read once when the layer is built (process start), after the feature flag service
@@ -160,9 +168,14 @@ export const ResourcePressureMonitorLive = Layer.effect(
   ResourcePressureMonitor,
   Effect.gen(function* () {
     yield* FeatureFlags.FeatureFlags;
+    const settings = yield* ServerSettingsService;
     return yield* makeResourcePressureMonitor({
       enabled: isResourcePressureEnabled(),
       sampleIntervalMs: resolveResourcePressureIntervalMs(),
+      readThresholds: settings.getSettings.pipe(
+        Effect.map((value) => value.resourcePressureThresholds),
+        Effect.catch(() => Effect.succeed(DEFAULT_RESOURCE_PRESSURE_THRESHOLDS)),
+      ),
     });
   }),
 ).pipe(Layer.provide(ResourcePressureEventRepositoryLive));

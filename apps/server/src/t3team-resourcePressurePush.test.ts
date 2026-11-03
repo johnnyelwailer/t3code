@@ -42,6 +42,18 @@ const call = (surface: T3TeamToolBinding, tool: string) =>
   surface.callTool({ server: "t3team", tool, arguments: {} });
 
 describe("proactive pressure push on tool results", () => {
+  it("names commit headroom when physical RAM still has space", () => {
+    assert.include(
+      pressureLine({
+        ...snapshot,
+        osLevel: null,
+        availableMemoryBytes: 4 * GIB,
+        commitHeadroomBytes: 0.5 * GIB,
+        commitLimitBytes: 32 * GIB,
+      }),
+      "machine: 25% available · commit headroom 0.5 GiB",
+    );
+  });
   it.effect("orchestration.resume is never refused: its result carries the pressure line", () =>
     Effect.gen(function* () {
       const monitor = monitorWith(yield* makeResourcePressureAutoPause());

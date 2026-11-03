@@ -452,6 +452,7 @@ const layerResourceDiagnostics = Layer.mergeAll(
   // Flag NEXI_FF_RESOURCE_PRESSURE: off = a constant "disabled" report, no fiber.
   ResourcePressureMonitorLive.pipe(
     Layer.provide(Layer.mergeAll(HostResources.layer, layerResourceTelemetry)),
+    Layer.provide(layerServerSettings),
   ),
   ProcessGroupMetrics.layer.pipe(Layer.provide(layerResourceTelemetry)),
 );

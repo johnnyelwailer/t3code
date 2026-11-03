@@ -108,6 +108,7 @@ export * from "./t3team-viewContext.ts";
 export * from "./scheduledTask.ts";
 export * from "./worktreeMcp.ts";
 export * from "./resourceTelemetry.ts";
+export * from "./t3team-resourcePressureSettings.ts";
 export * from "./rpc.ts";
 export * from "./worktreeSetup.ts";
 export * from "./secretRequest.ts";
