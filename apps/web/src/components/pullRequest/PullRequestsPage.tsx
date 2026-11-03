@@ -21,6 +21,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowDownUpIcon, LayersIcon, Plug2Icon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from "react";
+import { useOpenLinkedPullRequest } from "./t3team-useOpenLinkedPullRequest";
 
 import {
   collectPullRequestListFacets,
@@ -1085,11 +1086,11 @@ export function PullRequestsPage() {
     if (rightPanelState.isOpen) setMaximized((value) => !value);
   };
   const onGuideShown = () => setMaximized(true);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens the URL-linked pull request in the right panel store
-  useEffect(() => {
-    if (!pullRequestsSupported || rightPanelRef === null || linkedSelection === null) return;
-    useRightPanelStore.getState().openPullRequest(rightPanelRef, linkedSelection);
-  }, [linkedSelection, pullRequestsSupported, rightPanelRef]);
+  useOpenLinkedPullRequest({
+    rightPanelRef,
+    supported: pullRequestsSupported,
+    linkedSelection,
+  });
 
   const selected =
     rightPanelState.isOpen && activePullRequestSurface !== null
