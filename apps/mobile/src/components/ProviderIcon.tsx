@@ -9,6 +9,7 @@ import {
 import { useId, useState } from "react";
 import { resolveOfficialAcpRegistryIconUrl } from "@t3tools/contracts";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
+import { NexploreMark } from "./t3team-NexploreMark";
 import { AppText as Text } from "./ui/AppText";
 import { cn } from "../lib/cn";
 import { getProviderClient } from "@t3tools/client-runtime/provider-clients";
@@ -86,6 +87,9 @@ export function ProviderIcon(props: ProviderIconProps) {
   }
   if (props.provider === "acpRegistry") {
     return <AcpRegistryProviderIcon color={mono} iconUrl={props.iconUrl} size={size} />;
+  }
+  if (props.provider === "nexplore") {
+    return <NexploreMark size={size} />;
   }
 
   if (props.provider === "claudeAgent") {
