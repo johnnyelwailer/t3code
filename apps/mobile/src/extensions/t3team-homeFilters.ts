@@ -36,7 +36,16 @@ export function buildHomeFiltersProps(
     threads: source.threads,
     pendingTasks: source.pendingTasks,
     projectSortOrder: source.projectSortOrder,
-  }).map((scope) => ({ key: scope.key, label: scope.title }));
+  }).map((scope) => ({
+    key: scope.key,
+    label: scope.title,
+    icon: {
+      environmentId: scope.representative.environmentId,
+      workspaceRoot: scope.representative.workspaceRoot,
+      faviconPath: scope.representative.faviconPath,
+      projectIcon: scope.representative.projectIcon,
+    },
+  }));
   return {
     projects,
     selectedProjectKey: source.selectedProjectKey,

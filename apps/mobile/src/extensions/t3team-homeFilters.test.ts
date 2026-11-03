@@ -79,6 +79,30 @@ describe("buildHomeFiltersProps", () => {
     expect(setup().props.projects.map((entry) => entry.label)).toEqual(["Beta", "Alpha", "Gamma"]);
   });
 
+  it("hands each project the facts its own icon is drawn from", () => {
+    const withIcon: EnvironmentProject = {
+      ...project("alpha", "Alpha"),
+      faviconPath: "public/favicon.svg",
+      projectIcon: { kind: "emoji", emoji: "🚀" },
+    };
+    const { source } = setup();
+    const scopes = buildHomeProjectScopes({
+      projects: [withIcon, project("beta", "Beta")],
+      environmentId: null,
+      projectGroupingMode: "separate",
+    });
+    const { projects } = buildHomeFiltersProps(source, scopes);
+    const alpha = projects.find((entry) => entry.label === "Alpha");
+    const beta = projects.find((entry) => entry.label === "Beta");
+    expect(alpha?.icon).toEqual({
+      environmentId: local,
+      workspaceRoot: "/workspaces/alpha",
+      faviconPath: "public/favicon.svg",
+      projectIcon: { kind: "emoji", emoji: "🚀" },
+    });
+    expect(beta?.icon.workspaceRoot).toBe("/workspaces/beta");
+  });
+
   it("hands out environment ids as plain strings and reports the current selection", () => {
     const { props } = setup({ selectedEnvironmentId: remote, selectedProjectKey: "k" });
     expect(props.environments).toEqual([

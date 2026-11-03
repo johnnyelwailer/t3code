@@ -12,6 +12,7 @@ export type {
   HomeEmptyStateSlot,
   EnvironmentPickerTopProps,
   HomeFiltersProps,
+  HomeProjectIconFacts,
   MobileExtensions,
   SelectedProjectFacts,
   UrlPolicy,
@@ -44,6 +45,7 @@ export { ConnectionStatusDot } from "../features/connection/ConnectionStatusDot"
 export { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 export { createMobileThemeVariables } from "../lib/mobileTheme";
 export { ListRow } from "../components/ui/ListRow";
+export { HomeProjectIcon } from "./t3team-HomeProjectIcon";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";
 export { useProjects, useServerConfigs } from "../state/entities";
