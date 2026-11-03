@@ -45,7 +45,7 @@ describe("T3TeamDesktopRouteCard", () => {
   });
 
   it("offers no approval at all on a thread that already runs on this computer", () => {
-    const html = render(card({ target: "polassist.example.com", internal: false }), null);
+    const html = render(card({ target: "prod.example.com", internal: false }), null);
     expect(html).toContain("Nothing to route");
     expect(html).toContain("already runs on your computer");
     expect(html).not.toContain("Cloud session");

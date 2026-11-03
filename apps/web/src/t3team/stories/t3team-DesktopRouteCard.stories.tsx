@@ -75,7 +75,7 @@ export const ThreadOnThisComputer: Story = {
   args: {
     sessionLabel: null,
     card: cardFor(
-      { target: "polassist.switzerlandnorth.cloudapp.azure.com", internal: false },
+      { target: "prod.example.com", internal: false },
       "The documented production host returns ERR_NAME_NOT_RESOLVED from the browser session.",
     ),
   },
