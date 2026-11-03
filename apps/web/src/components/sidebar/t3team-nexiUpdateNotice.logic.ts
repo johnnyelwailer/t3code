@@ -1,29 +1,25 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
 
+import { plainReleaseNotes } from "./t3team-nexiUpdateNotes.logic";
+
 export type NexiUpdateNoticeView = {
-  readonly kind: "downloaded";
   readonly version: string;
   readonly title: string;
   readonly notes: ReadonlyArray<string>;
-  readonly action: "restart-now";
   readonly actionLabel: string;
-  readonly dismissible: true;
 };
 
+/** The Nexi feed's downloaded update, whether or not the user already said Later to it. */
 export function getNexiUpdateNoticeView(
   state: DesktopUpdateState | null,
-  dismissedVersion: string | null,
 ): NexiUpdateNoticeView | null {
   if (!state || state.feed !== "nexi-ghe" || state.status !== "downloaded") return null;
   const version = state.downloadedVersion;
-  if (version === null || version === dismissedVersion) return null;
+  if (version === null) return null;
   return {
-    kind: "downloaded",
     version,
     title: `Nexi Work ${version} is ready`,
-    notes: state.releaseNotes.flatMap((note) => note.items).slice(0, 4),
-    action: "restart-now",
-    actionLabel: "Restart now",
-    dismissible: true,
+    notes: plainReleaseNotes(state.releaseNotes.flatMap((note) => note.items)),
+    actionLabel: "Install now",
   };
 }
