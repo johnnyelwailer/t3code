@@ -11,6 +11,7 @@ import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQ
 import * as NodeHttp from "node:http";
 
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentHttpApi, type RepositoryIdentity } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -526,7 +527,12 @@ const layerHttpServer = Layer.unwrap(
 
 // t3team: the process spawner every service sees is the paced one (see t3team-pacedChildProcessSpawner).
 const layerPlatformServices = DocumentText.layer.pipe(
-  Layer.provideMerge(Layer.provideMerge(PacedChildProcessSpawner.layer(), NodeServices.layer)),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      Layer.provideMerge(PacedChildProcessSpawner.layer(), NodeServices.layer),
+      NodeCrypto.layer,
+    ),
+  ),
 );
 
 const layerPersistence = Layer.empty.pipe(Layer.provideMerge(SqlitePersistence.layerConfig));

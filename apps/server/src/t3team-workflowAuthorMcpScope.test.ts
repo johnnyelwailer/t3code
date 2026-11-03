@@ -3,6 +3,7 @@
  * toolkit — delegate_task, create_threads, t3_project_*, t3_pending_request, worktree,
  * preview, devices — refuses it), and admitted by the t3team toolkit only for its own tools.
  */
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { afterEach, beforeEach, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
@@ -16,7 +17,7 @@ import { HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
-import { T3TeamToolkitRegistrationLive } from "./mcp/McpHttpServer.ts";
+import { T3TeamToolkitRegistrationLive, layerInProcessMcpServer } from "./mcp/McpHttpServer.ts";
 import * as McpInvocationContext from "./mcp/McpInvocationContext.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import { readCaller } from "./mcp/threadAccess.ts";
@@ -69,7 +70,7 @@ const registry = McpSessionRegistry.__testing
         getDescriptor: Effect.die("unused"),
       }),
     ),
-    Effect.provide(NodeServices.layer),
+    Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
 
 it("pins the approval gate's author MCP names to the toolkit map and the author tool ids", () => {
@@ -156,7 +157,7 @@ it.effect(
     };
     const TestLayer = T3TeamToolkitRegistrationLive.pipe(
       Layer.provide(t3TeamRegistrationServices),
-      Layer.provideMerge(McpServer.McpServer.layer),
+      Layer.provideMerge(layerInProcessMcpServer),
       Layer.provideMerge(
         Layer.succeed(
           T3TeamToolBroker,

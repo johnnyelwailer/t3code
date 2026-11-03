@@ -119,6 +119,20 @@ T3_EVAL_FULL_TOOL_TEXT=1 node mcp-tool-use/run.ts --context  # the same, with th
 node mcp-tool-use/run.ts --dry-run --cases mcp-tool-use/cases/t3team-widgets.ndjson --samples 1 --out runs/dry
 ```
 
+## Threads vs tasks cases
+
+`cases/threads-vs-tasks.ndjson` covers explicit thread requests, delegated and background work, lifecycle operations, child permissions, and ordinary code requests using words like "thread" and "task". The native-subagent case is Claude-only. All scenarios use authored Acme data.
+
+`expect.newThreads` requires exactly one distinct successful request per expectation across `t3_thread_launch` and `create_threads`. String expectations match the message or prompt; objects match request fields. Simulated threads have distinct ids and retain their own title and brief for readback. Threads without a prompt stay idle.
+
+From `evals/`:
+
+```sh
+pnpm mcp-tool-use --cases mcp-tool-use/cases/threads-vs-tasks.ndjson --samples 3 --out runs/threads-vs-tasks
+```
+
+These cases measure routing decisions with simulated tools, not delivered child work. The original PR's paid baseline found Sonnet starting a background native Agent for `tt-background-agent`; the routing fix is stacked separately in #27139. Historical model results and the unresolved top-level reviewer re-check wording are recorded in #27138.
+
 ## Where T3's text lives
 
 - `packages/provider-core/src/server/runtimeInstructions.ts`

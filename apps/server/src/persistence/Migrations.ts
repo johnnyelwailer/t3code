@@ -186,6 +186,9 @@ import Migration0126 from "./Migrations/076_ProjectionProjectsPinArchive.ts";
 // New from the 2026-11-02 upstream sync (upstream 077). Appended above the fork's maximum id
 // (126; it runs at 127), as for every earlier sync; upstream 063 stays held (see above).
 import Migration0127 from "./Migrations/077_RepairBooleanSettledOverride.ts";
+// New from the 2026-11-03 upstream sync (upstream 078). Appended above the fork's maximum id
+// (127; it runs at 128), as for every earlier sync; upstream 063 stays held (see above).
+import Migration0128 from "./Migrations/078_DropOrchestrationEventCorrelationIndex.ts";
 
 export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -273,7 +276,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 127) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 128) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -324,6 +327,8 @@ export const migrationEntries = [
   [126, "ProjectionProjectsPinArchive", Migration0126],
   // Upstream 077 lives at 127 in this fork's ledger; see the import comment.
   [127, "RepairBooleanSettledOverride", Migration0127],
+  // Upstream 078 lives at 128 in this fork's ledger; see the import comment.
+  [128, "DropOrchestrationEventCorrelationIndex", Migration0128],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -347,13 +352,13 @@ export const FIRST_V2_MIGRATION_ID = 84;
 
 // The ledger ids that carry upstream-owned V2 migrations in this fork's ledger (upstream 055/056
 // at 84/85, 057/058 at 103/104, 059/060 at 107/108, 061 at 109, 062 at 110, 064-067 at
-// 112-115, 068-077 at 118-127; 063 is held). Only these are checked for being
+// 112-115, 068-078 at 118-128; 063 is held). Only these are checked for being
 // skipped: fork migrations (and the repair migrations for fork DBs that have gaps, e.g. 99, which
 // re-ensures 86-92 and 98) must keep starting on databases whose history has holes. Add each id a
 // sync appends from upstream.
 export const UPSTREAM_V2_MIGRATION_IDS: ReadonlySet<number> = new Set([
   84, 85, 103, 104, 107, 108, 109, 110, 112, 113, 114, 115, 118, 119, 120, 121, 122, 123, 124, 125,
-  126, 127,
+  126, 127, 128,
 ]);
 
 // Migrators skip ids up to the highest recorded; reject collisions that would skip V2 schema.

@@ -1,6 +1,7 @@
 import { ExternalLauncherError } from "@t3tools/contracts";
 import { buildConnectAuthorizeRequestUrl } from "@t3tools/shared/connectAuth";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -21,12 +22,13 @@ const fail = (
 
 /** PKCE verifier + S256 challenge and a CSRF state, for any loopback browser sign-in. */
 export const makePkceRequest = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const verifier = Base64Url.encode(yield* crypto.randomBytes(32));
+  const random = yield* SecureRandom.SecureRandom;
+  const digest = yield* Digest.Digest;
+  const verifier = Base64Url.encode(yield* random.randomBytes(32));
   const challenge = Base64Url.encode(
-    yield* crypto.digest("SHA-256", new TextEncoder().encode(verifier)),
+    yield* digest.digest(Digest.sha256, new TextEncoder().encode(verifier)),
   );
-  const state = Base64Url.encode(yield* crypto.randomBytes(16));
+  const state = Base64Url.encode(yield* random.randomBytes(16));
   return { verifier, challenge, state };
 });
 

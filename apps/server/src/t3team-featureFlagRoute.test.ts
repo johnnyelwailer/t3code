@@ -5,6 +5,7 @@
  * off, and run it again on the next request once the flag is on.
  */
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
@@ -67,7 +68,7 @@ const unreachedHandlerServices = Layer.mergeAll(
   Layer.mock(PullRequestProviderRegistry)({ get: () => null, kinds: [] }),
   Layer.mock(PullRequestService.PullRequestService)({}),
   ServerConfig.layerTest(process.cwd(), { prefix: "t3-feature-flag-route-" }),
-).pipe(Layer.provideMerge(NodeServices.layer));
+).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
 
 const serve = HttpRouter.serve(routes, { disableListenLog: true, disableLogger: true }).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
@@ -83,7 +84,9 @@ const post = (path: string) =>
 
 const run = <A, E>(effect: Effect.Effect<A, E, HttpClient.HttpClient>) =>
   Effect.runPromise(
-    Effect.scoped(effect).pipe(Effect.provide(Layer.mergeAll(serve, NodeServices.layer))),
+    Effect.scoped(effect).pipe(
+      Effect.provide(Layer.mergeAll(serve, NodeServices.layer, NodeCrypto.layer)),
+    ),
   );
 
 afterEach(() => replaceFeatureFlagPresetValues(new Map()));

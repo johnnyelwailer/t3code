@@ -97,6 +97,7 @@
     "apps/desktop/scripts/main-process-bundle.test.mjs",
     "apps/desktop/scripts/electron-launcher.mjs",
     "apps/desktop/scripts/electron-launcher.test.mjs",
+    "apps/desktop/src/app/DesktopApp.test.ts",
     "apps/desktop/src/app/DesktopAssets.test.ts",
     "apps/desktop/src/app/DesktopAssets.ts",
     "apps/desktop/src/app/DesktopBackendPort.ts",

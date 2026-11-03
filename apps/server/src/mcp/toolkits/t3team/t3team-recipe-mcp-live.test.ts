@@ -8,6 +8,7 @@
  * inline-`source` path executes `validateInlineWorkflowSourceForAgent` for real.
  */
 import { expect, it } from "@effect/vitest";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -28,7 +29,7 @@ import {
   type T3TeamRecipeToolId,
 } from "../../../t3team-toolBrokerBindingRecipes.ts";
 import { makeRecipeToolHandlers } from "../../../t3team-toolBrokerRecipeTools.ts";
-import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
+import { T3TeamToolkitRegistrationLive, layerInProcessMcpServer } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpSessionRegistry from "../../McpSessionRegistry.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -84,7 +85,7 @@ const makeRegistry = McpSessionRegistry.__testing
   .pipe(
     Effect.provideService(HttpServer.HttpServer, fakeHttpServer),
     Effect.provideService(ServerEnvironment.ServerEnvironment, fakeEnvironment),
-    Effect.provide(NodeServices.layer),
+    Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
 
 // Broker binding whose callTool runs the REAL recipe dispatch (not a canned result). Inline
@@ -116,7 +117,7 @@ const broker = T3TeamToolBroker.of({
 
 const TestLayer = T3TeamToolkitRegistrationLive.pipe(
   Layer.provide(t3TeamRegistrationServices),
-  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provideMerge(layerInProcessMcpServer),
   Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
 );
 
