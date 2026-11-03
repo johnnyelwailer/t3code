@@ -657,3 +657,7 @@ A draft can wait for an environment the catalog does not list yet (a cloud sessi
 
 - `apps/server/src/usage/UsageService.test.ts` — one test (`reports saved usage of a removed directory only for windows it reaches`) pins the clock with `TestClock` because its 2026-08-01 fixtures fall out of the 92-day usage cache retention on 2026-11-01T10:00Z; three lines, test only. Upstream will hit the same date dependence: remove this entry when the sync brings an upstream fix. Awaits human approval.
 - `packages/provider-cursor/src/server/driver.test.ts` — fork test updated for upstream's HttpClient-based Cursor catalog (`CursorSdkCatalog`, upstream #28718/#24639): the test that keeps an explicit API key's account out of the CLI login's Limits now answers `/v1/me` and the models list through an HttpClient mock like the neighbouring tests, instead of mocking `Cursor.me`/`Cursor.models.list`. Test only; removable once upstreamed. Approved by Phil 2026-11-02.
+
+## Mobile provider icon for the `nexplore` driver (2026-11-03)
+
+- `apps/mobile/src/components/ProviderIcon.tsx` — one branch before the package-icon lookup: the `nexplore` driver draws `NexploreMark` (`t3team-NexploreMark.tsx`), as the web's `PROVIDER_ICON_BY_PROVIDER` already does. Without it the driver fell through to the generic default glyph.
