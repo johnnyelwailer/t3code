@@ -21,6 +21,14 @@ vi.mock("../ipc/DesktopIpcHandlers.ts", () => ({
 }));
 vi.mock("../updates/DesktopRemoteUpdates.ts", () => ({ listen: Effect.void }));
 vi.mock("./DesktopStartupRecovery.ts", () => ({ listen: Effect.void }));
+// t3team: the fork's startup hooks reach Electron directly, which this test mocks empty.
+vi.mock("./t3team-atlassianAssetBearer.ts", () => ({
+  registerAtlassianAssetBearer: () => Effect.void,
+}));
+vi.mock("./t3team-DesktopStorageFlush.ts", () => ({
+  registerDesktopStorageFlush: () => Effect.void,
+}));
+vi.mock("../voice/t3team-voiceRuntime.ts", () => ({ configureDesktopVoiceLog: () => undefined }));
 
 import * as DesktopApp from "./DesktopApp.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
@@ -95,16 +103,15 @@ it.effect(
           Effect.provideService(ElectronApp.ElectronApp, {
             setPath: () => Effect.void,
             whenReady: record("ready"),
-            on: () => Effect.void,
-            onBeforeQuitForUpdate: () => Effect.void,
           } as unknown as ElectronApp.ElectronApp["Service"]),
-          // t3team: the fork's voice hotkey and renderer storage flush start with the app.
+          // t3team: the fork's voice hotkey starts with the app.
           Effect.provideService(DesktopVoiceHotkey.DesktopVoiceHotkey, {
             initialize: Effect.void,
           } as unknown as DesktopVoiceHotkey.DesktopVoiceHotkey["Service"]),
-          Effect.provideService(ElectronPowerMonitor.ElectronPowerMonitor, {
-            onSimpleEvent: () => Effect.void,
-          } as unknown as ElectronPowerMonitor.ElectronPowerMonitor["Service"]),
+          Effect.provideService(
+            ElectronPowerMonitor.ElectronPowerMonitor,
+            {} as unknown as ElectronPowerMonitor.ElectronPowerMonitor["Service"],
+          ),
           Effect.provideService(ElectronDialog.ElectronDialog, {
             showErrorBox: () => Effect.die("unexpected fatal startup error"),
           } as unknown as ElectronDialog.ElectronDialog["Service"]),
