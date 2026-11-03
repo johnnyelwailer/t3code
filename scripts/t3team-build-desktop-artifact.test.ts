@@ -136,24 +136,28 @@ it.layer(NodeServices.layer)("t3team desktop distribution packaging", (it) => {
     }
   });
 
-  it.effect("leaves afterPack unset because electron-builder resolves it against the CWD", () =>
-    Effect.gen(function* () {
-      // buildDesktopArtifact pins the absolute staged hook path after calling createBuildConfig.
-      for (const [platform, target] of [
-        ["mac", "dmg"],
-        ["linux", "AppImage"],
-        ["win", "nsis"],
-      ] as const) {
-        const config = yield* createBuildConfig({
-          platform,
-          target,
-          version: "1.2.3",
-          signed: false,
-          mockUpdates: false,
-        });
-        assert.notProperty(config, "afterPack");
-      }
-    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  it.effect(
+    "pins afterPack to an absolute path because electron-builder resolves it against the CWD",
+    () =>
+      Effect.gen(function* () {
+        // buildDesktopArtifact replaces it with the staged hook, which chains this one after the
+        // d.ts re-injection (see t3team-desktop-asar-dts-afterpack.cjs).
+        for (const [platform, target] of [
+          ["mac", "dmg"],
+          ["linux", "AppImage"],
+          ["win", "nsis"],
+        ] as const) {
+          const config = yield* createBuildConfig({
+            platform,
+            target,
+            version: "1.2.3",
+            signed: false,
+            mockUpdates: false,
+          });
+          assert.isTrue(NodePath.isAbsolute(String(config.afterPack)));
+          assert.isTrue(String(config.afterPack).endsWith("prepare-server-compile-cache.cjs"));
+        }
+      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
   it.effect("packages distribution env files consistently on every desktop platform", () =>

@@ -1,4 +1,3 @@
-import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { isElectron } from "../../env";
@@ -49,8 +48,7 @@ const fail = (title: string, error: unknown) =>
   );
 
 /**
- * The interim update notice for Nexi Work: what is new, Install now or Later, and the states that
- * need the user (signed out of GHE, GHE unreachable, a download that failed verification).
+ * Ready-to-install updates stay dismissed until another version is downloaded.
  */
 export function NexiUpdateNotice() {
   return isElectron ? <NexiUpdateNoticeContent /> : null;
@@ -58,12 +56,11 @@ export function NexiUpdateNotice() {
 
 function NexiUpdateNoticeContent() {
   const state = useDesktopUpdateState();
-  const navigate = useNavigate();
   const [dismissed, setDismissed] = useState(() => readKey(DISMISSED_KEY));
   const [busy, setBusy] = useState(false);
   const view = getNexiUpdateNoticeView(state, dismissed);
 
-  const announce = view?.kind === "available" ? view.version : null;
+  const announce = view?.version ?? null;
   useEffect(() => {
     if (announce !== null) notifyOnce(announce);
   }, [announce]);
@@ -80,24 +77,8 @@ function NexiUpdateNoticeContent() {
 
   const onAction = () => {
     const bridge = window.desktopBridge;
-    if (!bridge || view.kind === "downloading") return;
-    switch (view.action) {
-      case "open-settings":
-        void navigate({ to: "/settings/source-control" });
-        return;
-      case "retry":
-        void run(
-          () => (view.kind === "unreachable" ? bridge.checkForUpdate() : installNow(bridge)),
-          "Could not check for updates",
-        );
-        return;
-      case "install-now":
-        void run(() => installNow(bridge), "Could not install the update");
-        return;
-      case "restart-now":
-        void run(() => bridge.installUpdate(), "Could not restart to install the update");
-        return;
-    }
+    if (bridge)
+      run(() => bridge.installUpdate(view.version), "Could not restart to install the update");
   };
 
   return (
@@ -106,17 +87,9 @@ function NexiUpdateNoticeContent() {
       busy={busy}
       onAction={onAction}
       onLater={() => {
-        if (view.kind === "available" || view.kind === "downloaded") {
-          writeKey(DISMISSED_KEY, view.version);
-          setDismissed(view.version);
-        }
+        writeKey(DISMISSED_KEY, view.version);
+        setDismissed(view.version);
       }}
     />
   );
-}
-
-/** Download, then restart into the new version; stops at the first step that does not complete. */
-async function installNow(bridge: NonNullable<typeof window.desktopBridge>) {
-  const download = await bridge.downloadUpdate();
-  if (download.completed) await bridge.installUpdate();
 }
