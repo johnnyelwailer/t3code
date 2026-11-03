@@ -63,7 +63,7 @@
   .check label { display:flex; gap:8px; padding:2px 0; color:var(--fg); }
   .check .box { width:14px; height:14px; border:1.5px solid var(--mut); border-radius:3px; flex:none; margin-top:2px; }
   .check .box.on { background:var(--acc); border-color:var(--acc); }
-  .check .why { color:var(--mut); } .check .lock { color:var(--mut); font-weight:500; }
+  .check .why, .q .why { color:var(--mut); font-weight:400; } .ask { align-self:flex-start; width:560px; max-width:100%; border:1px solid var(--bd); border-radius:12px; padding:12px 14px 10px; background:var(--panel); box-shadow:var(--shadow); } .ask .q { font-weight:600; margin-bottom:4px; } .check .lock { color:var(--mut); font-weight:500; }
 </style>
 </head>
 <body>
@@ -103,21 +103,22 @@ const chat = `<div class="msg me">Can you check why the dev server keeps eating 
 const cleanup = `
   <div class="prompt"><small>Started from the memory badge · editable before it runs</small>
     Free memory on this machine. Memory is critical: 2.9 GiB free of 63.3 GiB.<br>
-    Find what is no longer needed: processes of idle or finished threads, dev servers and watchers, old worktrees, build caches. Do not stop or delete anything yet: list it first, grouped, with size and why.</div>
-  <div class="msg">I looked at 14 threads, 9 worktrees and 6 caches. Nothing was changed. I would free <b style="color:var(--fg)">about 9.8 GiB</b>:
-  <div class="check">
-    <div class="grp">Processes · 5.3 GiB</div>
-    <label><span class="box on"></span><span>npm run dev, thread “Fix login flow” <span class="why">· idle 2 h · 3.4 GiB</span></span></label>
-    <label><span class="box on"></span><span>dotnet watch, thread “Add invoice export” <span class="why">· finished 5 h ago · 1.9 GiB</span></span></label>
-    <div class="grp">Worktrees · 3.1 GiB</div>
-    <label><span class="box on"></span><span>fix-portal-address-form <span class="why">· PR merged, clean · 1.2 GiB</span></span></label>
-    <label><span class="box"></span><span>review-t3code-cloud-prs <span class="why">· unsure: branch has no PR · 1.9 GiB</span></span></label>
-    <div class="grp">Caches · 1.4 GiB</div>
-    <label><span class="box on"></span><span>pnpm store, vite cache <span class="why">· rebuildable</span></span></label>
-    <div class="grp lock">Not touched: 2 running threads, 1 pinned thread, 2 worktrees with unpushed commits</div>
-  </div>
-  Tell me to go ahead. I ask once more before deleting the unsure worktree.</div>
-  <div class="msg me">Go ahead with the ticked ones.</div>`;
+    Find what is no longer needed: processes of idle or finished threads, dev servers and watchers, old worktrees, build caches. Do not stop or delete anything yet; ask me which to free with the question tool.</div>
+  <div class="msg">I looked at 14 threads, 9 worktrees and 6 caches. Nothing was changed. Not touched: 2 running threads, 1 pinned thread, 2 worktrees with unpushed commits.</div>
+  <div class="ask">
+    <div class="q">Which of these should I free? <span class="why">about 9.8 GiB if all are ticked</span></div>
+    <div class="check">
+      <div class="grp">Processes</div>
+      <label><span class="box on"></span><span>npm run dev · Fix login flow <span class="why">· idle 2 h · 3.4 GiB</span></span></label>
+      <label><span class="box on"></span><span>dotnet watch · Add invoice export <span class="why">· thread finished 5 h ago · 1.9 GiB</span></span></label>
+      <div class="grp">Worktrees</div>
+      <label><span class="box on"></span><span>fix-portal-address-form <span class="why">· PR merged, clean · 1.2 GiB</span></span></label>
+      <label><span class="box"></span><span>review-t3code-cloud-prs <span class="why">· no PR, not sure · 1.9 GiB</span></span></label>
+      <div class="grp">Caches</div>
+      <label><span class="box on"></span><span>pnpm store, vite cache <span class="why">· rebuildable · 1.4 GiB</span></span></label>
+    </div>
+    <div class="acts"><button class="btn pri">Free 4 selected</button><button class="btn ghost">Not now</button></div>
+  </div>`;
 
 const pressureBtn = `<button class="ibtn pressure ${cls}">${chip}<span class="badge ${cls}"></span></button>`;
 const updateBtn = `<button class="ibtn">${dl}<span class="badge" style="background:var(--acc)"></span></button>`;
