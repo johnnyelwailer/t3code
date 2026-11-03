@@ -75,7 +75,6 @@ it("useDraftModelSelection follows what is stored on the draft, as plain ids", a
   expect(seen.at(-1)).toBeNull();
   await act(async () => {
     setDraftModelSelection("draft:seam-3", { instanceId: "codex", model: "gpt-6-astra" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
   });
   expect(seen.at(-1)).toEqual({ instanceId: "codex", model: "gpt-6-astra" });
   unmount();
