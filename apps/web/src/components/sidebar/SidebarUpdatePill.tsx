@@ -40,6 +40,8 @@ import {
 } from "./DesktopUpdateStatusIcon";
 import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
 import { SidebarUpdateCapsule } from "./SidebarUpdateCapsule";
+import { NexiUpdateReadyFooter } from "./t3team-NexiUpdateReadyFooter";
+import { getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
 import { UpdateEverythingDialog } from "./UpdateEverythingDialog";
 import type { UpdateEverythingRun, UpdateRunLocalState } from "./updateEverything.logic";
 import {
@@ -451,6 +453,9 @@ function SidebarUpdateControl() {
       </SidebarMenuItem>
     );
   }
+
+  const nexiReady = getNexiUpdateNoticeView(state);
+  if (nexiReady !== null && !runsEverything) return <NexiUpdateReadyFooter view={nexiReady} />;
 
   const updateButton = (
     <button
