@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { act } from "react";
-import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vite-plus/test";
 
 vi.mock("react-native", () => ({
@@ -25,24 +24,17 @@ import { ProviderIcon } from "./ProviderIcon";
 
 const NEXPLORE_ORANGE = "#f05a0a";
 
-async function renderedFills(provider: string): Promise<ReadonlyArray<string | null>> {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  const container = document.createElement("div");
-  const root = createRoot(container);
-  try {
-    await act(async () => root.render(<ProviderIcon provider={provider} size={16} />));
-    return Array.from(container.querySelectorAll("path"), (path) => path.getAttribute("fill"));
-  } finally {
-    await act(async () => root.unmount());
-  }
+function renderedFills(provider: string): ReadonlyArray<string> {
+  const markup = renderToStaticMarkup(<ProviderIcon provider={provider} size={16} />);
+  return Array.from(markup.matchAll(/<path fill="([^"]+)"/g), (match) => match[1] ?? "");
 }
 
-it("shows the Nexplore AI mark for the nexplore driver", async () => {
-  expect(await renderedFills("nexplore")).toEqual([NEXPLORE_ORANGE]);
+it("shows the Nexplore AI mark for the nexplore driver", () => {
+  expect(renderedFills("nexplore")).toEqual([NEXPLORE_ORANGE]);
 });
 
-it("keeps the generic fallback glyph for a driver without an icon", async () => {
-  const fills = await renderedFills("some-unknown-driver");
+it("keeps the generic fallback glyph for a driver without an icon", () => {
+  const fills = renderedFills("some-unknown-driver");
   expect(fills).not.toContain(NEXPLORE_ORANGE);
   expect(fills.length).toBeGreaterThan(0);
 });
