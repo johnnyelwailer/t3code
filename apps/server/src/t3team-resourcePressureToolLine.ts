@@ -65,7 +65,7 @@ export function withPressureLines<B extends T3TeamToolBinding | undefined>(
       Effect.map(([toolResult, report]) =>
         report.snapshot === null
           ? toolResult
-          : attachPressureLine(toolResult, pressureLine(report.snapshot)),
+          : attachHostLine(toolResult, pressureLine(report.snapshot)),
       ),
     );
   };
@@ -80,7 +80,11 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  * `hostResourcePressure` key) or, for errors, only the first text item (the line is folded
  * into it); in-process callers read `content` (the line is one more text item).
  */
-function attachPressureLine(result: T3TeamToolCallResult, line: string): T3TeamToolCallResult {
+export function attachHostLine(
+  result: T3TeamToolCallResult,
+  line: string,
+  structuredKey: string = "hostResourcePressure",
+): T3TeamToolCallResult {
   if (result.isError === true) {
     const [first, ...rest] = result.content;
     const text = first === undefined ? line : `${first.text}\n${line}`;
@@ -90,7 +94,7 @@ function attachPressureLine(result: T3TeamToolCallResult, line: string): T3TeamT
     ...result,
     content: [...result.content, { type: "text", text: line }],
     ...(isPlainObject(result.structuredContent)
-      ? { structuredContent: { ...result.structuredContent, hostResourcePressure: line } }
+      ? { structuredContent: { ...result.structuredContent, [structuredKey]: line } }
       : {}),
   };
 }
