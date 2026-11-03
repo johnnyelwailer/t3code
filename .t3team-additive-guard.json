@@ -10,6 +10,7 @@
     "apps/mobile/src/features/settings/SettingsRouteScreen.tsx",
     "apps/mobile/src/components/CompactBrandTitle.tsx",
     "apps/mobile/src/components/LoadingScreen.tsx",
+    "apps/mobile/src/components/ProviderIcon.tsx",
     "apps/mobile/src/lib/mobileThemeVariables.ts",
     "apps/mobile/src/features/home/HomeScreen.tsx",
     "apps/mobile/src/features/threads/NewTaskRouteScreen.tsx",
