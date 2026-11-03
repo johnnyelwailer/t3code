@@ -21,13 +21,13 @@ export interface NoticeCandidate {
 }
 
 export const NOTICE_QUIET_MS = 5 * 60_000;
-export const PACE_RISE_FACTOR = 1.5;
-export const USAGE_WARN_PERCENT = 80;
-export const USAGE_CRITICAL_PERCENT = 95;
-export const PROCESS_CPU_WARN_PERCENT = 80;
-export const PROCESS_RSS_WARN_BYTES = 2 * 1024 ** 3;
-export const PROCESS_RSS_CRITICAL_BYTES = 4 * 1024 ** 3;
-export const HOST_CPU_WARN_PERCENT = 90;
+const PACE_RISE_FACTOR = 1.5;
+const USAGE_WARN_PERCENT = 80;
+const USAGE_CRITICAL_PERCENT = 95;
+const PROCESS_CPU_WARN_PERCENT = 80;
+const PROCESS_RSS_WARN_BYTES = 2 * 1024 ** 3;
+const PROCESS_RSS_CRITICAL_BYTES = 4 * 1024 ** 3;
+const HOST_CPU_WARN_PERCENT = 90;
 export const CPU_SUSTAIN_MS = 10_000;
 
 const HOUR_MS = 3_600_000;

@@ -40,7 +40,7 @@ export interface AgentNoticeSources {
 
 const ACTIVE_CHILD = new Set(["pending", "running", "waiting"]);
 
-export const makeAgentNoticeInputs = (sources: AgentNoticeSources): AgentNoticeInputs => {
+const makeAgentNoticeInputs = (sources: AgentNoticeSources): AgentNoticeInputs => {
   const nowMs = DateTime.now.pipe(Effect.map(DateTime.toEpochMillis));
 
   const instanceWindows = Effect.fn("AgentNoticesLive.instanceWindows")(function* (
