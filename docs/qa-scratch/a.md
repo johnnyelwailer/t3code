@@ -1,1 +1,1 @@
-scratch a
+scratch a, changed after viewing
