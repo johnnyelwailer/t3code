@@ -28,7 +28,7 @@ import {
   projectGroupsSpanEnvironments,
 } from "~/sidebarProjectGrouping";
 import { useCloudAdoptedProjects } from "~/cloud/t3team-useCloudAdoptedProjects";
-import { useProjects, useThreadShells } from "~/state/entities";
+import { useProjects, useVisibleThreadShells } from "~/state/entities";
 import {
   useEnvironments,
   usePrimaryEnvironmentId,
@@ -76,7 +76,7 @@ export function DraftHeroHeadline({
   activeProjectTitle,
 }: DraftHeroHeadlineProps) {
   const projects = useCloudAdoptedProjects(useProjects());
-  const threads = useThreadShells();
+  const threads = useVisibleThreadShells();
   const { environments } = useEnvironments();
   const providersByEnvironment = useEnvironmentProviders();
   const primaryEnvironmentId = usePrimaryEnvironmentId();

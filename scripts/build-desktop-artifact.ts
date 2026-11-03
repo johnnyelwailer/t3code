@@ -3284,6 +3284,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   // other (e.g. 20 mounted "Nexi Work 0.0.33 Installer" volumes).
   const artifactTimestampSuffix = artifactTimestamp ? `-${artifactTimestamp}` : "";
   const buildConfig: Record<string, unknown> = {
+    afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
     appId,
     productName: resolvedProductName,
     // Built by concatenation, not a template literal: the ${version}/${arch}/

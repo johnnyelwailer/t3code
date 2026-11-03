@@ -10,6 +10,7 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as ServerConfig from "../config.ts";
+import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as AnalyticsService from "./AnalyticsService.ts";
 import { telemetryEnabledConfig } from "./t3team-telemetryDefault.ts";
 
@@ -39,6 +40,7 @@ const requestsSentUnder = (env: Record<string, unknown>) =>
         Layer.mergeAll(
           Layer.succeed(HostProcess.Platform, "linux"),
           Layer.succeed(HostProcess.Architecture, "arm64"),
+          ManagedPolicy.layerTest(),
         ),
       ),
       Layer.provideMerge(NodeHttpServer.layerTest),
