@@ -39,6 +39,7 @@
 const NodeFS = require("node:fs");
 const NodeModule = require("node:module");
 const NodePath = require("node:path");
+const NodeUrl = require("node:url");
 const CONFIG_PATH = NodePath.join(__dirname, "desktop-asar-dts-afterpack.json");
 
 const { fail, collectDtsFiles, buildExistingEntryStreams } = (() => {
@@ -170,15 +171,19 @@ async function reinjectDts(context) {
 
 /**
  * electron-builder takes one `afterPack`, and the staged build pins this hook there. Upstream's own
- * (`prepare-server-compile-cache.cjs`, the server bytecode cache) is chained after the re-injection:
- * it must see the final app.asar, so a hook that replaced it would silently drop the cache.
+ * hook is chained after the re-injection, because it must see the final app.asar: on Linux
+ * `linux-after-pack.ts` (server bytecode cache, then it strips group/world write bits from the app
+ * tree), elsewhere `prepare-server-compile-cache.cjs`. A hook that replaced it would drop both.
  */
 module.exports = async function desktopAsarDtsAfterPack(context) {
   await reinjectDts(context);
   const { repoScriptsPackageJson } = JSON.parse(NodeFS.readFileSync(CONFIG_PATH, "utf8"));
-  const serverCompileCacheHook = NodePath.join(
-    NodePath.dirname(repoScriptsPackageJson),
-    "prepare-server-compile-cache.cjs",
-  );
+  const scriptsDir = NodePath.dirname(repoScriptsPackageJson);
+  const linuxHook = NodePath.join(scriptsDir, "linux-after-pack.ts");
+  if (context.electronPlatformName === "linux" && NodeFS.existsSync(linuxHook)) {
+    await (await import(NodeUrl.pathToFileURL(linuxHook).href)).default(context);
+    return;
+  }
+  const serverCompileCacheHook = NodePath.join(scriptsDir, "prepare-server-compile-cache.cjs");
   if (NodeFS.existsSync(serverCompileCacheHook)) await require(serverCompileCacheHook)(context);
 };
