@@ -23,6 +23,7 @@ vi.mock("expo-file-system", () => ({
 
 import { appAtomRegistry } from "../state/atom-registry";
 import {
+  hasSelectableModel,
   readDraftModelSelection,
   setDraftModelSelection,
   useDraftModelSelection,
@@ -89,4 +90,34 @@ it("useStickyModelSelection reads without a stored pick as null", () => {
   const { seen, unmount } = renderHook(() => useStickyModelSelection());
   expect(seen.at(-1)).toBeNull();
   unmount();
+});
+
+const provider = (over: Record<string, unknown> = {}) => ({
+  instanceId: "codex",
+  driver: "codex",
+  enabled: true,
+  installed: true,
+  auth: { status: "authenticated" },
+  models: [{ slug: "m-1", name: "m-1", isCustom: false }],
+  ...over,
+});
+const config = (providers: ReadonlyArray<unknown>) => ({ providers }) as never;
+
+it("hasSelectableModel is the stock filter: a model the draft screen could pick", () => {
+  expect(hasSelectableModel(null, null)).toBe(false);
+  expect(hasSelectableModel(config([]), null)).toBe(false);
+  expect(hasSelectableModel(config([provider()]), "p-1")).toBe(true);
+  expect(hasSelectableModel(config([provider()]), null)).toBe(true);
+  // A bad project id is no project, not a crash.
+  expect(hasSelectableModel(config([provider()]), "Not A Slug!")).toBe(true);
+});
+
+it("hasSelectableModel is false where the stock screen would have no model", () => {
+  expect(hasSelectableModel(config([provider({ enabled: false })]), null)).toBe(false);
+  expect(hasSelectableModel(config([provider({ installed: false })]), null)).toBe(false);
+  expect(
+    hasSelectableModel(config([provider({ auth: { status: "unauthenticated" } })]), null),
+  ).toBe(false);
+  // Installed and signed in but listing no model: enabled+installed is looser than a pickable model.
+  expect(hasSelectableModel(config([provider({ models: [] })]), null)).toBe(false);
 });

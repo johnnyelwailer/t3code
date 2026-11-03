@@ -1,4 +1,6 @@
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, type ServerConfig } from "@t3tools/contracts";
+
+import { buildModelOptions } from "../lib/modelOptions";
 
 import {
   getComposerDraftSnapshot,
@@ -54,4 +56,26 @@ export function setDraftModelSelection(
 /** The model the user last picked on this device, whichever environment it was picked on. */
 export function useStickyModelSelection(): DraftModelRef | null {
   return plain(useStickyComposerModelSelection());
+}
+
+/**
+ * Whether the draft screen would have a model to pick from this server's catalog: the same
+ * `buildModelOptions` filter the stock screen uses (provider enabled for the project, installed, not
+ * signed out, at least one model that is not hidden). A distribution releases its hold on the
+ * catalog only when this is true, so the hold and the stock screen can never disagree.
+ */
+export function hasSelectableModel(
+  config: ServerConfig | null | undefined,
+  projectId: string | null,
+): boolean {
+  if (!config) return false;
+  let project: ReturnType<typeof ProjectId.make> | null = null;
+  try {
+    project = projectId === null ? null : ProjectId.make(projectId);
+  } catch {
+    project = null;
+  }
+  return buildModelOptions(config, null, undefined, project).some(
+    (option) => !option.isUnavailable,
+  );
 }

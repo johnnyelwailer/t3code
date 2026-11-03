@@ -25,6 +25,7 @@ export type {
 } from "./t3team-pendingDraftTypes";
 export { retargetPendingDraft } from "./t3team-retargetPendingDraft";
 export {
+  hasSelectableModel,
   readDraftModelSelection,
   setDraftModelSelection,
   useDraftModelSelection,
