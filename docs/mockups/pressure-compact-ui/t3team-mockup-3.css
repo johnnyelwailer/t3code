@@ -1,0 +1,93 @@
+.narrow .sheet {
+  position: absolute;
+  left: 0;
+  width: 390px;
+  bottom: 45px;
+  background: var(--panel);
+  border-top: 1px solid var(--bd);
+  border-radius: 16px 16px 0 0;
+  box-shadow: var(--shadow);
+  z-index: 6;
+}
+.narrow .sheet .grab {
+  width: 38px;
+  height: 4px;
+  border-radius: 9px;
+  background: var(--bd);
+  margin: 8px auto 0;
+}
+.narrow .pop {
+  border: 0;
+  box-shadow: none;
+  width: auto;
+  border-radius: 0;
+  padding: 10px 16px 14px;
+}
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  z-index: 4;
+}
+.dark .scrim {
+  background: rgba(0, 0, 0, 0.5);
+}
+.prompt {
+  align-self: flex-end;
+  max-width: 600px;
+  background: var(--ctl);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--fg);
+}
+.prompt small {
+  display: block;
+  color: var(--mut);
+  margin-bottom: 4px;
+}
+.check .grp {
+  font-weight: 600;
+  color: var(--fg);
+  margin: 10px 0 3px;
+}
+.check label {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  color: var(--fg);
+}
+.check .box {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--mut);
+  border-radius: 3px;
+  flex: none;
+  margin-top: 2px;
+}
+.check .box.on {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+.check .why,
+.q .why {
+  color: var(--mut);
+  font-weight: 400;
+}
+.ask {
+  align-self: flex-start;
+  width: 560px;
+  max-width: 100%;
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  padding: 12px 14px 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.ask .q {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.check .lock {
+  color: var(--mut);
+  font-weight: 500;
+}

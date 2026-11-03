@@ -1,0 +1,170 @@
+:root {
+  --bg: #fafafa;
+  --panel: #ffffff;
+  --side: #f3f3f4;
+  --ctl: #e9e9eb;
+  --fg: #18181b;
+  --mut: #6b6b73;
+  --bd: #dcdce0;
+  --warn: #b45309;
+  --crit: #b91c1c;
+  --ok: #15803d;
+  --acc: #2f5bd6;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.dark {
+  --bg: #121214;
+  --panel: #1b1b1f;
+  --side: #18181b;
+  --ctl: #2a2a30;
+  --fg: #ececf0;
+  --mut: #9a9aa5;
+  --bd: #34343c;
+  --warn: #fbbf24;
+  --crit: #f87171;
+  --ok: #4ade80;
+  --acc: #7c9cff;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  font:
+    13px/1.45 "Segoe UI",
+    system-ui,
+    sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+.app {
+  display: flex;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+.side {
+  width: 260px;
+  background: var(--side);
+  border-right: 1px solid var(--bd);
+  display: flex;
+  flex-direction: column;
+  flex: none;
+}
+.side h6 {
+  margin: 14px 14px 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+  font-weight: 600;
+}
+.row {
+  margin: 1px 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row.sel {
+  background: var(--ctl);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mut);
+  flex: none;
+}
+.dot.run {
+  background: var(--ok);
+}
+.grow {
+  flex: 1;
+}
+.foot {
+  padding: 8px 10px;
+  border-top: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.foot .who {
+  color: var(--mut);
+  font-size: 12px;
+  flex: 1;
+}
+.ibtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  background: var(--ctl);
+  color: var(--mut);
+  border: 0;
+}
+.ibtn svg {
+  width: 16px;
+  height: 16px;
+}
+.badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--ctl);
+}
+.badge.warn {
+  background: var(--warn);
+}
+.badge.crit {
+  background: var(--crit);
+}
+.ibtn.pressure.warn {
+  color: var(--warn);
+}
+.ibtn.pressure.crit {
+  color: var(--crit);
+}
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.top {
+  height: 44px;
+  border-bottom: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+}
+.top .title {
+  font-weight: 600;
+}
+.msgs {
+  flex: 1;
+  padding: 22px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+.msg {
+  max-width: 640px;
+  color: var(--mut);
+}
