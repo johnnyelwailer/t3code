@@ -1,15 +1,13 @@
 import { EnvironmentId, ProjectId, type RepositoryIdentity } from "@t3tools/contracts";
-import {
-  buildProjectGroups,
-  type ProjectGroupingSettings,
-} from "@t3tools/client-runtime/state/project-grouping";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { normalizeGitRemoteUrl } from "@t3tools/shared/git";
 import { describe, expect, it } from "vite-plus/test";
 
-import { adoptCloudCheckoutProjects } from "./t3team-cloudCheckoutProjectAdoption";
+import { buildProjectGroups, type ProjectGroupingSettings } from "./projectGrouping.ts";
+import type { EnvironmentProject } from "./models.ts";
+import { adoptCloudCheckoutProjects } from "./t3team-cloudCheckoutAdoption.ts";
 
 const LOCAL = EnvironmentId.make("env-local");
+const OTHER_LOCAL = EnvironmentId.make("env-local-2");
 const CLOUD = EnvironmentId.make("env-cloud");
 const OTHER_CLOUD = EnvironmentId.make("env-cloud-2");
 
@@ -55,10 +53,21 @@ const groupsOf = (projects: ReadonlyArray<EnvironmentProject>) =>
     label: group.label,
     members: group.members.map((member) => member.project.id as string),
   }));
-const adopt = (projects: ReadonlyArray<EnvironmentProject>) =>
+
+/** The web's rule: only the primary environment's projects count as the user's own. */
+const adoptFromPrimary = (projects: ReadonlyArray<EnvironmentProject>) =>
   adoptCloudCheckoutProjects({
     projects,
-    primaryEnvironmentId: LOCAL,
+    isOwnEnvironment: (environmentId) => environmentId === LOCAL,
+    isCloudSessionEnvironment: (environmentId) =>
+      environmentId === CLOUD || environmentId === OTHER_CLOUD,
+  });
+
+/** The phone's rule: every environment that is not the session's machine counts as the user's own. */
+const adoptFromOwnEnvironments = (projects: ReadonlyArray<EnvironmentProject>) =>
+  adoptCloudCheckoutProjects({
+    projects,
+    isOwnEnvironment: (environmentId) => environmentId !== CLOUD && environmentId !== OTHER_CLOUD,
     isCloudSessionEnvironment: (environmentId) =>
       environmentId === CLOUD || environmentId === OTHER_CLOUD,
   });
@@ -77,7 +86,7 @@ describe("cloud checkout joins the user's project (#777)", () => {
 
   it("merges the checkout into a work-source-bound project under its name", () => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE, { source: jira });
-    expect(groupsOf(adopt([local, checkout]))).toEqual([
+    expect(groupsOf(adoptFromPrimary([local, checkout]))).toEqual([
       { label: "PTI: POLAssist", members: ["pti", "checkout"] },
     ]);
   });
@@ -85,7 +94,7 @@ describe("cloud checkout joins the user's project (#777)", () => {
   it("labels a merged plain project with its own title, not the repository path", () => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE);
     expect(groupsOf([local, checkout])[0]?.label).not.toBe("PTI: POLAssist");
-    expect(groupsOf(adopt([local, checkout]))).toEqual([
+    expect(groupsOf(adoptFromPrimary([local, checkout]))).toEqual([
       { label: "PTI: POLAssist", members: ["pti", "checkout"] },
     ]);
   });
@@ -96,7 +105,7 @@ describe("cloud checkout joins the user's project (#777)", () => {
     ["upper case host and path", "https://NEXPLORE.ghe.com/Hive/PTI-POLAssist.git"],
   ])("matches a local checkout whose remote is spelled as %s", (_label, localRemote) => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", localRemote);
-    expect(groupsOf(adopt([local, checkout]))).toEqual([
+    expect(groupsOf(adoptFromPrimary([local, checkout]))).toEqual([
       { label: "PTI: POLAssist", members: ["pti", "checkout"] },
     ]);
   });
@@ -104,7 +113,7 @@ describe("cloud checkout joins the user's project (#777)", () => {
   it("merges sessions on the same repository from several cloud environments", () => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE, { source: jira });
     const second = project(OTHER_CLOUD, "checkout-2", "repository", REMOTE);
-    expect(groupsOf(adopt([local, checkout, second]))).toEqual([
+    expect(groupsOf(adoptFromPrimary([local, checkout, second]))).toEqual([
       { label: "PTI: POLAssist", members: ["pti", "checkout", "checkout-2"] },
     ]);
   });
@@ -112,31 +121,31 @@ describe("cloud checkout joins the user's project (#777)", () => {
   it("keeps different repositories apart", () => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE, { source: jira });
     const other = project(CLOUD, "other", "repository", "https://nexplore.ghe.com/hive/other.git");
-    expect(adopt([local, other])).toEqual([local, other]);
-    expect(groupsOf(adopt([local, other]))).toHaveLength(2);
+    expect(adoptFromPrimary([local, other])).toEqual([local, other]);
+    expect(groupsOf(adoptFromPrimary([local, other]))).toHaveLength(2);
   });
 
   it("leaves a project without a remote as it was", () => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE);
     const bare = project(CLOUD, "bare", "repository", null);
-    expect(adopt([local, bare])).toEqual([local, bare]);
+    expect(adoptFromPrimary([local, bare])).toEqual([local, bare]);
   });
 
   it("does not guess between bound projects of different work sources", () => {
     const one = project(LOCAL, "a", "A", REMOTE, { source: jira });
     const two = project(LOCAL, "b", "B", REMOTE, { source: { ...jira, externalProjectId: "11" } });
-    expect(adopt([one, two, checkout])).toEqual([one, two, checkout]);
+    expect(adoptFromPrimary([one, two, checkout])).toEqual([one, two, checkout]);
   });
 
   it("only adopts checkouts of cloud session environments", () => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE, { source: jira });
     const elsewhere = project(EnvironmentId.make("env-ssh"), "ssh", "repository", REMOTE);
-    expect(adopt([local, elsewhere])).toEqual([local, elsewhere]);
+    expect(adoptFromPrimary([local, elsewhere])).toEqual([local, elsewhere]);
   });
 
   it("keeps the checkout's own environment and id so selecting it opens the session's project", () => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE, { source: jira });
-    const [, adopted] = adopt([local, checkout]);
+    const [, adopted] = adoptFromPrimary([local, checkout]);
     expect(adopted).toMatchObject({
       environmentId: CLOUD,
       id: "checkout",
@@ -146,6 +155,58 @@ describe("cloud checkout joins the user's project (#777)", () => {
 
   it("returns the same list when nothing is adopted", () => {
     const projects = [project(LOCAL, "pti", "PTI: POLAssist", REMOTE)];
-    expect(adopt(projects)).toBe(projects);
+    expect(adoptFromPrimary(projects)).toBe(projects);
+  });
+});
+
+describe("cloud checkout keeps the Jira project's identity (#999)", () => {
+  // The selected project: a Jira project whose linked repository the machine checks out. The
+  // machine's copy is named after the repository and carries no work-source binding.
+  const selected = project(LOCAL, "nexi", "Nexi AI", "https://nexplore.ghe.com/hive/nx-nexi.git", {
+    source: jira,
+  });
+  const machine = project(CLOUD, "machine", "nx-nexi", "https://nexplore.ghe.com/hive/nx-nexi.git");
+
+  it("adopts the Jira project's title and work-source binding", () => {
+    const [, adopted] = adoptFromOwnEnvironments([selected, machine]) as EnvironmentProject[];
+    expect(adopted).toMatchObject({
+      environmentId: CLOUD,
+      id: "machine",
+      title: "Nexi AI",
+      source: jira,
+      repositoryIdentity: machine.repositoryIdentity,
+    });
+  });
+
+  it("the selector shows the project once, under its Jira name", () => {
+    expect(groupsOf(adoptFromOwnEnvironments([selected, machine]))).toEqual([
+      { label: "Nexi AI", members: ["nexi", "machine"] },
+    ]);
+  });
+
+  it("the machine's scratch project is never adopted", () => {
+    const scratch = project(CLOUD, "scratch", "Scratch", null, { isScratch: true });
+    expect(adoptFromOwnEnvironments([selected, machine, scratch])).toHaveLength(3);
+    expect(groupsOf(adoptFromOwnEnvironments([selected, machine, scratch]))).toHaveLength(2);
+  });
+
+  it("adopts from a second own environment when the first is not primary", () => {
+    const elsewhere = project(
+      OTHER_LOCAL,
+      "nexi-b",
+      "Nexi AI",
+      "https://nexplore.ghe.com/hive/nx-nexi.git",
+      {
+        source: jira,
+      },
+    );
+    const [, adopted] = adoptFromOwnEnvironments([elsewhere, machine]) as EnvironmentProject[];
+    expect(adopted).toMatchObject({ title: "Nexi AI", source: jira });
+    expect(groupsOf(adoptFromOwnEnvironments([elsewhere, machine]))).toHaveLength(1);
+  });
+
+  it("adopts nothing when no own environment has the repository", () => {
+    const projects = [machine];
+    expect(adoptFromOwnEnvironments(projects)).toBe(projects);
   });
 });

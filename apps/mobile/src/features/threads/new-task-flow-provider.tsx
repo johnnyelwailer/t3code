@@ -23,7 +23,8 @@ import { threadContextsOutsideEnvironment } from "@t3tools/shared/composerContex
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 
-import { useProjects, useServerConfigs, useThreadShells } from "../../state/entities";
+import { useServerConfigs, useThreadShells } from "../../state/entities";
+import { useCloudAdoptedProjects } from "../../state/t3team-cloudAdoption";
 import type { TurnCommandMetadata } from "../../lib/commandMetadata";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
@@ -231,7 +232,7 @@ export function NewTaskFlowProvider(
     routeDraftId?: string;
   }>,
 ) {
-  const catalogProjects = useProjects();
+  const catalogProjects = useCloudAdoptedProjects();
   // A pending draft's project is not in the catalog yet: a placeholder stands in for it.
   const { projects, pendingDraft: heldDraft } = usePendingDraftProjects(
     catalogProjects,
