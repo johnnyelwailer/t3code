@@ -68,6 +68,13 @@ describe("NexiUpdateProvider", () => {
     });
   });
 
+  it("hands the release page of the offered version through as releaseUrl", async () => {
+    const info = await make(available).getLatestVersion();
+    expect(info.releaseUrl).toBe(
+      "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.5",
+    );
+  });
+
   it("resolves the file to the local backend URL whose path ends in the file name", async () => {
     const provider = make(available);
     const files = provider.resolveFiles(await provider.getLatestVersion());

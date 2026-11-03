@@ -110,6 +110,29 @@ describe("Nexi ready update in the footer", () => {
     });
   });
 
+  it("links the full history of the version and opens it outside the app", async () => {
+    const releasePage = "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.8";
+    mocks.state = { ...ready, releaseUrl: releasePage };
+    const openExternal = vi.fn().mockResolvedValue(true);
+    using _bridge = stubGlobal("desktopBridge", { openExternal });
+    await withFreshStorage("0.1.2-rc.8", async () => {
+      await using screen = await render(<SidebarUpdatePill />);
+      await userEvent.click(screen.getByRole("button", { name: /is ready to install/ }));
+      await userEvent.click(page.getByRole("link", { name: "Full history" }));
+      await vi.waitFor(() => expect(openExternal).toHaveBeenCalledWith(releasePage));
+    });
+  });
+
+  it("shows no history link when the feed gave no release page", async () => {
+    mocks.state = ready;
+    await withFreshStorage("0.1.2-rc.8", async () => {
+      await using screen = await render(<SidebarUpdatePill />);
+      await userEvent.click(screen.getByRole("button", { name: /is ready to install/ }));
+      await expect.element(page.getByText("Nexi Work 0.1.2-rc.8 is ready")).toBeVisible();
+      expect(document.querySelector('[data-testid="nexi-update-popover"] a')).toBeNull();
+    });
+  });
+
   it("keeps Later per version: the dot goes, the icon stays, a new version brings it back", async () => {
     mocks.state = ready;
     await withFreshStorage("0.1.2-rc.8", async () => {

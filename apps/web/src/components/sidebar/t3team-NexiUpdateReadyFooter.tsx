@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { cn } from "../../lib/utils";
+import { openDesktopUpdateReleaseNotes } from "../desktopUpdate.toast";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -116,7 +117,13 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
           </TooltipPopup>
         </Tooltip>
         <PopoverPopup side="top" align="end" padding="compact" width="sm">
-          <NexiUpdatePopoverView view={view} busy={busy} onAction={onAction} onLater={onLater} />
+          <NexiUpdatePopoverView
+            view={view}
+            busy={busy}
+            onAction={onAction}
+            onLater={onLater}
+            onOpenHistory={(url) => void openDesktopUpdateReleaseNotes(window.desktopBridge, url)}
+          />
         </PopoverPopup>
       </Popover>
     </SidebarMenuItem>
