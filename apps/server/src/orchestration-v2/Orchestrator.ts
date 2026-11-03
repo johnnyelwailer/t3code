@@ -67,7 +67,6 @@ import {
   ProviderInteractionMode,
   isRuntimeModeAbove,
   resolveProviderInstanceEnabled,
-  resolveProjectProviderInstanceEnabled,
   type ProviderSessionId,
   RunId,
   RuntimeMode,
@@ -199,6 +198,8 @@ import { visibleShellIndex, visibleShellSnapshot } from "./t3team-hiddenShellThr
 import { rewritePersistenceFailureCause } from "./persistenceStorageError.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ServerSettings from "../serverSettings.ts";
+import { resolveProjectProviderInstanceEnabledWithPack } from "../t3team-packProviderGate.ts";
+import { getPackProviderOverlay } from "../t3team-pack-providerOverlay.ts";
 
 const isMessageQuestionAnswer = Schema.is(
   Schema.Union([TrimmedNonEmptyString, Schema.NonEmptyArray(TrimmedNonEmptyString)]),
@@ -9187,10 +9188,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           .pipe(mapDispatchError(command));
         const settings = yield* serverSettings.getSettings.pipe(Effect.orDie);
         if (
-          !resolveProjectProviderInstanceEnabled(
+          !resolveProjectProviderInstanceEnabledWithPack(
             settings,
             thread.projectId,
             thread.providerInstanceId,
+            getPackProviderOverlay(),
           )
         ) {
           return yield* new OrchestratorDispatchError({
