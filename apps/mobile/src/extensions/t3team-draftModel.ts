@@ -26,17 +26,29 @@ export function readDraftModelSelection(draftKey: string): DraftModelRef | null 
   return plain(getComposerDraftSnapshot(draftKey).modelSelection);
 }
 
+/** Whether the model was stored: an instance id the contracts refuse is reported, never thrown. */
+export type SetDraftModelResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "invalid-instance-id" };
+
 /**
  * Stores a model on the draft, as picking it in the picker does (without making it the sticky
- * default). A draft that carries one needs no loaded catalog to show the composer.
+ * default). A draft that carries one needs no loaded catalog to show the composer. A provider id the
+ * contracts cannot brand is refused with a result, so one bad id from a distribution cannot throw into
+ * the draft screen.
  */
-export function setDraftModelSelection(draftKey: string, selection: DraftModelRef): void {
-  updateComposerDraftSettings(draftKey, {
-    modelSelection: {
-      instanceId: ProviderInstanceId.make(selection.instanceId),
-      model: selection.model,
-    },
-  });
+export function setDraftModelSelection(
+  draftKey: string,
+  selection: DraftModelRef,
+): SetDraftModelResult {
+  let instanceId: ReturnType<typeof ProviderInstanceId.make>;
+  try {
+    instanceId = ProviderInstanceId.make(selection.instanceId);
+  } catch {
+    return { ok: false, reason: "invalid-instance-id" };
+  }
+  updateComposerDraftSettings(draftKey, { modelSelection: { instanceId, model: selection.model } });
+  return { ok: true };
 }
 
 /** The model the user last picked on this device, whichever environment it was picked on. */

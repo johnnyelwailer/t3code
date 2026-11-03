@@ -57,11 +57,16 @@ it("stores a model on a draft by plain ids and reads it back", () => {
   });
 });
 
-it("brands the instance id: an id the contracts refuse is rejected, not stored", () => {
-  expect(() =>
-    setDraftModelSelection("draft:seam-2", { instanceId: "Not A Slug!", model: "m" }),
-  ).toThrow();
+it("refuses an instance id the contracts cannot brand, with a result, and stores nothing", () => {
+  const result = setDraftModelSelection("draft:seam-2", { instanceId: "Not A Slug!", model: "m" });
+  expect(result).toEqual({ ok: false, reason: "invalid-instance-id" });
   expect(readDraftModelSelection("draft:seam-2")).toBeNull();
+});
+
+it("reports a stored model as ok", () => {
+  expect(setDraftModelSelection("draft:seam-4", { instanceId: "codex", model: "m" })).toEqual({
+    ok: true,
+  });
 });
 
 it("useDraftModelSelection(null) does not throw and has no model (useComposerDraft keys a null draft to the empty draft)", () => {
