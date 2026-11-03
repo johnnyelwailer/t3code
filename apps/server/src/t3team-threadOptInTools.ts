@@ -26,6 +26,8 @@ import { getProjectRecipeToolGroupForToolId } from "@t3tools/project-recipes";
 const FLAG_FOR_OPT_IN_TOOL: ReadonlyMap<string, FeatureFlagKey> = new Map([
   ["t3team.change_request.publish", "AGENTS_CHANGE_REQUEST_PUBLISH"],
   ["t3team.desktop_route.request", "AGENTS_DESKTOP_ROUTE"],
+  // Default-enabled in the catalog; here so a thread without a synced context still holds it while the flag is on.
+  ["t3team.view.read", "AGENTS_VIEW_CONTEXT"],
 ]);
 
 /** Catalog tools a thread does not get by default, with the tool group that classifies each. */

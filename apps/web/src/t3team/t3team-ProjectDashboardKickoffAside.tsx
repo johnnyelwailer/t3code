@@ -91,6 +91,7 @@ export function ProjectDashboardKickoffAside({
       projectId: project.id,
       surface: sidecarSurface,
       projectWorkspaceRoot: project.workspace?.rootPath,
+      project,
       ...(workItemRef ? { workItem: workItemRef } : {}),
       openThread: onOpenThread,
       buildSelectedRecipe: (recipe, customization) =>

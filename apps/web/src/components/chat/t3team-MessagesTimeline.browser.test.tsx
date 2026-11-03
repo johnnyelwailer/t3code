@@ -1,4 +1,5 @@
 import { EnvironmentId, MessageId, RunId, ThreadId } from "@t3tools/contracts";
+import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@t3tools/shared/composerContextReferences";
 import type { LegendListRef } from "@legendapp/list/react";
 import { act, createRef, type ComponentProps, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -588,5 +589,54 @@ describe("MessagesTimeline t3team working row (GHE #201/#208/#236)", () => {
     expect(thinking).toContain(
       '<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Thinking</span>',
     );
+  });
+});
+
+describe("MessagesTimeline t3team user message text", () => {
+  const image = {
+    type: "image" as const,
+    id: "photo",
+    name: "photo.png",
+    mimeType: "image/png",
+    sizeBytes: 100,
+  };
+  const renderMessage = async (message: Partial<ChatMessage>) => {
+    const entry = buildUserTimelineEntry("");
+    return await renderMarkup(
+      <MessagesTimeline
+        {...baseProps()}
+        timelineEntries={[{ ...entry, message: { ...entry.message, ...message } }]}
+      />,
+    );
+  };
+
+  it("hides the bootstrap prompt of an attachment-only message and renders it as media only", async () => {
+    const markup = await renderMessage({
+      text: ATTACHMENT_ONLY_BOOTSTRAP_PROMPT,
+      attachments: [image],
+    });
+    expect(markup).not.toContain("User attached one or more files");
+    // Media only: no text body and no message bubble around the image.
+    expect(markup).not.toContain("data-user-message-body");
+    expect(markup).not.toContain("bg-message");
+  });
+
+  it("still shows the person's own words from ext displayText", async () => {
+    const markup = await renderMessage({
+      text: "Review the auth path\n\n<work-item-context>PROJ-1</work-item-context>",
+      t3teamExt: { displayText: "Review the auth path" },
+    });
+    expect(markup).toContain("Review the auth path");
+    expect(markup).not.toContain("work-item-context");
+  });
+
+  it("leaves an agent-attributed message unchanged", async () => {
+    const markup = await renderMessage({
+      text: "Please look at the failing build",
+      createdBy: "agent",
+      creationSource: "mcp",
+      senderThreadId: ThreadId.make("thread-parent"),
+    });
+    expect(markup).toContain('data-user-message-attribution="agent"');
   });
 });

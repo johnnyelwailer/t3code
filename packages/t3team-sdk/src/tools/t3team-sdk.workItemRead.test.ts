@@ -63,6 +63,51 @@ describe("t3team.work_item.search / get", () => {
     expect(result).toEqual({ ok: true, source: "mirror", items: [row] });
   });
 
+  it("search and get pass the host's freshness through to the caller", async () => {
+    const freshness = { source: "mirror", syncedAt: "2026-11-02T08:00:00.000Z", stale: true };
+    const ctx = (answer: unknown) =>
+      createToolCtx({ t3team: { callHostTool: async () => answer } });
+    const searched = await executeRegisteredTool(
+      searchWorkItemsTool.id,
+      {},
+      ctx({ ok: true, source: "mirror", items: [row], freshness }),
+    );
+    expect(searched).toEqual({ ok: true, source: "mirror", items: [row], freshness });
+    const read = await executeRegisteredTool(
+      getWorkItemTool.id,
+      { issueKey: "PROJ-1" },
+      ctx({
+        ok: true,
+        item: row,
+        comments: [],
+        commentsTruncated: false,
+        links: [],
+        children: [],
+        freshness: { source: "live" },
+      }),
+    );
+    expect(read).toMatchObject({ freshness: { source: "live" } });
+  });
+
+  it("search rejects a freshness whose source is neither mirror nor live", async () => {
+    await expect(
+      executeRegisteredTool(
+        searchWorkItemsTool.id,
+        {},
+        createToolCtx({
+          t3team: {
+            callHostTool: async () => ({
+              ok: true,
+              source: "mirror",
+              items: [],
+              freshness: { source: "cache" },
+            }),
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
   it("search rejects an out-of-range limit before it reaches the host", async () => {
     let called = false;
     await expect(

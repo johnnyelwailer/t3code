@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { matchRecipes } from "@t3tools/project-recipes";
 import {
   getBundledT3TeamRecipe,
@@ -13,11 +13,7 @@ import { buildT3TeamActionRecipeLaunchContext } from "~/t3team/t3team-actionReci
 import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import { useOfferedRecipes } from "~/t3team/t3team-offeredRecipes";
 import { buildAvailableContextKeys } from "~/t3team/t3team-sidecarRecipeContextKeys";
-import {
-  buildPinnedQuickStartSelection,
-  mergeSidecarRecipeQuickStarts,
-  mapDiscoveredRecipesToQuickStarts,
-} from "~/t3team/t3team-sidecarRecipeDiscoveryMapping";
+import { buildPinnedQuickStartSelection } from "~/t3team/t3team-sidecarRecipeDiscoveryMapping";
 import {
   buildProjectRecipeDiscoveryRequest,
   buildRecipeRenderContext,
@@ -27,7 +23,7 @@ import {
   renderPromptTemplate,
 } from "~/t3team/t3team-sidecarRecipeTemplates";
 import { buildT3TeamSidecarRecipeMembershipKey } from "~/t3team/t3team-sidecarRecipeInputKey";
-import { areQuickStartsEqual } from "~/t3team/t3team-sidecarRecipeQuickStartEquality";
+import { type RecipeDiscoveryStatus, useRecipeDiscovery } from "~/t3team/t3team-useRecipeDiscovery";
 import type {
   T3TeamSidecarRecipeInput,
   T3TeamSidecarRecipeQuickStart,
@@ -135,18 +131,19 @@ export function buildT3TeamSidecarRecipeQuickStarts(
   });
 }
 
-export function useT3TeamSidecarRecipeQuickStarts(
+export function useT3TeamSidecarRecipeDiscovery(
   input: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   },
-): ReadonlyArray<T3TeamSidecarRecipeQuickStart> {
+): {
+  readonly quickStarts: ReadonlyArray<T3TeamSidecarRecipeQuickStart>;
+  readonly status: RecipeDiscoveryStatus;
+} {
   const membershipKey = buildT3TeamSidecarRecipeMembershipKey(input);
   const fallbackQuickStarts = useMemo(
     () => buildT3TeamSidecarRecipeQuickStarts(input),
     [membershipKey],
   );
-  const [quickStarts, setQuickStarts] =
-    useState<ReadonlyArray<T3TeamSidecarRecipeQuickStart>>(fallbackQuickStarts);
   const workspaceRoot = input.project.workspace?.rootPath;
   const discoveryRequest = useMemo(
     () =>
@@ -158,57 +155,19 @@ export function useT3TeamSidecarRecipeQuickStarts(
         : null,
     [membershipKey, workspaceRoot],
   );
-  const backend = input.backend;
-  const limit = input.limit;
+  const { quickStarts, status } = useRecipeDiscovery({
+    backend: input.backend,
+    discoveryRequest,
+    fallbackQuickStarts,
+    limit: input.limit,
+  });
+  return { quickStarts: useOfferedRecipes(quickStarts), status };
+}
 
-  useEffect(() => {
-    const setQuickStartsIfChanged = (
-      nextQuickStarts: ReadonlyArray<T3TeamSidecarRecipeQuickStart>,
-    ) => {
-      setQuickStarts((current) =>
-        areQuickStartsEqual(current, nextQuickStarts) ? current : nextQuickStarts,
-      );
-    };
-
-    setQuickStartsIfChanged(fallbackQuickStarts);
-
-    if (!backend || !discoveryRequest) {
-      return;
-    }
-
-    let cancelled = false;
-    void backend.projectWorkspace
-      .discoverRecipes(discoveryRequest)
-      .then((response) => {
-        if (cancelled) {
-          return;
-        }
-        // Gate on what was DISCOVERED, not on `hasProjectLocalRecipes` — pack-shipped recipes are a
-        // legitimate source that reports that flag false. Empty list still means bundled fallback.
-        if (response.recipes.length === 0) {
-          setQuickStartsIfChanged(fallbackQuickStarts);
-          return;
-        }
-        const discoveredQuickStarts = mapDiscoveredRecipesToQuickStarts(
-          response.recipes,
-          discoveryRequest.context.surface,
-          limit,
-          discoveryRequest.context,
-        );
-        setQuickStartsIfChanged(
-          mergeSidecarRecipeQuickStarts(discoveredQuickStarts, fallbackQuickStarts, limit),
-        );
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setQuickStartsIfChanged(fallbackQuickStarts);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [backend, discoveryRequest, fallbackQuickStarts, limit]);
-
-  return useOfferedRecipes(quickStarts);
+export function useT3TeamSidecarRecipeQuickStarts(
+  input: T3TeamSidecarRecipeInput & {
+    readonly backend: BackendApi | null;
+  },
+): ReadonlyArray<T3TeamSidecarRecipeQuickStart> {
+  return useT3TeamSidecarRecipeDiscovery(input).quickStarts;
 }

@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./assembly-highlighting": {
+      "types": "./src/assemblyHighlighting.ts",
+      "default": "./src/assemblyHighlighting.ts"
+    },
     "./zip/bounded-zip": {
       "types": "./src/zip/boundedZip.ts",
       "default": "./src/zip/boundedZip.ts"
@@ -59,6 +63,10 @@
       "types": "./src/t3team-runPromptCopy.ts",
       "default": "./src/t3team-runPromptCopy.ts"
     },
+    "./t3team-environmentFilter": {
+      "types": "./src/t3team-environmentFilter.ts",
+      "default": "./src/t3team-environmentFilter.ts"
+    },
     "./t3team-credentialSourceOptions": {
       "types": "./src/t3team-credentialSourceOptions.ts",
       "default": "./src/t3team-credentialSourceOptions.ts"
@@ -82,6 +90,10 @@
     "./state/local-thread-overrides": {
       "types": "./src/state/t3team-localThreadOverrides.ts",
       "default": "./src/state/t3team-localThreadOverrides.ts"
+    },
+    "./state/thread-answers": {
+      "types": "./src/state/t3team-threadAnswers.ts",
+      "default": "./src/state/t3team-threadAnswers.ts"
     },
     "./state/cloud-sessions": {
       "types": "./src/state/t3team-cloudSessions.ts",
@@ -210,6 +222,10 @@
     "./state/orchestration": {
       "types": "./src/state/orchestration.ts",
       "default": "./src/state/orchestration.ts"
+    },
+    "./state/thread-history-merge": {
+      "types": "./src/state/threadHistoryMerge.ts",
+      "default": "./src/state/threadHistoryMerge.ts"
     },
     "./state/orchestration-v2-projection": {
       "types": "./src/state/orchestrationV2Projection.ts",

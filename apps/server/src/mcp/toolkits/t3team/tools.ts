@@ -24,11 +24,13 @@ import {
   T3TeamWorkItemChangeSetTool,
   T3TeamWorkItemDraftTool,
 } from "./t3team-workItemDraftTools.ts";
+import { T3TeamCurrentViewTool } from "./t3team-currentViewTool.ts";
 import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workItemReadTools.ts";
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
 import { T3TeamMachineFindDefinitionsTool } from "./t3team-machineDefinitionTools.ts";
 import { T3TeamMachineSetSourceTool } from "./t3team-machineSourceTools.ts";
+import { T3TeamToolHelpTool } from "./t3team-toolHelpTool.ts";
 import { T3TeamDesktopRouteRequestTool } from "./t3team-desktopRouteTools.ts";
 
 /**
@@ -77,7 +79,6 @@ export { mcpDescriptionOf };
  */
 export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
   "t3team.backlog.set_assignee_filter",
-  "t3team.view.read",
   "t3team.work_item.refresh_context_bundle",
   "t3team.project.refresh_context_bundle",
   // Draft mutations — workflow-body surface only; see the note above.
@@ -417,9 +418,25 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
     widget_code: Schema.optional(Schema.String).annotate({
       description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
     }),
-    format: Schema.optional(Schema.Literals(["html", "svg"])).annotate({
+    format: Schema.optional(Schema.Literals(["html", "svg", "rich-choice"])).annotate({
       description: T3TEAM_WIDGET_FORMAT_DESCRIPTION,
     }),
+    choice: Schema.optional(
+      Schema.Struct({
+        prompt: Schema.String,
+        options: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            title: Schema.String,
+            body: Schema.String,
+            tag: Schema.optional(Schema.String),
+            chips: Schema.optional(Schema.Array(Schema.String)),
+          }),
+        ),
+        multiple: Schema.optional(Schema.Boolean),
+        default_id: Schema.optional(Schema.String),
+      }),
+    ),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(
       Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
@@ -522,6 +539,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRecipeValidateTool,
   T3TeamMyWorkDigestTool,
   T3TeamMyWorkArrangeTool,
+  T3TeamCurrentViewTool,
   T3TeamWorkItemSearchTool,
   T3TeamWorkItemGetTool,
   T3TeamWorkItemDraftTool,
@@ -532,4 +550,5 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamMachineSetSourceTool,
   T3TeamDesktopRouteRequestTool,
   T3TeamThreadSkillMetadataTool,
+  T3TeamToolHelpTool,
 );

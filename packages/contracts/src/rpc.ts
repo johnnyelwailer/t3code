@@ -149,6 +149,8 @@ import {
   VcsStatusStreamEvent,
 } from "./git.ts";
 import {
+  ReviewBranchCommitsInput,
+  ReviewBranchCommitsResult,
   ReviewDiffFileContentsInput,
   ReviewDiffFileContentsResult,
   ReviewDiffPreviewError,
@@ -232,7 +234,9 @@ import {
 import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationGetWorkflowScriptError,
+  OrchestrationV2GetNativeChildWorkError,
   OrchestrationV2StopWorkflowError,
+  OrchestrationV2ForceStopThreadError,
   OrchestrationV2DispatchCommandError,
   OrchestrationV2GetShellSnapshotError,
   OrchestrationV2CommandOutputError,
@@ -333,6 +337,9 @@ import {
   ServerRemoveKeybindingResult,
   ServerProviderUpdatedPayload,
   ServerSelfUpdateError,
+  ServerNpmRelease,
+  ServerNpmReleaseError,
+  ServerNpmReleaseInput,
   ServerSelfUpdateInput,
   ServerSelfUpdateProgressEvent,
   ServerSelfUpdateResult,
@@ -421,6 +428,7 @@ import {
   SourceControlRepositoryLookupInput,
   SourceControlAppAccess,
   SourceControlAppAccessInput,
+  SourceControlStarredInput,
   SourceControlSignInError,
   SourceControlSignInInput,
   SourceControlSignInPrompt,
@@ -452,6 +460,11 @@ import {
   T3TeamStopThreadCascadeInput,
   T3TeamStopThreadCascadeResult,
 } from "./t3team-threadStopCascade.ts";
+import {
+  T3TeamContextBindingError,
+  T3TeamContextBindingRecordInput,
+  T3TeamContextBindingRecordResult,
+} from "./t3team-contextBinding.ts";
 import {
   T3TeamThreadHandoffCapture,
   T3TeamThreadHandoffError,
@@ -529,6 +542,7 @@ export const WS_METHODS = {
   gitResolvePullRequest: "git.resolvePullRequest",
   gitPreparePullRequestThread: "git.preparePullRequestThread",
 
+  reviewGetBranchCommits: "review.getBranchCommits",
   reviewGetDiffPreview: "review.getDiffPreview",
   reviewGetDiffFileContents: "review.getDiffFileContents",
 
@@ -563,6 +577,7 @@ export const WS_METHODS = {
 
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
+  serverGetNpmRelease: "server.getNpmRelease",
   serverRefreshProviders: "server.refreshProviders",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
@@ -673,6 +688,7 @@ export const WS_METHODS = {
   sourceControlSignInWait: "sourceControl.signInWait",
   sourceControlSignInCancel: "sourceControl.signInCancel",
   sourceControlAppAccess: "sourceControl.appAccess",
+  sourceControlStarred: "sourceControl.starred",
   projectCloneStart: "projectClone.start",
   projectCloneCancel: "projectClone.cancel",
   projectCloneRetry: "projectClone.retry",
@@ -712,6 +728,8 @@ export const WS_METHODS = {
   // t3team: "Move to" another machine (capability-gated by `capabilities.t3team.threadHandoff`).
   t3teamThreadHandoffPrepare: "t3team.threadHandoff.prepare",
   t3teamThreadHandoffRecord: "t3team.threadHandoff.record",
+  // t3team: the view a chat thread was started from (flag `CONTEXT_CHAT_TAB`).
+  t3teamContextBindingRecord: "t3team.contextBinding.record",
 } as const;
 
 const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -745,6 +763,8 @@ export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProv
     fresh: Schema.optional(Schema.Boolean),
     /** Bypass model caches; explicit rediscovery may open sessions, background refreshes must not. */
     refreshModels: Schema.optional(Schema.Boolean),
+    /** Read secret references again; unlocking a vault can prompt on the host, so only explicit user refreshes ask. */
+    reloadSecrets: Schema.optional(Schema.Boolean),
     /**
      * Reply without snapshots, or with only the requested instance's cwd snapshot. Snapshots then
      * reach the client only through these replies, so another client's scan shows on its next
@@ -849,6 +869,12 @@ const WsProviderInstallRemoveRpc = Rpc.make(WS_METHODS.providerInstallRemove, {
   payload: ProviderSetupInput,
   success: ProviderInstallState,
   error: ProviderSetupRpcError,
+});
+
+const WsServerGetNpmReleaseRpc = Rpc.make(WS_METHODS.serverGetNpmRelease, {
+  payload: ServerNpmReleaseInput,
+  success: Schema.NullOr(ServerNpmRelease),
+  error: Schema.Union([ServerNpmReleaseError, EnvironmentAuthorizationError]),
 });
 
 const WsServerUpdateServerRpc = Rpc.make(WS_METHODS.serverUpdateServer, {
@@ -1411,6 +1437,13 @@ const WsSourceControlAppAccessRpc = Rpc.make(WS_METHODS.sourceControlAppAccess, 
   error: EnvironmentAuthorizationError,
 });
 
+// False when the server's forge account has not starred the repository or the forge cannot say.
+const WsSourceControlStarredRpc = Rpc.make(WS_METHODS.sourceControlStarred, {
+  payload: SourceControlStarredInput,
+  success: Schema.Boolean,
+  error: EnvironmentAuthorizationError,
+});
+
 // Returns when the project exists and cloning starts; progress uses the subscription.
 const WsProjectCloneStartRpc = Rpc.make(WS_METHODS.projectCloneStart, {
   payload: ProjectCloneStartInput,
@@ -1680,6 +1713,12 @@ const WsVcsSwitchRefRpc = Rpc.make(WS_METHODS.vcsSwitchRef, {
 const WsVcsInitRpc = Rpc.make(WS_METHODS.vcsInit, {
   payload: VcsInitInput,
   error: Schema.Union([VcsError, EnvironmentAuthorizationError]),
+});
+
+const WsReviewGetBranchCommitsRpc = Rpc.make(WS_METHODS.reviewGetBranchCommits, {
+  payload: ReviewBranchCommitsInput,
+  success: ReviewBranchCommitsResult,
+  error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
 });
 
 const WsReviewGetDiffPreviewRpc = Rpc.make(WS_METHODS.reviewGetDiffPreview, {
@@ -1955,12 +1994,27 @@ const WsOrchestrationV2StopWorkflowRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.st
   error: Schema.Union([OrchestrationV2StopWorkflowError, EnvironmentAuthorizationError]),
 });
 
+const WsOrchestrationV2ForceStopThreadRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.forceStopThread, {
+  payload: OrchestrationV2RpcSchemas.forceStopThread.input,
+  success: OrchestrationV2RpcSchemas.forceStopThread.output,
+  error: Schema.Union([OrchestrationV2ForceStopThreadError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationV2GetWorkflowScriptRpc = Rpc.make(
   ORCHESTRATION_V2_WS_METHODS.getWorkflowScript,
   {
     payload: OrchestrationV2RpcSchemas.getWorkflowScript.input,
     success: OrchestrationV2RpcSchemas.getWorkflowScript.output,
     error: Schema.Union([OrchestrationGetWorkflowScriptError, EnvironmentAuthorizationError]),
+  },
+);
+
+const WsOrchestrationV2GetNativeChildWorkRpc = Rpc.make(
+  ORCHESTRATION_V2_WS_METHODS.getNativeChildWork,
+  {
+    payload: OrchestrationV2RpcSchemas.getNativeChildWork.input,
+    success: OrchestrationV2RpcSchemas.getNativeChildWork.output,
+    error: Schema.Union([OrchestrationV2GetNativeChildWorkError, EnvironmentAuthorizationError]),
   },
 );
 
@@ -2014,6 +2068,13 @@ const WsT3TeamThreadHandoffRecordRpc = Rpc.make(WS_METHODS.t3teamThreadHandoffRe
   payload: T3TeamThreadHandoffRecordInput,
   success: T3TeamThreadHandoffRecordResult,
   error: Schema.Union([T3TeamThreadHandoffError, EnvironmentAuthorizationError]),
+});
+
+// t3team: context binding — which view a thread was started from, a thread fact.
+const WsT3TeamContextBindingRecordRpc = Rpc.make(WS_METHODS.t3teamContextBindingRecord, {
+  payload: T3TeamContextBindingRecordInput,
+  success: T3TeamContextBindingRecordResult,
+  error: Schema.Union([T3TeamContextBindingError, EnvironmentAuthorizationError]),
 });
 
 // t3team: fork thread facts side stream (snapshot, then per-thread changes).
@@ -2255,6 +2316,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProviderInstallSubscribeRpc,
   WsProviderInstallRemoveRpc,
   WsServerUpdateServerRpc,
+  WsServerGetNpmReleaseRpc,
   WsServerUpdateServerWithProgressRpc,
   WsServerCommitDesktopUpdateRpc,
   WsServerUpsertKeybindingRpc,
@@ -2356,6 +2418,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSourceControlSignInWaitRpc,
   WsSourceControlSignInCancelRpc,
   WsSourceControlAppAccessRpc,
+  WsSourceControlStarredRpc,
   WsProjectCloneStartRpc,
   WsProjectCloneCancelRpc,
   WsProjectCloneRetryRpc,
@@ -2398,6 +2461,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsVcsCreateRefRpc,
   WsVcsSwitchRefRpc,
   WsVcsInitRpc,
+  WsReviewGetBranchCommitsRpc,
   WsReviewGetDiffPreviewRpc,
   WsReviewGetDiffFileContentsRpc,
   WsTerminalOpenRpc,
@@ -2442,7 +2506,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeResourceTelemetryRpc,
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,
+  WsOrchestrationV2GetNativeChildWorkRpc,
   WsOrchestrationV2StopWorkflowRpc,
+  WsOrchestrationV2ForceStopThreadRpc,
   WsOrchestrationV2GetTurnItemRpc,
   WsOrchestrationV2GetTurnDiffRpc,
   WsOrchestrationV2GetFullThreadDiffRpc,
@@ -2466,4 +2532,5 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeCommandOutputRpc,
   WsT3TeamThreadHandoffPrepareRpc,
   WsT3TeamThreadHandoffRecordRpc,
+  WsT3TeamContextBindingRecordRpc,
 ).middleware(RpcScopeAuthorization);

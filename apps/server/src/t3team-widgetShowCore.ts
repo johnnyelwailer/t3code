@@ -5,6 +5,7 @@
  * widget publishes through upstream HTML renders (`t3team-widgetHtmlDocument.ts`).
  */
 
+import { parseRichChoicePayload } from "@t3tools/shared/t3team-richChoicePayload";
 import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
 
@@ -18,11 +19,21 @@ const LOADING_MESSAGES_MAX = 8;
 const LOADING_MESSAGE_MAX_LENGTH = 200;
 const TOOLS_MAX = 16;
 
-export type T3TeamWidgetFormat = "html" | "svg" | "mdx" | "tsx";
-const WIDGET_FORMATS: ReadonlySet<T3TeamWidgetFormat> = new Set(["html", "svg", "mdx", "tsx"]);
+export type T3TeamWidgetFormat = "html" | "svg" | "mdx" | "tsx" | "rich-choice";
+const WIDGET_FORMATS: ReadonlySet<T3TeamWidgetFormat> = new Set([
+  "html",
+  "svg",
+  "mdx",
+  "tsx",
+  "rich-choice",
+]);
 /** Formats the sandboxed-iframe pipeline renders today. mdx/tsx are reserved seams that will
  * route to the T1 safe-mdx renderer and T2b compose pipeline without changing the tool shape. */
-const IMPLEMENTED_WIDGET_FORMATS: ReadonlySet<T3TeamWidgetFormat> = new Set(["html", "svg"]);
+const IMPLEMENTED_WIDGET_FORMATS: ReadonlySet<T3TeamWidgetFormat> = new Set([
+  "html",
+  "svg",
+  "rich-choice",
+]);
 
 export interface T3TeamWidgetShowInput {
   readonly title: string;
@@ -71,6 +82,25 @@ export function parseT3TeamWidgetShowInput(
     .slice(0, TITLE_MAX_LENGTH);
   if (title.length === 0) {
     return { error: "title must contain at least one alphanumeric character." };
+  }
+
+  if (args.format === "rich-choice") {
+    if (args.widget_code !== undefined || args.intent !== undefined) {
+      return { error: "format 'rich-choice' takes choice only, not intent or widget_code." };
+    }
+    const parsedChoice = parseRichChoicePayload(args.choice);
+    if (!parsedChoice.ok) return { error: parsedChoice.error };
+    return {
+      title,
+      format: "rich-choice",
+      widgetCode: JSON.stringify(parsedChoice.payload),
+      intent: undefined,
+      loadingMessages: [],
+      tools: [],
+    };
+  }
+  if (args.choice !== undefined) {
+    return { error: "choice is only valid with format 'rich-choice'." };
   }
 
   const rawIntent = typeof args.intent === "string" ? args.intent.trim() : "";

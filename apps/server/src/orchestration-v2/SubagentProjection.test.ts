@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import {
+  CommandId,
   type ModelSelection,
   NodeId,
   RunId,
@@ -81,7 +82,10 @@ function makeParentThread(): OrchestrationV2AppThread {
 }
 
 it("keeps a subagent child awake when its parent thread is snoozed", () => {
-  const parentThread = makeParentThread();
+  const parentThread: OrchestrationV2AppThread = {
+    ...makeParentThread(),
+    titleRegeneration: { requestId: CommandId.make("command:parent-title"), startedAt: snoozedAt },
+  };
   const childProviderThreadId = ProviderThreadId.make("provider-thread:subagent-awake-child");
   const parentNodeId = NodeId.make("node:subagent-parent");
   const childThread = makeSubagentChildThread({
@@ -99,6 +103,7 @@ it("keeps a subagent child awake when its parent thread is snoozed", () => {
 
   assert.isNull(childThread.snoozedUntil);
   assert.isNull(childThread.snoozedAt);
+  assert.isNull(childThread.titleRegeneration);
   assert.equal(childThread.projectId, parentThread.projectId);
   assert.equal(childThread.runtimeMode, parentThread.runtimeMode);
   assert.equal(childThread.interactionMode, parentThread.interactionMode);
@@ -119,14 +124,17 @@ it("keeps a subagent child awake when its parent thread is snoozed", () => {
   });
 });
 
-it.effect.each([
-  ["sql", ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemory))],
-] as const)(
-  "%s: a pinned parent's subagent child is born unpinned and is left to the child-settle sweeper",
-  ([, testLayer]) =>
+it.effect.each(["provider", "mcp"] as const)(
+  "a %s child does not inherit parent settlement protections and is left to the child-settle sweeper",
+  (creationSource) =>
     Effect.gen(function* () {
       const store = yield* ProjectionStore.ProjectionStoreV2;
-      const parentThread = { ...makeParentThread(), pinnedAt: parentCreatedAt, pinOrderKey: "a0" };
+      const parentThread = {
+        ...makeParentThread(),
+        pinnedAt: parentCreatedAt,
+        pinOrderKey: "a0",
+        autoSettleDisabledAt: parentCreatedAt,
+      };
       const childThread = makeSubagentChildThread({
         parentThread,
         childThreadId,
@@ -137,13 +145,14 @@ it.effect.each([
         title: "Child",
         now: childCreatedAt,
         createdBy: "agent",
-        creationSource: "provider",
+        creationSource,
       });
 
       assert.equal(parentThread.pinnedAt, parentCreatedAt);
       assert.equal(parentThread.pinOrderKey, "a0");
       assert.isNull(childThread.pinnedAt);
       assert.isNull(childThread.pinOrderKey);
+      assert.isNull(childThread.autoSettleDisabledAt);
 
       for (const thread of [parentThread, childThread]) {
         yield* store.apply({
@@ -157,9 +166,11 @@ it.effect.each([
       const savedParent = yield* store.getThread(parentThreadId);
       assert.deepEqual(savedParent.pinnedAt, parentCreatedAt);
       assert.equal(savedParent.pinOrderKey, "a0");
+      assert.deepEqual(savedParent.autoSettleDisabledAt, parentCreatedAt);
       const savedChild = yield* store.getThread(childThreadId);
       assert.isNull(savedChild.pinnedAt);
       assert.isNull(savedChild.pinOrderKey);
+      assert.isNull(savedChild.autoSettleDisabledAt);
       // t3team: the automatic sweep never offers a subagent child. The fork's child-settle
       // sweeper (`t3team-childSettleSweeper`) settles children with their parent instead.
       const candidates = yield* store.getSettlementCandidates();
@@ -167,7 +178,9 @@ it.effect.each([
         candidates.map((candidate) => candidate.id),
         [],
       );
-    }).pipe(Effect.provide(testLayer)),
+    }).pipe(
+      Effect.provide(ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemory))),
+    ),
 );
 
 function taskFixture() {
@@ -258,15 +271,25 @@ it("waits for nested work and retains the report across monitor acknowledgements
       "result_available",
     );
   }
-  assert.equal(
-    delegatedTaskProgress({
-      ...projection,
-      providerThreads: [
-        { pendingBackgroundTasks: [{ taskId: "background-audit", kind: "command" }] },
-      ],
-    }).state,
-    "waiting_for_children",
-  );
+  for (const [awaited, state] of [
+    [true, "waiting_for_children"],
+    [false, "result_available"],
+  ] as const) {
+    assert.equal(
+      delegatedTaskProgress({
+        ...projection,
+        providerThreads: [
+          {
+            pendingBackgroundTasks: [
+              { taskId: "background-audit", kind: "command", ...(awaited ? { awaited } : {}) },
+              { taskId: "log-watcher", kind: "monitor" },
+            ],
+          },
+        ],
+      }).state,
+      state,
+    );
+  }
   const pending = {
     ...run,
     id: RunId.make("followup"),

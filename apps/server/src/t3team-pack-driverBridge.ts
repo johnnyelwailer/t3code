@@ -17,7 +17,7 @@
  * @module t3team-pack-driverBridge
  */
 import type { PackHostCapabilities, PackProviderDriverDefinition } from "@t3team/pack-api";
-import { ProviderDriverKind, type ProviderInstanceEnvironment } from "@t3tools/contracts";
+import { ProviderDriverKind, type ResolvedProviderInstanceEnvironment } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -42,7 +42,7 @@ const errorDetail = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
 const environmentToRecord = (
-  environment: ProviderInstanceEnvironment,
+  environment: ResolvedProviderInstanceEnvironment,
 ): Record<string, string | undefined> =>
   Object.fromEntries(environment.map((entry) => [entry.name, entry.value]));
 

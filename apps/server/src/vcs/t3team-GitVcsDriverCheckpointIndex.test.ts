@@ -92,6 +92,10 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver.layer).pi
         withExitSemantics(input, () => {
           // The service-level execute prepends `-C <cwd>`; strip it.
           const args = gitSubcommandArgs(input.args);
+          // One combined probe: common dir, index path and whether HEAD exists.
+          if (args[0] === "rev-parse" && args[1] === "--path-format=absolute") {
+            return ok(`${input.cwd}/.git\n${input.cwd}/.git/index\nhead-oid\n`);
+          }
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
             return ok(".git\n");
           }
@@ -206,6 +210,10 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDr
       run: (input) =>
         withExitSemantics(input, () => {
           const args = gitSubcommandArgs(input.args);
+          // One combined probe: common dir, index path and whether HEAD exists.
+          if (args[0] === "rev-parse" && args[1] === "--path-format=absolute") {
+            return ok(`${input.cwd}/.git\n${input.cwd}/.git/index\nhead-oid\n`);
+          }
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
             return ok(".git\n");
           }
@@ -343,6 +351,10 @@ const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) => {
         const args = gitSubcommandArgs(input.args);
+        // One combined probe: common dir, index path and whether HEAD exists.
+        if (args[0] === "rev-parse" && args[1] === "--path-format=absolute") {
+          return Effect.succeed(ok(`${input.cwd}/.git\n${input.cwd}/.git/index\nhead-oid\n`));
+        }
         if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
           return Effect.succeed(ok(".git\n"));
         }

@@ -16,6 +16,8 @@ vi.mock("../../state/entities", () => ({
   useThreadProjection: () => ({ projection: state.projection }),
   useThreadRelationshipShells: () => [],
   useThreadShells: () => [],
+  useHiddenThreadKeys: () => new Set(),
+  useAnyEnvironmentHiding: () => false,
   useProjects: () => [],
   useServerConfigs: () => new Map(),
 }));
@@ -102,6 +104,8 @@ it("lists an app-owned delegated child once, in the sub-run tree, and keeps prov
       <ThreadRelationshipsPanel
         environmentId={EnvironmentId.make("test")}
         threadId={ThreadId.make("parent")}
+        showLineage
+        showSideChats={false}
       />,
     );
   });

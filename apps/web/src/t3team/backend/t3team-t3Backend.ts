@@ -8,6 +8,7 @@ import {
 import { createAtlassianPollingBackendApi } from "./t3team-pollingBackend";
 import { createAtlassianProjectIssuesBackendApi } from "./t3team-projectIssuesBackend";
 import { createMyWorkDigestBackendApi } from "./t3team-myworkDigestBackendApi";
+import { createViewContextApi } from "./t3team-viewContextApi";
 import { createMyWorkDigestArrangementApi } from "./t3team-myworkDigestArrangementApi";
 import { createPrimaryEnvironmentOrchestrationApi } from "./t3team-orchestrationApi";
 import { postJson, resolveHttpBaseUrl, resolveWsUrl } from "./t3team-t3BackendHttp";
@@ -98,6 +99,7 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     orchestration: createPrimaryEnvironmentOrchestrationApi(),
     launchRecipeHeadless,
     ...threadWorkflow,
+    ...createViewContextApi(httpBaseUrl),
     listThreadPlacements,
     syncThreadToolContext,
     atlassian,

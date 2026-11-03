@@ -29,6 +29,15 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  AGENTS_VIEW_CONTEXT: {
+    group: "Agent",
+    subgroup: "Tools",
+    label: "View context for agents",
+    description:
+      "The My Work view shares what it shows (filters, visible items, selection) with the thread opened beside it, and agents can read it. Off: nothing is published and the tool is not offered.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   AGENTS_PREFER_READY_PROVIDER: {
     group: "Agent",
     subgroup: "Providers",

@@ -208,6 +208,7 @@ function pullRequestServiceLayer(
     reviewerCandidates: () => Effect.die("not used"),
     requestReviewers: () => Effect.die("not used"),
     invalidate: () => Effect.void,
+    withSharedProjectReads: (effect) => effect,
   });
   return Layer.succeed(PullRequestService.PullRequestService, service);
 }

@@ -23,6 +23,7 @@ import {
   getMirrorItem,
   isMirrorReady,
   listMirrorChildren,
+  readMirrorFreshness,
   searchMirror,
 } from "./t3team-workItemReadMirror.ts";
 import { makeProjectScope } from "./t3team-workItemProjectScope.ts";
@@ -59,6 +60,7 @@ const makeLiveWorkItemReadService = Effect.fn("t3team.workItemRead.makeService")
 
   const port: WorkItemReadPort = {
     mirrorReady: (binding) => provide(isMirrorReady(binding)),
+    mirrorFreshness: (binding) => provide(readMirrorFreshness(binding)),
     mirrorSearch: (binding, filters, limit, offset) =>
       provide(searchMirror(binding, filters, limit, offset)),
     mirrorGet: (binding, key) => provide(getMirrorItem(binding, key)),

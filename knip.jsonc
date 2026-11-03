@@ -126,6 +126,7 @@
         "sign-macos.ts",
         // Run by the distribution's release workflow against the built app, not imported.
         "t3team-check-packed-imports.ts",
+        "prepare-server-compile-cache.cjs",
         "smoke-desktop-app.ts",
         "verify-windows-desktop-artifact.ts",
       ],
@@ -188,6 +189,7 @@
         // Same: imported by nexi-work/pack/nexplore-global/pi-mcp*.ts and pi-skills-exec.ts, which the pack
         // compiles in. Upstream deleted the unused declaration; the pack's import check needs it.
         "@modelcontextprotocol/sdk",
+        "ffi-rs",
       ],
     },
     "apps/desktop": {
@@ -200,6 +202,7 @@
         "src/snapShot/SnapShotAccessibilityWorker.ts!",
         "src/boot.ts!",
         "src/compileCache.ts!",
+        "src/serverCompileCache.ts!",
         "src/main.ts!",
         "src/preload.ts!",
         "src/preview-pick-preload.ts!",

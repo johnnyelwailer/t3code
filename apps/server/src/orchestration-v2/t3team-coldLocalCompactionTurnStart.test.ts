@@ -62,6 +62,7 @@ function makeHarness(input: {
       activeProviderThreadId: providerThreadId,
       branch: null,
       worktreePath: null,
+      lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
     } as OrchestrationV2ThreadProjection["thread"],
     ...usage,
     attempts: [

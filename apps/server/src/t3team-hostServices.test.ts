@@ -18,7 +18,7 @@ it.effect(
           assert.match(context.stateDirectory, /userdata$/);
           events.push(`start:${context.localOrigin}`);
           return {
-            request: async (method, path, body) => ({ method, path, body }),
+            request: async (method, path, body, caller) => ({ method, path, body, caller }),
             close: () => {
               events.push("stop");
             },
@@ -41,9 +41,21 @@ it.effect(
         yield* services.start(3773);
         yield* services.start(3773);
         assert.deepEqual(
-          yield* services.request("acme.devices", "POST", "enable", { enabled: true }),
-          { method: "POST", path: "enable", body: { enabled: true } },
+          yield* services.request(
+            "acme.devices",
+            "POST",
+            "enable",
+            { enabled: true },
+            { desktop: false },
+          ),
+          { method: "POST", path: "enable", body: { enabled: true }, caller: { desktop: false } },
         );
+        assert.deepEqual(yield* services.request("acme.devices", "GET", "status", undefined), {
+          method: "GET",
+          path: "status",
+          body: undefined,
+          caller: undefined,
+        });
         assert.equal(
           yield* services.request("other", "GET", "status", undefined).pipe(
             Effect.match({

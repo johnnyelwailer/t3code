@@ -9,9 +9,21 @@
 
 import type { ScopedThreadRef, T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
 
+import { T3TeamRichChoiceWidgetBlock } from "~/t3team/chat/t3team-RichChoiceWidgetBlock";
 import { useT3TeamWidgetBlockController } from "~/t3team/chat/t3team-useWidgetBlockController";
 
 export function T3TeamWidgetBlock(props: {
+  readonly widget: T3TeamMessageWidgetAttachment["widget"];
+  readonly threadRef: ScopedThreadRef | null;
+}) {
+  return props.widget.format === "rich-choice" ? (
+    <T3TeamRichChoiceWidgetBlock {...props} />
+  ) : (
+    <T3TeamIframeWidgetBlock {...props} />
+  );
+}
+
+function T3TeamIframeWidgetBlock(props: {
   readonly widget: T3TeamMessageWidgetAttachment["widget"];
   readonly threadRef: ScopedThreadRef | null;
 }) {

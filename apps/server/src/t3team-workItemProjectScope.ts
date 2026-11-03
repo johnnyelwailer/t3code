@@ -7,6 +7,7 @@
 import { restrictJqlToProject, type JqlScopeResult } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
 
+import { fresherRow } from "./t3team-workItemReadFreshness.ts";
 import { parseIssueKey } from "./t3team-workItemReadQuery.ts";
 import type { WorkItemReadPort } from "./t3team-workItemReadService.ts";
 import type { JiraMirrorBinding } from "./t3team-workflowSignalWorkItemProjectMirror.ts";
@@ -22,7 +23,7 @@ export const scoped = (result: JqlScopeResult) =>
       );
 
 export const makeProjectScope = (port: Pick<WorkItemReadPort, "searchLive" | "mirrorGet">) => {
-  /** The work item when `key` (already a parsed key) is in the project, else null. */
+  /** The work item when `key` (already a parsed key) is in the project, else null; the fresher row. */
   const findInProject = Effect.fn("t3team.workItemScope.find")(function* (
     binding: JiraMirrorBinding,
     key: string,
@@ -30,7 +31,7 @@ export const makeProjectScope = (port: Pick<WorkItemReadPort, "searchLive" | "mi
     const jql = yield* scoped(restrictJqlToProject(`key = "${key}"`, binding.externalProjectId));
     const live = (yield* port.searchLive(binding, jql, 1, undefined)).items[0] ?? null;
     if (live === null) return null;
-    return (yield* port.mirrorGet(binding, key)) ?? live;
+    return fresherRow(yield* port.mirrorGet(binding, key), live);
   });
 
   /** The keys that are not in the project; a key that is not a work item key counts as foreign. */

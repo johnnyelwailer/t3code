@@ -103,13 +103,6 @@ export function AndroidWorkspaceNavigation(props: {
     ...placeExtraTab(visibleNavigationTabs(order, hidden, capacity), extraTab),
     "settings",
   ];
-  const metrics = floatingTabsMetrics(
-    tabs.length,
-    scale,
-    fabSize,
-    props.paneWidth ?? window.width,
-    props.fillWidth,
-  );
   const { containerColor, indicatorColor, selectedColor, unselectedColor } =
     androidWorkspaceNavigationColors(colors, rail, floating);
   // The extra tab is not one of the user-orderable tabs, so it is never folded into Settings.
@@ -124,6 +117,11 @@ export function AndroidWorkspaceNavigation(props: {
         hidden,
         capacity,
       );
+  // FloatingWorkspaceTabs starts the bar at the left inset, so a cutout narrows the room.
+  const barWidth =
+    (props.paneWidth ?? window.width) -
+    (Math.max(insets.left, FLOATING_TABS.edge) - FLOATING_TABS.edge);
+  const metrics = floatingTabsMetrics(tabs.length, scale, fabSize, barWidth, props.fillWidth);
   if (!rail && keyboardVisible) return null;
 
   return (

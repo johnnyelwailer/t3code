@@ -29,6 +29,7 @@ import { RemoteDelegation } from "../peer/RemoteDelegation.ts";
 import { PreviewManager } from "../preview/Manager.ts";
 import { PreviewBrowser } from "../preview/PreviewBrowser.ts";
 import { ManagedProjectFolders } from "../project/ManagedProjectFolders.ts";
+import { ProjectCloneTracker } from "../project/ProjectCloneTracker.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import { ProjectSetupScriptRunner } from "../project/ProjectSetupScriptRunner.ts";
 import { PullRequestReviewGuideService } from "../pullRequest/PullRequestReviewGuideService.ts";
@@ -38,6 +39,17 @@ import { SecretRequests } from "../secrets/SecretRequests.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { SourceControlRepositoryService } from "../sourceControl/SourceControlRepositoryService.ts";
 import { T3TeamAskUserWriter } from "../mcp/toolkits/t3team/t3team-askUserWriter.ts";
+import { T3TeamToolkit } from "../mcp/toolkits/t3team/tools.ts";
+import {
+  FIELD_DESCRIPTION_CAP_BYTES,
+  MINIMAL_TOOL_DOCS,
+  TOOL_DESCRIPTION_CAP_BYTES,
+} from "../mcp/toolkits/t3team/t3team-toolDocs.ts";
+import {
+  collectFieldDescriptions,
+  formatToolSizeTable,
+  measureToolListSizes,
+} from "../mcp/toolkits/t3team/t3team-toolListSizes.ts";
 import { T3TeamToolBroker } from "../t3team-toolBroker.ts";
 import { GitVcsDriver } from "../vcs/GitVcsDriver.ts";
 import { VcsStatusBroadcaster } from "../vcs/VcsStatusBroadcaster.ts";
@@ -61,6 +73,7 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(PreviewAutomationBroker)({}),
   Layer.mock(PreviewBrowser)({}),
   Layer.mock(PreviewManager)({}),
+  Layer.mock(ProjectCloneTracker)({}),
   Layer.mock(ProjectService)({}),
   Layer.mock(ProjectSetupScriptRunner)({}),
   Layer.mock(ProviderAdapterRegistryV2)({}),
@@ -109,6 +122,11 @@ const codexAdditionalContext = () =>
     .map((entry) => entry.value)
     .join("");
 
+const toolsLayer = McpHttpServer.layerTools.pipe(
+  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provide(toolHandlerServices),
+);
+
 // CI rejects a PR that raises any value above main's agentContextBudget.json, so growth
 // needs the agent-context-increase label. Lower the values when the text shrinks.
 it.effect("agent context matches the committed budget", () =>
@@ -133,12 +151,63 @@ it.effect("agent context matches the committed budget", () =>
       measured,
       "Set agentContextBudget.json to the measured values. Before you cut text to fit, run the evals that cover it (evals/README.md).",
     ).toEqual(budget);
-  }).pipe(
-    Effect.provide(
-      McpHttpServer.layerTools.pipe(
-        Layer.provideMerge(McpServer.McpServer.layer),
-        Layer.provide(toolHandlerServices),
-      ),
-    ),
-  ),
+  }).pipe(Effect.provide(toolsLayer)),
+);
+
+// The tool list is part of the cacheable prompt prefix: two builds must serialize to the same bytes
+// (no per-build values, deterministic key order), so a change breaks the cache once at deploy.
+const serializedToolList = Effect.gen(function* () {
+  const mcp = yield* McpServer.McpServer;
+  return JSON.stringify(
+    mcp.tools.map(({ tool }) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    })),
+  );
+}).pipe(Effect.provide(toolsLayer));
+
+it.effect("the tool list serializes to identical bytes on every build", () =>
+  Effect.gen(function* () {
+    const first = yield* serializedToolList;
+    const second = yield* serializedToolList;
+    expect(second).toBe(first);
+    expect(first).toContain('"rich-choice"');
+  }),
+);
+
+// The fork's own tools advertise minimal text; the full text is behind t3_tool_help.
+it.effect("every fork tool description and field note is within the cap", () =>
+  Effect.gen(function* () {
+    const mcp = yield* McpServer.McpServer;
+    const forkNames = new Set(Object.keys(T3TeamToolkit.tools));
+    const tools = mcp.tools.map(({ tool }) => tool);
+    const over = tools
+      .filter((tool) => forkNames.has(tool.name))
+      .flatMap((tool) => [
+        ...(utf8Bytes(tool.description ?? "") > TOOL_DESCRIPTION_CAP_BYTES
+          ? [`${tool.name}: description ${utf8Bytes(tool.description ?? "")} B`]
+          : []),
+        ...collectFieldDescriptions(tool.inputSchema)
+          .filter((text) => utf8Bytes(text) > FIELD_DESCRIPTION_CAP_BYTES)
+          .map((text) => `${tool.name}: field note ${utf8Bytes(text)} B "${text.slice(0, 40)}"`),
+      ]);
+    const notFork = Object.keys(MINIMAL_TOOL_DOCS).filter((name) => !forkNames.has(name));
+    expect(
+      { over, notFork },
+      `Add a minimal entry to t3team-toolDocs-fork.ts: at most ${TOOL_DESCRIPTION_CAP_BYTES} B a description, ${FIELD_DESCRIPTION_CAP_BYTES} B a field note. The long text stays registered and t3_tool_help returns it. Upstream tools are not trimmed.`,
+    ).toEqual({ over: [], notFork: [] });
+  }).pipe(Effect.provide(toolsLayer)),
+);
+
+// `T3_TOOL_SIZE_REPORT=1 vp test run src/provider/AgentContextBudget.test.ts` prints what each tool costs.
+it.effect.skipIf(!process.env.T3_TOOL_SIZE_REPORT)("prints the per-tool size table", () =>
+  Effect.gen(function* () {
+    const mcp = yield* McpServer.McpServer;
+    const rows = measureToolListSizes(
+      mcp.tools.map(({ tool }) => tool),
+      new Set(Object.keys(T3TeamToolkit.tools)),
+    );
+    yield* Effect.sync(() => process.stdout.write(`\n${formatToolSizeTable(rows)}\n`));
+  }).pipe(Effect.provide(toolsLayer)),
 );

@@ -416,6 +416,10 @@ state alone, not by the thread's synced tool context (`/mcp` threads carry none)
 still need the tool context. `get` asks the tracker whether the key is in the project before it
 returns any mirrored content or comments, returns the newest 50 comments with `commentsTruncated`,
 and `links[].issueKey` / `parentKey` may be keys outside the project (key and relation text only).
+Both answers carry an optional `freshness: { source, syncedAt?, stale? }`: `syncedAt` is the mirror's last
+successful catch-up (absent for a live answer), `stale` is true when the mirror has failed since. `get`
+answers from the tracker's row when it is newer than the mirror row, so a lagging mirror cannot hand back
+an old description.
 
 ```text
 t3team.work_item.search

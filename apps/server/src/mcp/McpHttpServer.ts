@@ -24,6 +24,7 @@ import {
 } from "@t3tools/contracts";
 
 import packageJson from "../../package.json" with { type: "json" };
+import { parseBearerToken } from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as DeviceService from "../device/DeviceService.ts";
@@ -81,6 +82,7 @@ import { T3TeamToolkitHandlersLive } from "./toolkits/t3team/handlers.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./toolkits/t3team/t3team-mcpToolAliases.ts";
 import { withToolNameAliases } from "./toolkits/t3team/t3team-mcpToolAliasProtocol.ts";
 import { withFeatureGatedToolList } from "./toolkits/t3team/t3team-mcpToolFeatureGate.ts";
+import { advertiseToolDocs } from "./toolkits/t3team/t3team-toolDocs.ts";
 import { withThreadScopedToolList } from "./toolkits/t3team/t3team-mcpToolThreadList.ts";
 import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
 
@@ -202,6 +204,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
   const clients = yield* Effect.serviceOption(McpClientAuthenticator);
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const runtimeModeCeiling = serverSettings.managedPolicy?.limits?.maxRuntimeMode;
   const linksEnabled = serverSettings.getSettings.pipe(
     Effect.map((settings) => settings.linkedEnvironmentsEnabled),
     Effect.orElseSucceed(() => false),
@@ -209,10 +212,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
   return Effect.fn("McpHttpServer.authenticateRequest")(function* (httpEffect) {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const authorization = request.headers.authorization;
-    const token =
-      authorization?.startsWith("Bearer ") === true
-        ? authorization.slice("Bearer ".length).trim()
-        : "";
+    const token = parseBearerToken(request) ?? "";
     const invocation =
       (yield* registry.resolve(token)) ??
       (Option.isSome(clients) && token.length > 0
@@ -220,7 +220,14 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         : undefined);
     if (!invocation) {
       yield* Effect.logWarning("rejected MCP request with an unusable credential", {
-        reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",
+        reason:
+          authorization === undefined
+            ? "missing_authorization_header"
+            : authorization.split(" ", 1)[0]?.toLowerCase() !== "bearer"
+              ? "unsupported_scheme"
+              : token.length === 0
+                ? "missing_bearer_token"
+                : "unknown_or_expired_token",
       });
       return unauthorized({
         request,
@@ -228,8 +235,9 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         offerOAuth: Option.isSome(clients) && !looksLikeProviderToken(token),
       });
     }
-    const limited = withModeLimit(invocation, request);
-    if (limited === undefined) return invalidModeLimit;
+    const asked = withModeLimit(invocation, request);
+    if (asked === undefined) return invalidModeLimit;
+    const limited = McpInvocationContext.withRuntimeModeCeiling(asked, runtimeModeCeiling);
     const linkedEnvironments = yield* linksEnabled;
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     return yield* httpEffect.pipe(
@@ -772,10 +780,14 @@ const registerDeviceScreenshot = Effect.fn("McpHttpServer.registerDeviceScreensh
         Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
       ),
     "screenshot",
-    (error) =>
-      isDeviceToolError(error) || isOrchestratorMcpFailure(error)
-        ? error.message
-        : "Device screenshot failed.",
+    (error) => {
+      if (!isDeviceToolError(error)) {
+        return isOrchestratorMcpFailure(error) ? error.message : "Device screenshot failed.";
+      }
+      return error._tag === "DeviceOperationError" && error.reason === "hub_rejected"
+        ? `${error.message} Call device_list to check the device state, and device_open if it needs to be reopened.`
+        : error.message;
+    },
   );
 });
 
@@ -1041,6 +1053,23 @@ const withAdvertisedSchemas = Effect.fn("McpHttpServer.withAdvertisedSchemas")(f
   return yield* registration.pipe(Effect.provideService(McpServer.McpServer, advertisingServer));
 });
 
+/** Registers every tool added inside `registration` with the minimal text a fork entry asks for. */
+const withMinimalToolDocs = Effect.fnUntraced(function* <A, E, R>(
+  registration: Effect.Effect<A, E, R>,
+) {
+  const server = yield* McpServer.McpServer;
+  const minimalServer = McpServer.McpServer.of({
+    ...server,
+    addTool: Effect.fn("McpServer.addTool")(function (options) {
+      return server.addTool({
+        ...options,
+        tool: new McpSchema.Tool({ ...options.tool, ...advertiseToolDocs(options.tool) }),
+      });
+    }),
+  });
+  return yield* registration.pipe(Effect.provideService(McpServer.McpServer, minimalServer));
+});
+
 /**
  * `McpServer.toolkit` asks for every service its tools declare when it
  * registers them, but the auth middleware provides `McpInvocationContext` to
@@ -1052,8 +1081,10 @@ export const toolkitRegistration = <Tools extends Record<string, Tool.Any>, EX, 
   handlers: McpToolAccess.HandlersLayer<Tools, EX, RX>,
 ) => {
   const registration = Layer.effectDiscard(
-    withToolAnalytics(
-      withAdvertisedSchemas(toolkit, McpServer.registerToolkit(decodeAsAdvertised(toolkit))),
+    withMinimalToolDocs(
+      withToolAnalytics(
+        withAdvertisedSchemas(toolkit, McpServer.registerToolkit(decodeAsAdvertised(toolkit))),
+      ),
     ),
   ).pipe(Layer.provide(McpServer.McpServer.layer));
   // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off - the auth middleware provides it per request.
@@ -1069,7 +1100,7 @@ const imageToolRegistration = <Tools extends Record<string, Tool.Any>, A, E, R, 
   register: Effect.Effect<A, E, R>,
   handlers: McpToolAccess.HandlersLayer<Tools, EX, RX>,
 ) =>
-  Layer.effectDiscard(withToolAnalytics(register)).pipe(
+  Layer.effectDiscard(withMinimalToolDocs(withToolAnalytics(register))).pipe(
     Layer.provide(McpToolAccess.HandlersLayer.layer(handlers)),
   );
 

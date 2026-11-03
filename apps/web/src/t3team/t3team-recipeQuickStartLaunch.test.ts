@@ -29,6 +29,33 @@ function createProject(): ProjectShellProject {
 }
 
 describe("applyT3TeamRecipeQuickStartLaunchCustomization", () => {
+  it("merges customization into the recipe's own parameters instead of replacing them", () => {
+    const recipe: T3TeamSidecarRecipeQuickStart = {
+      id: "pr-review",
+      title: "Review this PR",
+      description: "Review.",
+      prompt: "Review the PR.",
+      workflow: {
+        kind: "recipe",
+        recipeId: "pr-review",
+        title: "Review this PR",
+        description: "Review.",
+        source: "pack",
+        surface: "github.pull_request.detail.sidepanel",
+        parameters: { pullRequest: "https://ghe.example.com/hive/api/pull/12", depth: "quick" },
+      },
+    };
+    const customized = applyT3TeamRecipeQuickStartLaunchCustomization(recipe, {
+      selections: [{ name: "depth", label: "Depth", value: "deep" }],
+    });
+    expect(customized.workflow?.parameters).toEqual({
+      pullRequest: "https://ghe.example.com/hive/api/pull/12",
+      depth: "deep",
+    });
+    // The input is not mutated.
+    expect(recipe.workflow?.parameters).toMatchObject({ depth: "quick" });
+  });
+
   it("appends launch guidance and persists structured workflow parameters", () => {
     const recipe = {
       id: "technical-implementation-plan",
