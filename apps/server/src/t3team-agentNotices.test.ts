@@ -6,7 +6,7 @@ import * as Ref from "effect/Ref";
 
 import { clearUsageSampleHistory } from "./provider/t3team-providerUsageHistory.ts";
 import type { ProviderCapacityWindow } from "./provider/t3team-providerCapacityWindows.ts";
-import { NOTICE_QUIET_MS, type OwnedProcess } from "./t3team-agentNoticeEngine.ts";
+import { DEFAULT_NOTICE_THRESHOLDS, type OwnedProcess } from "./t3team-agentNoticeEngine.ts";
 import {
   makeAgentNotices,
   withAgentNotices,
@@ -48,6 +48,7 @@ const fixture = (overrides: Partial<AgentNoticeInputs> & { readonly clock?: Ref.
       childUsage: () => Effect.succeed([]),
       ownedProcesses: () => Effect.succeed([]),
       hostCpuPercent: Effect.succeed(undefined),
+      thresholds: Effect.succeed(DEFAULT_NOTICE_THRESHOLDS),
       ...overrides,
     };
     const binding: T3TeamToolBinding = {
@@ -98,7 +99,7 @@ describe("agent notices on tool results", () => {
         "vite (pid 4242, thread parent) holds 3.0 GiB of memory; if it is an idle dev server or watcher, stop it",
       );
       yield* Ref.set(heavy, []);
-      yield* Ref.set(clock, NOW + NOTICE_QUIET_MS);
+      yield* Ref.set(clock, NOW + DEFAULT_NOTICE_THRESHOLDS.quietMs);
       assert.include(lastText(yield* call(surface)), "memory is back to normal or it has stopped");
     }),
   );

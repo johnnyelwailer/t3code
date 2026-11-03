@@ -7,15 +7,15 @@
 import * as Effect from "effect/Effect";
 
 import {
-  createNoticeDebouncer,
   hostCpuCandidate,
-  noticeBlock,
   processCandidates,
   trackHighCpu,
   usageCandidates,
   type NoticeCandidate,
+  type NoticeThresholds,
   type OwnedProcess,
 } from "./t3team-agentNoticeEngine.ts";
+import { createNoticeDebouncer, noticeBlock } from "./t3team-agentNoticeDebounce.ts";
 import { attachHostLine } from "./t3team-resourcePressureToolLine.ts";
 import type { ProviderCapacityWindow } from "./provider/t3team-providerCapacityWindows.ts";
 import {
@@ -37,6 +37,7 @@ export interface AgentNoticeInputs {
   readonly childUsage: (threadId: string) => Effect.Effect<ReadonlyArray<UsageSubject>>;
   readonly ownedProcesses: (threadId: string) => Effect.Effect<ReadonlyArray<OwnedProcess>>;
   readonly hostCpuPercent: Effect.Effect<number | undefined>;
+  readonly thresholds: Effect.Effect<NoticeThresholds>;
 }
 
 export interface AgentNotices {
@@ -66,23 +67,29 @@ export const makeAgentNotices = (inputs: AgentNoticeInputs): AgentNotices => {
   const noteFor = Effect.fn("AgentNotices.noteFor")(
     function* (threadId: string) {
       const nowMs = yield* inputs.nowMs;
+      const thresholds = yield* inputs.thresholds;
       const subjects = [
         ...(yield* inputs.ownUsage(threadId)),
         ...(yield* inputs.childUsage(threadId)),
       ];
       const burns = burnsFor(subjects, nowMs);
       const processes = yield* inputs.ownedProcesses(threadId);
-      const tracked = trackHighCpu(processes, highCpuSince.get(threadId) ?? new Map(), nowMs);
+      const tracked = trackHighCpu(
+        processes,
+        highCpuSince.get(threadId) ?? new Map(),
+        nowMs,
+        thresholds,
+      );
       const hostCpu = yield* inputs.hostCpuPercent;
       const candidates: NoticeCandidate[] = [
         ...subjects.flatMap(({ subject, windows }) =>
-          usageCandidates({ subject, windows, burns, nowMs }),
+          usageCandidates({ subject, windows, burns, nowMs, thresholds }),
         ),
-        ...processCandidates(processes, tracked, nowMs),
-        ...(hostCpu === undefined ? [] : [hostCpuCandidate(hostCpu)]),
+        ...processCandidates(processes, tracked, nowMs, thresholds),
+        ...(hostCpu === undefined ? [] : [hostCpuCandidate(hostCpu, thresholds)]),
       ];
       highCpuSince.set(threadId, tracked);
-      return noticeBlock(debouncer.take(threadId, candidates, nowMs));
+      return noticeBlock(debouncer.take(threadId, candidates, nowMs, thresholds.quietMs));
     },
     Effect.catchCause(() => Effect.succeed(null)),
   );
