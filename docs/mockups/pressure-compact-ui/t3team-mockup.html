@@ -2,27 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Compact pressure badge + drill-down (mockup)</title>
+<title>Compact pressure badge, drill-down and cleanup thread (mockup v2)</title>
 <style>
   :root { --bg:#fafafa; --panel:#ffffff; --side:#f3f3f4; --ctl:#e9e9eb; --fg:#18181b; --mut:#6b6b73; --bd:#dcdce0;
-          --warn:#b45309; --warnbg:#fef3c7; --crit:#b91c1c; --critbg:#fee2e2; --ok:#15803d; --acc:#2f5bd6; --shadow:0 8px 28px rgba(0,0,0,.18); }
+          --warn:#b45309; --crit:#b91c1c; --ok:#15803d; --acc:#2f5bd6; --shadow:0 8px 28px rgba(0,0,0,.18); }
   .dark { --bg:#121214; --panel:#1b1b1f; --side:#18181b; --ctl:#2a2a30; --fg:#ececf0; --mut:#9a9aa5; --bd:#34343c;
-          --warn:#fbbf24; --warnbg:#3a2c0a; --crit:#f87171; --critbg:#3d1414; --ok:#4ade80; --acc:#7c9cff; --shadow:0 8px 28px rgba(0,0,0,.6); }
+          --warn:#fbbf24; --crit:#f87171; --ok:#4ade80; --acc:#7c9cff; --shadow:0 8px 28px rgba(0,0,0,.6); }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; }
-  body { font:13px/1.4 "Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  body { font:13px/1.45 "Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--fg); }
   .app { display:flex; height:100vh; position:relative; overflow:hidden; }
   .side { width:260px; background:var(--side); border-right:1px solid var(--bd); display:flex; flex-direction:column; flex:none; }
   .side h6 { margin:14px 14px 6px; font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--mut); font-weight:600; }
   .row { margin:1px 8px; padding:6px 8px; border-radius:6px; display:flex; gap:8px; align-items:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .row.sel { background:var(--ctl); }
-  .dot { width:7px; height:7px; border-radius:50%; background:var(--mut); flex:none; }
-  .dot.run { background:var(--ok); }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--mut); flex:none; } .dot.run { background:var(--ok); }
   .grow { flex:1; }
-  .foot { padding:8px 10px; border-top:1px solid var(--bd); display:flex; align-items:center; gap:6px; position:relative; }
+  .foot { padding:8px 10px; border-top:1px solid var(--bd); display:flex; align-items:center; gap:6px; }
   .foot .who { color:var(--mut); font-size:12px; flex:1; }
-  .ibtn { width:28px; height:28px; border-radius:7px; display:grid; place-items:center; position:relative; background:transparent; color:var(--mut); border:0; }
-  .ibtn.ctl { background:var(--ctl); }
+  .ibtn { width:28px; height:28px; border-radius:7px; display:grid; place-items:center; position:relative; background:var(--ctl); color:var(--mut); border:0; }
   .ibtn svg { width:16px; height:16px; }
   .badge { position:absolute; top:3px; right:3px; width:8px; height:8px; border-radius:50%; box-shadow:0 0 0 2px var(--ctl); }
   .badge.warn { background:var(--warn); } .badge.crit { background:var(--crit); }
@@ -30,131 +28,117 @@
   .main { flex:1; display:flex; flex-direction:column; min-width:0; }
   .top { height:44px; border-bottom:1px solid var(--bd); display:flex; align-items:center; padding:0 14px; gap:10px; }
   .top .title { font-weight:600; }
-  .msgs { flex:1; padding:22px 28px; display:flex; flex-direction:column; gap:14px; }
-  .msg { max-width:620px; background:var(--panel); border:1px solid var(--bd); border-radius:10px; padding:10px 12px; color:var(--mut); }
-  .msg.me { align-self:flex-end; color:var(--fg); background:var(--ctl); }
+  .msgs { flex:1; padding:22px 28px; display:flex; flex-direction:column; gap:12px; overflow:hidden; }
+  .msg { max-width:640px; color:var(--mut); }
+  .msg.me { align-self:flex-end; color:var(--fg); background:var(--ctl); border-radius:10px; padding:8px 12px; }
+  .msg.sys { font-size:12px; border-left:2px solid var(--bd); padding-left:10px; }
   .composer { margin:0 28px 18px; border:1px solid var(--bd); background:var(--panel); border-radius:12px; padding:12px; color:var(--mut); }
-  /* tooltip */
-  .tip { position:absolute; background:#111114; color:#f3f3f5; border-radius:8px; padding:7px 10px; font-size:12px; max-width:250px; box-shadow:var(--shadow); z-index:5; }
-  .tip b { color:#fff; } .tip small { color:#b9b9c2; display:block; margin-top:2px; }
-  /* popover */
-  .pop { position:absolute; background:var(--panel); border:1px solid var(--bd); border-radius:12px; box-shadow:var(--shadow); z-index:6; width:400px; overflow:hidden; }
-  .pop header { display:flex; align-items:center; gap:8px; padding:11px 14px 9px; }
-  .pill { font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; }
-  .pill.crit { background:var(--critbg); color:var(--crit); } .pill.warn { background:var(--warnbg); color:var(--warn); } .pill.ok { background:var(--ctl); color:var(--ok); }
-  .pop header .t { font-weight:600; font-size:14px; }
-  .pop header .age { margin-left:auto; white-space:nowrap; color:var(--mut); font-size:12px; }
-  .sec { padding:2px 14px 10px; }
-  .sec h5 { margin:8px 0 6px; font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--mut); font-weight:600; }
-  .met { padding:8px 10px; border:1px solid var(--bd); border-radius:9px; margin-bottom:6px; }
-  .met .l { display:flex; align-items:center; gap:8px; font-weight:600; flex-wrap:wrap; } .met .l .v { white-space:nowrap; }
-  .met .v { margin-left:auto; font-variant-numeric:tabular-nums; }
-  .bar { height:6px; border-radius:99px; background:var(--ctl); margin:7px 0 5px; position:relative; overflow:hidden; }
-  .bar i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; }
-  .bar i.crit { background:var(--crit); } .bar i.warn { background:var(--warn); } .bar i.ok { background:var(--ok); }
-  .bar u { position:absolute; top:-1px; bottom:-1px; width:2px; background:var(--fg); opacity:.55; }
-  .met .s { color:var(--mut); font-size:12px; }
-  .met .s b { color:var(--crit); font-weight:600; }
-  .proc { display:grid; grid-template-columns:1fr auto; gap:0 10px; padding:6px 2px; border-top:1px solid var(--bd); }
-  .proc:first-of-type { border-top:0; }
-  .proc .n { font-weight:600; } .proc .th { color:var(--mut); font-size:12px; grid-column:1; } .proc .num { text-align:right; font-variant-numeric:tabular-nums; } .proc .num span { color:var(--mut); display:block; font-size:12px; }
-  .proc .th a { color:var(--acc); text-decoration:none; }
-  .acts { display:flex; gap:8px; padding:10px 14px 12px; border-top:1px solid var(--bd); background:color-mix(in srgb,var(--ctl) 35%,transparent); align-items:center; }
-  .btn { border:1px solid var(--bd); background:var(--panel); color:var(--fg); border-radius:8px; padding:6px 11px; font:inherit; font-weight:600; }
-  .btn.pri { background:var(--acc); border-color:var(--acc); color:#fff; }
-  .btn.ghost { border-color:transparent; background:transparent; color:var(--mut); font-weight:500; }
-  .note { color:var(--mut); font-size:11.5px; padding:0 14px 10px; }
-  .label { position:absolute; left:14px; top:10px; z-index:9; font-size:11px; color:var(--mut); letter-spacing:.03em; }
-  /* narrow */
-  .narrow { width:390px; margin:0 auto; border-left:1px solid var(--bd); border-right:1px solid var(--bd); } .narrow .side { display:none; } .narrow .pop { width:auto; }
-  .narrow .msgs { padding:14px 14px; } .narrow .composer { margin:0 14px 14px; }
-  .narrow .sheet { position:absolute; left:0; right:0; width:390px; bottom:0; background:var(--panel); border-top:1px solid var(--bd); border-radius:16px 16px 0 0; box-shadow:var(--shadow); z-index:6; max-height:86%; overflow:hidden; }
-  .narrow .sheet .grab { width:38px; height:4px; border-radius:9px; background:var(--bd); margin:8px auto 2px; }
-  .scrim { position:absolute; inset:0; background:rgba(0,0,0,.28); z-index:4; }
-  .dark .scrim { background:rgba(0,0,0,.5); }
+  .tip { position:absolute; background:#111114; color:#f3f3f5; border-radius:7px; padding:6px 9px; font-size:12px; box-shadow:var(--shadow); z-index:5; white-space:nowrap; }
+  .pop { background:var(--panel); border:1px solid var(--bd); border-radius:12px; box-shadow:var(--shadow); width:372px; padding:12px 14px 10px; }
+  .pop .hd { display:flex; align-items:baseline; gap:8px; }
+  .pop .hd b { font-size:14px; } .lvl.crit { color:var(--crit); } .lvl.warn { color:var(--warn); }
+  .pop .hd .age { margin-left:auto; color:var(--mut); font-size:12px; }
+  .bar { height:5px; border-radius:99px; background:var(--ctl); margin:9px 0 6px; position:relative; overflow:hidden; }
+  .bar i { position:absolute; left:0; top:0; bottom:0; border-radius:99px; } .bar i.crit { background:var(--crit); } .bar i.warn { background:var(--warn); }
+  .bar u { position:absolute; top:0; bottom:0; width:2px; background:var(--fg); opacity:.6; }
+  .fact { color:var(--mut); font-size:12px; } .fact b { color:var(--fg); font-weight:600; }
+  .list { margin:12px 0 4px; }
+  .list .it { display:flex; gap:8px; padding:5px 0; align-items:baseline; }
+  .list .it .n { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .list .it .n small { color:var(--mut); font-size:12px; }
+  .list .it .v { font-variant-numeric:tabular-nums; }
+  .list .it.mut .n, .list .it.mut .v { color:var(--mut); }
+  .acts { display:flex; gap:6px; margin-top:8px; padding-top:10px; border-top:1px solid var(--bd); }
+  .btn { border:1px solid var(--bd); background:var(--panel); color:var(--fg); border-radius:8px; padding:5px 11px; font:inherit; font-weight:600; }
+  .btn.pri { background:var(--acc); border-color:var(--acc); color:#fff; } .btn.ghost { border-color:transparent; background:transparent; color:var(--mut); font-weight:500; }
+  .narrow { width:390px; margin:0 auto; border-left:1px solid var(--bd); border-right:1px solid var(--bd); }
+  .narrow .side { display:none; } .narrow .msgs { padding:14px; } .narrow .composer { margin:0 14px 14px; }
+  .narrow .sheet { position:absolute; left:0; width:390px; bottom:0; background:var(--panel); border-top:1px solid var(--bd); border-radius:16px 16px 0 0; box-shadow:var(--shadow); z-index:6; }
+  .narrow .sheet .grab { width:38px; height:4px; border-radius:9px; background:var(--bd); margin:8px auto 0; }
+  .narrow .pop { border:0; box-shadow:none; width:auto; border-radius:0; padding:10px 16px 14px; }
+  .scrim { position:absolute; inset:0; background:rgba(0,0,0,.28); z-index:4; } .dark .scrim { background:rgba(0,0,0,.5); }
+  .prompt { align-self:flex-end; max-width:600px; background:var(--ctl); border-radius:10px; padding:10px 12px; color:var(--fg); }
+  .prompt small { display:block; color:var(--mut); margin-bottom:4px; }
+  .check .grp { font-weight:600; color:var(--fg); margin:10px 0 3px; }
+  .check label { display:flex; gap:8px; padding:2px 0; color:var(--fg); }
+  .check .box { width:14px; height:14px; border:1.5px solid var(--mut); border-radius:3px; flex:none; margin-top:2px; }
+  .check .box.on { background:var(--acc); border-color:var(--acc); }
+  .check .why { color:var(--mut); } .check .lock { color:var(--mut); font-weight:500; }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
 const q = new URLSearchParams(location.search);
-const theme = q.get("theme") || "light";
-const narrow = (q.get("w") || "desktop") === "narrow";
-const level = q.get("level") || "crit";
+const theme = q.get("theme") || "light", narrow = (q.get("w") || "desktop") === "narrow";
+const level = q.get("level") || "crit", view = q.get("view") || "drill";
 document.documentElement.className = theme === "dark" ? "dark" : "";
+const crit = level === "crit", cls = crit ? "crit" : "warn";
 
-const bolt = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="10" height="7" rx="1.2"/><path d="M5.5 4.5v-2M8 4.5v-2M10.5 4.5v-2M5.5 11.5v2M8 11.5v2M10.5 11.5v2"/></svg>';
+const chip = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="10" height="7" rx="1.2"/><path d="M5.5 4.5v-2M8 4.5v-2M10.5 4.5v-2M5.5 11.5v2M8 11.5v2M10.5 11.5v2"/></svg>';
 const dl = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.8 7.6 8 10.8l3.2-3.2M3 13.2h10"/></svg>';
-const gear = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></svg>';
 
-const crit = level === "crit";
-const cls = crit ? "crit" : "warn";
-const word = crit ? "Critical" : "Warning";
+const head = crit
+  ? { lvl: "Critical", free: "2.9 GiB", fact: `<b>0.1 GiB below</b> the 3.0 GiB limit · warning below 6.0 GiB`, fill: 4.6, tick: 4.7 }
+  : { lvl: "Low", free: "5.1 GiB", fact: `<b>0.9 GiB below</b> the 6.0 GiB warning · critical below 3.0 GiB`, fill: 8.1, tick: 9.5 };
 
-const metrics = crit ? `
-  <div class="met"><div class="l"><span class="pill crit">Critical</span>Available memory<span class="v">2.9 GiB <span style="color:var(--mut);font-weight:400">of 63.3 GiB</span></span></div>
-    <div class="bar"><i class="crit" style="width:4.6%"></i><u style="left:4.7%" title="critical"></u></div>
-    <div class="s met-s s">Critical below <b style="color:var(--fg)">3.0 GiB</b> (warning below 6.0 GiB). <b>0.1 GiB under the critical threshold.</b></div></div>
-  <div class="met"><div class="l"><span class="pill ok">OK</span>Commit headroom (Windows)<span class="v">11.4 GiB <span style="color:var(--mut);font-weight:400">of 96.0 GiB</span></span></div>
-    <div class="bar"><i class="ok" style="width:11.9%"></i><u style="left:9.6%"></u></div>
-    <div class="s">Warning below 9.6 GiB (10% of limit).</div></div>`
- : `
-  <div class="met"><div class="l"><span class="pill warn">Warning</span>Available memory<span class="v">5.1 GiB <span style="color:var(--mut);font-weight:400">of 63.3 GiB</span></span></div>
-    <div class="bar"><i class="warn" style="width:8.1%"></i><u style="left:4.7%"></u><u style="left:9.5%"></u></div>
-    <div class="s">Warning below <b style="color:var(--fg)">6.0 GiB</b>, critical below 3.0 GiB. <b style="color:var(--warn)">0.9 GiB under the warning threshold.</b></div></div>
-  <div class="met"><div class="l"><span class="pill ok">OK</span>Commit headroom (Windows)<span class="v">18.2 GiB <span style="color:var(--mut);font-weight:400">of 96.0 GiB</span></span></div>
-    <div class="bar"><i class="ok" style="width:19%"></i><u style="left:9.6%"></u></div><div class="s">Warning below 9.6 GiB (10% of limit).</div></div>`;
+const drill = `<div class="pop">
+  <div class="hd"><b><span class="lvl ${cls}">${head.lvl}</span> memory</b><span class="age">12 s ago</span></div>
+  <div class="bar"><i class="${cls}" style="width:${head.fill}%"></i><u style="left:${head.tick}%"></u></div>
+  <div class="fact"><b>${head.free}</b> free of 63.3 GiB · ${head.fact}</div>
+  <div class="list">
+    <div class="it"><span class="n">npm run dev <small>· Fix login flow · idle 2 h</small></span><span class="v">3.4 GiB</span></div>
+    <div class="it"><span class="n">dotnet watch <small>· Add invoice export · done 5 h ago</small></span><span class="v">1.9 GiB</span></div>
+    <div class="it mut"><span class="n">Nexi Work itself</span><span class="v">7.9 GiB</span></div>
+    <div class="it mut"><span class="n">Other applications</span><span class="v">38.6 GiB</span></div>
+  </div>
+  <div class="fact">Commit headroom (Windows) 11.4 GiB, fine.</div>
+  <div class="acts"><button class="btn pri">Clean up…</button><button class="btn ghost">Hide</button></div>
+</div>`;
 
-const popBody = `
-  <header><span class="pill ${cls}">${word}</span><span class="t">Memory pressure</span><span class="age">sampled 12 s ago</span></header>
-  <div class="sec"><h5>What is ${crit ? "critical" : "low"}</h5>${metrics}
-  <h5>Biggest consumers</h5>
-  <div class="proc"><div class="n">npm run dev (vite)</div><div class="num">3.4 GiB<span>2% CPU</span></div><div class="th">thread <a>Fix login flow</a> · idle 2 h 10 min</div></div>
-  <div class="proc"><div class="n">Nexi Work app tree</div><div class="num">7.9 GiB<span>14% CPU</span></div><div class="th">this app (23 processes)</div></div>
-  <div class="proc"><div class="n">dotnet watch (Api)</div><div class="num">1.9 GiB<span>0% CPU</span></div><div class="th">thread <a>Add invoice export</a> · finished 5 h ago</div></div>
-  <div class="proc"><div class="n">Other applications</div><div class="num">38.6 GiB<span></span></div><div class="th">outside Nexi Work, no owner thread</div></div></div>
-  <div class="acts"><button class="btn pri">Clean up resources…</button><button class="btn ghost">Hide for now</button><span style="margin-left:auto" class="ibtn" title="Settings">${gear}</span></div>
-  <div class="note">“Clean up” opens a thread where an agent proposes what to stop. It never touches running work, pinned threads or unpushed changes, and asks before deleting anything unclear.</div>`;
-
-const tipText = crit
-  ? `<b>Memory critical</b><br>2.9 GiB available (critical below 3.0 GiB)<small>Click for details · right-click to hide</small>`
-  : `<b>Memory low</b><br>5.1 GiB available (warning below 6.0 GiB)<small>Click for details · right-click to hide</small>`;
-
-const sideRows = `
-  <h6>Nexi Work</h6>
-  <div class="row sel"><span class="dot run"></span>Experimental pressure notes</div>
-  <div class="row"><span class="dot run"></span>Fix login flow</div>
-  <div class="row"><span class="dot"></span>Add invoice export</div>
-  <div class="row"><span class="dot"></span>Review PR 812</div>
-  <h6>Portal</h6>
-  <div class="row"><span class="dot"></span>Address form follow-ups</div>
-  <div class="row"><span class="dot"></span>Knowledge search (German)</div>`;
-
-const chat = `
-  <div class="msg me">Can you check why the dev server keeps eating memory?</div>
+const chat = `<div class="msg me">Can you check why the dev server keeps eating memory?</div>
   <div class="msg">Looking at the running jobs of this thread…</div>
-  <div class="msg">[host] npm run dev (pid 4242, thread Fix login flow) holds 3.4 GiB of memory; if it is an idle dev server or watcher, stop it</div>`;
+  <div class="msg sys">[host] npm run dev (pid 4242, thread Fix login flow) holds 3.4 GiB of memory; if it is an idle dev server or watcher, stop it</div>`;
 
-const pressureBtn = `<button class="ibtn ctl pressure ${cls}" aria-label="Memory pressure ${word.toLowerCase()}">${bolt}<span class="badge ${cls}"></span></button>`;
-const updateBtn = `<button class="ibtn ctl" aria-label="Update available">${dl}<span class="badge" style="background:var(--acc)"></span></button>`;
+const cleanup = `
+  <div class="prompt"><small>Started from the memory badge · editable before it runs</small>
+    Free memory on this machine. Memory is critical: 2.9 GiB free of 63.3 GiB.<br>
+    Find what is no longer needed: processes of idle or finished threads, dev servers and watchers, old worktrees, build caches. Do not stop or delete anything yet: list it first, grouped, with size and why.</div>
+  <div class="msg">I looked at 14 threads, 9 worktrees and 6 caches. Nothing was changed. I would free <b style="color:var(--fg)">about 9.8 GiB</b>:
+  <div class="check">
+    <div class="grp">Processes · 5.3 GiB</div>
+    <label><span class="box on"></span><span>npm run dev, thread “Fix login flow” <span class="why">· idle 2 h · 3.4 GiB</span></span></label>
+    <label><span class="box on"></span><span>dotnet watch, thread “Add invoice export” <span class="why">· finished 5 h ago · 1.9 GiB</span></span></label>
+    <div class="grp">Worktrees · 3.1 GiB</div>
+    <label><span class="box on"></span><span>fix-portal-address-form <span class="why">· PR merged, clean · 1.2 GiB</span></span></label>
+    <label><span class="box"></span><span>review-t3code-cloud-prs <span class="why">· unsure: branch has no PR · 1.9 GiB</span></span></label>
+    <div class="grp">Caches · 1.4 GiB</div>
+    <label><span class="box on"></span><span>pnpm store, vite cache <span class="why">· rebuildable</span></span></label>
+    <div class="grp lock">Not touched: 2 running threads, 1 pinned thread, 2 worktrees with unpushed commits</div>
+  </div>
+  Tell me to go ahead. I ask once more before deleting the unsure worktree.</div>
+  <div class="msg me">Go ahead with the ticked ones.</div>`;
 
+const pressureBtn = `<button class="ibtn pressure ${cls}">${chip}<span class="badge ${cls}"></span></button>`;
+const updateBtn = `<button class="ibtn">${dl}<span class="badge" style="background:var(--acc)"></span></button>`;
+const sideRows = (first) => `<h6>Nexi Work</h6><div class="row sel"><span class="dot run"></span>${first}</div><div class="row"><span class="dot run"></span>Fix login flow</div><div class="row"><span class="dot"></span>Add invoice export</div><div class="row"><span class="dot"></span>Review PR 812</div><h6>Portal</h6><div class="row"><span class="dot"></span>Address form follow-ups</div><div class="row"><span class="dot"></span>Knowledge search (German)</div>`;
+const tipText = crit ? "Memory critical · 2.9 GiB free (limit 3.0)" : "Memory low · 5.1 GiB free (warning 6.0)";
+
+const isCleanup = view === "cleanup", isTip = view === "tip";
+const title = isCleanup ? "Clean up resources" : "Experimental pressure notes";
+const body = isCleanup ? cleanup : chat;
 let html;
 if (!narrow) {
-  html = `<div class="app">
-    <aside class="side">${sideRows}<div class="grow"></div>
+  html = `<div class="app"><aside class="side">${sideRows(title)}<div class="grow"></div>
       <div class="foot"><span class="who">PJ · NEXPLORE</span>${pressureBtn}${updateBtn}</div></aside>
-    <section class="main"><div class="top"><span class="title">Experimental pressure notes</span></div>
-      <div class="msgs">${chat}</div><div class="composer">Message…</div></section>
-    ${q.get("open")==="0"?"":`<div class="pop" style="left:34px; bottom:56px;">${popBody}</div>`}
-    <div class="tip" style="left:${q.get("tip")==="1"?"96":"-999"}px; bottom:52px;">${tipText}</div>
-  </div>`;
+    <section class="main"><div class="top"><span class="title">${title}</span></div><div class="msgs">${body}</div>
+      <div class="composer">Message…</div></section>
+    ${view === "drill" ? `<div style="position:absolute;left:34px;bottom:56px;z-index:6">${drill}</div>` : ""}
+    ${isTip ? `<div class="tip" style="left:60px;bottom:50px">${tipText}</div>` : ""}</div>`;
 } else {
-  html = `<div class="app narrow">
-    <section class="main"><div class="top"><span class="title">Experimental pressure notes</span><span class="grow"></span>${pressureBtn}</div>
-      <div class="msgs">${chat}</div><div class="composer">Message…</div></section>
-    <div class="scrim"></div>
-    <div class="sheet"><div class="grab"></div><div class="pop" style="position:static;border:0;box-shadow:none;border-radius:0;">${popBody}</div></div>
-  </div>`;
+  html = `<div class="app narrow"><section class="main"><div class="top"><span class="title">${title}</span><span class="grow"></span>${pressureBtn}</div>
+    <div class="msgs">${body}</div><div class="composer">Message…</div></section>
+    ${view === "drill" ? `<div class="scrim"></div><div class="sheet"><div class="grab"></div>${drill}</div>` : ""}</div>`;
 }
 document.getElementById("root").innerHTML = html;
 </script>
