@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { SidebarListItem } from "~/components/Sidebar.logic";
 import { isSidebarReorderTarget, isThreadContextDragPoint } from "./t3team-sidebarContextDragPoint";
