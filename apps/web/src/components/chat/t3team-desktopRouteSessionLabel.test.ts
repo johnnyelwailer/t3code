@@ -28,9 +28,7 @@ describe("desktopRouteSessionLabel", () => {
     ).toBe("This cloud session");
   });
 
-  it("does not call a thread on the user's own computer a cloud session", () => {
-    expect(desktopRouteSessionLabel(env("env-own"), env("env-own"), sessions)).toBe(
-      "Your own computer (not a cloud session)",
-    );
+  it("is null for a thread on the user's own computer: nothing to route there", () => {
+    expect(desktopRouteSessionLabel(env("env-own"), env("env-own"), sessions)).toBeNull();
   });
 });

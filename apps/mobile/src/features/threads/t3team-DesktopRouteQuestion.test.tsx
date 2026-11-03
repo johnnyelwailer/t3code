@@ -82,7 +82,7 @@ const mount = (submitResult: unknown, rejects = false) => {
     );
   render(null);
   const once = () =>
-    [...container.querySelectorAll("button")].find((b) => b.textContent === "Approve once");
+    [...container.querySelectorAll("button")].find((b) => b.textContent === "Approve");
   return { render, once, onSelectOption, onSubmit, container };
 };
 

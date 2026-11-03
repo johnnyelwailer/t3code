@@ -28,31 +28,35 @@ const card = (proposal: { target: string; internal: boolean }, reason = "npm ci 
   if (built === null) throw new Error("not a card");
   return built;
 };
-const render = (c: ReturnType<typeof card>) =>
+const render = (c: ReturnType<typeof card>, sessionLabel: string | null = "acme-api (#4242)") =>
   renderToStaticMarkup(
-    <T3TeamDesktopRouteCard card={c} sessionLabel="acme-api (#4242)" onAnswer={() => {}} />,
+    <T3TeamDesktopRouteCard card={c} sessionLabel={sessionLabel} onAnswer={() => {}} />,
   );
 
 describe("T3TeamDesktopRouteCard", () => {
-  it("names the session and host, and offers approve once, approve for the session, deny and always", () => {
+  it("names the session and host, and offers Approve, a menu for wider scopes, and Deny", () => {
     const html = render(card({ target: "registry.npmjs.org", internal: false }));
     expect(html).toContain("acme-api (#4242)");
     expect(html).toContain("registry.npmjs.org");
-    for (const text of [
-      "Approve once",
-      "Approve for this session",
-      "Deny",
-      "Always for this host",
-    ]) {
-      expect(html).toContain(text);
-    }
+    expect(html).toContain(">Approve<");
+    expect(html).toContain('aria-label="More ways to approve"');
+    expect(html).toContain(">Deny<");
     expect(html).not.toContain("Internal address");
   });
 
-  it("warns for an internal host and drops Always, even when the agent did not flag it", () => {
+  it("offers no approval at all on a thread that already runs on this computer", () => {
+    const html = render(card({ target: "prod.example.com", internal: false }), null);
+    expect(html).toContain("Nothing to route");
+    expect(html).toContain("already runs on your computer");
+    expect(html).not.toContain("Cloud session");
+    expect(html).not.toContain(">Approve<");
+    expect(html).not.toContain("More ways to approve");
+    expect(html).toContain(">Dismiss<");
+  });
+
+  it("warns for an internal host", () => {
     const html = render(card({ target: "10.4.4.4", internal: false }));
     expect(html).toContain("Internal address");
-    expect(html).not.toContain("Always for this host");
   });
 
   it("shows the agent's words as text, never markup", () => {

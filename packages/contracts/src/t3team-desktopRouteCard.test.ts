@@ -9,7 +9,11 @@ import {
   desktopRouteQuestionLine,
   encodeDesktopRouteQuestionId,
 } from "./t3team-desktopRoute.ts";
-import { desktopRouteCardFrom, desktopRouteCardOf } from "./t3team-desktopRouteCard.ts";
+import {
+  desktopRouteCardFrom,
+  desktopRouteCardOf,
+  desktopRouteChoices,
+} from "./t3team-desktopRouteCard.ts";
 
 const options = [
   DESKTOP_ROUTE_ONCE_LABEL,
@@ -83,5 +87,49 @@ describe("desktopRouteCardFrom", () => {
     expect(desktopRouteCardOf([q, q])).toBeNull();
     expect(desktopRouteCardOf([])).toBeNull();
     expect(desktopRouteCardOf([{ ...q, id: "other" }])).toBeNull();
+  });
+});
+
+describe("desktopRouteChoices", () => {
+  const cardOf = (proposal: { target: string; internal: boolean }, over = {}) => {
+    const card = desktopRouteCardFrom(question(proposal, over));
+    if (card === null) throw new Error("not a card");
+    return card;
+  };
+
+  it("makes Approve answer once, and puts the session and always scopes behind it in order", () => {
+    const choices = desktopRouteChoices(cardOf({ target: "registry.npmjs.org", internal: false }));
+    expect(choices.primary).toEqual({
+      scope: "once",
+      label: DESKTOP_ROUTE_ONCE_LABEL,
+      text: "Approve",
+    });
+    expect(choices.more.map(({ scope, label }) => [scope, label])).toEqual([
+      ["session", DESKTOP_ROUTE_SESSION_LABEL],
+      ["always", DESKTOP_ROUTE_ALWAYS_LABEL],
+    ]);
+    expect(choices.decline).toBe(DESKTOP_ROUTE_DECLINE_LABEL);
+  });
+
+  it("never offers always for an internal host", () => {
+    const { more } = desktopRouteChoices(cardOf({ target: "10.4.4.4", internal: false }));
+    expect(more.map((choice) => choice.scope)).toEqual(["session"]);
+  });
+
+  it("names a wider primary by its scope instead of a bare Approve", () => {
+    const { primary, more } = desktopRouteChoices(
+      cardOf(
+        { target: "registry.npmjs.org", internal: false },
+        {
+          options: [{ label: DESKTOP_ROUTE_SESSION_LABEL }, { label: DESKTOP_ROUTE_DECLINE_LABEL }],
+        },
+      ),
+    );
+    expect(primary).toEqual({
+      scope: "session",
+      label: DESKTOP_ROUTE_SESSION_LABEL,
+      text: "Approve for this session",
+    });
+    expect(more).toEqual([]);
   });
 });

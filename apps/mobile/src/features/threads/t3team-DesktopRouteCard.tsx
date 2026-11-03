@@ -1,25 +1,27 @@
-import type { DesktopRouteCard } from "@t3tools/contracts";
+import { desktopRouteChoices, type DesktopRouteCard } from "@t3tools/contracts";
 import { View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
 
 /**
- * The same card as the web one, from the same `desktopRouteCardFrom`: which cloud session, the host
- * in monospace with a warning for an internal address, the agent's reason as plain text, and
- * Approve once / Approve for this session / Deny, with Always only as a quiet extra on a public host.
+ * The same card as the web one, from the same `desktopRouteCardFrom` and `desktopRouteChoices`:
+ * which cloud session, the host in monospace with a warning for an internal address, the agent's
+ * reason as plain text, then Approve (once), the wider scopes as quiet extras, and Deny. On a thread
+ * that is not a cloud session there is nothing to route: it says so and offers only Dismiss.
  */
 export function T3TeamDesktopRouteCard(props: {
   readonly card: DesktopRouteCard;
-  readonly sessionLabel: string;
+  /** The cloud session's name, or null when the thread is not in a cloud session. */
+  readonly sessionLabel: string | null;
   readonly disabled: boolean;
   readonly onAnswer: (label: string) => void;
 }) {
   const { card, sessionLabel, disabled, onAnswer } = props;
-  const { always, decline } = card.actions;
+  const local = sessionLabel === null;
+  const { primary, more, decline } = desktopRouteChoices(card);
   // A phone cannot approve an internal address yet: the desktop refuses it, so it is not offered.
-  const once = card.internal ? null : card.actions.once;
-  const session = card.internal ? null : card.actions.session;
+  const approvals = local || card.internal ? [] : [primary, ...more].filter((c) => c !== null);
   const row = (name: string, children: React.ReactNode) => (
     <View className="gap-0.5">
       <Text className="font-t3-bold text-2xs uppercase tracking-[1px] text-foreground-muted">
@@ -30,10 +32,19 @@ export function T3TeamDesktopRouteCard(props: {
   );
   return (
     <View className="gap-3 pt-1">
-      <Text className="font-t3-bold text-base text-foreground">Route through your computer?</Text>
-      {row(
-        "Cloud session",
-        <Text className="font-sans text-sm text-foreground">{sessionLabel}</Text>,
+      <Text className="font-t3-bold text-base text-foreground">
+        {local ? "Nothing to route" : "Route this host through your computer?"}
+      </Text>
+      {local ? (
+        <Text className="font-sans text-sm leading-5 text-foreground">
+          This thread is not in a cloud session, so routing through your computer would change
+          nothing. If the host can't be reached, check the address, your VPN or DNS.
+        </Text>
+      ) : (
+        row(
+          "Cloud session",
+          <Text className="font-sans text-sm text-foreground">{sessionLabel}</Text>,
+        )
       )}
       {row(
         "Host",
@@ -44,7 +55,7 @@ export function T3TeamDesktopRouteCard(props: {
           >
             {card.target}
           </Text>
-          {card.internal ? (
+          {card.internal && !local ? (
             <Text className="rounded-md bg-warning/15 px-2 py-1 font-t3-bold text-xs text-warning">
               Internal address
             </Text>
@@ -52,12 +63,12 @@ export function T3TeamDesktopRouteCard(props: {
         </View>,
       )}
       {row(
-        "Why",
+        local ? "Agent said" : "Why",
         <Text className="font-sans text-sm leading-5 text-foreground">
           {card.reason === "" ? "The agent gave no reason." : card.reason}
         </Text>,
       )}
-      {card.internal ? (
+      {local ? null : card.internal ? (
         <Text className="font-sans text-xs text-foreground-muted">
           It may resolve to a private network address on your network. Internal addresses are
           approved on your computer, not from the phone.
@@ -68,39 +79,23 @@ export function T3TeamDesktopRouteCard(props: {
         </Text>
       )}
       <View className="gap-2">
-        {once === null ? null : (
+        {approvals.map((choice, index) => (
           <Button
-            label="Approve once"
+            key={choice.scope}
+            label={choice.text}
             fullWidth
-            tone="primary"
+            {...(index === 0 ? { tone: "primary" as const } : {})}
             disabled={disabled}
-            onPress={() => onAnswer(once)}
+            onPress={() => onAnswer(choice.label)}
           />
-        )}
-        {session === null ? null : (
-          <Button
-            label="Approve for this session"
-            fullWidth
-            disabled={disabled}
-            onPress={() => onAnswer(session)}
-          />
-        )}
+        ))}
         {decline === null ? null : (
           <Button
-            label="Deny"
+            label={local ? "Dismiss" : "Deny"}
             fullWidth
-            tone="text"
+            {...(local ? {} : { tone: "text" as const })}
             disabled={disabled}
             onPress={() => onAnswer(decline)}
-          />
-        )}
-        {always === null ? null : (
-          <Button
-            label="Always for this host"
-            fullWidth
-            tone="text"
-            disabled={disabled}
-            onPress={() => onAnswer(always)}
           />
         )}
       </View>
