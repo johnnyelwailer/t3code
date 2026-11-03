@@ -145,17 +145,40 @@ export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {
   );
 }
 
+/** `managedDenial` is this machine's policy refusing updates (`managedUpdatesDenial`); it wins. */
 export function getDesktopUpdateDisabledReason(
   state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
+  managedDenial?: string,
 ): string | null {
+  if (managedDenial !== undefined) return managedDenial;
   if (!state || (state.enabled && state.status !== "disabled")) return null;
   return state.message?.trim() || "Automatic updates are not available in this build.";
 }
 
 export function getDesktopUpdateIdleTooltip(
-  state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
+  state:
+    | (Pick<DesktopUpdateState, "enabled" | "status" | "message"> &
+        Partial<Pick<DesktopUpdateState, "feed" | "errorContext" | "nextCheckAt">>)
+    | null,
+  managedDenial?: string,
 ) {
-  const disabledReason = getDesktopUpdateDisabledReason(state);
+  if (
+    state?.enabled &&
+    state.feed === "nexi-ghe" &&
+    state.status === "error" &&
+    state.errorContext === "check"
+  ) {
+    const next = state.nextCheckAt ? new Date(state.nextCheckAt) : null;
+    const retry =
+      next && Number.isFinite(next.getTime())
+        ? `Next automatic check: ${next.toLocaleString()}.`
+        : "The next automatic check is being scheduled.";
+    return {
+      title: "Could not check for updates",
+      detail: `${state.message ?? "The update feed did not answer."} ${retry} Click to try now.`,
+    };
+  }
+  const disabledReason = getDesktopUpdateDisabledReason(state, managedDenial);
   return disabledReason
     ? { title: "Updates unavailable", detail: disabledReason }
     : { title: "Check for updates", detail: null };

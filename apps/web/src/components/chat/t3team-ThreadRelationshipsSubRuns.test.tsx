@@ -16,6 +16,8 @@ vi.mock("../../state/entities", () => ({
   useThreadProjection: () => ({ projection: state.projection }),
   useThreadRelationshipShells: () => [],
   useThreadShells: () => [],
+  useHiddenThreadKeys: () => new Set(),
+  useAnyEnvironmentHiding: () => false,
   useProjects: () => [],
   useServerConfigs: () => new Map(),
 }));

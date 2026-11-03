@@ -28,6 +28,35 @@ const checkError = (cause: unknown) =>
   new ElectronUpdater.ElectronUpdaterCheckForUpdatesError({ channel: null, cause });
 
 describe("DesktopUpdates with the interim Nexi feed", () => {
+  it.effect("publishes the actual pending poll time after a startup failure", () => {
+    const harness = makeHarness({
+      nexiFeed: feed(true),
+      env: { T3CODE_DESKTOP_MOCK_UPDATES: "false" },
+      checkForUpdates: Effect.fail(
+        checkError(new NexiUpdateIssue("unreachable", "Feed unavailable.")),
+      ),
+    });
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        yield* flushCallbacks;
+        const scheduled = (yield* updates.getState).nextCheckAt;
+        assert.isString(scheduled);
+        yield* TestClock.adjust("15 seconds");
+        yield* flushCallbacks;
+        const failed = yield* updates.getState;
+        assert.equal(failed.issue, "unreachable");
+        assert.equal(failed.nextCheckAt, scheduled);
+        assert.equal(harness.checkCount(), 1);
+        yield* TestClock.adjust("3 hours");
+        yield* flushCallbacks;
+        assert.equal(harness.checkCount(), 2);
+        assert.notEqual((yield* updates.getState).nextCheckAt, scheduled);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
   it.effect(
     "says signed out, with the message to show, when the check finds no GHE sign-in",
     () => {
