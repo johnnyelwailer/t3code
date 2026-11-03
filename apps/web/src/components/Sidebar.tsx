@@ -265,6 +265,11 @@ import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarT
 // plus the child-thread relation hook used to hide sub-runbook children and chip their parent.
 import { InboxHeader, InboxWorkItemSection } from "~/t3team/components/t3team-InboxSlots";
 import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
+import {
+  isSidebarReorderTarget,
+  isThreadContextDragPoint,
+  sidebarRowKeyAtPoint,
+} from "~/t3team/t3team-sidebarContextDragPoint";
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
@@ -1132,6 +1137,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   } | null>(null);
   const dragSensorRef = useRef<SidebarPointerSensor | null>(null);
   const contextDragKeyRef = useRef<string | null>(null);
+  const isReorderTargetRef = useRef<(rowKey: string) => boolean>(() => false);
   const [actionSweep, setActionSweep] = useState<{
     action: SidebarSweepAction;
     keys: ReadonlySet<string>;
@@ -1890,12 +1896,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       return ref ? [ref] : [];
     });
   };
-  const pointerOutsideThreadList = (point: { x: number; y: number }) => {
+  const isContextDragAt = (point: { x: number; y: number }) => {
     const bounds = threadListRef.current?.getBoundingClientRect();
-    return bounds !== undefined && (point.x < bounds.left || point.x > bounds.right);
+    return isThreadContextDragPoint({
+      pointerOutsideList: bounds !== undefined && (point.x < bounds.left || point.x > bounds.right),
+      hoveredRowKey: sidebarRowKeyAtPoint(point),
+      draggedKey: contextDragKeyRef.current,
+      isReorderTarget: (rowKey) => isReorderTargetRef.current(rowKey),
+    });
   };
   const moveThreadContextDrag = (point: { x: number; y: number }) => {
-    const contextDrag = pointerOutsideThreadList(point);
+    const contextDrag = isContextDragAt(point);
     setDragState((current) =>
       current === null || current.contextDrag === contextDrag
         ? current
@@ -1912,7 +1923,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     return true;
   };
   const dropThreadContextDrag = (point: { x: number; y: number }) => {
-    if (!pointerOutsideThreadList(point)) return false;
+    if (!isContextDragAt(point)) return false;
     dropThreadContext(point, contextDragThreads());
     return true;
   };
@@ -2183,39 +2194,35 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const draggedThreadKey = dragState?.activeKey;
   const draggedFromSection = dragState?.activeSection;
   const dragActivationY = dragState?.activationY;
-  const dndCollisionDetection = (() => {
-    if (draggedThreadKey === undefined || draggedFromSection === undefined)
-      return createSidebarCollisionDetection(() => true);
+  const isReorderTarget = (id: string) => {
+    if (draggedThreadKey === undefined || draggedFromSection === undefined) return true;
     const source = threadByKey.get(draggedThreadKey);
-    if (source === undefined) return createSidebarCollisionDetection(() => false);
-    return createSidebarCollisionDetection(
-      (id) => {
-        const target = resolveSidebarDropTarget(sidebarListItems, draggedThreadKey, id);
-        if (target === null) return false;
-        return (
-          planSidebarThreadDrop({
-            activeKey: draggedThreadKey,
-            activeSection: draggedFromSection,
-            activePinned: source.pinnedAt != null,
-            activeSettled: source.settledOverride === "settled",
-            supportsSettlement: serverConfigs.has(source.environmentId),
-            target,
-            pinnedOrder: pinnedKeys,
-            pinnedKeysById,
-            reorderableKeys: draggableThreadKeys,
-            activeOrder: activeKeys,
-            activeKeysById,
-            activeReorderableKeys: activeReorderableThreadKeys,
-            activeTimeOrdered: workingShelfEnabled,
-          }).kind !== "none"
-        );
-      },
-      {
-        items: sidebarListItems,
-        activationY: dragActivationY ?? null,
-      },
-    );
-  })();
+    if (source === undefined) return false;
+    return isSidebarReorderTarget({
+      items: sidebarListItems,
+      overId: id,
+      activeKey: draggedThreadKey,
+      activeSection: draggedFromSection,
+      activePinned: source.pinnedAt != null,
+      activeSettled: source.settledOverride === "settled",
+      supportsSettlement: serverConfigs.has(source.environmentId),
+      pinnedOrder: pinnedKeys,
+      pinnedKeysById,
+      reorderableKeys: draggableThreadKeys,
+      activeOrder: activeKeys,
+      activeKeysById,
+      activeReorderableKeys: activeReorderableThreadKeys,
+      activeTimeOrdered: workingShelfEnabled,
+    });
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes the committed reorder predicate to the stable pointer-sensor callbacks
+  useLayoutEffect(() => {
+    isReorderTargetRef.current = isReorderTarget;
+  });
+  const dndCollisionDetection = createSidebarCollisionDetection(isReorderTarget, {
+    items: sidebarListItems,
+    activationY: dragActivationY ?? null,
+  });
   const handleThreadDragEnd = (event: DragEndEvent) => {
     const activeKey = String(event.active.id);
     const activeSection = sectionByThreadKey.get(activeKey);

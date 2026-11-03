@@ -400,6 +400,7 @@ import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransitio
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
 import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
+import { useT3TeamThreadContextQueue } from "~/t3team/chat/t3team-useThreadContextQueue";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -473,11 +474,8 @@ export default function ChatView(props: ChatViewProps) {
     dispatchTurnStartOverride,
     enqueueOfflineTurnStart,
     composerContextAttachmentSlot,
-    composerContextAttachments,
-    prepareComposerContextAttachments,
     composerContainerProps,
     composerContainerOverlay,
-    onComposerContextAttachmentsConsumed,
     onBack,
     headerAccessory,
     titleBarControlsAccessory,
@@ -485,6 +483,15 @@ export default function ChatView(props: ChatViewProps) {
     hideBranchToolbar = false,
     minimalComposer = false,
   } = t3teamExtension;
+  // t3team: the add-to-chat queue is read here, once, for a thread on any environment.
+  const contextQueue = useT3TeamThreadContextQueue({
+    environmentId,
+    threadId,
+    enabled: routeKind === "server",
+  });
+  const composerContextAttachments = contextQueue.attachments;
+  const prepareComposerContextAttachments = contextQueue.prepare;
+  const onComposerContextAttachmentsConsumed = contextQueue.onConsumed;
   const handleNewThread = useNewThreadHandler();
   const routeThreadRef = scopeThreadRef(environmentId, threadId);
   const routeThreadKey = scopedThreadKey(routeThreadRef);
@@ -3812,6 +3819,7 @@ export default function ChatView(props: ChatViewProps) {
                   data-chat-composer-stack="true"
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
+                  {contextQueue.strip}
                   {composerContextAttachmentSlot}
                   <div
                     ref={draftHeroComposerAnchorRef}

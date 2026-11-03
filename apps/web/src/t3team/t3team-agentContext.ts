@@ -9,6 +9,8 @@ export type AgentContextToolDefinition = {
   id: string;
   label: string;
   description?: string;
+  /** Addresses this item to the tool (e.g. `{ issueKey }`): the item's stable id. */
+  arguments?: Readonly<Record<string, string>>;
 };
 
 export type AgentContextActionDefinition =
@@ -58,6 +60,7 @@ export function buildAddToChatAgentContextCapabilities(
   request: AddToChatRequest,
   options?: {
     sidebarPin?: T3TeamSidebarPinActionState;
+    tools?: readonly AgentContextToolDefinition[];
   },
 ): AgentContextCapabilities {
   const actions: AgentContextActionDefinition[] = [
@@ -96,5 +99,6 @@ export function buildAddToChatAgentContextCapabilities(
 
   return {
     actions,
+    ...(options?.tools?.length ? { tools: options.tools } : {}),
   };
 }

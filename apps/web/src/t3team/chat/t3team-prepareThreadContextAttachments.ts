@@ -6,6 +6,7 @@ import {
   syncContextAttachmentFromRequest,
 } from "~/t3team/t3team-contextAttachmentSync";
 import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
+import { isContextCacheAttachment } from "~/t3team/t3team-contextCacheJob";
 
 export function appendContextAttachmentsToPrompt(
   prompt: string,
@@ -27,7 +28,9 @@ export async function prepareThreadContextAttachments(input: {
 
   for (const attachment of current) {
     const request = resolveContextAttachmentRequest(attachment.id);
-    if (!request) {
+    // A dropped pointer goes out as it stands: its cached copy is written in the background and
+    // the message must not wait for it.
+    if (!request || isContextCacheAttachment(attachment.id)) {
       nextAttachments.push(attachment);
       continue;
     }
