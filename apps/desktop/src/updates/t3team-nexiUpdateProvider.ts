@@ -35,6 +35,11 @@ export function releaseNotesForNotice(body: string): string {
     .join("\n");
 }
 
+/** electron-updater re-emits this object untouched, so the extra field reaches `update-available`. */
+export interface NexiUpdateInfo extends UpdateInfo {
+  readonly releaseUrl: string;
+}
+
 export interface NexiUpdateProviderDeps {
   readonly currentVersion: string;
   readonly check: () => Promise<NexiUpdateCheck>;
@@ -47,7 +52,7 @@ export interface NexiUpdateProviderDeps {
 type RuntimeOptions = object;
 
 export function makeNexiUpdateProviderClass(deps: NexiUpdateProviderDeps) {
-  return class NexiUpdateProvider extends Provider<UpdateInfo> {
+  return class NexiUpdateProvider extends Provider<NexiUpdateInfo> {
     private url: string | null = null;
     private authorization: string | null = null;
 
@@ -56,7 +61,7 @@ export function makeNexiUpdateProviderClass(deps: NexiUpdateProviderDeps) {
       super(runtimeOptions as never);
     }
 
-    override get fileExtraDownloadHeaders(): Provider<UpdateInfo>["fileExtraDownloadHeaders"] {
+    override get fileExtraDownloadHeaders(): Provider<NexiUpdateInfo>["fileExtraDownloadHeaders"] {
       return this.authorization === null
         ? null
         : { accept: "*/*", authorization: this.authorization };
@@ -67,11 +72,18 @@ export function makeNexiUpdateProviderClass(deps: NexiUpdateProviderDeps) {
       return [];
     }
 
-    async getLatestVersion(): Promise<UpdateInfo> {
+    async getLatestVersion(): Promise<NexiUpdateInfo> {
       const check = await deps.check();
       switch (check.kind) {
         case "up-to-date":
-          return { version: deps.currentVersion, files: [], path: "", sha512: "", releaseDate: "" };
+          return {
+            version: deps.currentVersion,
+            files: [],
+            path: "",
+            sha512: "",
+            releaseDate: "",
+            releaseUrl: "",
+          };
         case "signed-out":
         case "unreachable":
         case "unsupported":
@@ -88,12 +100,13 @@ export function makeNexiUpdateProviderClass(deps: NexiUpdateProviderDeps) {
             releaseName: `Nexi Work ${check.version}`,
             releaseNotes: releaseNotesForNotice(check.notes),
             releaseDate: check.publishedAt ?? "",
+            releaseUrl: check.htmlUrl,
           };
         }
       }
     }
 
-    resolveFiles(updateInfo: UpdateInfo): Array<ResolvedUpdateFileInfo> {
+    resolveFiles(updateInfo: NexiUpdateInfo): Array<ResolvedUpdateFileInfo> {
       const { url } = this;
       if (url === null) return [];
       return updateInfo.files.map((info) => ({ url: new URL(url), info }));

@@ -7,7 +7,14 @@ export type NexiUpdateNoticeView = {
   readonly title: string;
   readonly notes: ReadonlyArray<string>;
   readonly actionLabel: string;
+  /** The feed's release page for this version; only an https page is ever offered as a link. */
+  readonly releaseUrl: string | null;
 };
+
+function httpsPage(value: string | undefined): string | null {
+  if (!value) return null;
+  return URL.canParse(value) && new URL(value).protocol === "https:" ? value : null;
+}
 
 /** The Nexi feed's downloaded update, whether or not the user already said Later to it. */
 export function getNexiUpdateNoticeView(
@@ -21,5 +28,6 @@ export function getNexiUpdateNoticeView(
     title: `Nexi Work ${version} is ready`,
     notes: plainReleaseNotes(state.releaseNotes.flatMap((note) => note.items)),
     actionLabel: "Install now",
+    releaseUrl: httpsPage(state.releaseUrl),
   };
 }

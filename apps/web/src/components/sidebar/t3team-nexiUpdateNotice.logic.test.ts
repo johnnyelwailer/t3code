@@ -62,7 +62,17 @@ describe("Nexi update notice", () => {
       title: "Nexi Work 0.1.2-rc.8 is ready",
       notes: ["A phone cloud session starts behind an open draft, never ending in an error"],
       actionLabel: "Install now",
+      releaseUrl: null,
     });
+  });
+  it("links the release page of the downloaded version, but only over https", () => {
+    const ready = { ...base, status: "downloaded" as const, downloadedVersion: "0.1.2-rc.8" };
+    const page = "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.8";
+    expect(getNexiUpdateNoticeView({ ...ready, releaseUrl: page })?.releaseUrl).toBe(page);
+    expect(getNexiUpdateNoticeView(ready)?.releaseUrl).toBeNull();
+    for (const unsafe of ["javascript:alert(1)", "file:///C:/x", "not a url", ""]) {
+      expect(getNexiUpdateNoticeView({ ...ready, releaseUrl: unsafe })?.releaseUrl).toBeNull();
+    }
   });
   it("shows only the version when no note is left", () => {
     const ready = { ...base, status: "downloaded" as const, downloadedVersion: "0.1.2-rc.8" };

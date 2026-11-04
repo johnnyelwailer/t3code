@@ -35,6 +35,9 @@ function fixtureState(ready: boolean): DesktopUpdateState {
     errorContext: ready ? null : "check",
     canRetry: true,
     feed: "nexi-ghe",
+    ...(ready
+      ? { releaseUrl: "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.8" }
+      : {}),
     issue: "unreachable",
     nextCheckAt: "2026-11-02T13:30:00Z",
   };
