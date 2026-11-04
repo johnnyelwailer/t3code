@@ -46,6 +46,10 @@ vi.mock("../../state/entities", () => ({
   useEnvironmentServerConfig: () => null,
   useServerConfigs: () => new Map(),
 }));
+vi.mock("../../state/t3team-cloudAdoption", () => ({
+  useCloudAdoptedProjects: mocks.projects,
+  cloudAdoptedProjectsAtom: null,
+}));
 vi.mock("../../state/vcs", () => ({
   vcsEnvironment: { status: mocks.status, listRefs: mocks.refs },
 }));
