@@ -296,7 +296,8 @@ jobs:
 
             // t3team hot-file warning: surfaces large additions to files the upstream
             // redesign stack (#28839..#28845) rewrites. WARNING ONLY — never fails the build.
-            // The file list is read from the base checkout; before it lands there is nothing to warn about.
+            // The list is data-only (paths + a threshold); it is read from the base checkout,
+            // or from the PR head as passive git data before it lands on the base.
             let hotFileConfig = null;
             try {
               hotFileConfig = JSON.parse(
@@ -306,7 +307,17 @@ jobs:
                 ),
               );
             } catch {
-              hotFileConfig = null;
+              try {
+                hotFileConfig = JSON.parse(
+                  execFileSync(
+                    "git",
+                    ["show", `${resolvedHeadSha}:scripts/t3team-hot-files.json`],
+                    { encoding: "utf8" },
+                  ),
+                );
+              } catch {
+                hotFileConfig = null;
+              }
             }
             if (hotFileConfig?.files?.length) {
               const hotNumstat = execFileSync(
