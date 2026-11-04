@@ -104,6 +104,11 @@ import {
   markAsClipboardEdit,
 } from "~/composer-undo-grouping";
 import { collectInlineContextIds } from "~/lib/composerContextReferences";
+import {
+  composerVoiceGhostPluginKey,
+  ComposerVoiceGhostExtension,
+  updateVoiceGhost,
+} from "./t3team-composerVoiceGhost";
 import { resolveDiffThemeName } from "~/lib/diffRendering";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { basenameOfPath } from "~/pierre-icons";
@@ -140,6 +145,8 @@ export interface ComposerPromptEditorHandle {
     contextIds: string[];
   };
   isCaretOnVisualEdge: (edge: "start" | "end") => boolean;
+  /** Shows the live dictation preview as muted ghost text at the end of the draft. "" hides it. */
+  setVoiceGhost: (text: string) => void;
 }
 
 export interface ComposerPromptEditorProps {
@@ -843,6 +850,7 @@ function createComposerExtensions(richText: boolean) {
     ComposerCitationExtension,
     ComposerContextReferenceExtension,
     ComposerMarkersExtension,
+    ComposerVoiceGhostExtension,
     ...(richText
       ? [
           ComposerBoldSelectionOnlyExtension,
@@ -1703,6 +1711,11 @@ function ComposerPromptEditorTiptapInner(
         }
       },
       readSnapshot,
+      setVoiceGhost: (text) => {
+        if (!editor) return;
+        if (composerVoiceGhostPluginKey.getState(editor.state) === text) return;
+        editor.view.dispatch(updateVoiceGhost(editor.state.tr, text));
+      },
       isCaretOnVisualEdge: (edge) => {
         const snapshot = readSnapshot();
         if (snapshot.value.length === 0) return true;

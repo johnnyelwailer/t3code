@@ -13,6 +13,7 @@ import { ComposerVoiceInput } from "./t3team-ComposerVoiceInput";
  */
 export function ComposerMicInput(props: {
   readonly onTranscript: (text: string) => void;
+  readonly onPartial?: (text: string) => void;
   readonly disabled: boolean;
   readonly environmentId: string | null;
   readonly threadId: string | null;
@@ -28,12 +29,14 @@ export function ComposerMicInput(props: {
       onTranscript={props.onTranscript}
       disabled={props.disabled}
       sessionKey={props.sessionKey}
+      {...(props.onPartial !== undefined ? { onPartial: props.onPartial } : {})}
     />
   ) : (
     <ComposerVoiceInput
       onTranscript={props.onTranscript}
       disabled={props.disabled}
       sessionKey={props.sessionKey}
+      {...(props.onPartial !== undefined ? { onPartialTranscript: props.onPartial } : {})}
     />
   );
 }

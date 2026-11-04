@@ -139,17 +139,25 @@ describe("VoiceComposerDock", () => {
 
 describe("VoiceComposerInline", () => {
   const onDictated = vi.fn();
+  const onPartial = vi.fn();
   const inline = (threadId = VOICE_THREAD) => (
-    <VoiceComposerInline environmentId={ENV} threadId={threadId} onDictated={onDictated} />
+    <VoiceComposerInline
+      environmentId={ENV}
+      threadId={threadId}
+      onDictated={onDictated}
+      onPartial={onPartial}
+    />
   );
-  afterEach(() => onDictated.mockReset());
+  afterEach(() => {
+    onDictated.mockReset();
+    onPartial.mockReset();
+  });
 
-  it("trails the draft with the words being spoken, and has no stop, timer or level row", () => {
+  it("puts the words being spoken into the draft as ghost text, and renders no strip of its own", () => {
     show("recording", { startedAtMs: Date.now() }, { level: 0.3, partial: "open the board" });
     mount(inline());
-    const row = container!.querySelector('[data-testid="voice-composer-inline"]')!;
-    expect(row.getAttribute("data-state")).toBe("recording");
-    expect(row.textContent).toBe("open the board");
+    expect(onPartial).toHaveBeenLastCalledWith("open the board");
+    expect(container!.querySelector('[data-testid="voice-composer-inline"]')).toBeNull();
     expect(container!.querySelector("button")).toBeNull();
     expect(container!.querySelector('[data-testid="voice-clock"]')).toBeNull();
   });
@@ -168,10 +176,11 @@ describe("VoiceComposerInline", () => {
     expect(bar.getAttribute("aria-valuenow")).toBe("65");
   });
 
-  it("marks words being written down with a quiet ellipsis, never a Transcribing row", () => {
+  it("clears the ghost while words are written down, and never shows a Transcribing row", () => {
     show("transcribing", { startedAtMs: 0, endedAtMs: Date.now() - 3_000 }, { writing: 1 });
     mount(inline());
-    expect(container!.textContent).toBe("…");
+    expect(onPartial).toHaveBeenLastCalledWith("");
+    expect(container!.textContent).toBe("");
     expect(container!.textContent).not.toContain("Transcribing");
   });
 
