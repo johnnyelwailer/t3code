@@ -165,6 +165,23 @@ describe("turn-start dispatch", () => {
     expect(outcome).toEqual({ outcome: "retry" });
   });
 
+  it("retries a turn whose dispatch hit an in-flight socket read failure", async () => {
+    // The connection dropped while the dispatch was in flight: Effect RPC
+    // reports an RpcClientError whose text ("SocketReadError: …") matches no
+    // transport pattern — the tag must decide.
+    const fake = fakeDeps({
+      seen: false,
+      startTurnResult: AsyncResult.failure(
+        Cause.fail({
+          _tag: "RpcClientError",
+          message: "SocketReadError: An error occurred during Read",
+        }),
+      ),
+    });
+    const outcome = await run(turnStartEntry(), fake);
+    expect(outcome).toEqual({ outcome: "retry" });
+  });
+
   it("fails permanently on server-answered rejections", async () => {
     const fake = fakeDeps({
       seen: false,
