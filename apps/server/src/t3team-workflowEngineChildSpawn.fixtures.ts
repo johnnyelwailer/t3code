@@ -1,13 +1,9 @@
-/**
- * Shared fixtures for the workflow-engine CHILD-SPAWN tests: the broker's own contract
- * (`t3team-workflowEngineBrokerChildSpawn.test.ts`) and the end-to-end refusal through the
- * durable engine (`t3team-workflowEngineChildRefusal.test.ts`).
- *
- * Both need the same three things — a host that refuses the first child, a broker wired to the
- * real registry with a recording step emitter, and a way to let Node's unhandled-rejection
- * bookkeeping run. Keeping them here stops the two modules from growing two slightly different
- * copies of the same harness, and keeps each test module readable.
- */
+// @effect-diagnostics nodeBuiltinImport:off - the journal helpers read a temp run journal from disk.
+/** Shared real-broker harness for child-spawn and durable refusal tests. */
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+
+import { buildJournalMaps, type JournalMaps } from "@t3team/sdk";
 import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 
@@ -112,3 +108,30 @@ export const flushRejections = async (): Promise<void> => {
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
 };
+
+/** A run's replay maps, read from the same `<runsRoot>/<runId>/journal.jsonl` the engine uses. */
+export function readRunJournal(runsRoot: string, runId: string): JournalMaps {
+  const file = NodePath.join(runsRoot, runId, "journal.jsonl");
+  const lines = NodeFS.existsSync(file)
+    ? NodeFS.readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => line.trim().length > 0)
+    : [];
+  return buildJournalMaps(lines.map((line) => JSON.parse(line) as unknown));
+}
+
+/**
+ * The lowest-seq `thread.turn` whose reply never landed. For the caught fixture that is the REFUSED
+ * child's awaited half: its create was refused, so the turn fired, threw, and left a `sent` line
+ * with no `resolved` partner — the exact journal shape replay has to make sense of.
+ */
+export function firstUnansweredTurn(journal: JournalMaps): string {
+  const open = [...journal.bySeq.values()]
+    .filter((entry) => entry.kind === "thread.turn" && entry.phase === "sent")
+    .sort((left, right) => left.seq - right.seq)
+    .find((entry) => !journal.byCorrelation.has(entry.correlationId ?? ""));
+  if (open?.correlationId === undefined) {
+    throw new Error("expected an unanswered thread.turn in the journal");
+  }
+  return open.correlationId;
+}

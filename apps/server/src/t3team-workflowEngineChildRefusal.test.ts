@@ -1,30 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - the test reads workflow fixtures and a temp journal root.
 /**
- * A child the host REFUSES to create must fail the RUN — through the REAL durable SDK engine
- * (`startWorkflow`) and the REAL broker (`createWorkflowEngineBroker`), not only through the
- * `createThreadPrimitives` surface.
- *
- * The sibling test (`t3team-workflowEngineBrokerChildSpawn.test.ts`) proves the broker's own
- * contract in isolation: the one-way create settles quietly, nothing phantom is registered, and
- * the refusal is re-thrown on that child's next awaited turn. What it cannot prove is that the
- * refusal REACHES THE AUTHOR through the whole production path — the durable engine, the
- * journal, the loader's body — because a primitives-level harness stops short of the run.
- *
- * The contract asserted here:
- *   1. the run FAILS with the host's ORIGINAL error object (not a copy, not a wrapper);
- *   2. it fails PROMPTLY — the run rejects instead of parking on a turn that never began;
- *   3. nothing phantom survives: no child in the run's registry, no completed spawn step;
- *   4. no turn was started on the host — the child does not exist, so there is nothing to run;
- *   5. the refusal leaves no unhandled rejection behind (the create is fired floating);
- *   6. a CAUGHT refusal does not poison the workflow: the next agent in the same run starts;
- *   7. a CAUGHT refusal is NOT durable across an ORDINARY resume. The refused turn keeps a `sent`
- *      entry with no `resolved` partner, so replay can only read it as an ask still awaiting its
- *      reply, and the sticky suspension latch re-parks the run there, without consuming the
- *      surviving child's delivered answer;
- *   8. with the SAME broker, the supported one-shot `refire` target recovers that park: re-sending the
- *      refused turn makes the broker re-throw the host's ORIGINAL refusal, the body's `catch`
- *      handles it, the latch never arms, and the run completes on the surviving child's reply —
- *      while journaling no second intent line for the re-sent ask.
+ * Exercise child refusal through the durable engine and real broker.
+ * Pin ordinary-resume parking and same-broker refire recovery separately.
  */
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -214,11 +191,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     });
     expect(wrote).toBe(true);
 
-    // CHARACTERIZED LIMITATION: the answer is durable, but the run can never reach it. Replay walks
-    // the body from the top; the refused turn is a recorded `sent` with no `resolved` partner, so
-    // `awaitResolution` reads it as an ask still waiting and arms the sticky suspension latch
-    // THERE. The latch is first-wins and re-throws at every engine touchpoint, so the body's
-    // `catch` cannot carry the run past it — the run parks on a child the host refused to create.
+    // The unresolved refused turn arms the sticky suspension latch before the saved answer.
     const resumed = await resumeWorkflow(runId, caughtRef, {}, options);
     expect("suspended" in resumed).toBe(true);
     if (!("suspended" in resumed)) throw new Error("expected the resumed run to park");
@@ -278,11 +251,7 @@ describe("a child the host refuses, through the durable engine and the real brok
       await appendResolvedEntry({ runsRoot, runId, correlationId: survivingTurn, reply: answer }),
     ).toBe(true);
 
-    // SUPPORTED RECOVERY: naming the refused turn as the run's one-shot `refire` target re-sends it.
-    // The broker's per-child refusal store is NOT consumed by a throw, so the re-send re-throws the
-    // host's ORIGINAL refusal; the body's `catch` handles that instead of the engine's suspension
-    // signal, the sticky latch never arms, and the replay carries on to the surviving child's
-    // now-journaled reply. Where the ordinary resume above re-parks forever, this COMPLETES.
+    // Refire rethrows the cached refusal; catching it lets replay reach the saved answer.
     const resumed = await resumeWorkflow(runId, caughtRef, {}, { ...options, refire: refusedTurn });
     expect("result" in resumed).toBe(true);
     if (!("result" in resumed)) throw new Error("expected the refire resume to complete");
@@ -317,5 +286,63 @@ describe("a child the host refuses, through the durable engine and the real brok
     expect(pendingAfterLive).toEqual([`${runId}:1`, `${runId}:3`]);
     expect(registry.pendingThreadIds()).toEqual(pendingAfterLive);
     expect(registry.peekPending(`${runId}:1`)?.correlationId).toBe(refusedTurn);
+  });
+
+  it("dispatches a turn for the missing child when a restarted broker refires it", async () => {
+    const refusal = new Error(MISSING_LAUNCH_CHECKOUT);
+    const { host, attempts, created, turns } = makeRefusingWorkflowHost(refusal);
+    const runId = "run-refusal-caught-restart";
+    const logs: string[] = [];
+    const optionsFor = (h: ReturnType<typeof makeChildSpawnHarness>): WorkflowRunOptions => ({
+      runsRoot,
+      tools: [],
+      broker: h.broker,
+      launchThreadId: CHILD_SPAWN_LAUNCH_THREAD_ID,
+      onLog: (message) => logs.push(message),
+    });
+    const live = makeChildSpawnHarness(host, { runId });
+    const parked = await startWorkflow(caughtRef, {}, { ...optionsFor(live), runId });
+    expect("suspended" in parked).toBe(true);
+    if (!("suspended" in parked)) throw new Error("expected the live run to park");
+    const survivingTurn = parked.correlationId;
+    const refusedTurn = firstUnansweredTurn(readRunJournal(runId));
+    const answered = await appendResolvedEntry({
+      runsRoot,
+      runId,
+      correlationId: survivingTurn,
+      reply: "Ship behind a flag.",
+    });
+    expect(answered).toBe(true);
+
+    // RESTART: a fresh broker and registry over the SAME journal. The refusal cache is per-broker
+    // and in-memory, and the journal carries no failure marker, so the refusal is now unrecorded.
+    const restarted = makeChildSpawnHarness(host, { runId });
+    const resumed = await resumeWorkflow(
+      runId,
+      caughtRef,
+      {},
+      { ...optionsFor(restarted), refire: refusedTurn },
+    );
+
+    // OBSERVED: with no cached refusal to re-throw, the re-send dispatches a turn for a child that
+    // was never created and then defers, so the run re-parks on it instead of taking the answer.
+    expect("suspended" in resumed).toBe(true);
+    if (!("suspended" in resumed)) throw new Error("expected the restarted resume to park");
+    expect(resumed.correlationId).toBe(refusedTurn);
+    // The missing-child dispatch is real; no create was retried and no phantom child was claimed.
+    expect(turns.map((turn) => turn.threadId)).toEqual([created[0]?.threadId, `${runId}:1`]);
+    expect(attempts).toHaveLength(2);
+    expect(created).toHaveLength(1);
+    expect(restarted.registry.childThreadsForRun(runId)).toEqual([]);
+    expect(restarted.spawnPips()).toEqual([]);
+    // Intent count is stable — the re-fire journaled nothing — so the turn stays unanswered and any
+    // later restart repeats the same dispatch; the answer stays durably out of reach.
+    const journal = readRunJournal(runId);
+    expect(journal.bySeq.size).toBe(4);
+    expect([...journal.byCorrelation.keys()]).toEqual([survivingTurn]);
+    // The catch now sees the suspension signal, not the refusal: the reason did not survive.
+    expect(logs[0]).toBe(`child refused: ${MISSING_LAUNCH_CHECKOUT}`);
+    expect(logs).toHaveLength(2);
+    expect(logs[1]).toContain(`correlationId '${refusedTurn}'`);
   });
 });

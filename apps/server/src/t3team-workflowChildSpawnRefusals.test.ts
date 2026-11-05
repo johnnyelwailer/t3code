@@ -1,14 +1,4 @@
-/**
- * The per-run refusal store is the only memory standing between a refused `thread.create` and the
- * author's next awaited verb, and it caps itself so repeated failed spawns cannot grow it without
- * limit (t3team-workflowChildSpawnRefusals.ts). These tests pin that cap's boundary behaviour:
- * what survives at exactly the limit, what the 65th refusal evicts, and that the eviction is
- * oldest-first by RECENCY rather than insertion, so a re-recorded child is not the one dropped.
- *
- * The end-to-end re-raise and successful-retry cleanup are covered through the real broker in
- * t3team-workflowEngineBrokerChildSpawn.test.ts; here the store is exercised directly so the
- * boundary is exact and deterministic, with no host, queue or SDK in the way.
- */
+/** Test exact cache bounds, refusal identity, and recency-based eviction without a host. */
 import { describe, expect, it } from "vite-plus/test";
 
 import { makeChildSpawnRefusalStore } from "./t3team-workflowChildSpawnRefusals.ts";

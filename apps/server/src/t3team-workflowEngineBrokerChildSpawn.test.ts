@@ -1,18 +1,6 @@
 /**
- * A child the host REFUSES to create (a launch thread whose checkout cannot be inherited, an
- * unreadable project) must not be reported as spawned: the `completed` step pip and the registry
- * entry are both claims that the thread is there, and a phantom child hides the real failure behind
- * a run that continues into a turn on a missing thread.
- *
- * It also must not be reported as a crash. `spawnThread` fires `thread.create` through the SDK's
- * one-way `sendOneWay`, which does `void call.fire(...)` — there is no caller to reject to, so a
- * refusal cannot travel out of this send. The contract is therefore: the create settles
- * successfully and quietly, and the refusal surfaces on the next AWAITED verb for that child (the
- * `thread.turn` every `agent()` sends), with the host's own error object.
- *
- * The real {@link createWorkflowEngineBroker} is used here — the defect lives in the composition of
- * the broker's serialised queue, its step emitter and the placement module's registry write, so a
- * hand-built `BrokerCore` would reproduce none of it.
+ * Refused one-way creates settle quietly without registry entries or completion markers.
+ * The real broker must raise the original refusal on the child's awaited turn.
  */
 import {
   createMockBroker,

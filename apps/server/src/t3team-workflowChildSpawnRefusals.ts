@@ -1,17 +1,6 @@
 /**
- * Per-broker memory of the `thread.create`s the HOST refused, keyed by child thread id.
- *
- * `spawnThread` fires `thread.create` through the SDK's one-way `sendOneWay`, which does
- * `void call.fire(...)` — there is no caller to reject to, so a refused create that rejected the
- * send would surface as an unhandled rejection and the author's `await agent(...)` would carry on
- * into a turn on a thread that does not exist. The refusal is therefore swallowed HERE, at the
- * one place that can be both silent and ordered, and re-surfaced at the next AWAITED verb on the
- * same child: the `thread.turn` that a `spawnThread(...).askAgent(...)` / `agent()` sends. The
- * body then sees the host's own error, on the awaited call it already handles.
- *
- * The per-run store caps itself so repeated failed spawns cannot grow it without limit. The oldest refusal
- * is dropped first, which degrades a very old child's turn back to the pre-existing behaviour
- * (a turn against a missing thread) rather than failing memory.
+ * Keep one-way creation refusals for the next awaited child turn.
+ * The bounded, per-broker cache loses older refusals on eviction or restart.
  */
 
 /** A refusal wrapper, so a thrown `undefined` is still distinguishable from "no refusal". */
