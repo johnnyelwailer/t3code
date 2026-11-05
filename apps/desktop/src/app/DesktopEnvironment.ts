@@ -100,6 +100,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly isolatedInstance: boolean;
     /** t3team: the Electron `userData` path of an isolated instance; undefined otherwise. */
     readonly isolatedProfileDir: string | undefined;
+    /** t3team: a distribution's custom URL scheme(s) that open the app (e.g. `nexi`). */
+    readonly urlSchemes: readonly string[];
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
     readonly runtimeInfo: DesktopRuntimeInfo;
     readonly resolvePickFolderDefaultPath: (rawOptions: unknown) => Option.Option<string>;
@@ -117,6 +119,7 @@ interface PackagedDesktopBrandingResource {
   readonly isolatedInstance?: boolean;
   readonly linuxDesktopEntryName?: string;
   readonly linuxWmClass?: string;
+  readonly urlSchemes?: readonly string[];
 }
 
 function readPackagedDesktopBranding(
@@ -208,6 +211,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const packagedBranding = input.isPackaged
     ? readPackagedDesktopBranding(input.resourcesPath)
     : undefined;
+  // t3team: a distribution's custom URL scheme(s) that open the app (e.g. `nexi`). The filter keeps
+  // only string entries so a malformed desktop-branding.json cannot produce a bogus scheme.
+  const urlSchemes =
+    packagedBranding?.urlSchemes?.filter((scheme) => typeof scheme === "string") ?? [];
   // t3team: an isolated instance behaves as if T3CODE_HOME were its own app-data directory.
   const isolatedUserDataDirName = packagedBranding?.userDataDirName?.trim();
   const isolatedProblem = isolatedInstanceStartupProblem({
@@ -334,6 +341,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     isolatedInstance: isolatedHome !== undefined,
     isolatedProfileDir:
       isolatedHome === undefined ? undefined : resolveIsolatedProfileDir(isolatedHome, path.join),
+    urlSchemes,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),
     runtimeInfo: resolveDesktopRuntimeInfo({
       platform: input.platform,

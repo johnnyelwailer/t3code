@@ -3,6 +3,7 @@ import type { ExpoConfig } from "expo/config";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 import { applyDistributionMobile } from "./t3team-distributionMobileConfig.cjs";
+import { readDistributionUrlSchemes } from "./t3team-mobileUrlSchemesConfig.cjs";
 
 type AppVariant = "development" | "preview" | "production";
 
@@ -120,6 +121,11 @@ const variant = VARIANT_CONFIG[APP_VARIANT];
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;
+
+// A distribution's custom URL scheme(s) that open the app (e.g. nexi). The mobile build sets
+// T3CODE_DISTRIBUTION to the pack's dir; read the scheme from distribution.json so desktop and
+// mobile register the same schemes. Empty for a stock build.
+const distributionUrlSchemes = readDistributionUrlSchemes(process.env);
 
 const dmSansFonts = {
   regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
@@ -258,6 +264,18 @@ const config: ExpoConfig = {
       "keychain-access-groups": [`$(AppIdentifierPrefix)${variant.iosBundleIdentifier}`],
     },
     infoPlist: {
+      // A distribution's custom URL scheme(s) (e.g. nexi). Expo registers the main `scheme` on its
+      // own; this adds the distribution schemes as their own URL types.
+      ...(distributionUrlSchemes.length
+        ? {
+            CFBundleURLTypes: [
+              {
+                CFBundleURLName: `${iosBundleIdentifier}.deep-links`,
+                CFBundleURLSchemes: distributionUrlSchemes,
+              },
+            ],
+          }
+        : {}),
       UISupportedInterfaceOrientations: [
         "UIInterfaceOrientationPortrait",
         "UIInterfaceOrientationLandscapeLeft",
@@ -288,6 +306,20 @@ const config: ExpoConfig = {
   android: {
     icon: variant.assets.appIcon,
     package: variant.androidPackage,
+    // A distribution's custom URL scheme(s) (e.g. nexi). The main `scheme` is registered by Expo;
+    // this adds the distribution schemes as VIEW intent filters so the OS routes them to the app.
+    ...(distributionUrlSchemes.length
+      ? {
+          intentFilters: [
+            {
+              action: "VIEW",
+              autoVerify: true,
+              data: distributionUrlSchemes.map((scheme) => ({ scheme })),
+              category: ["DEFAULT", "BROWSABLE"],
+            },
+          ],
+        }
+      : {}),
     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
       ? { googleServicesFile: repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE }
       : {}),
@@ -440,6 +472,8 @@ const config: ExpoConfig = {
   extra: {
     appVariant: APP_VARIANT,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
+    // A distribution's custom URL scheme(s); App.tsx registers them as link prefixes.
+    urlSchemes: distributionUrlSchemes,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
     },

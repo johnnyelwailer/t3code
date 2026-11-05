@@ -23,6 +23,7 @@ import * as DesktopUserData from "./DesktopUserData.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { openClerkTokenStorage } from "./ClerkTokenStore.ts";
 import * as DesktopWebLinks from "./DesktopWebLinks.ts";
+import { threadDeepLinkToT3codeUrl } from "./t3team-threadDeepLink.ts";
 
 declare const __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: string | undefined;
 
@@ -210,8 +211,19 @@ export const make = Effect.gen(function* () {
         return true;
       };
       const openAppLink = (value: string | undefined) => {
-        if (!value || (promptLinkAppPath(value) === null && readPairingAppLink(value) === null))
-          return false;
+        if (!value) return false;
+        // A distribution's thread deep link (e.g. nexi://threads/<env>/<thread>): normalize it to the
+        // t3code deep link and let the renderer's in-app navigation handle it unchanged.
+        const threadUrl = threadDeepLinkToT3codeUrl(
+          value,
+          environment.urlSchemes,
+          ElectronProtocol.getDesktopScheme(environment.isDevelopment),
+        );
+        if (threadUrl !== null) {
+          void runPromise(webLinks.receive(threadUrl));
+          return true;
+        }
+        if (promptLinkAppPath(value) === null && readPairingAppLink(value) === null) return false;
         void runPromise(webLinks.receive(value));
         return true;
       };
