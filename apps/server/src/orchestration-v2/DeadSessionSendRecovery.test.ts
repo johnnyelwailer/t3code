@@ -6,12 +6,15 @@ import {
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
+  ProviderSessionId,
   ProviderTurnId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
@@ -20,6 +23,7 @@ import * as ProjectionStore from "./ProjectionStore.ts";
 import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderReplayHarness from "./testkit/ProviderReplayHarness.ts";
+import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import { EventSinkWriteError } from "./EventSink.ts";
 
 const instanceId = ProviderInstanceId.make("codex");
@@ -157,6 +161,141 @@ it.effect(
       );
       assert.notEqual(fresh!.id, zombie.id);
     }).pipe(Effect.provide(layerTest)),
+);
+
+const liveSessionId = ProviderSessionId.make("session:stale-live");
+
+/**
+ * A live provider session whose run has no running turn: the session
+ * survived (idle or paused) while its turn ended without settling the run.
+ * Only `get`/`isLive` are exercised by the recovery path; the rest die on use.
+ */
+const liveStaleSessionRuntime: ProviderAdapter.ProviderAdapterV2SessionRuntime = {
+  instanceId,
+  driver: ProviderDriverKind.make("codex"),
+  providerSessionId: liveSessionId,
+  providerSession: {
+    id: liveSessionId,
+    driver: ProviderDriverKind.make("codex"),
+    providerInstanceId: instanceId,
+    status: "ready",
+    cwd: "C:/work",
+    model: null,
+    capabilities: CodexProviderCapabilitiesV2,
+    createdAt: DateTime.makeUnsafe("2026-11-05T00:00:00.000Z"),
+    updatedAt: DateTime.makeUnsafe("2026-11-05T00:00:00.000Z"),
+    lastError: null,
+  },
+  events: Stream.empty,
+  ensureThread: () => Effect.die("unused in recovery test"),
+  resumeThread: () => Effect.die("unused in recovery test"),
+  startTurn: () => Effect.die("unused in recovery test"),
+  steerTurn: () => Effect.die("unused in recovery test"),
+  interruptTurn: () => Effect.die("unused in recovery test"),
+  respondToRuntimeRequest: () => Effect.die("unused in recovery test"),
+  readThreadSnapshot: () => Effect.die("unused in recovery test"),
+  rollbackThread: () => Effect.die("unused in recovery test"),
+  forkThread: () => Effect.die("unused in recovery test"),
+};
+
+const layerLiveStaleSession = Layer.effect(
+  ProviderSessionManager.ProviderSessionManagerV2,
+  Effect.succeed({
+    shutdown: Effect.void,
+    open: () => Effect.die("unused in recovery test"),
+    get: () => Effect.succeed(Option.some(liveStaleSessionRuntime)),
+    isLive: () => Effect.succeed(true),
+    close: () => Effect.void,
+    closeInstance: () => Effect.void,
+    release: () => Effect.void,
+    releaseUnlessBusy: () => Effect.succeed(false),
+    detach: () => Effect.void,
+    otherWorkingThreads: () => Effect.succeed([]),
+  }),
+);
+
+/**
+ * Project a run that reads as running while its provider thread points at a
+ * live session that no longer has a running turn for the active attempt —
+ * the state that used to dead-end Send with "No running provider turn found
+ * for active run …".
+ */
+const seedRunningRunWithoutTurn = (threadId: ThreadId) =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make(`seed:${threadId}`),
+      threadId,
+      messageId: MessageId.make(`message:${threadId}:seed`),
+      text: "seed",
+      attachments: [],
+      dispatchMode: { type: "start_immediately" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const now = yield* DateTime.now;
+    const projection = yield* orchestrator.getThreadProjection(threadId);
+    const run = projection.runs[0]!;
+    const attempt = projection.attempts.find((candidate) => candidate.id === run.activeAttemptId)!;
+    const providerThread = projection.providerThreads.find(
+      (candidate) => candidate.id === run.providerThreadId,
+    )!;
+    yield* projections.apply({
+      id: EventId.make(`event:${threadId}:run-running`),
+      type: "run.updated",
+      threadId,
+      runId: run.id,
+      occurredAt: now,
+      payload: { ...run, status: "running", startedAt: now },
+    });
+    yield* projections.apply({
+      id: EventId.make(`event:${threadId}:attempt-running`),
+      type: "run-attempt.updated",
+      threadId,
+      runId: run.id,
+      occurredAt: now,
+      payload: { ...attempt, status: "running", startedAt: now },
+    });
+    yield* projections.apply({
+      id: EventId.make(`event:${threadId}:thread-live-session`),
+      type: "provider-thread.updated",
+      threadId,
+      occurredAt: now,
+      payload: { ...providerThread, providerSessionId: liveSessionId, status: "active" },
+    });
+    return run;
+  });
+
+it.effect(
+  "send to a running run without a running provider turn starts a fresh turn instead of failing",
+  () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const threadId = ThreadId.make("thread:stale-live-session");
+      yield* createThread(threadId);
+      const staleRun = yield* seedRunningRunWithoutTurn(threadId);
+
+      // Steer into a run whose active attempt has no running turn — previously
+      // failed with "No running provider turn found for active run …".
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(`send:${threadId}:recover`),
+        threadId,
+        messageId: MessageId.make(`message:${threadId}:recover`),
+        text: "continue after the turn vanished",
+        attachments: [],
+        dispatchMode: { type: "steer_active", targetRunId: staleRun.id },
+        createdBy: "user",
+        creationSource: "web",
+      });
+
+      const after = yield* orchestrator.getThreadProjection(threadId);
+      const fresh = after.runs.find((run) => run.userMessageId === `message:${threadId}:recover`);
+      assert.isDefined(fresh);
+      assert.notEqual(fresh!.id, staleRun.id);
+    }).pipe(Effect.provide(Layer.merge(layerLiveStaleSession, layerTest))),
 );
 
 it("EventSinkWriteError message names disk pressure for SQLITE_CANTOPEN", () => {
