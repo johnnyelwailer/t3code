@@ -231,6 +231,58 @@ it.effect("checkpoint capture skips untracked nested repositories without a comm
   }).pipe(Effect.scoped, Effect.provide(layerGitContract)),
 );
 
+it.effect("checkpoint probes the repository layout and ref commits once, not per capture", () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const liveRunner = yield* ProcessRunner.ProcessRunner;
+    const layoutProbeCount: { n: number } = { n: 0 };
+    const refResolveCount: { n: number } = { n: 0 };
+    const captureProcess = yield* VcsProcess.make.pipe(
+      Effect.provideService(ProcessRunner.ProcessRunner, {
+        run: (input) => {
+          if (
+            input.args[0] === "rev-parse" &&
+            input.args.includes("--path-format=absolute") &&
+            input.args.includes("--git-common-dir")
+          ) {
+            layoutProbeCount.n += 1;
+          }
+          if (
+            input.args[0] === "rev-parse" &&
+            input.args.includes("--verify") &&
+            input.args.some((arg) => arg.endsWith("^{commit}"))
+          ) {
+            refResolveCount.n += 1;
+          }
+          return liveRunner.run(input);
+        },
+      }),
+    );
+    const driver = yield* GitVcsDriver.makeVcsDriverShape().pipe(
+      Effect.provideService(VcsProcess.VcsProcess, captureProcess),
+    );
+    const cwd = yield* fileSystem.makeTempDirectoryScoped({
+      prefix: "t3-checkpoint-probe-cache-",
+    });
+    const { checkpointRef } = yield* makeCheckpointFixture(driver, cwd);
+
+    yield* driver.checkpoints.captureCheckpoint({ cwd, checkpointRef });
+    assert.equal(layoutProbeCount.n, 1);
+
+    const secondRef = CheckpointRef.make("refs/t3/checkpoints/second");
+    yield* driver.checkpoints.captureCheckpoint({ cwd, checkpointRef: secondRef });
+    // The layout probe is cached for the second capture within the same window.
+    assert.equal(layoutProbeCount.n, 1);
+
+    // Ref-commit resolution is cached per (cwd, ref): the second read is free.
+    assert.isTrue(yield* driver.checkpoints.hasCheckpointRef({ cwd, checkpointRef }));
+    const firstReads = refResolveCount.n;
+    assert.isTrue(firstReads >= 1);
+    assert.isTrue(yield* driver.checkpoints.hasCheckpointRef({ cwd, checkpointRef }));
+    assert.equal(refResolveCount.n, firstReads);
+  }).pipe(Effect.scoped, Effect.provide(layerGitCaptureContract)),
+);
+
 it.effect.skipIf(!symlinksSupported)(
   "checkpoint capture writes its index into the real git dir when cwd is a symlinked subdirectory",
   () =>
