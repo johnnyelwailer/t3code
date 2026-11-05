@@ -240,15 +240,16 @@ it.effect("checkpoint probes the repository layout and ref commits once, not per
     const captureProcess = yield* VcsProcess.make.pipe(
       Effect.provideService(ProcessRunner.ProcessRunner, {
         run: (input) => {
+          // gitCommand prepends `-C <cwd>`, so the subcommand is not at index 0.
           if (
-            input.args[0] === "rev-parse" &&
+            input.args.includes("rev-parse") &&
             input.args.includes("--path-format=absolute") &&
             input.args.includes("--git-common-dir")
           ) {
             layoutProbeCount.n += 1;
           }
           if (
-            input.args[0] === "rev-parse" &&
+            input.args.includes("rev-parse") &&
             input.args.includes("--verify") &&
             input.args.some((arg) => arg.endsWith("^{commit}"))
           ) {

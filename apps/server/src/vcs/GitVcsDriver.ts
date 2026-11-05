@@ -876,11 +876,10 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
 
   // The capture path probes the repository layout and checkpoint refs with short
   // git processes. On hosts where process creation is slow, re-probing on every
-  // capture and every self-heal re-run multiplies that cost; both answers are
-  // stable, so they are cached briefly and re-probed when a capture fails.
+  // capture multiplies that cost. The layout is cached briefly and re-probed when a
+  // capture fails; proven ref OIDs are cached briefly and re-probed after every capture.
   const CAPTURE_REPOSITORY_CACHE_TTL = Duration.seconds(60);
   const CHECKPOINT_COMMIT_CACHE_TTL = Duration.minutes(5);
-  const CHECKPOINT_COMMIT_MISS_CACHE_TTL = Duration.seconds(5);
 
   const checkpointCommitCache = yield* Cache.makeWith(
     (key: string) => {
@@ -889,9 +888,9 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     },
     {
       capacity: 4_096,
+      // A cached miss would hide a ref a capture creates moments later, so only proven OIDs are cached.
       timeToLive: Exit.match({
-        onSuccess: (commit) =>
-          commit === null ? CHECKPOINT_COMMIT_MISS_CACHE_TTL : CHECKPOINT_COMMIT_CACHE_TTL,
+        onSuccess: (commit) => (commit === null ? Duration.zero : CHECKPOINT_COMMIT_CACHE_TTL),
         onFailure: () => Duration.zero,
       }),
     },
@@ -1387,6 +1386,12 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       return yield* captureWithTimeoutSelfHeal(1).pipe(
         Effect.tapError(() =>
           Cache.invalidate(captureRepositoryCache, captureRepositoryCacheKey(input.cwd)),
+        ),
+        Effect.tap(() =>
+          Cache.invalidate(
+            checkpointCommitCache,
+            checkpointCommitCacheKey(input.cwd, input.checkpointRef),
+          ),
         ),
       );
     }),
