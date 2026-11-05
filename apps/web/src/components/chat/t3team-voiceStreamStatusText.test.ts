@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { voiceStreamStatusText } from "./t3team-VoiceStreamStatus";
+import { voiceStreamStatusText } from "./t3team-voiceStreamStatusText";
 
 describe("voiceStreamStatusText", () => {
   it("says listening until a partial arrives, then shows it", () => {

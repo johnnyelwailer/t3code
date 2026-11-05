@@ -103,10 +103,21 @@ describe("useVoiceStream", () => {
     bridge.emit({ sessionId: "s1", type: "utterance", text: " open the board ", elapsedMs: 900 });
     expect(view.onUtterance).toHaveBeenCalledWith("open the board", undefined);
     expect(view.view()).toMatchObject({
+      partial: "",
       writing: 0,
       writingSinceMs: null,
       heard: { text: "open the board" },
     });
+  });
+
+  it("drops the in-progress partial when its utterance arrives without a silence pause", () => {
+    const bridge = installBridge();
+    const view = mount("s1");
+    bridge.emit({ sessionId: "s1", type: "partial", text: "open the board", elapsedMs: 10 });
+    expect(view.view()).toMatchObject({ partial: "open the board" });
+    bridge.emit({ sessionId: "s1", type: "utterance", text: "open the board", elapsedMs: 900 });
+    expect(view.view()).toMatchObject({ partial: "", writing: 0 });
+    expect(view.onUtterance).toHaveBeenCalledWith("open the board", undefined);
   });
 
   it("hands whisper's metadata over with the utterance", () => {

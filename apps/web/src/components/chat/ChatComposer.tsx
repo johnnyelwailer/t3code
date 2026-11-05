@@ -201,6 +201,7 @@ import {
   composerSuggestionOptionId,
 } from "./ComposerCommandMenu";
 import { ComposerMicInput } from "./t3team-ComposerMicInput";
+import { needsComposerLeadingSpace } from "./t3team-composerTextBoundary";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { VoiceComposerDock } from "../../t3team/voice/t3team-VoiceComposerDock";
 import { VoiceComposerInline } from "../../t3team/voice/t3team-VoiceComposerInline";
@@ -307,7 +308,12 @@ export interface ChatComposerHandle {
   hasPendingAttachments: () => boolean;
   insertTextAtEnd: (
     text: string,
-    options?: { ensureLeadingBoundary?: boolean; clipboardData?: DataTransfer },
+    options?: {
+      ensureLeadingBoundary?: boolean;
+      /** Dictation text: punctuation-aware boundary instead of the plain leading-space rule. */
+      voiceBoundary?: boolean;
+      clipboardData?: DataTransfer;
+    },
   ) => boolean;
   pasteTextAtEnd: (text: string, options?: { bypassAutoAttachment?: boolean }) => boolean;
   citeAssistantText: (
@@ -2454,6 +2460,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     position: "cursor" | "end",
     options?: {
       ensureLeadingBoundary?: boolean;
+      /** Dictation text: skip the space when the draft already ends in whitespace or the text starts with punctuation. */
+      voiceBoundary?: boolean;
       citationCommentAnchor?: AssistantCitationSourceAnchor;
       clipboardData?: DataTransfer;
     },
@@ -2472,10 +2480,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     const prompt = promptRef.current;
     const cursor = position === "cursor" ? readComposerSnapshot().expandedCursor : prompt.length;
-    const needsLeadingSpace =
-      (options?.ensureLeadingBoundary ?? false) &&
-      cursor > 0 &&
-      !/\s/.test(prompt[cursor - 1] ?? "");
+    const needsLeadingSpace = needsComposerLeadingSpace(options, prompt, cursor, text);
     const rangeEnd = extendReplacementRangeForTrailingSpace(prompt, cursor, text);
     return applyPromptReplacement(
       cursor,
@@ -3187,20 +3192,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       />
     ) : null;
   const composerAttachButton = showComposerAttachAction ? (
-    <>
-      <ComposerAttachButton
-        addComposerAttachments={addComposerAttachments}
-        focusComposer={focusComposer}
-      />
-      <ComposerMicInput
-        environmentId={environmentId}
-        threadId={activeThreadId}
-        sessionKey={composerDraftTargetKey}
-        onTranscript={(text) => insertComposerTextAtEnd(text)}
-        disabled={projectSelectionRequired}
-      />
-    </>
+    <ComposerAttachButton
+      addComposerAttachments={addComposerAttachments}
+      focusComposer={focusComposer}
+    />
   ) : null;
+  const composerMicButton = (
+    <ComposerMicInput
+      environmentId={environmentId}
+      threadId={activeThreadId}
+      sessionKey={composerDraftTargetKey}
+      onTranscript={(text) => insertComposerTextAtEnd(text, { voiceBoundary: true })}
+      onPartial={(text) => composerEditorRef.current?.setVoiceGhost(text)}
+      disabled={projectSelectionRequired}
+    />
+  );
   return (
     <form
       ref={composerFormRef}
@@ -3509,9 +3515,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <VoiceComposerInline
                   environmentId={environmentId}
                   threadId={activeThreadId}
-                  onDictated={(text) =>
-                    insertComposerTextAtEnd(text, { ensureLeadingBoundary: true })
-                  }
+                  onDictated={(text) => insertComposerTextAtEnd(text, { voiceBoundary: true })}
+                  onPartial={(text) => composerEditorRef.current?.setVoiceGhost(text)}
                 />
                 {showMobilePendingAnswerActions ? (
                   <div
@@ -3575,6 +3580,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   >
                     {composerControls}
                   </div>
+                  {composerMicButton}
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
