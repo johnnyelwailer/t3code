@@ -5,6 +5,7 @@ import {
   ForwardCompatibleArray,
   GuestMessageId,
   GuestShareId,
+  MessageId,
   NonNegativeInt,
   PositiveInt,
   ThreadId,
@@ -26,6 +27,7 @@ export const COMPOSER_CONTEXT_KINDS = [
   "thread",
   "work-item",
   "environment",
+  "message-quote",
 ] as const;
 export type KnownComposerContextKind = (typeof COMPOSER_CONTEXT_KINDS)[number];
 
@@ -40,6 +42,7 @@ const COMPOSER_CONTEXT_ELEMENT_HTML_MAX_CHARS = 8_000;
 const COMPOSER_CONTEXT_ELEMENT_STYLES_MAX_CHARS = 8_000;
 export const COMPOSER_CONTEXT_REVIEW_TEXT_MAX_CHARS = 16_000;
 export const COMPOSER_CONTEXT_REVIEW_DIFF_MAX_CHARS = 32_000;
+export const COMPOSER_CONTEXT_QUOTE_TEXT_MAX_CHARS = 16_000;
 const COMPOSER_CONTEXT_PREVIEW_COMMENT_MAX_CHARS = 8_000;
 
 export const ComposerContextId = TrimmedNonEmptyString.check(
@@ -240,6 +243,19 @@ export const EnvironmentContextRecord = Schema.Struct({
 });
 export type EnvironmentContextRecord = typeof EnvironmentContextRecord.Type;
 
+/**
+ * A chat message quoted so the agent reads it as reference. The full quoted text travels with
+ * the message; only `messageId` is stable identity, which is why the same message quotes once.
+ */
+export const MessageQuoteContextRecord = Schema.Struct({
+  ...recordBase,
+  kind: Schema.Literal("message-quote"),
+  messageId: MessageId,
+  author: ContextLabel,
+  quotedText: BoundedString(COMPOSER_CONTEXT_QUOTE_TEXT_MAX_CHARS),
+});
+export type MessageQuoteContextRecord = typeof MessageQuoteContextRecord.Type;
+
 const isJson = Schema.is(Schema.Json);
 
 /**
@@ -284,6 +300,7 @@ export const KnownComposerContextRecord = Schema.Union([
   ThreadContextRecord,
   WorkItemContextRecord,
   EnvironmentContextRecord,
+  MessageQuoteContextRecord,
 ]);
 export type KnownComposerContextRecord = typeof KnownComposerContextRecord.Type;
 

@@ -88,6 +88,14 @@ export interface TimelineRowSharedState {
   onForkFromRun:
     | ((input: { readonly sourceThreadId: ThreadId; readonly runId: RunId }) => Promise<void>)
     | undefined;
+  /** Absent hides the reply button; quotes a chat message into the composer as reference context. */
+  onQuoteMessage:
+    | ((input: {
+        readonly messageId: MessageId;
+        readonly author: string;
+        readonly text: string;
+      }) => void)
+    | undefined;
   onToggleTurnFold: (runId: RunId) => void;
   onToggleAttemptFold: (attemptId: RunAttemptId) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;

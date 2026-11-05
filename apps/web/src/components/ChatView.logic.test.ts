@@ -13,7 +13,11 @@ import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
 import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
 import { deriveProviderInstanceEntries } from "../providerInstances";
 import { ensureInlineContextReferences } from "../lib/composerContextReferences";
-import { terminalContextReference } from "../lib/composerContextRecords";
+import {
+  messageQuoteContextRecord,
+  messageQuoteContextReference,
+  terminalContextReference,
+} from "../lib/composerContextRecords";
 import {
   CommandId,
   EnvironmentId,
@@ -1043,10 +1047,16 @@ describe("snapshotComposerSend", () => {
   const live = { ...expired, id: "ctx-live", text: "pnpm test", lineStart: 9, lineEnd: 9 };
 
   it("drops expired terminal contexts from the contexts and from the prompt", () => {
+    const quote = messageQuoteContextRecord({
+      messageId: MessageId.make("msg-quote"),
+      author: "T3 Code",
+      text: "The login page 500s",
+    });
     const snapshot = snapshotComposerSend({
       prompt: ensureInlineContextReferences("run", [
         terminalContextReference(expired),
         terminalContextReference(live),
+        messageQuoteContextReference(quote),
       ]),
       images: [],
       files: [],
@@ -1056,11 +1066,16 @@ describe("snapshotComposerSend", () => {
       reviewComments: [],
       threadContexts: [],
       environmentContexts: [],
+      messageQuotes: [quote],
     });
 
     expect(snapshot.terminalContexts).toEqual([live]);
+    expect(snapshot.messageQuotes).toEqual([quote]);
     expect(snapshot.messageText).toBe(
-      ensureInlineContextReferences("run", [terminalContextReference(live)]).trim(),
+      ensureInlineContextReferences("run", [
+        terminalContextReference(live),
+        messageQuoteContextReference(quote),
+      ]).trim(),
     );
   });
 });
@@ -1162,6 +1177,7 @@ describe("restorePlanFollowUpComposer", () => {
         reviewComments: [],
         previewAnnotations: [],
         threadContexts: [],
+        messageQuotes: [],
       },
       draftHasUserContent: composer.draft.trim().length > 0,
       routeIsCurrent,
@@ -1176,6 +1192,7 @@ describe("restorePlanFollowUpComposer", () => {
       writePreviewAnnotations: () => undefined,
       writeThreadContexts: () => undefined,
       writeEnvironmentContexts: () => undefined,
+      writeMessageQuotes: () => undefined,
       resetCursor: ({ prompt }) => {
         composer.cursor = prompt;
       },

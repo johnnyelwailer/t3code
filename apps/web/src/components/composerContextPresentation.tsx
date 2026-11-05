@@ -1,14 +1,15 @@
 import ChatMarkdown from "./ChatMarkdown";
 import { isSvgAttachment } from "@t3tools/shared/image";
 import { ReadOnlySourcePreview } from "./files/AttachmentFilePreview";
-import type {
-  EnvironmentContextRecord,
-  PreviewAnnotationPayload,
-  ThreadContextRecord,
+import {
+  type EnvironmentContextRecord,
+  type MessageQuoteContextRecord,
+  type PreviewAnnotationPayload,
+  type ThreadContextRecord,
 } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { videoMimeType } from "@t3tools/shared/video";
-import { MessageCircleIcon, MousePointerClickIcon } from "lucide-react";
+import { MessageCircleIcon, MousePointerClickIcon, Quote as MessageQuoteIcon } from "lucide-react";
 import { createContext, type MouseEvent, type ReactElement, type ReactNode, use } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 
@@ -71,7 +72,8 @@ export type ComposerDraftContextRecord =
   | { kind: "file"; record: ComposerFileAttachment; upload?: AttachmentUploadState | undefined }
   | { kind: "thread"; record: ThreadContextRecord }
   | { kind: "environment"; record: EnvironmentContextRecord }
-  | { kind: "work-item"; record: WorkItemContextDraft };
+  | { kind: "work-item"; record: WorkItemContextDraft }
+  | { kind: "message-quote"; record: MessageQuoteContextRecord };
 
 export interface ComposerContextActions {
   environmentId: EnvironmentId | null;
@@ -112,6 +114,7 @@ export function composerContextRecordsFromDraft(input: {
   threadContexts?: ReadonlyArray<ThreadContextRecord>;
   environmentContexts?: ReadonlyArray<EnvironmentContextRecord>;
   workItems?: ReadonlyArray<WorkItemContextDraft>;
+  messageQuotes?: ReadonlyArray<MessageQuoteContextRecord>;
   images?: ReadonlyArray<ComposerImageAttachment>;
   files?: ReadonlyArray<ComposerFileAttachment>;
   uploadsByImageId?: Readonly<Record<string, AttachmentUploadState>>;
@@ -153,6 +156,9 @@ export function composerContextRecordsFromDraft(input: {
   }
   for (const record of input.workItems ?? []) {
     records.set(workItemContextId(record.key), { kind: "work-item", record });
+  }
+  for (const record of input.messageQuotes ?? []) {
+    records.set(record.contextId, { kind: "message-quote", record });
   }
   return records;
 }
@@ -413,6 +419,7 @@ const composerContextPresentationRegistry = createContextPresentationRegistry<
     "thread",
     "environment",
     "work-item",
+    "message-quote",
   ],
   handlers: [
     {
@@ -525,6 +532,32 @@ const composerContextPresentationRegistry = createContextPresentationRegistry<
       render: (entry, context) =>
         entry.kind === "work-item" ? (
           <WorkItemContextChip record={entry.record} />
+        ) : (
+          <UnresolvedContextChip label={context.label} />
+        ),
+    },
+    {
+      kind: "message-quote",
+      canRender: (entry) => entry.kind === "message-quote",
+      render: (entry, context, definition) =>
+        entry.kind === "message-quote" ? (
+          <ContextChip
+            icon={<MessageQuoteIcon />}
+            label={entry.record.label}
+            kindLabel="Quoted message"
+            details={
+              <div className="space-y-2">
+                <div className="truncate text-xs font-medium text-foreground">
+                  {entry.record.author}
+                </div>
+                <div className="max-h-64 overflow-y-auto whitespace-pre-wrap wrap-break-word text-sm text-foreground">
+                  {entry.record.quotedText}
+                </div>
+              </div>
+            }
+            detailsMode={definition.capabilities.details}
+            kind="citation"
+          />
         ) : (
           <UnresolvedContextChip label={context.label} />
         ),

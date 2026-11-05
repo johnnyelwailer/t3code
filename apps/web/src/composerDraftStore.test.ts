@@ -25,6 +25,7 @@ import {
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
+  MessageId,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   RunId,
   ThreadId,
@@ -98,6 +99,7 @@ import { insertInlineContextReference } from "./lib/composerContextReferences";
 import {
   buildMessageContext,
   environmentContextRecord,
+  messageQuoteContextRecord,
   terminalContextReference,
 } from "./lib/composerContextRecords";
 import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
@@ -814,6 +816,74 @@ describe("composerDraftStore environment contexts", () => {
     store.addEnvironmentContexts(threadRef, [vps]);
     store.setEnvironmentContexts(threadRef, []);
     expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
+  });
+});
+
+describe("composerDraftStore message quotes", () => {
+  const threadId = ThreadId.make("thread-with-quote");
+  const threadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
+  const quoted = messageQuoteContextRecord({
+    messageId: MessageId.make("msg-quoted"),
+    author: "T3 Code",
+    text: "The login page 500s\nwhen the form is empty",
+  });
+
+  beforeEach(resetComposerDraftStore);
+
+  it("quotes once per message, appends one chip, and survives persistence", () => {
+    const store = useComposerDraftStore.getState();
+    store.setPrompt(threadRef, "Fix this:");
+    store.addMessageQuotes(threadRef, [quoted]);
+    store.addMessageQuotes(threadRef, [quoted, { ...quoted, quotedText: "different excerpt" }]);
+
+    const draft = draftFor(threadId, TEST_ENVIRONMENT_ID);
+    expect(draft?.messageQuotes).toEqual([quoted]);
+    expect(quoted.label).toBe("T3 Code: The login page 500s");
+    expect(draft?.prompt).toBe(
+      `Fix this: [${quoted.label}](t3-context://v1/message-quote/${quoted.contextId}) `,
+    );
+
+    const merge = useComposerDraftStore.persist.getOptions().merge!;
+    const hydrated = merge(
+      JSON.parse(
+        JSON.stringify(partializeComposerDraftStoreState(useComposerDraftStore.getState())),
+      ),
+      useComposerDraftStore.getInitialState(),
+    );
+    expect(hydrated.draftsByThreadKey[scopedThreadKey(threadRef)]?.messageQuotes).toEqual([quoted]);
+    expect(hydrated.draftsByThreadKey[scopedThreadKey(threadRef)]?.prompt).toBe(draft?.prompt);
+  });
+
+  it("keeps one chip per quoted message", () => {
+    const store = useComposerDraftStore.getState();
+    const second = messageQuoteContextRecord({
+      messageId: MessageId.make("msg-second"),
+      author: "You",
+      text: "second message",
+    });
+    store.addMessageQuotes(threadRef, [quoted, second]);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.messageQuotes).toEqual([quoted, second]);
+  });
+
+  it("removes the chip with the record and drops an otherwise empty draft", () => {
+    const store = useComposerDraftStore.getState();
+    store.addMessageQuotes(threadRef, [quoted]);
+    store.removeMessageQuote(threadRef, quoted.contextId);
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)).toBeUndefined();
+  });
+
+  it("sends the quoted text with the message context", () => {
+    const store = useComposerDraftStore.getState();
+    store.addMessageQuotes(threadRef, [quoted]);
+    const draft = draftFor(threadId, TEST_ENVIRONMENT_ID);
+    expect(
+      buildMessageContext({
+        terminalContexts: [],
+        reviewComments: [],
+        previewAnnotations: [],
+        messageQuotes: draft?.messageQuotes ?? [],
+      })?.records,
+    ).toEqual([quoted]);
   });
 });
 

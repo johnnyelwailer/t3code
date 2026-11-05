@@ -247,6 +247,7 @@ function composer(queued: CloudQueuedSend): ComposerThreadDraftState {
     reviewComments: [],
     threadContexts: [],
     environmentContexts: [],
+    messageQuotes: [],
     modelSelectionByProvider: {},
     activeProvider: null,
     runtimeMode: null,

@@ -24,7 +24,12 @@ import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import ChatMarkdown from "../ChatMarkdown";
 import { EnvironmentContextChip } from "../EnvironmentContextChip";
 import { ThreadContextChip } from "../ThreadContextChip";
-import { MessageCircleIcon, MousePointerClickIcon, PaintbrushIcon } from "lucide-react";
+import {
+  MessageCircleIcon,
+  MousePointerClickIcon,
+  PaintbrushIcon,
+  Quote as MessageQuoteIcon,
+} from "lucide-react";
 import type { ComposerContextId, KnownComposerContextRecord } from "@t3tools/contracts";
 import { buildExpandedImagePreview } from "./ExpandedImagePreview";
 import { WorkspaceEntryIcon, WorkspaceEntryTooltip } from "./WorkspaceEntryIcon";
@@ -508,6 +513,29 @@ const userMessageContextPresentationRegistry = createContextPresentationRegistry
           </UserMessageContextPopover>
         );
       },
+    },
+    {
+      kind: "message-quote",
+      canRender: (record) => record.kind === "message-quote",
+      render: (record, context) =>
+        record.kind === "message-quote" ? (
+          <UserMessageContextPopover
+            copyMarkdown={context.copyMarkdown}
+            accessibleLabel={`Quoted message, ${record.label}`}
+            kind="citation"
+            icon={<MessageQuoteIcon />}
+            label={record.label}
+          >
+            <div className="space-y-2">
+              <div className="truncate text-xs font-medium text-foreground">{record.author}</div>
+              <div className="max-h-64 overflow-y-auto whitespace-pre-wrap wrap-break-word text-sm text-foreground">
+                {record.quotedText}
+              </div>
+            </div>
+          </UserMessageContextPopover>
+        ) : (
+          <UnavailableUserMessageContextChip {...context} />
+        ),
     },
     {
       kind: "preview-annotation",
