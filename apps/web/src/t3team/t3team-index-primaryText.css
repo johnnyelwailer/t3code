@@ -1,0 +1,7 @@
+/* Tailwind resolves `text-*` from `--text-color-*` before `--color-*`, so this
+ * re-points every `text-primary` (variants and opacity modifiers included) at
+ * the pack's `primaryText` token while `bg-primary` keeps the fill colour.
+ * Without a pack value it is exactly `--primary`. */
+@theme inline {
+  --text-color-primary: var(--t3team-primary-text, var(--primary));
+}

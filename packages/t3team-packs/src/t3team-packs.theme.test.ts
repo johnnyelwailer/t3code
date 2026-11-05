@@ -13,7 +13,10 @@ const theme = {
   id: "nexplore",
   name: "Nexplore",
   labels: { appName: "Nexi" },
-  colors: { light: { primary: "#f05a00" }, dark: { primary: "#ff6a0a" } },
+  colors: {
+    light: { primary: "#f05a00" },
+    dark: { primary: "#ff6a0a", primaryText: "#e5e0ff" },
+  },
   density: 0.96,
 };
 

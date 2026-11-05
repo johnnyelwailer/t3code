@@ -37,6 +37,8 @@ export const ThemeColorTokens = Schema.Struct({
   popoverForeground: OptionalColor,
   primary: OptionalColor,
   primaryForeground: OptionalColor,
+  /** Text in the primary colour (links, `text-primary`); defaults to `primary`. */
+  primaryText: OptionalColor,
   secondary: OptionalColor,
   secondaryForeground: OptionalColor,
   muted: OptionalColor,

@@ -156,6 +156,7 @@ describe("pack appearance", () => {
         },
         dark: {
           sidebar: "#111111",
+          primaryText: "#e5e0ff",
           sidebarHeaderBackground: "url(https://packs.example/header.png)",
         },
       },
@@ -182,6 +183,9 @@ describe("pack appearance", () => {
     expect(css).toContain(
       "--t3team-sidebar-header-background:url(https://packs.example/header.png)",
     );
+    // Primary-coloured text is independent of the button fill, per appearance.
+    expect(css).toMatch(/:root\.dark\{[^}]*--t3team-primary-text:#e5e0ff/);
+    expect(css).not.toMatch(/:root\{[^}]*--t3team-primary-text/);
   });
 
   it("swaps the favicon to the brand mark and restores it on reset", () => {
