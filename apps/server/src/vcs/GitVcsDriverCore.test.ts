@@ -209,7 +209,9 @@ it.effect("readConfigValue probes git once per key and re-probes after a write",
         .spawn(command)
         .pipe(
           Effect.tap(() =>
-            command.args[0] === "config" && command.args[1] === "--get"
+            command._tag === "StandardCommand" &&
+            command.args[0] === "config" &&
+            command.args[1] === "--get"
               ? Ref.update(configGetProbes, (count) => count + 1)
               : Effect.void,
           ),

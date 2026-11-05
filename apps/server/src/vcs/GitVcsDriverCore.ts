@@ -3772,10 +3772,8 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       input.cwd,
       ["config", input.key, input.value],
       { writesSharedConfig: true },
-    ).pipe(
-      retryWhileConfigLocked,
-      Effect.as(Cache.invalidate(configValueCache, configValueCacheKey(input.cwd, input.key))),
-    );
+    ).pipe(retryWhileConfigLocked);
+    yield* Cache.invalidate(configValueCache, configValueCacheKey(input.cwd, input.key));
   });
 
   // `git branch` writes a remote start point's upstream itself and fails outright if the
