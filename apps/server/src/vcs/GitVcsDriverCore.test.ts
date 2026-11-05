@@ -200,6 +200,43 @@ describe("Git output collection", () => {
   );
 });
 
+it.effect("readConfigValue probes git once per key and re-probes after a write", () =>
+  Effect.gen(function* () {
+    const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const configGetProbes = yield* Ref.make(0);
+    const spawner = ChildProcessSpawner.make((command) =>
+      delegate
+        .spawn(command)
+        .pipe(
+          Effect.tap(() =>
+            command.args[0] === "config" && command.args[1] === "--get"
+              ? Ref.update(configGetProbes, (count) => count + 1)
+              : Effect.void,
+          ),
+        ),
+    );
+    const driver = yield* makeGitVcsDriverCore().pipe(
+      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Effect.provide(layerServerConfig),
+    );
+    const cwd = yield* makeTmpDir();
+    yield* driver.initRepo({ cwd });
+    const key = "t3.probe.cache";
+    const value = "probe-value";
+    yield* driver.writeConfigValue({ cwd, key, value });
+    assert.equal(yield* driver.readConfigValue(cwd, key), value);
+    assert.equal(yield* driver.readConfigValue(cwd, key), value);
+    assert.equal(yield* driver.readConfigValue(cwd, "t3.probe.missing"), null);
+    assert.equal(yield* Ref.get(configGetProbes), 2);
+    yield* driver.writeConfigValue({ cwd, key: "t3.probe.missing", value: "second" });
+    assert.equal(yield* driver.readConfigValue(cwd, "t3.probe.missing"), "second");
+    assert.equal(yield* Ref.get(configGetProbes), 3);
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(layerServerConfig.pipe(Layer.provideMerge(NodeServices.layer))),
+  ),
+);
+
 const makeTmpDir = (
   prefix = "git-vcs-driver-test-",
 ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem | Scope.Scope> =>

@@ -3722,11 +3722,36 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     return { oldContents, newContents };
   });
 
+  // Polling callers (branch/base/head/upstream context) re-read the same keys dozens of times
+  // per minute; each spawn blocks the event loop. Cache briefly; misses expire sooner because a
+  // branch switch can fill a missing key within seconds.
+  const configValueCache = yield* Cache.makeWith(
+    (key: string) => {
+      const separator = key.indexOf("\u0000");
+      const cwd = key.slice(0, separator);
+      const configKey = key.slice(separator + 1);
+      return runGitStdout(
+        "GitVcsDriver.readConfigValue",
+        cwd,
+        ["config", "--get", configKey],
+        true,
+      ).pipe(
+        Effect.map((stdout) => stdout.trim()),
+        Effect.map((trimmed) => (trimmed.length > 0 ? trimmed : null)),
+      );
+    },
+    {
+      capacity: 4_096,
+      timeToLive: Exit.match({
+        onSuccess: (value) => (value === null ? Duration.seconds(2) : Duration.seconds(10)),
+        onFailure: () => Duration.zero,
+      }),
+    },
+  );
+  const configValueCacheKey = (cwd: string, key: string) =>
+    `${path.normalize(path.resolve(cwd))}\u0000${key}`;
   const readConfigValue: GitVcsDriver.GitVcsDriver["Service"]["readConfigValue"] = (cwd, key) =>
-    runGitStdout("GitVcsDriver.readConfigValue", cwd, ["config", "--get", key], true).pipe(
-      Effect.map((stdout) => stdout.trim()),
-      Effect.map((trimmed) => (trimmed.length > 0 ? trimmed : null)),
-    );
+    Cache.get(configValueCache, configValueCacheKey(cwd, key));
 
   // Git never waits for .git/config.lock, and git run outside T3, such as an agent's, can hold it.
   // Only writes that are safe to repeat retry.
@@ -3747,7 +3772,10 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       input.cwd,
       ["config", input.key, input.value],
       { writesSharedConfig: true },
-    ).pipe(retryWhileConfigLocked);
+    ).pipe(
+      retryWhileConfigLocked,
+      Effect.as(Cache.invalidate(configValueCache, configValueCacheKey(input.cwd, input.key))),
+    );
   });
 
   // `git branch` writes a remote start point's upstream itself and fails outright if the
