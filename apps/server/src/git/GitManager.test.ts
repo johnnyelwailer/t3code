@@ -266,8 +266,15 @@ function configureVisibleRemoteUrlWithLocalRewrite(
   localRemotePath: string,
 ): Effect.Effect<void, GitCommandError, GitVcsDriver.GitVcsDriver> {
   return Effect.gen(function* () {
-    yield* runGit(cwd, ["config", `remote.${remoteName}.url`, visibleUrl]);
-    yield* runGit(cwd, ["config", `url.${localRemotePath}.insteadOf`, visibleUrl]);
+    const driver = yield* GitVcsDriver.GitVcsDriver;
+    // Write through the driver: the config cache is per driver service, and a raw `git config`
+    // would leave the repointed remote visible to the next read until the TTL expires.
+    yield* driver.writeConfigValue({ cwd, key: `remote.${remoteName}.url`, value: visibleUrl });
+    yield* driver.writeConfigValue({
+      cwd,
+      key: `url.${localRemotePath}.insteadOf`,
+      value: visibleUrl,
+    });
   });
 }
 

@@ -2857,7 +2857,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         yield* git(cwd, ["commit", "-m", "feature work"]);
 
         for (const baseRef of ["upstream/main", "canonical/team/main", "release/v2"]) {
-          yield* git(cwd, ["config", "branch.feature/configured-base.gh-merge-base", baseRef]);
+          yield* driver.writeConfigValue({
+            cwd,
+            key: "branch.feature/configured-base.gh-merge-base",
+            value: baseRef,
+          });
           const status = yield* driver.statusDetailsLocal(cwd, { includeBranchChanges: true });
           assert.deepStrictEqual(status.branchChanges, { baseRef, insertions: 1, deletions: 0 });
           assert.strictEqual(status.aheadCount, 1);
@@ -2870,7 +2874,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         }
 
         for (const baseRef of ["origin/main", "upstream/missing", "main"]) {
-          yield* git(cwd, ["config", "branch.feature/configured-base.gh-merge-base", baseRef]);
+          yield* driver.writeConfigValue({
+            cwd,
+            key: "branch.feature/configured-base.gh-merge-base",
+            value: baseRef,
+          });
           const status = yield* driver.statusDetailsLocal(cwd, { includeBranchChanges: true });
           assert.deepStrictEqual(status.branchChanges, {
             baseRef: "origin/main",
@@ -2938,7 +2946,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
 
         for (const configuredBase of [undefined, "main", "release/v2"]) {
           if (configuredBase !== undefined) {
-            yield* git(cwd, ["config", "branch.feature/local-base.gh-merge-base", configuredBase]);
+            yield* driver.writeConfigValue({
+              cwd,
+              key: "branch.feature/local-base.gh-merge-base",
+              value: configuredBase,
+            });
           }
           const baseRef = configuredBase ?? "main";
           const status = yield* driver.statusDetailsLocal(cwd, { includeBranchChanges: true });
@@ -4014,7 +4026,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           ["1", "1"],
           ["", "0"],
         ] as const) {
-          yield* git(cwd, ["config", "checkout.workers", configured]);
+          yield* driver.writeConfigValue({ cwd, key: "checkout.workers", value: configured });
           const configuredPath = path.join(yield* makeTmpDir("git-worktrees-"), "configured");
           yield* driver.createWorktree({
             cwd,
