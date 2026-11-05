@@ -10,10 +10,8 @@ import * as NodeURL from "node:url";
 
 import {
   appendResolvedEntry,
-  buildJournalMaps,
   resumeWorkflow,
   startWorkflow,
-  type JournalMaps,
   type WorkflowRef,
   type WorkflowRunOptions,
 } from "@t3team/sdk";
@@ -21,10 +19,12 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import {
   CHILD_SPAWN_LAUNCH_THREAD_ID,
+  firstUnansweredTurn,
   flushRejections,
   makeChildSpawnHarness,
   makeRefusingWorkflowHost,
   MISSING_LAUNCH_CHECKOUT,
+  readRunJournal,
 } from "./t3team-workflowEngineChildSpawn.fixtures.ts";
 
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-child-refusal-"));
@@ -39,33 +39,6 @@ const fixtureRef = (name: string): WorkflowRef => ({
 
 const propagateRef = fixtureRef("t3team-childRefusalPropagate.workflow.ts");
 const caughtRef = fixtureRef("t3team-childRefusalCaught.workflow.ts");
-
-/** The run's replay maps, read from the same `<runsRoot>/<runId>/journal.jsonl` the engine uses. */
-function readRunJournal(runId: string): JournalMaps {
-  const file = NodePath.join(runsRoot, runId, "journal.jsonl");
-  const lines = NodeFS.existsSync(file)
-    ? NodeFS.readFileSync(file, "utf8")
-        .split("\n")
-        .filter((line) => line.trim().length > 0)
-    : [];
-  return buildJournalMaps(lines.map((line) => JSON.parse(line) as unknown));
-}
-
-/**
- * The lowest-seq `thread.turn` whose reply never landed. For the caught fixture that is the REFUSED
- * child's awaited half: its create was refused, so the turn fired, threw, and left a `sent` line
- * with no `resolved` partner — the exact journal shape replay has to make sense of.
- */
-function firstUnansweredTurn(journal: JournalMaps): string {
-  const open = [...journal.bySeq.values()]
-    .filter((entry) => entry.kind === "thread.turn" && entry.phase === "sent")
-    .sort((left, right) => left.seq - right.seq)
-    .find((entry) => !journal.byCorrelation.has(entry.correlationId ?? ""));
-  if (open?.correlationId === undefined) {
-    throw new Error("expected an unanswered thread.turn in the journal");
-  }
-  return open.correlationId;
-}
 
 /** Collect unhandled rejections for the duration of `run`. */
 async function withoutUnhandledRejection<T>(
@@ -178,7 +151,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     if (!("suspended" in parked)) throw new Error("expected the live run to park");
     const survivingTurn = parked.correlationId;
     // Two distinct asks are open: the refused child's turn (lower seq) and the surviving one.
-    const refusedTurn = firstUnansweredTurn(readRunJournal(runId));
+    const refusedTurn = firstUnansweredTurn(readRunJournal(runsRoot, runId));
     expect(refusedTurn).not.toBe(survivingTurn);
 
     // Deliver the surviving child's answer through the SUPPORTED resume path — the same
@@ -205,7 +178,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     expect(again.correlationId).toBe(refusedTurn);
 
     // The delivered reply is still journaled, and still unconsumed by the body.
-    expect(readRunJournal(runId).byCorrelation.get(survivingTurn)?.reply).toBe(answer);
+    expect(readRunJournal(runsRoot, runId).byCorrelation.get(survivingTurn)?.reply).toBe(answer);
 
     // Replay re-fires nothing: the host saw exactly the live run's two creates and one turn, and no
     // phantom child appeared for the refused one.
@@ -244,7 +217,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     expect("suspended" in parked).toBe(true);
     if (!("suspended" in parked)) throw new Error("expected the live run to park");
     const survivingTurn = parked.correlationId;
-    const refusedTurn = firstUnansweredTurn(readRunJournal(runId));
+    const refusedTurn = firstUnansweredTurn(readRunJournal(runsRoot, runId));
     // A stale pending ask for the REFUSED child is already on the registry before any resume.
     const pendingAfterLive = [...registry.pendingThreadIds()];
     expect(
@@ -267,7 +240,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     // Pre-fire intent semantics survive the re-send: `refireRecorded` journals NOTHING, so the run
     // still has exactly its four original `sent` lines — no second intent line for the re-sent ask —
     // and the refused turn still has no `resolved` partner of its own.
-    const journal = readRunJournal(runId);
+    const journal = readRunJournal(runsRoot, runId);
     expect(journal.bySeq.size).toBe(4);
     expect(journal.byCorrelation.get(refusedTurn)).toBeUndefined();
     expect([...journal.byCorrelation.keys()]).toEqual([survivingTurn]);
@@ -305,7 +278,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     expect("suspended" in parked).toBe(true);
     if (!("suspended" in parked)) throw new Error("expected the live run to park");
     const survivingTurn = parked.correlationId;
-    const refusedTurn = firstUnansweredTurn(readRunJournal(runId));
+    const refusedTurn = firstUnansweredTurn(readRunJournal(runsRoot, runId));
     const answered = await appendResolvedEntry({
       runsRoot,
       runId,
@@ -337,7 +310,7 @@ describe("a child the host refuses, through the durable engine and the real brok
     expect(restarted.spawnPips()).toEqual([]);
     // Intent count is stable — the re-fire journaled nothing — so the turn stays unanswered and any
     // later restart repeats the same dispatch; the answer stays durably out of reach.
-    const journal = readRunJournal(runId);
+    const journal = readRunJournal(runsRoot, runId);
     expect(journal.bySeq.size).toBe(4);
     expect([...journal.byCorrelation.keys()]).toEqual([survivingTurn]);
     // The catch now sees the suspension signal, not the refusal: the reason did not survive.
