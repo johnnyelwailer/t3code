@@ -2548,11 +2548,19 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
         const forkRemote = yield* createBareRemote();
         yield* runGit(repoDir, ["remote", "add", "fork", forkRemote]);
         yield* runGit(repoDir, ["push", "fork", "feature/pr-retarget"]);
-        yield* runGit(repoDir, [
-          "branch",
-          "--set-upstream-to=fork/feature/pr-retarget",
-          "feature/pr-retarget",
-        ]);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        // Retarget through the driver: raw `git branch --set-upstream-to` would leave the
+        // cached branch.<name>.remote value until its TTL expires.
+        yield* driver.writeConfigValue({
+          cwd: repoDir,
+          key: "branch.feature/pr-retarget.remote",
+          value: "fork",
+        });
+        yield* driver.writeConfigValue({
+          cwd: repoDir,
+          key: "branch.feature/pr-retarget.merge",
+          value: "refs/heads/feature/pr-retarget",
+        });
 
         yield* manager.invalidateStatus(repoDir);
         const second = yield* manager.status({ cwd: repoDir });

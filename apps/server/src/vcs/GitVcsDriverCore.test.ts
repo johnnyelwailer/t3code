@@ -2888,11 +2888,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           assert.strictEqual(status.aheadCount, 2);
         }
 
-        yield* git(cwd, [
-          "config",
-          "branch.feature/configured-base.gh-merge-base",
-          "refs/remotes/upstream/main",
-        ]);
+        yield* driver.writeConfigValue({
+          cwd,
+          key: "branch.feature/configured-base.gh-merge-base",
+          value: "refs/remotes/upstream/main",
+        });
         yield* writeTextFile(cwd, "upstream.txt", "feature edits upstream file\n");
         for (const shadowRef of ["refs/heads/upstream/main", "refs/tags/upstream/main"]) {
           yield* git(cwd, ["update-ref", shadowRef, "HEAD~2"]);
