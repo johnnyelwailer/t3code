@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 /**
- * `surface.companion` end to end against the app registry: with nothing registered every
- * placement shows the surface's own fallback; a pack fills only the placements it lists; the first
- * registration of a placement wins; a companion that throws gives the fallback back; companions
- * switched off show the fallback, and they are off until the viewer turns them on. The registry is
- * one per page, so the empty tests run first.
+ * `surface.companion` against the app registry: fallback without a pack, first registration wins,
+ * a throwing companion gives the fallback back, and companions stay off until the viewer turns them
+ * on. The registry is one per page, so the empty tests run first.
  */
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
