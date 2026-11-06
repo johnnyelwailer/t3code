@@ -14,7 +14,7 @@ import { useFaceTransition } from "./surface/t3team-useFaceTransition";
 import { VOICE_CLASS } from "./surface/t3team-voiceClasses";
 import { voiceUiIsLive } from "./surface/t3team-voiceUiModel";
 import { useVoiceUiStore } from "./surface/t3team-voiceUiStore";
-import { voiceCompanionMood, voiceCompanionPreferences } from "./t3team-voiceCompanion";
+import { voiceCompanionMood, voiceCompanionPreferences } from "./t3team-voiceOutput";
 import { FrozenVoiceViewProvider, type VoiceUiView } from "./surface/t3team-voiceView";
 import "~/t3team/voice/surface/t3team-voice.css";
 

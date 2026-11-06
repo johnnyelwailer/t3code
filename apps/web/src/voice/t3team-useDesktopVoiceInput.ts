@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   VoiceInputController,
-  createDesktopVoiceTranscriber,
   type DesktopVoiceBridge,
   type VoiceInputState,
 } from "@t3tools/client-runtime/voice-input";
 import type { DesktopVoiceConfig, VoiceTranscriptMetadata } from "@t3tools/contracts";
 
 import { usePrimarySettings } from "~/hooks/useSettings";
+import { createDesktopWhisperDictationEngine } from "~/t3team/voice/t3team-dictationEngine";
 import { MediaVoiceRecorder, requestMicrophonePermission } from "./t3team-mediaVoiceRecorder";
-import { decodeRecordingToPcm16Base64 } from "./t3team-recordingToPcm";
 import { createVoicePcmTap, type VoicePcmTap, type VoiceStreamBridge } from "./t3team-voicePcmTap";
 import { useVoiceModelProgressPercent } from "./t3team-useVoiceModelProgress";
 import { useVoiceSessionOwnership } from "./t3team-useVoiceSessionOwnership";
@@ -42,12 +41,15 @@ function createController(input: {
   readonly hasCommittedSpeech: () => boolean;
   readonly onStateChange: (state: VoiceInputState) => void;
 }): VoiceInputController {
-  const transcriber = createDesktopVoiceTranscriber({
+  // The dictation engine is the seam the controller's transcriber comes from; today it is the
+  // desktop whisper host. A second engine (the environment speech service) is selected here and
+  // nothing else learns the switch.
+  const engine = createDesktopWhisperDictationEngine({
     bridge: input.bridge,
     getConfig: input.getConfig,
-    decodeRecording: decodeRecordingToPcm16Base64,
-    finishLiveSession: () => input.tap?.finish() ?? Promise.resolve(null),
+    tap: input.tap,
   });
+  const transcriber = engine.transcriber;
   const recorder: MediaVoiceRecorder = new MediaVoiceRecorder((url) => {
     void controller.handleRecorderStatus({ isFinished: true, hasError: false, error: null, url });
   }, input.tap);
