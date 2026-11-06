@@ -153,6 +153,7 @@ describe("pack appearance", () => {
           sidebar: "#fafafa",
           sidebarRowHover: "#eeeeee",
           success: "#0a7f2e",
+          cardForeground: "#1c1772",
           sidebarHeaderBackground: "linear-gradient(90deg, #f05a00, #ff8a3d)",
         },
         dark: {
@@ -175,10 +176,14 @@ describe("pack appearance", () => {
     const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
     expect(css).not.toContain("--sidebar:");
     expect(css).toContain("--success:#0a7f2e");
-    // Colors are scoped to the pack's own theme: a user-chosen theme stays untouched, and the
-    // attribute selector matches the theme block's (0,1,1) so derived tokens still win by order.
+    // Colors are scoped to the pack's own theme: a user-chosen theme stays untouched.
     expect(css).toContain('html[data-theme-id="t3team-pack-nexplore"]{');
     expect(css).not.toContain("html[data-theme-id]{");
+    // Derived overrides must reach upstream's (0,2,1) theme block in light as well as dark.
+    expect(css).toMatch(
+      /html:not\(\.dark\)\[data-theme-id="t3team-pack-nexplore"\]\{[^}]*--card-foreground/,
+    );
+    expect(css).not.toMatch(/html\[data-theme-id="t3team-pack-nexplore"\]\{[^}]*--card-foreground/);
     expect(css).not.toMatch(/:root\{[^}]*--(?:success|card-foreground|t3team-primary-text)/);
     expect(css).toContain(
       "--t3team-sidebar-header-background:linear-gradient(90deg, #f05a00, #ff8a3d)",
@@ -195,7 +200,7 @@ describe("pack appearance", () => {
       'html.dark[data-theme-id="t3team-pack-nexplore"] [data-composer-send-button]:enabled{' +
         "background-image:linear-gradient(135deg, #4c3cf6 45%, #f05a0a 140%);box-shadow:0 4px 14px rgba(76,60,246,.4)}",
     );
-    expect(css).not.toContain("html:not(.dark)[data-theme-id");
+    expect(css).not.toMatch(/html:not\(\.dark\)\[[^\]]*\] \[data-composer-send-button\]/);
 
     // A user who picks another theme gets that theme whole: no pack colour rule matches.
     const root = document.documentElement;

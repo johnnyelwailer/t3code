@@ -74,13 +74,14 @@ function themeCss(appearance: EnvironmentAppearance): string {
   const lightOverride = overrideDeclarations(appearance.colors.light);
   const darkOverride = overrideDeclarations(appearance.colors.dark);
   // Colors apply only while the pack's own theme is selected: a user who picks another theme in
-  // Settings → Appearance gets that theme whole, not a pack colour layered on top of it. The
-  // attribute selector also matches the theme block's specificity, so derived tokens win by order.
-  const theme = `[data-theme-id="${t3teamPackThemeId(appearance.themeId)}"]`;
-  const lightColors = [light, lightOverride].filter(Boolean).join(";");
+  // Settings → Appearance gets that theme whole, not a pack colour layered on top of it.
+  // Upstream's theme block is `html[data-theme-id]:not([data-theme-id=""])`, (0,2,1). Derived
+  // overrides match that with `html:not(.dark)[…]` / `html.dark[…]` and win by document order.
+  const theme = `[data-theme-id="${t3teamPackThemeId(appearance.themeId).replace(/["\\]/g, "\\$&")}"]`;
   const darkColors = [dark, darkOverride].filter(Boolean).join(";");
   return `:root{${sans}${mono}${display}${radius}}
-    html${theme}{${lightColors}}
+    html${theme}{${light}}
+    html:not(.dark)${theme}{${lightOverride}}
     html.dark${theme}{${darkColors}}
     ${packPrimaryActionCss(appearance.colors, theme)}
     ${displayFontCss(appearance)}`;
