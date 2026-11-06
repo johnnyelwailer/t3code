@@ -4,6 +4,7 @@
  * Bitbucket-shaped one that cannot read files. The reader is provider-neutral, so every file case
  * runs once per provider that can read.
  */
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
 import {
   CHANGE_REQUEST_FILE_MAX_BYTES,
@@ -13,7 +14,6 @@ import {
   ChangeRequestUnsupportedError,
 } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 
 import {
   BASE,
@@ -78,7 +78,7 @@ it.effect.each(providers)(
           .map((call) => call.revision),
         [HEAD, BASE],
       );
-    }),
+    }).pipe(Effect.provide(NodeCrypto.layer)),
 );
 
 it.effect.each(providers)("$name: fileAt types binary and missing files", (provider) =>
@@ -92,7 +92,7 @@ it.effect.each(providers)("$name: fileAt types binary and missing files", (provi
       cr.fileAt({ ref: provider.ref, path: "nope/missing.ts", side: "head" }),
     );
     assert.deepStrictEqual(missing, { kind: "missing", path: "nope/missing.ts", sha: HEAD });
-  }),
+  }).pipe(Effect.provide(NodeCrypto.layer)),
 );
 
 it.effect.each(providers)(
@@ -116,7 +116,7 @@ it.effect.each(providers)(
         );
         assert.deepStrictEqual(providerCalls, [], `provider asked for path '${path}'`);
       }
-    }),
+    }).pipe(Effect.provide(NodeCrypto.layer)),
 );
 
 it.effect.each(providers)(
@@ -145,10 +145,10 @@ it.effect.each(providers)(
         ],
         [0],
       );
-    }),
+    }).pipe(Effect.provide(NodeCrypto.layer)),
 );
 
-it.layer(Layer.empty)("fileAt shaping and bounds", (it) => {
+it.layer(NodeCrypto.layer)("fileAt shaping and bounds", (it) => {
   const github1 = { repository: "acme/app", number: 1 };
   it.effect("an explicit sha reads that commit, and exactly one of side or sha is required", () =>
     Effect.gen(function* () {

@@ -1,7 +1,8 @@
 import type { AccountStatus } from "@t3tools/contracts";
 import type { AccountDefinition } from "@t3team/pack-api";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as HttpClient from "effect/http/HttpClient";
@@ -39,7 +40,8 @@ const make = Effect.fn("account.accounts.make")(function* (
     secrets: yield* ServerSecretStore.ServerSecretStore,
     http: yield* HttpClient.HttpClient,
     launcher: yield* ExternalLauncher.ExternalLauncher,
-    crypto: yield* Crypto.Crypto,
+    random: yield* SecureRandom.SecureRandom,
+    digest: yield* Digest.Digest,
   };
   const sessions = new Map<string, AccountSession>();
   // Read when the layer builds, not when this module loads: the distribution activates first.

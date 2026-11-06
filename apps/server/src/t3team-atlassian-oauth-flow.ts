@@ -1,6 +1,6 @@
 import { buildAuthorizeUrl, generatePkce } from "@t3tools/integrations-atlassian";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 
 import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
@@ -33,11 +33,13 @@ export type AtlassianOAuthBeginResult = {
  * finish this sign-in, so it has to be unguessable rather than merely unique — a UUID would do, but
  * nothing derived from time or a counter would.
  */
-const newFlowState: Effect.Effect<string, never, Crypto.Crypto> = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const bytes = yield* crypto.randomBytes(16).pipe(Effect.orDie);
-  return Buffer.from(bytes).toString("hex");
-});
+const newFlowState: Effect.Effect<string, never, SecureRandom.SecureRandom> = Effect.gen(
+  function* () {
+    const random = yield* SecureRandom.SecureRandom;
+    const bytes = yield* random.randomBytes(16);
+    return Buffer.from(bytes).toString("hex");
+  },
+);
 
 function requiredClientId(): string {
   const clientId = readAtlassianOAuthClientId();

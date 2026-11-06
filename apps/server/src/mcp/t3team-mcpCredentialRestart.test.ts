@@ -9,6 +9,7 @@
  *
  * Every clock here is injected — no real sleeps.
  */
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
@@ -33,6 +34,7 @@ const infrastructure = Layer.mergeAll(
   Layer.succeed(HttpServer.HttpServer, fakeHttpServer),
   Layer.succeed(ServerEnvironment.ServerEnvironment, fakeEnvironment),
   NodeServices.layer,
+  NodeCrypto.layer,
 );
 
 const LIVENESS_WINDOW_MS = 100;

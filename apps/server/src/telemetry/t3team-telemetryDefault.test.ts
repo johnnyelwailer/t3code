@@ -1,4 +1,5 @@
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -56,7 +57,7 @@ const requestsSentUnder = (env: Record<string, unknown>) =>
     return capturedPaths;
   });
 
-it.layer(NodeServices.layer)("telemetry default", (it) => {
+it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("telemetry default", (it) => {
   it.effect("usage telemetry is off when nothing is configured", () =>
     Effect.gen(function* () {
       assert.equal(yield* resolveEnabled({}), false);

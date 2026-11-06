@@ -69,7 +69,7 @@ export const WorkItemDragOver: Story = {
   render: () => <RowWithWorkItemSource />,
   play: ({ canvasElement }) => {
     const source = canvasElement.querySelector<HTMLElement>('[data-testid="work-item-source"]');
-    const row = canvasElement.querySelector<HTMLElement>('[role="treeitem"]');
+    const row = canvasElement.querySelector<HTMLElement>('[data-thread-item] [role="button"]');
     if (!source || !row) throw new Error("work item source or thread row did not render");
     const dataTransfer = new DataTransfer();
     const dragEvent = (type: string) =>
@@ -99,7 +99,7 @@ export const WorkItemDragOverOtherProject: Story = {
 export const ThreadContextDragOver: Story = {
   render: () => <ThreadRowHarness row={makeThreadRowProps()} />,
   play: ({ canvasElement }) => {
-    const row = canvasElement.querySelector<HTMLElement>('[role="treeitem"]');
+    const row = canvasElement.querySelector<HTMLElement>('[data-thread-item] [role="button"]');
     if (!row) throw new Error("thread row did not render");
     const bounds = row.getBoundingClientRect();
     moveThreadContextDrag(

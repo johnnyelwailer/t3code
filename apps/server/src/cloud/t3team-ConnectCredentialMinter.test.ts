@@ -1,4 +1,5 @@
 import { readConnectAuthorizeRequest } from "@t3tools/shared/connectAuth";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
@@ -121,14 +122,14 @@ const makeMinterLayer = (
   const http = makeTokenEndpointLayer(requests);
   const secretsLayer = ServerSecretStore.layer.pipe(
     Layer.provide(configLayer),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
   const launcherMock = Layer.succeed(ExternalLauncher.ExternalLauncher, { launchBrowser } as never);
   const cliLayer = CliTokenManager.layer.pipe(
     Layer.provide(secretsLayer),
     Layer.provide(http),
     Layer.provide(launcherMock),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
     Layer.provide(config),
   );
   const minterLayer = Layer.effect(
@@ -137,7 +138,7 @@ const makeMinterLayer = (
   ).pipe(
     Layer.provide(cliLayer),
     Layer.provide(launcherMock),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
     Layer.provide(http),
     Layer.provide(config),
   );
@@ -145,7 +146,14 @@ const makeMinterLayer = (
   // provide), so the merge is a plain service union exposing the minter,
   // the CLI manager, the secret store, the state dir, and the disk —
   // everything the assertions inspect directly.
-  return Layer.mergeAll(minterLayer, cliLayer, secretsLayer, configLayer, NodeServices.layer);
+  return Layer.mergeAll(
+    minterLayer,
+    cliLayer,
+    secretsLayer,
+    configLayer,
+    NodeServices.layer,
+    NodeCrypto.layer,
+  );
 };
 
 /** Simulates the hosted /connect page: it redirects the code to the loopback listener. */
@@ -392,7 +400,7 @@ describe("ConnectCredentialMinter", () => {
         Effect.provide(
           ServerSecretStore.layer.pipe(
             Layer.provide(configLayer),
-            Layer.provide(NodeServices.layer),
+            Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
           ),
         ),
       );

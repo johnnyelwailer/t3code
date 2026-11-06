@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
@@ -141,6 +142,7 @@ const makeDependencies = (
   let delegated = options.alreadyDelegated === true;
   return Layer.mergeAll(
     NodeServices.layer,
+    NodeCrypto.layer,
     ServerSettings.layerTest(),
     Layer.mock(ThreadManagementService.ThreadManagementService)({
       hasReceipt: () => Effect.sync(() => delegated),

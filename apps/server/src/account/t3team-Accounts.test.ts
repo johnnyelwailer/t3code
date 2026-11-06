@@ -1,4 +1,5 @@
 // @effect-diagnostics preferSchemaOverJson:off - the fake issuer writes raw JSON bodies, as a real one does.
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
@@ -126,7 +127,7 @@ const acme = Effect.gen(function* () {
   };
 });
 
-it.layer(NodeServices.layer)("Accounts", (it) => {
+it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("Accounts", (it) => {
   it.effect("an account the build does not define says so instead of asking for a sign-in", () =>
     Effect.gen(function* () {
       const accounts = yield* Accounts;

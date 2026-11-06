@@ -4,6 +4,7 @@
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -154,7 +155,7 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver.layer).pi
         }),
     }),
   ),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 it.effect("captureCheckpoint skips an unindexable reserved-name file instead of failing", () => {
@@ -256,7 +257,7 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDr
         }),
     }),
   ),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 it.effect(
@@ -407,7 +408,7 @@ const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver
       },
     }),
   ),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 // `it.live` (real clock) so the 5s backoff between capture attempts actually

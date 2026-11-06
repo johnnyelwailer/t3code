@@ -168,10 +168,11 @@ it.effect(
           version: "1.0.0",
           path: "/mcp",
           protocols: [T3_MCP_PROTOCOL],
+          registrations: T3TeamToolkitRegistrationLive.pipe(
+            Layer.provide(t3TeamRegistrationServices),
+          ),
         }).pipe(Layer.provide(AuthLive));
-        const serverLayer = T3TeamToolkitRegistrationLive.pipe(
-          Layer.provide(t3TeamRegistrationServices),
-          Layer.provideMerge(transport),
+        const serverLayer = transport.pipe(
           Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
         );
         yield* HttpRouter.serve(serverLayer, { disableListenLog: true, disableLogger: true }).pipe(

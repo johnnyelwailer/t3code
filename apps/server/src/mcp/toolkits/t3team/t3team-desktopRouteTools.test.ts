@@ -20,7 +20,7 @@ import { McpSchema, McpServer } from "effect/ai";
 import { ServerConfig } from "../../../config.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
-import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
+import { T3TeamToolkitRegistrationLive, layerInProcessMcpServer } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { withFeatureGatedToolList } from "./t3team-mcpToolFeatureGate.ts";
 import {
@@ -96,7 +96,7 @@ const callTool = (
   );
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provide(services),
-    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(layerInProcessMcpServer),
     Layer.provideMerge(
       Layer.succeed(
         T3TeamToolBroker,

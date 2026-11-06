@@ -2,6 +2,7 @@
 import * as NodeChildProcess from "node:child_process";
 import * as NodePath from "node:path";
 
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import {
@@ -28,7 +29,7 @@ import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 const layerGit = GitVcsDriver.layer.pipe(
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3team-cr-publish-test-" })),
   Layer.provideMerge(VcsProcess.layer),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 const git = (cwd: string, args: ReadonlyArray<string>) =>
