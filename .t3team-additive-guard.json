@@ -821,7 +821,8 @@
     "apps/web/src/components/pullRequest/PullRequestsPage.tsx",
     "apps/mobile/src/features/home/HomeRouteScreen.tsx",
     "apps/mobile/src/features/threads/ThreadNavigationSidebar.tsx",
-    "apps/mobile/src/features/pull-requests/PullRequestListFilters.tsx"
+    "apps/mobile/src/features/pull-requests/PullRequestListFilters.tsx",
+    "apps/web/src/components/settings/LabsSettingsPanel.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
