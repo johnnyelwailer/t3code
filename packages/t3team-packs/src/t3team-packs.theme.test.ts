@@ -15,7 +15,12 @@ const theme = {
   labels: { appName: "Nexi" },
   colors: {
     light: { primary: "#f05a00" },
-    dark: { primary: "#ff6a0a", primaryText: "#e5e0ff" },
+    dark: {
+      primary: "#ff6a0a",
+      primaryText: "#e5e0ff",
+      primaryActionBackground: "linear-gradient(135deg, #4c3cf6 0%, #f05a0a 140%)",
+      primaryActionShadow: "0 4px 14px rgba(76,60,246,.4), inset 0 1px 0 rgba(255,255,255,.3)",
+    },
   },
   density: 0.96,
 };
@@ -30,6 +35,12 @@ describe("theme definition", () => {
       decodeThemeDefinition({
         ...theme,
         colors: { ...theme.colors, light: { primary: "red;display:none" } },
+      }),
+    ).toThrow();
+    expect(() =>
+      decodeThemeDefinition({
+        ...theme,
+        colors: { ...theme.colors, light: { primaryActionBackground: "red}body{display:none" } },
       }),
     ).toThrow();
     expect(() => decodeThemeDefinition({ ...theme, density: 2 })).toThrow();

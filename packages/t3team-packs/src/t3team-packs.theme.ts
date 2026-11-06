@@ -5,6 +5,8 @@ const CssColor = Schema.String.check(
   Schema.isPattern(/^(?:#[0-9a-fA-F]{3,8}|(?:oklch|rgb|rgba|hsl|hsla)\([^;{}]+\))$/),
 );
 const FontStack = Schema.String.check(Schema.isPattern(/^[^;{}]+$/));
+/** A raw CSS value (gradient, shadow list) emitted into one declaration, so it may not end it. */
+const CssDeclarationValue = Schema.String.check(Schema.isPattern(/^[^;{}<>\\]+$/));
 
 const BrandAsset = Schema.String.check(
   Schema.isPattern(
@@ -39,6 +41,10 @@ export const ThemeColorTokens = Schema.Struct({
   primaryForeground: OptionalColor,
   /** Text in the primary colour (links, `text-primary`); defaults to `primary`. */
   primaryText: OptionalColor,
+  /** Composer send button background while enabled, e.g. a gradient; unset keeps `primary`. */
+  primaryActionBackground: Schema.optionalKey(CssDeclarationValue),
+  /** Composer send button `box-shadow` while enabled; used only with `primaryActionBackground`. */
+  primaryActionShadow: Schema.optionalKey(CssDeclarationValue),
   secondary: OptionalColor,
   secondaryForeground: OptionalColor,
   muted: OptionalColor,

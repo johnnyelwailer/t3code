@@ -45,6 +45,7 @@ describe("pack appearance", () => {
     // The whole point of the unification: colors upstream owns are NOT painted here any more.
     // `primary` now reaches the app as the theme library's `messageAction` role.
     expect(css).not.toContain("--primary:");
+    expect(css).not.toContain("data-composer-send-button");
     expect(document.documentElement.dataset.themeId).toBe(t3teamPackThemeId("nexplore"));
     const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
     expect(installed?.variants?.light?.messageAction).toBe(toCanonicalThemeColor("#f05a00"));
@@ -157,6 +158,8 @@ describe("pack appearance", () => {
         dark: {
           sidebar: "#111111",
           primaryText: "#e5e0ff",
+          primaryActionBackground: "linear-gradient(135deg, #4c3cf6 45%, #f05a0a 140%)",
+          primaryActionShadow: "0 4px 14px rgba(76,60,246,.4)",
           sidebarHeaderBackground: "url(https://packs.example/header.png)",
         },
       },
@@ -186,6 +189,11 @@ describe("pack appearance", () => {
     // Primary-coloured text is independent of the button fill, per appearance.
     expect(css).toMatch(/:root\.dark\{[^}]*--t3team-primary-text:#e5e0ff/);
     expect(css).not.toMatch(/:root\{[^}]*--t3team-primary-text/);
+    // The send-button rule exists only for the appearance that sets it, and only while enabled.
+    expect(css).toContain(
+      "html.dark[data-theme-id] [data-composer-send-button]:enabled{background-image:linear-gradient(135deg, #4c3cf6 45%, #f05a0a 140%);box-shadow:0 4px 14px rgba(76,60,246,.4)}",
+    );
+    expect(css).not.toContain("html:not(.dark)[data-theme-id] [data-composer-send-button]");
   });
 
   it("swaps the favicon to the brand mark and restores it on reset", () => {
