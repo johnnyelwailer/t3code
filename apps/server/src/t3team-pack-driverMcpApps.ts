@@ -71,9 +71,13 @@ export const makePackMcpApps = (
     packCall((cause) => new ProviderAdapterProtocolError({ driver, detail, payload: cause }));
   return {
     listTools: ({ providerThread, server }) =>
-      bridge("Pack MCP tool listing failed.").call(() =>
-        mcpApps.listTools({ providerThreadId: providerThread.id, server }),
-      ),
+      bridge("Pack MCP tool listing failed.")
+        .call(() => mcpApps.listTools({ providerThreadId: providerThread.id, server }))
+        .pipe(
+          Effect.map((tools) =>
+            tools.map((tool) => ({ ...tool, inputSchema: tool.inputSchema ?? { type: "object" } })),
+          ),
+        ),
     callTool: ({ providerThread, server, tool, arguments: args }) =>
       bridge("Pack MCP tool call failed.").call(() =>
         mcpApps.callTool({ providerThreadId: providerThread.id, server, tool, arguments: args }),
