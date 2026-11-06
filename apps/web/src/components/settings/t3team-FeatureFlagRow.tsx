@@ -3,13 +3,19 @@ import type { FeatureFlagView } from "@t3tools/contracts";
 import { Badge } from "../ui/badge";
 import { Switch } from "../ui/switch";
 import { SettingResetButton } from "./settingsLayout";
-import { featureFlagLockReason, featureFlagSourceChip } from "./t3team-featureFlagsSettings.logic";
+import {
+  featureFlagFreshness,
+  featureFlagLockReason,
+  featureFlagSourceChip,
+} from "./t3team-featureFlagsSettings.logic";
 
 export interface FeatureFlagRowProps {
   /** Already carries an optimistic value while a request is in flight. */
   readonly flag: FeatureFlagView;
   readonly preset: string | undefined;
   readonly canEdit: boolean;
+  /** Decides which flags still count as New. */
+  readonly now: Date;
   readonly busy: boolean;
   readonly error: string | undefined;
   readonly onSetEnabled: (key: string, enabled: boolean) => void;
@@ -22,6 +28,7 @@ export function FeatureFlagRow({
   flag,
   preset,
   canEdit,
+  now,
   busy,
   error,
   onSetEnabled,
@@ -29,6 +36,7 @@ export function FeatureFlagRow({
 }: FeatureFlagRowProps) {
   const chip = featureFlagSourceChip(flag, preset);
   const lockReason = featureFlagLockReason(flag, canEdit);
+  const freshness = featureFlagFreshness(flag, now);
   const descriptionId = `feature-flag-${flag.key}-description`;
 
   return (
@@ -41,6 +49,11 @@ export function FeatureFlagRow({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 flex-wrap items-center gap-1.5">
             <h3 className="text-sm font-medium text-foreground">{flag.label}</h3>
+            {freshness.isNew ? (
+              <Badge variant="info" size="sm">
+                New
+              </Badge>
+            ) : null}
             {flag.scope === "pack" ? (
               <Badge variant="outline" size="sm">
                 Pack
@@ -72,6 +85,7 @@ export function FeatureFlagRow({
                 Restart needed
               </Badge>
             ) : null}
+            <span className="text-xs text-muted-foreground">{freshness.label}</span>
             {lockReason === null ? null : (
               <span className="text-xs text-muted-foreground">{lockReason}</span>
             )}
