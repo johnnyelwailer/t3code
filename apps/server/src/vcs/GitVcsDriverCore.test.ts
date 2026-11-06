@@ -239,6 +239,59 @@ it.effect("readConfigValue probes git once per key and re-probes after a write",
   ),
 );
 
+it.effect(
+  "a config-mutating driver command leaves no stale value for the next readConfigValue",
+  () =>
+    Effect.gen(function* () {
+      const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const configGetProbes = yield* Ref.make(0);
+      const spawner = ChildProcessSpawner.make((command) =>
+        delegate
+          .spawn(command)
+          .pipe(
+            Effect.tap(() =>
+              command._tag === "StandardCommand" &&
+              command.args[0] === "config" &&
+              command.args[1] === "--get"
+                ? Ref.update(configGetProbes, (count) => count + 1)
+                : Effect.void,
+            ),
+          ),
+      );
+      const driver = yield* makeGitVcsDriverCore().pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.provide(layerServerConfig),
+      );
+      const run = (cwd: string, args: readonly string[]) =>
+        driver.execute({ operation: "test.git", cwd, args, timeoutMs: 10_000 });
+      const cwd = yield* makeTmpDir();
+      yield* driver.initRepo({ cwd });
+      yield* run(cwd, ["branch", "-M", "main"]);
+      const remote = yield* makeTmpDir();
+      yield* run(remote, ["init", "--bare"]);
+      yield* run(cwd, ["remote", "add", "origin", remote]);
+      // Warm the cache: the branch has no upstream yet.
+      assert.equal(yield* driver.readConfigValue(cwd, "branch.main.remote"), null);
+      const warmedProbes = yield* Ref.get(configGetProbes);
+      yield* driver.setBranchUpstream({
+        cwd,
+        branch: "main",
+        remoteName: "origin",
+        remoteBranch: "main",
+      });
+      // No waiting: the mutation invalidated the cache, so the next read probes git again.
+      assert.equal(yield* driver.readConfigValue(cwd, "branch.main.remote"), "origin");
+      assert.equal(yield* driver.readConfigValue(cwd, "branch.main.merge"), "refs/heads/main");
+      assert.ok(
+        (yield* Ref.get(configGetProbes)) > warmedProbes,
+        "the post-mutation read probes git again",
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(layerServerConfig.pipe(Layer.provideMerge(NodeServices.layer))),
+    ),
+);
+
 const makeTmpDir = (
   prefix = "git-vcs-driver-test-",
 ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem | Scope.Scope> =>

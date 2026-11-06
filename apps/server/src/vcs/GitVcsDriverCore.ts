@@ -1155,8 +1155,18 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         },
       }),
       // Outside the process permit: resolving the repository may itself need one.
-      (execution) =>
-        input.writesSharedConfig ? withSharedConfigLock(input.cwd, execution) : execution,
+      (execution) => {
+        const guarded = input.writesSharedConfig
+          ? withSharedConfigLock(input.cwd, execution)
+          : execution;
+        // Config-mutating commands invalidate the config cache after they run, so the next
+        // readConfigValue is fresh instead of the value held by the hit TTL.
+        return input.writesSharedConfig
+          ? guarded.pipe(
+              Effect.flatMap((result) => invalidateConfigCacheValues().pipe(Effect.as(result))),
+            )
+          : guarded;
+      },
     );
 
   const executeGit = (
@@ -2814,7 +2824,11 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       };
     }
 
-    yield* runGit("GitVcsDriver.pushCurrentBranch.push", cwd, ["push"], { timeoutMs: null });
+    yield* runGit("GitVcsDriver.pushCurrentBranch.push", cwd, ["push"], {
+      timeoutMs: null,
+      // Without a refspec, push.autoSetupRemote records the branch's upstream in the shared config.
+      writesSharedConfig: true,
+    });
     return {
       status: "pushed" as const,
       branch,
@@ -3753,6 +3767,11 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const readConfigValue: GitVcsDriver.GitVcsDriver["Service"]["readConfigValue"] = (cwd, key) =>
     Cache.get(configValueCache, configValueCacheKey(cwd, key));
 
+  // Untracked on purpose: it runs inside the mutation command's own span (remote add, branch
+  // --set-upstream-to, branch -m, push, config) and clears every key, not just the one written,
+  // because one command can rewrite several keys (e.g. branch -m).
+  const invalidateConfigCacheValues = () => Cache.invalidateAll(configValueCache);
+
   // Git never waits for .git/config.lock, and git run outside T3, such as an agent's, can hold it.
   // Only writes that are safe to repeat retry.
   const retryWhileConfigLocked = <A>(effect: Effect.Effect<A, GitCommandError>) =>
@@ -3767,13 +3786,13 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const writeConfigValue: GitVcsDriver.GitVcsDriver["Service"]["writeConfigValue"] = Effect.fn(
     "writeConfigValue",
   )(function* (input) {
+    // The shared runner invalidates the config cache for every writesSharedConfig command.
     yield* executeGitWithStableDiagnostics(
       "GitVcsDriver.writeConfigValue",
       input.cwd,
       ["config", input.key, input.value],
       { writesSharedConfig: true },
     ).pipe(retryWhileConfigLocked);
-    yield* Cache.invalidate(configValueCache, configValueCacheKey(input.cwd, input.key));
   });
 
   // `git branch` writes a remote start point's upstream itself and fails outright if the
