@@ -39,7 +39,7 @@ export function T3TeamProjectSetupSetting() {
         <div className={`space-y-1 ${workProfileChooserEnabled ? "border-t pt-4" : ""}`}>
           <h4 className="text-sm font-medium">Initial setup wizard</h4>
           <p className="text-xs text-muted-foreground">
-            Reopen the first-run welcome flow before stepping through guided Jira setup again.
+            Run the first-run setup again: computers, agents, Jira, a first project and GitHub.
           </p>
         </div>
         <Button
@@ -47,10 +47,7 @@ export function T3TeamProjectSetupSetting() {
           variant="outline"
           className="w-full justify-center sm:w-fit"
           onClick={() => {
-            void navigate({
-              to: "/t3team",
-              search: { setup: "welcome" },
-            });
+            void navigate({ to: "/welcome" });
           }}
         >
           Reopen initial setup

@@ -33,7 +33,6 @@ export function App({
   view,
   dashboardMode,
   showCreate: showCreateProp,
-  reopenInitialSetup,
   onCreateOpenChange,
   manageRepositoriesProjectId: manageRepositoriesProjectIdProp,
   onManageRepositoriesChange,
@@ -185,7 +184,6 @@ export function App({
           activeDashboardMode={activeDashboardMode}
           resolvedView={resolvedView}
           store={store}
-          reopenInitialSetup={reopenInitialSetup ?? false}
           onCreate={() => setShowCreate(true)}
           onOpenTicket={handleSelectTicket}
           onOpenThread={handleSelectThread}

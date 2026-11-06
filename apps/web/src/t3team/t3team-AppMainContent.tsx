@@ -19,7 +19,6 @@ import {
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
 import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
 import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
-import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
 
 type MainContentProps = {
@@ -28,7 +27,6 @@ type MainContentProps = {
   selectedProjectId: string | null;
   projects: ProjectShellProject[];
   allProjects: ProjectShellProject[];
-  reopenInitialSetup?: boolean;
   shouldInsetDesktopHeader?: boolean;
   getThreadsForProject: (projectId: string) => ProjectThread[];
   onOpenTicket: (projectId: string, ticketId: string) => void;
@@ -56,7 +54,6 @@ export function AppMainContent({
   selectedProjectId,
   projects,
   allProjects,
-  reopenInitialSetup = false,
   shouldInsetDesktopHeader = false,
   getThreadsForProject,
   onOpenTicket,
@@ -80,13 +77,7 @@ export function AppMainContent({
   // judging it as first run flashed the setup surface on every launch. Bootstrapped also settles
   // for an environment that stays disconnected, so this can never hold the skeleton forever.
   const projectsLoading = !useAllEnvironmentShellsBootstrapped() && allProjects.length === 0;
-  const showInitialSetup =
-    !view && (reopenInitialSetup || (!projectsLoading && allProjects.length === 0));
-  const setupSurfaceReason = resolveT3TeamSetupSurfaceReason({
-    allProjects,
-    selectedProjectId,
-    reopenInitialSetup,
-  });
+  const showInitialSetup = !view && !projectsLoading && allProjects.length === 0;
   const homeProject = resolveWorkHomeProject({
     allProjects,
     selectedProjectId,
@@ -96,8 +87,7 @@ export function AppMainContent({
   const homeBrowser = (
     <AppMainContentHomeBrowser
       onCreate={onCreate}
-      setupSurfaceReason={setupSurfaceReason}
-      showAside={!reopenInitialSetup && projects.length > 0}
+      showAside={projects.length > 0}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       scratchProject={scratchProject}
       onStartScratch={startScratch}
@@ -153,10 +143,8 @@ export function AppMainContent({
     }
     // A cold start lands on My Work when it has something to show; otherwise the new conversation.
     return (
-      <T3TeamStartupMyWorkGate
-        eligible={startupEligible && selectedProjectId === null && !reopenInitialSetup}
-      >
-        {projectsLoading && !reopenInitialSetup ? (
+      <T3TeamStartupMyWorkGate eligible={startupEligible && selectedProjectId === null}>
+        {projectsLoading ? (
           <div className="flex w-full flex-col p-4 sm:p-6">
             <ProjectMyWorkLoadingState />
           </div>

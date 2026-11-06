@@ -1,7 +1,6 @@
 import type { EnvironmentSetupProfile, ServerConfig } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { listT3TeamSetupWelcomeSteps } from "~/t3team/t3team-SetupWelcomeSteps";
 import {
   isT3TeamWorkProfileChooserEnabled,
   resolveT3TeamDeveloperSetupProfileId,
@@ -41,19 +40,5 @@ describe("work profile chooser gate", () => {
       "engineering-copilot",
     );
     expect(resolveT3TeamDeveloperSetupProfileId(undefined)).toBe("engineering-copilot");
-  });
-});
-
-describe("surfaces gated by the chooser", () => {
-  it("renumbers the welcome steps when the profile step is dropped", () => {
-    expect(listT3TeamSetupWelcomeSteps(true).map((item) => [item.step, item.title])).toEqual([
-      ["01", "Pick your style"],
-      ["02", "Connect Jira"],
-      ["03", "Start working"],
-    ]);
-    expect(listT3TeamSetupWelcomeSteps(false).map((item) => [item.step, item.title])).toEqual([
-      ["01", "Connect Jira"],
-      ["02", "Start working"],
-    ]);
   });
 });

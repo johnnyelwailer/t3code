@@ -31,6 +31,7 @@ import {
 } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import { MyWorkFirstLoadPlaceholder } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { MyWorkScopeColumn, MyWorkViewSwitchStandIn } from "~/t3team/t3team-MyWorkScopeColumn";
+import { T3TeamMyWorkNoWorkSourceEmpty } from "~/t3team/t3team-MyWorkNoWorkSourceEmpty";
 
 export function AllProjectsMyWorkView({
   onOpenTicket,
@@ -84,16 +85,7 @@ export function AllProjectsMyWorkView({
     );
   }
 
-  if (boundProjects.length === 0) {
-    return (
-      <div className="flex h-full min-h-0 flex-1 items-center justify-center p-6">
-        <p className="max-w-sm text-center text-muted-foreground text-sm">
-          No projects are connected to a work source yet. Connect one to see the items assigned to
-          you here.
-        </p>
-      </div>
-    );
-  }
+  if (boundProjects.length === 0) return <T3TeamMyWorkNoWorkSourceEmpty />;
 
   return (
     <MyWorkScopeColumn>

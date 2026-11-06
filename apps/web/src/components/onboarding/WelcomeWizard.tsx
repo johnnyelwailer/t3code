@@ -83,7 +83,6 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { connectPairing } from "../../connection/onboarding";
 import { getProviderSummary } from "../settings/providerStatus";
 import { providerClients } from "../settings/providerDriverMeta";
-import { ChatGptWelcomeCoordinator } from "../settings/ChatGptWelcomeCoordinator";
 import { AddManagedCodexAccountDialog, CodexSetupSection } from "../settings/CodexSetupSection";
 import { readCodexSetupMode } from "../settings/CodexSetupSection.logic";
 import { buildProviderInstanceUpdatePatch } from "../settings/SettingsPanels.logic";
@@ -110,12 +109,19 @@ import { formatRelativeTime } from "../../timestampFormat";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
 import { WelcomeCloudSignInOption } from "./t3team-WelcomeCloudSignInOption";
 import { OnboardingReadyAgents } from "./t3team-OnboardingReadyAgents";
+import { T3TeamChatGptWelcomeCoordinator } from "./t3team-ChatGptWelcomeGate";
+import { T3TeamWelcomeWorkSourceSteps } from "./t3team-WelcomeWorkSourceSteps";
+import {
+  isWorkSourceStep,
+  nextWelcomeWizardStep,
+  useWorkSourceFirstRun,
+  welcomeWizardStages,
+  type WelcomeWizardStep as WizardStep,
+} from "./t3team-welcomeWizardFlow";
 
-type WizardStep = "connection" | "agents" | "import";
 const NO_ENVIRONMENTS: readonly EnvironmentId[] = [];
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
-const ONBOARDING_STAGES = ["Connect", "Agents", "Projects"] as const;
 const SCAN_LIMIT_MESSAGE = "Scan limit reached. Some projects or conversations may be missing.";
 
 export function WelcomeWizard({
@@ -128,6 +134,8 @@ export function WelcomeWizard({
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
   const brand = useWelcomeWizardBrand();
+  const workSource = useWorkSourceFirstRun();
+  const stages = welcomeWizardStages(workSource);
   const [step, setStep] = useState<WizardStep>(resumeEnvironmentId ? "agents" : "connection");
   const { environments } = useEnvironments();
   const [selection, setSelection] = useState<ReadonlySet<EnvironmentId> | null>(null);
@@ -177,7 +185,9 @@ export function WelcomeWizard({
     setSetupIds(ids);
     setStep("agents");
   };
-  const stageIndex = step === "agents" ? 1 : step === "import" ? 2 : 0;
+  const stageIndex = stages.findIndex((stage) => stage.step === step);
+  const continueFrom = (current: WizardStep) =>
+    setStep(nextWelcomeWizardStep(stages, current) ?? "import");
   const finish = (
     projectRef?: ScopedProjectRef,
     importWarning?: string,
@@ -265,12 +275,12 @@ export function WelcomeWizard({
           }
         >
           <WizardSteps
-            steps={ONBOARDING_STAGES}
+            steps={stages.map((stage) => stage.label)}
             currentStep={stageIndex}
             isStepDisabled={(index) => isImporting || index >= stageIndex}
             onStepChange={(index) => {
               if (isImporting || index > stageIndex) return;
-              setStep(index === 0 ? "connection" : "agents");
+              setStep(stages[index]?.step ?? "connection");
             }}
           />
         </WizardHeader>
@@ -299,7 +309,13 @@ export function WelcomeWizard({
               }}
             />
           ) : step === "agents" ? (
-            <AgentsStep environmentIds={setupIds} onContinue={() => setStep("import")} />
+            <AgentsStep environmentIds={setupIds} onContinue={() => continueFrom("agents")} />
+          ) : isWorkSourceStep(step) ? (
+            <T3TeamWelcomeWorkSourceSteps
+              step={step}
+              onContinue={() => continueFrom(step)}
+              onFinish={() => void finish()}
+            />
           ) : (
             <ImportStep
               scans={scans}
@@ -312,7 +328,7 @@ export function WelcomeWizard({
           )}
         </WizardPanel>
       </WizardPopup>
-      <ChatGptWelcomeCoordinator />
+      <T3TeamChatGptWelcomeCoordinator />
     </Dialog>
   );
 }

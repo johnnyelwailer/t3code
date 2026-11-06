@@ -14,7 +14,6 @@ export function AppContentPane({
   activeDashboardMode,
   resolvedView,
   store,
-  reopenInitialSetup = false,
   onCreate,
   onOpenTicket,
   onOpenThread,
@@ -32,7 +31,6 @@ export function AppContentPane({
   activeDashboardMode: ProjectDashboardMode;
   resolvedView: ViewState | null;
   store: ReturnType<typeof useProjectStore>;
-  reopenInitialSetup?: boolean;
   onCreate: () => void;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onOpenThread: (projectId: string, threadId: string) => void;
@@ -73,7 +71,6 @@ export function AppContentPane({
               selectedProjectId={homeProjectId}
               projects={store.projects}
               allProjects={store.allProjects}
-              reopenInitialSetup={reopenInitialSetup}
               shouldInsetDesktopHeader={shouldInsetDesktopHeader}
               getThreadsForProject={store.getThreadsForProject}
               onOpenTicket={onOpenTicket}
