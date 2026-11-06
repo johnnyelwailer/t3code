@@ -76,7 +76,7 @@ const SESSION_LOG_FILE = /\.(?:log|ndjson|cpuprofile)$/;
  * per-session files under subfolders (provider event logs, stall CPU profiles): each session
  * appends to its own file, so an old modification time means that session no longer writes it.
  */
-const isExpirableLogFile = (name: string, inSubdirectory: boolean) =>
+export const isExpirableLogFile = (name: string, inSubdirectory: boolean) =>
   ROTATED_LOG_FILE.test(name) || (inSubdirectory && SESSION_LOG_FILE.test(name));
 // Give settle scripts time to open terminals that protect the worktree.
 const SETTLE_SCRIPT_GRACE_MS = 60_000;

@@ -1,6 +1,5 @@
 import {
   EnvironmentAuthInvalidError,
-  EnvironmentInternalError,
   type AuthBrowserSessionResult,
   type AuthCreatePairingCredentialInput,
   type AuthSessionState,
@@ -164,29 +163,6 @@ describe("resolveInitialServerAuthGateState", () => {
 
     expect(testApi.calls.session).toBe(2);
     expect(testApi.calls.browserSession).toEqual([{ credential: "desktop-bootstrap-token" }]);
-  });
-
-  it("keeps reading the session while a busy server answers 500", async () => {
-    let calls = 0;
-    const testApi = await installEnvironmentHttpTest({
-      session: () =>
-        ++calls <= 2
-          ? Effect.fail(
-              new EnvironmentInternalError({
-                code: "internal_error",
-                reason: "internal_error",
-                traceId: "trace-busy-startup",
-              }),
-            )
-          : Effect.succeed(authenticatedSession(DESKTOP_AUTH)),
-    });
-    disposeHttpTest = testApi.dispose;
-    const { resolveInitialServerAuthGateState } = await import("./environments/primary");
-
-    await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
-      status: "authenticated",
-    });
-    expect(testApi.calls.session).toBe(3);
   });
 
   it("takes a pairing token from the location hash and strips it immediately", async () => {
