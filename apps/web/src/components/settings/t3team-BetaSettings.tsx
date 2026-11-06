@@ -52,15 +52,15 @@ function BetaFlagSelect<K extends keyof T3TeamBetaFlags>({
 }
 
 /**
- * The t3team rows at the Interface seam: the companion switch, and the digest variants, hidden
- * while `MYWORK_DIGEST_VARIANTS` is off because the digest then ignores these choices.
+ * The t3team rows at the Interface seam: the digest variants, hidden while
+ * `MYWORK_DIGEST_VARIANTS` is off because the digest then ignores them, and the companion switch.
  */
 export function T3TeamBetaSettings() {
   const digestVariants = useFeatureFlag("MYWORK_DIGEST_VARIANTS");
   return (
     <>
-      <T3TeamCompanionSetting />
       {digestVariants ? <BetaSettingsSection /> : null}
+      <T3TeamCompanionSetting />
     </>
   );
 }
