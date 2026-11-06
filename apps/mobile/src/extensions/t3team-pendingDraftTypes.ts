@@ -30,8 +30,9 @@ export interface PendingDraft {
 
 /**
  * Drafts that wait for an environment not in the catalog yet, by draft key; the hook must not
- * throw. Keep a draft in the map until the catalog lists its project, or it returns to the picker.
- * To swap in a real project call `retargetPendingDraft`, then drop the map entry.
+ * throw. Keep a draft in the map while it is pending; the app shows its hold for the draft as long
+ * as the entry exists, so it survives the user choosing another project on the draft before the
+ * first send. To swap in a real project call `retargetPendingDraft`, then drop the map entry.
  */
 export interface PendingDraftSlot {
   readonly usePendingDrafts: () => ReadonlyMap<string, PendingDraft>;

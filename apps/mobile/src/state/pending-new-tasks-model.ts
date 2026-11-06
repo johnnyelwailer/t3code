@@ -114,8 +114,7 @@ export function buildPendingNewTasks(input: {
   }
   for (const [draftKey, draft] of Object.entries(input.drafts)) {
     const hasUserContent = composerDraftHasUserContent(draft);
-    const pending =
-      pendingDraftHolding(input.pendingDrafts?.get(draftKey), draft.project) ?? undefined;
+    const pending = pendingDraftHolding(input.pendingDrafts?.get(draftKey)) ?? undefined;
     if (!isNewTaskDraftKey(draftKey) || !draft.project || !listsDraft(hasUserContent, pending)) {
       continue;
     }
