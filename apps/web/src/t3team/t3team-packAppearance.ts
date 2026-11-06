@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 
 import { applyT3TeamPackFavicon, pickT3TeamPackBrandAsset } from "./t3team-packBrand";
 import { packPrimaryActionCss } from "./t3team-packPrimaryAction";
+import { t3teamPackThemeId } from "./t3team-packThemeDefinition";
 import { installT3TeamPackTheme } from "./t3team-packThemeInstall";
 import {
   T3TEAM_PACK_DERIVED_OVERRIDE_TOKENS,
@@ -35,7 +36,7 @@ const declarationsFor =
       .flatMap(([key, value]) => (variables[key] ? [`${variables[key]}:${value}`] : []))
       .join(";");
 
-/** Independent tokens: `:root` is enough, nothing downstream re-derives them. */
+/** Independent tokens: nothing downstream re-derives them. */
 const declarations = declarationsFor(T3TEAM_PACK_ONLY_COLOR_TOKENS);
 /** Derived tokens: need the theme block's specificity to beat `html[data-theme-id]`. */
 const overrideDeclarations = declarationsFor(T3TEAM_PACK_DERIVED_OVERRIDE_TOKENS);
@@ -72,11 +73,17 @@ function themeCss(appearance: EnvironmentAppearance): string {
   const dark = declarations(appearance.colors.dark);
   const lightOverride = overrideDeclarations(appearance.colors.light);
   const darkOverride = overrideDeclarations(appearance.colors.dark);
-  return `:root{${light ? `${light};` : ""}${sans}${mono}${display}${radius}}
-    :root.dark{${dark}}
-    html[data-theme-id]{${lightOverride}}
-    html.dark[data-theme-id]{${darkOverride}}
-    ${packPrimaryActionCss(appearance.colors)}
+  // Colors apply only while the pack's own theme is selected: a user who picks another theme in
+  // Settings → Appearance gets that theme whole, not a pack colour layered on top of it.
+  // Upstream's theme block is `html[data-theme-id]:not([data-theme-id=""])`, (0,2,1). Derived
+  // overrides match that with `html:not(.dark)[…]` / `html.dark[…]` and win by document order.
+  const theme = `[data-theme-id="${t3teamPackThemeId(appearance.themeId).replace(/["\\]/g, "\\$&")}"]`;
+  const darkColors = [dark, darkOverride].filter(Boolean).join(";");
+  return `:root{${sans}${mono}${display}${radius}}
+    html${theme}{${light}}
+    html:not(.dark)${theme}{${lightOverride}}
+    html.dark${theme}{${darkColors}}
+    ${packPrimaryActionCss(appearance.colors, theme)}
     ${displayFontCss(appearance)}`;
 }
 
