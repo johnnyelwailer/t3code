@@ -12,6 +12,7 @@ import {
   type AuthSessionState,
   type ExecutionEnvironmentDescriptor,
   type EnvironmentAuthInvalidError,
+  type EnvironmentInternalError,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import type * as Context from "effect/Context";
@@ -30,7 +31,7 @@ type BrowserSessionHandler = (
 
 interface EnvironmentHttpTestScenario {
   readonly descriptor?: () => Effect.Effect<ExecutionEnvironmentDescriptor>;
-  readonly session?: () => Effect.Effect<AuthSessionState>;
+  readonly session?: () => Effect.Effect<AuthSessionState, EnvironmentInternalError>;
   readonly browserSession?: BrowserSessionHandler;
   readonly pairingCredential?: (
     payload: AuthCreatePairingCredentialInput,
