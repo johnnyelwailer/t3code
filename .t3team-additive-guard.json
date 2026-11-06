@@ -1,6 +1,10 @@
 {
   "allowedModifiedFiles": [
     "apps/server/src/resourceTelemetry/HostResources.ts",
+    "apps/server/src/storageCleanup.test.ts",
+    "apps/web/src/authBootstrap.test.ts",
+    "apps/web/src/environments/primary/auth.ts",
+    "apps/web/test/environmentHttpTest.ts",
     "packages/contracts/src/resourceTelemetry.ts",
     "apps/web/src/hooks/useThreadActions.permissions.test.ts",
     "apps/web/src/hooks/useThreadActionMenu.test.ts",
