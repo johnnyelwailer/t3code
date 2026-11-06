@@ -4805,7 +4805,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return yield* new OrchestratorDispatchError({
         commandId: input.command.commandId,
         commandType: input.command.type,
-        cause: `No running provider turn found for active run ${targetRun.id}.`,
+        cause:
+          "The previous turn ended before this message could be delivered to it. " +
+          "Send it again to start a new turn.",
       });
     }
     const sessionOption = yield* providerSessions.get(providerSessionId).pipe(
@@ -5672,6 +5674,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projection.providerTurns.filter((candidate) => candidate.nodeId === target?.rootNodeId),
         target?.activeAttemptId,
       );
+      const runningTurn =
+        target !== undefined
+          ? projection.providerTurns.find(
+              (candidate) =>
+                candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
+            )
+          : undefined;
       // The client may still show a running turn while its completion is being
       // projected. Preserve the submission as a new turn when steering is too late.
       if (
@@ -5681,6 +5690,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             turn !== undefined &&
             turn.status === "completed"))
       ) {
+        dispatchMode = { type: "start_immediately" };
+      } else if (
+        target !== undefined &&
+        runningTurn === undefined &&
+        (target.status === "running" || target.status === "waiting")
+      ) {
+        // The run reads as active but its active attempt has no running turn: a
+        // turn ended without settling the run, or the provider paused. Steer
+        // would dead-end with "No running provider turn"; start the message as
+        // a new turn instead, queued behind the stale run until it settles.
+        yield* Effect.logWarning(
+          "Steer/restart found no running provider turn on the active attempt; starting a fresh run",
+          {
+            threadId: command.threadId,
+            runId: target.id,
+            dispatchMode: dispatchMode.type,
+          },
+        );
         dispatchMode = { type: "start_immediately" };
       } else if (target !== undefined) {
         // Idle-release / crash left a projected "running" turn with no live
@@ -5696,10 +5723,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             : yield* providerSessions
                 .get(providerSessionId)
                 .pipe(Effect.orElseSucceed(() => Option.none()));
-        const runningTurn = projection.providerTurns.find(
-          (candidate) =>
-            candidate.runAttemptId === target.activeAttemptId && candidate.status === "running",
-        );
         // Only a run that got under way can be a zombie. One that never started keeps the
         // regular steer validation (maintenance commands, goal commands, not-running targets).
         const underWay =
