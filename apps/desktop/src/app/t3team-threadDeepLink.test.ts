@@ -10,10 +10,7 @@ describe("parseThreadDeepLink", () => {
   });
 
   it("keeps a URL-encoded thread id intact", () => {
-    assert.equal(
-      parseThreadDeepLink("nexi://threads/env-1/mcp%3Aabc", NEXI),
-      "/env-1/mcp%3Aabc",
-    );
+    assert.equal(parseThreadDeepLink("nexi://threads/env-1/mcp%3Aabc", NEXI), "/env-1/mcp%3Aabc");
   });
 
   it("accepts the scheme case-insensitively and a trailing slash", () => {
@@ -34,7 +31,8 @@ describe("parseThreadDeepLink", () => {
   });
 
   it("rejects a bare scheme with no path", () => {
-    for (const url of ["nexi://", "nexi:///", "nexi:"]) assert.isNull(parseThreadDeepLink(url, NEXI));
+    for (const url of ["nexi://", "nexi:///", "nexi:"])
+      assert.isNull(parseThreadDeepLink(url, NEXI));
   });
 
   it("rejects a path with more or fewer than two segments", () => {

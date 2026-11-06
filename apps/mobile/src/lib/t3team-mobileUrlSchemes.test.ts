@@ -16,8 +16,8 @@ describe("urlSchemesFromConfig", () => {
   });
 
   it("dedupes and drops entries that are not valid URL schemes", () => {
-    expect(urlSchemesFromConfig({ urlSchemes: ["nexi", "nexi", "1bad", "has/slash", "good"] })).toEqual(
-      ["nexi", "good"],
-    );
+    expect(
+      urlSchemesFromConfig({ urlSchemes: ["nexi", "nexi", "1bad", "has/slash", "good"] }),
+    ).toEqual(["nexi", "good"]);
   });
 });

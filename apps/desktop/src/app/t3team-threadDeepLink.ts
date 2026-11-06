@@ -1,15 +1,9 @@
 import { promptLinkDeepLink } from "@t3tools/shared/promptLinks";
 
 /**
- * A distribution's custom URL scheme (e.g. `nexi`) opens a thread the same way `t3code://` does:
- * `<scheme>://threads/<environmentId>/<threadId>`. The host is `threads` (the collection) and the
- * path is `/<environmentId>/<threadId>` — the exact shape the web app and the renderer's
- * promptLinks parser already understand.
- *
- * Only a scheme the build declared (its distribution branding) is honored, and the path must be
- * exactly two non-empty segments. Anything else — a foreign scheme, a bare `nexi://`, a different
- * host, or a path with more or fewer segments — is rejected, so a deep link can never open an
- * arbitrary URL or path.
+ * A distribution scheme (e.g. `nexi`) opens a thread exactly like `t3code://`:
+ * `<scheme>://threads/<environmentId>/<threadId>`. Only build-declared schemes and a
+ * two-segment `/<environmentId>/<threadId>` path are honored; anything else is rejected.
  */
 
 // Same shape as promptLinks' THREAD_PATH: two path segments, an optional trailing slash.

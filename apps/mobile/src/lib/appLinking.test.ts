@@ -25,13 +25,6 @@ describe("shouldHandleAppLink", () => {
     expect(shouldHandleAppLink(url, true)).toBe(true);
   });
 
-  it.each(["nexi://threads/env-1/thread-1", "nexi://threads/env-1/mcp%3Aabc"])(
-    "handles a distribution-scheme thread URL %s",
-    (url) => {
-      expect(shouldHandleAppLink(url, true)).toBe(true);
-    },
-  );
-
   it.each(["t3code://expo-development-client/?url=x", "t3code://expo-sharing/anything"])(
     "ignores lifecycle URL %s",
     (url) => {

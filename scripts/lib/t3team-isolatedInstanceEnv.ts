@@ -101,7 +101,9 @@ export function distributionProtocolClaims(env: Env): ReadonlyArray<{
   readonly schemes: readonly string[];
 }> {
   const schemes = parseDistributionUrlSchemes(env);
-  return isIsolatedInstanceBuild(env) || schemes.length === 0 ? [] : [{ name: "Deep links", schemes }];
+  return isIsolatedInstanceBuild(env) || schemes.length === 0
+    ? []
+    : [{ name: "Deep links", schemes }];
 }
 
 /** Extra `desktop-branding.json` fields for an isolated instance (none for a normal build). */

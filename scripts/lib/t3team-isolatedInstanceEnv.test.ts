@@ -92,9 +92,7 @@ describe("distribution URL scheme claims", () => {
   });
 
   it("parses and claims the declared scheme", () => {
-    assert.deepEqual(parseDistributionUrlSchemes({ T3CODE_DESKTOP_URL_SCHEMES: "nexi" }), [
-      "nexi",
-    ]);
+    assert.deepEqual(parseDistributionUrlSchemes({ T3CODE_DESKTOP_URL_SCHEMES: "nexi" }), ["nexi"]);
     assert.deepEqual(distributionProtocolClaims({ T3CODE_DESKTOP_URL_SCHEMES: "nexi" }), [
       { name: "Deep links", schemes: ["nexi"] },
     ]);
