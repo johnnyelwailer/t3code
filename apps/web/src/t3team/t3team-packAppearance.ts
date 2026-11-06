@@ -2,6 +2,7 @@ import type { EnvironmentAppearance } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
 
 import { applyT3TeamPackFavicon, pickT3TeamPackBrandAsset } from "./t3team-packBrand";
+import { packPrimaryActionCss } from "./t3team-packPrimaryAction";
 import { installT3TeamPackTheme } from "./t3team-packThemeInstall";
 import {
   T3TEAM_PACK_DERIVED_OVERRIDE_TOKENS,
@@ -75,6 +76,7 @@ function themeCss(appearance: EnvironmentAppearance): string {
     :root.dark{${dark}}
     html[data-theme-id]{${lightOverride}}
     html.dark[data-theme-id]{${darkOverride}}
+    ${packPrimaryActionCss(appearance.colors)}
     ${displayFontCss(appearance)}`;
 }
 
