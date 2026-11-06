@@ -3,7 +3,8 @@
  * `surface.companion` end to end against the app registry: with nothing registered every
  * placement shows the surface's own fallback; a pack fills only the placements it lists; the first
  * registration of a placement wins; a companion that throws gives the fallback back; companions
- * switched off show the fallback. The registry is one per page, so the empty tests run first.
+ * switched off show the fallback, and they are off until the viewer turns them on. The registry is
+ * one per page, so the empty tests run first.
  */
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -20,6 +21,7 @@ import {
   blobCompanionPackWebModule,
   grumpyCompanionPackWebModule,
 } from "./t3team-companionPackFixtures";
+import { T3TEAM_COMPANION_ENABLED_STORAGE_KEY } from "./t3team-companionSetting";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -58,6 +60,9 @@ describe("with nothing registered", () => {
 });
 
 describe("with companion packs", () => {
+  beforeEach(() => window.localStorage.setItem(T3TEAM_COMPANION_ENABLED_STORAGE_KEY, "true"));
+  afterEach(() => window.localStorage.removeItem(T3TEAM_COMPANION_ENABLED_STORAGE_KEY));
+
   it("fills the placements a pack lists, and only those", () => {
     activateAppViewPacks([blobCompanionPackWebModule]);
 
@@ -86,6 +91,21 @@ describe("with companion packs", () => {
       <T3TeamCompanionSlot placement="thread.new" mood="newThread" size="md" fallback={mark} />,
     );
     expect(container.innerHTML).toBe('<span data-testid="mark">mark</span>');
+  });
+
+  it("mounts no companion until the viewer switches companions on", () => {
+    window.localStorage.removeItem(T3TEAM_COMPANION_ENABLED_STORAGE_KEY);
+    render(
+      <T3TeamCompanionSlot placement="myWork.loading" mood="loading" size="sm" fallback={mark} />,
+    );
+    expect(container.innerHTML).toBe('<span data-testid="mark">mark</span>');
+
+    render(<T3TeamCompanionSlot placement="myWork.empty" mood="empty" size="md" />);
+    expect(container.innerHTML).toBe("");
+
+    act(() => window.localStorage.setItem(T3TEAM_COMPANION_ENABLED_STORAGE_KEY, "true"));
+    render(<T3TeamCompanionSlot placement="myWork.empty" mood="empty" size="md" />);
+    expect(container.querySelector("[data-fixture=blob-companion]")).not.toBeNull();
   });
 
   it("shows the fallback when companions are switched off, and passes the quality ceiling on", () => {
