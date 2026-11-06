@@ -9,12 +9,13 @@ function rules(scope: string, colors: Readonly<Record<string, string>>): string 
   return `${scope} ${SEND_BUTTON}{background-image:${background}${shadow}}${scope} ${SEND_BUTTON}:hover{filter:brightness(1.08)}`;
 }
 
-export function packPrimaryActionCss(colors: {
-  readonly light: Readonly<Record<string, string>>;
-  readonly dark: Readonly<Record<string, string>>;
-}): string {
-  return (
-    rules("html:not(.dark)[data-theme-id]", colors.light) +
-    rules("html.dark[data-theme-id]", colors.dark)
-  );
+/** `theme` is the pack theme's attribute selector, so a user-chosen theme keeps its own button. */
+export function packPrimaryActionCss(
+  colors: {
+    readonly light: Readonly<Record<string, string>>;
+    readonly dark: Readonly<Record<string, string>>;
+  },
+  theme: string,
+): string {
+  return rules(`html:not(.dark)${theme}`, colors.light) + rules(`html.dark${theme}`, colors.dark);
 }

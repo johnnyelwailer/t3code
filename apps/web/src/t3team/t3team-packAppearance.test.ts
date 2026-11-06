@@ -175,11 +175,11 @@ describe("pack appearance", () => {
     const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
     expect(css).not.toContain("--sidebar:");
     expect(css).toContain("--success:#0a7f2e");
-    // Tokens upstream DERIVES inside `html[data-theme-id]` must be emitted at that specificity or
-    // they lose the cascade silently: `:root` is (0,1,0) against the theme block's (0,1,1), and
-    // `data-theme-id` is always present once a theme is selected.
-    expect(css).toContain("html[data-theme-id]{");
-    expect(css).not.toMatch(/:root\{[^}]*--card-foreground/);
+    // Colors are scoped to the pack's own theme: a user-chosen theme stays untouched, and the
+    // attribute selector matches the theme block's (0,1,1) so derived tokens still win by order.
+    expect(css).toContain('html[data-theme-id="t3team-pack-nexplore"]{');
+    expect(css).not.toContain("html[data-theme-id]{");
+    expect(css).not.toMatch(/:root\{[^}]*--(?:success|card-foreground|t3team-primary-text)/);
     expect(css).toContain(
       "--t3team-sidebar-header-background:linear-gradient(90deg, #f05a00, #ff8a3d)",
     );
@@ -187,13 +187,35 @@ describe("pack appearance", () => {
       "--t3team-sidebar-header-background:url(https://packs.example/header.png)",
     );
     // Primary-coloured text is independent of the button fill, per appearance.
-    expect(css).toMatch(/:root\.dark\{[^}]*--t3team-primary-text:#e5e0ff/);
-    expect(css).not.toMatch(/:root\{[^}]*--t3team-primary-text/);
+    expect(css).toMatch(
+      /html\.dark\[data-theme-id="t3team-pack-nexplore"\]\{[^}]*--t3team-primary-text:#e5e0ff/,
+    );
     // The send-button rule exists only for the appearance that sets it, and only while enabled.
     expect(css).toContain(
-      "html.dark[data-theme-id] [data-composer-send-button]:enabled{background-image:linear-gradient(135deg, #4c3cf6 45%, #f05a0a 140%);box-shadow:0 4px 14px rgba(76,60,246,.4)}",
+      'html.dark[data-theme-id="t3team-pack-nexplore"] [data-composer-send-button]:enabled{' +
+        "background-image:linear-gradient(135deg, #4c3cf6 45%, #f05a0a 140%);box-shadow:0 4px 14px rgba(76,60,246,.4)}",
     );
-    expect(css).not.toContain("html:not(.dark)[data-theme-id] [data-composer-send-button]");
+    expect(css).not.toContain("html:not(.dark)[data-theme-id");
+
+    // A user who picks another theme gets that theme whole: no pack colour rule matches.
+    const root = document.documentElement;
+    root.classList.add("dark");
+    root.dataset.themeId = "t3-chat";
+    const colorRules = [
+      ...((document.getElementById("t3team-pack-theme") as HTMLStyleElement).sheet?.cssRules ?? []),
+    ].filter(
+      (rule): rule is CSSStyleRule => "selectorText" in rule && rule.selectorText !== ":root",
+    );
+    expect(colorRules.length).toBeGreaterThan(0);
+    for (const rule of colorRules) {
+      const htmlPart = rule.selectorText.split(" ")[0] ?? "";
+      if (htmlPart.startsWith("html")) expect(root.matches(htmlPart)).toBe(false);
+    }
+    root.dataset.themeId = t3teamPackThemeId("nexplore");
+    expect(colorRules.some((rule) => root.matches(rule.selectorText.split(" ")[0] ?? ""))).toBe(
+      true,
+    );
+    root.classList.remove("dark");
   });
 
   it("swaps the favicon to the brand mark and restores it on reset", () => {
