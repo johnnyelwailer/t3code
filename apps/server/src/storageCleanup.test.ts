@@ -32,6 +32,7 @@ import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { CodexProviderCapabilitiesV2 } from "./orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { ServerActivation } from "./serverActivation.ts";
+import { HOUSEKEEPING_STARTUP_GRACE } from "./t3team-housekeepingGrace.ts";
 import { describe, expect, it } from "@effect/vitest";
 import {
   EventId,
@@ -1088,6 +1089,8 @@ describe("deleted thread worktrees", () => {
           ),
         ),
       );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
       yield* fixture.service.reports.pipe(
         Stream.filter((report) => report !== null),
         Stream.take(1),
@@ -1344,6 +1347,8 @@ describe("deleted thread worktrees", () => {
             ),
           ),
         );
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
         yield* fixture.service.reports.pipe(
           Stream.filter((report) => report !== null),
           Stream.take(1),
