@@ -33,6 +33,13 @@ const decodeProfile = Schema.decodeUnknownEffect(
 
 export const machineRepositoryAccess = Effect.fn("cloud.machineRepositoryAccess")(function* () {
   const vcs = yield* VcsProcess;
+  return yield* machineRepositoryAccessFor(vcs);
+});
+
+/** The same access bound to an explicitly passed service, for optional contexts. */
+export const machineRepositoryAccessFor = Effect.fn("cloud.machineRepositoryAccess.for")(function* (
+  vcs: VcsProcess["Service"],
+) {
   const api = yield* GitHubApi.GitHubApi;
   const git = (cwd: string, operation: string, args: ReadonlyArray<string>) =>
     vcs

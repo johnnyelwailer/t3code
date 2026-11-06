@@ -110,5 +110,36 @@ export function createCloudSessionAtoms<R, E>(
         }) => JSON.stringify([environmentId, input.sessionId]),
       },
     }),
+
+    /**
+     * Delete a machine's persistent state. Serial per session like cancel: a delete
+     * racing a second delete (or its own stop) must not double-push or double-remove.
+     */
+    delete: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:cloud-sessions:delete",
+      tag: WS_METHODS.cloudSessionDelete,
+      scheduler: commandScheduler,
+      concurrency: {
+        mode: "serial" as const,
+        key: ({
+          environmentId,
+          input,
+        }: {
+          readonly environmentId: string;
+          readonly input: { readonly sessionId: string };
+        }) => JSON.stringify([environmentId, input.sessionId]),
+      },
+    }),
+
+    /**
+     * What the delete confirmation shows (the machine's projects), a one-shot read asked right
+     * before the confirmation opens. A command, not a query: nothing renders its result live,
+     * so there is no state to keep fresh.
+     */
+    deleteInfo: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:cloud-sessions:delete-info",
+      tag: WS_METHODS.cloudSessionDeleteInfo,
+      scheduler: commandScheduler,
+    }),
   };
 }

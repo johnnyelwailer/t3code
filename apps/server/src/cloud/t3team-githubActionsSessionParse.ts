@@ -76,6 +76,23 @@ export function parseRunsResponse(body: string): readonly WorkflowRunSummary[] |
 }
 
 /**
+ * Parse one run, as `GET /actions/runs/{id}` answers it. `null` when unreadable — the caller
+ * must not read that as "the run ended".
+ */
+export function parseRunResponse(body: string): WorkflowRunSummary | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const run = (parsed as { workflow_run?: unknown }).workflow_run;
+  if (typeof run !== "object" || run === null) return null;
+  return toRun(run as Record<string, unknown>);
+}
+
+/**
  * Whether every job in a `GET /actions/runs/{id}/jobs` answer belongs to `attempt`. That endpoint
  * answers for the run's LATEST attempt, so a re-run that began after the run was listed shows up
  * here as jobs of a later attempt. Unreadable, no jobs yet (a re-run that has not queued any), or
@@ -132,4 +149,39 @@ export function parseJobStepsResponse(body: string): readonly WorkflowJobStep[] 
         ...(typeof step["started_at"] === "string" ? { startedAt: step["started_at"] } : {}),
       }));
   });
+}
+
+export interface CacheEntrySummary {
+  readonly id: number;
+  readonly key: string;
+}
+
+/**
+ * Parse one page of `GET /actions/caches`: the entries and whether more pages follow.
+ * `null` when the body is not the expected shape — the caller must not read "unreadable"
+ * as "no more caches" mid-pagination, because the delete then would miss entries.
+ */
+export function parseCachesResponse(
+  body: string,
+): { readonly entries: readonly CacheEntrySummary[]; readonly hasMore: boolean } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const raw = parsed as { actions_caches?: unknown; total_count?: unknown };
+  if (!Array.isArray(raw.actions_caches)) return null;
+  const entries = raw.actions_caches
+    .filter(
+      (entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null,
+    )
+    .map((entry) => ({
+      id: typeof entry["id"] === "number" ? entry["id"] : 0,
+      key: asString(entry["key"]),
+    }))
+    .filter((entry): entry is CacheEntrySummary => entry.id > 0);
+  // A full page means one more may follow; the pagination is bounded by the caller anyway.
+  return { entries, hasMore: entries.length === 100 };
 }

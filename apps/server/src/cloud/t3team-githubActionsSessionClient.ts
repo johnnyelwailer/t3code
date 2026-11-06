@@ -163,11 +163,44 @@ export function jobStepsRequest(
   };
 }
 
+export function getRunRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.getRun",
+    path: repoApiPath(ref, `actions/runs/${runId}`),
+  };
+}
+
 export function cancelRunRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.cancelRun",
     method: "POST",
     path: repoApiPath(ref, `actions/runs/${runId}/cancel`),
+  };
+}
+
+/**
+ * List the fleet repository's Actions cache entries (the delete flow). No page cap here:
+ * the caller bounds the pagination, because a fleet with many users' caches is normal, not an
+ * error.
+ */
+export function listCachesRequest(ref: CloudSessionRepoRef, page: number): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.listCaches",
+    path: repoApiPath(ref, `actions/caches?per_page=100&page=${page}`),
+  };
+}
+
+export function deleteCacheRequest(
+  ref: CloudSessionRepoRef,
+  cacheId: number,
+): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.deleteCache",
+    method: "DELETE",
+    path: repoApiPath(ref, `actions/caches/${cacheId}`),
   };
 }

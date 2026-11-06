@@ -49,6 +49,7 @@ export { HomeProjectIcon } from "./t3team-HomeProjectIcon";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";
 export { useProjects, useServerConfigs } from "../state/entities";
+export { cloudSessionCommands } from "../state/t3team-cloudSessionCommands";
 export { useWorkspaceEnvironments } from "../state/workspace";
 export { useAtomCommand } from "../state/use-atom-command";
 

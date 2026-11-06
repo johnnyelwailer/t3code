@@ -169,5 +169,40 @@ export const CloudSessionCancelInputSchema = Schema.Struct({
 });
 export type CloudSessionCancelInput = typeof CloudSessionCancelInputSchema.Type;
 
+/**
+ * Delete a machine, not just this session's run: its persistent state (the workspace's
+ * snapshots and the machine's resume branch) goes with it. Same targeting rules as cancel:
+ * only one of the caller's own sessions.
+ */
+export const CloudSessionDeleteInputSchema = Schema.Struct({
+  sessionId: Schema.String,
+});
+export type CloudSessionDeleteInput = typeof CloudSessionDeleteInputSchema.Type;
+
+/**
+ * What a delete removed. `wipBranch`: when the machine carried work that was not pushed
+ * anywhere of the user's own, that work was pushed to a branch of the project's remote
+ * before the delete finished.
+ */
+export const CloudSessionDeleteResultSchema = Schema.Struct({
+  /** The branch the unpushed work was saved on, or null when the machine carried none. */
+  wipBranch: Schema.NullOr(Schema.String),
+  /** Parts the delete could not reach (e.g. no snapshot was ever saved for the run). */
+  warnings: Schema.Array(Schema.String),
+});
+export type CloudSessionDeleteResult = typeof CloudSessionDeleteResultSchema.Type;
+
+/**
+ * What the delete confirmation shows before anything is removed: the machine's repository
+ * and the projects on this server that run on it.
+ */
+export const CloudSessionDeleteInfoSchema = Schema.Struct({
+  /** `owner/name` of the repository whose resume branch the machine preserves; null when unknown. */
+  repository: Schema.NullOr(Schema.String),
+  /** The names of this server's projects whose machine is this one. */
+  projects: Schema.Array(Schema.String),
+});
+export type CloudSessionDeleteInfo = typeof CloudSessionDeleteInfoSchema.Type;
+
 export * from "./t3team-cloudSessionFailure.ts";
 export * from "./t3team-cloudSessionProjectFolder.ts";
