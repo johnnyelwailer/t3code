@@ -5,8 +5,16 @@ const CssColor = Schema.String.check(
   Schema.isPattern(/^(?:#[0-9a-fA-F]{3,8}|(?:oklch|rgb|rgba|hsl|hsla)\([^;{}]+\))$/),
 );
 const FontStack = Schema.String.check(Schema.isPattern(/^[^;{}]+$/));
-/** A raw CSS value (gradient, shadow list) emitted into one declaration, so it may not end it. */
-const CssDeclarationValue = Schema.String.check(Schema.isPattern(/^[^;{}<>\\]+$/));
+/**
+ * A raw CSS value (gradient, shadow list) emitted into one declaration. It may not end the
+ * declaration, open a comment or string, or leave a bracket open: any of those swallows the rules
+ * after it. Brackets balance up to two levels, e.g. `linear-gradient(rgb(…) 0%, …)`.
+ */
+const CSS_VALUE_CHAR = String.raw`(?:(?!\/\*|\*\/)[^;{}<>\\"'()\[\]\r\n])`;
+const CSS_VALUE_GROUP = String.raw`\((?:${CSS_VALUE_CHAR}|\(${CSS_VALUE_CHAR}*\))*\)`;
+const CssDeclarationValue = Schema.String.check(
+  Schema.isPattern(new RegExp(`^(?:${CSS_VALUE_CHAR}|${CSS_VALUE_GROUP})+$`)),
+);
 
 const BrandAsset = Schema.String.check(
   Schema.isPattern(

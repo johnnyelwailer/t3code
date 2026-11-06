@@ -43,6 +43,21 @@ describe("theme definition", () => {
         colors: { ...theme.colors, light: { primaryActionBackground: "red}body{display:none" } },
       }),
     ).toThrow();
+    for (const unsafe of [
+      "linear-gradient(red",
+      "red /* x",
+      "url('x')",
+      'url("x")',
+      "red)",
+      "a[b",
+    ]) {
+      expect(() =>
+        decodeThemeDefinition({
+          ...theme,
+          colors: { ...theme.colors, light: { primaryActionBackground: unsafe } },
+        }),
+      ).toThrow();
+    }
     expect(() => decodeThemeDefinition({ ...theme, density: 2 })).toThrow();
   });
 
