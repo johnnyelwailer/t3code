@@ -9,7 +9,7 @@
   flex: none;
   place-items: center;
   border-radius: 50%;
-  color: var(--primary);
+  color: var(--t3team-primary-text, var(--primary));
   background: var(--vz-live-10);
   transition:
     background 240ms var(--vz-ease-std),

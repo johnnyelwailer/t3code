@@ -365,6 +365,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         (!hasSendableContent && !showResume)
       }
       aria-label={submitStatus ?? submitLabel}
+      data-composer-send-button=""
     >
       {stageBackdropVariant ? (
         <span
