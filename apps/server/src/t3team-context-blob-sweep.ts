@@ -4,7 +4,10 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
-import { markT3TeamContextBlobPurgedIfUnreferenced } from "./t3team-context-blob-store-tables.ts";
+import {
+  deleteExpiredT3TeamContextBlobTombstones,
+  markT3TeamContextBlobPurgedIfUnreferenced,
+} from "./t3team-context-blob-store-tables.ts";
 import { T3TEAM_CONTEXT_BLOB_ROOT } from "./t3team-context-blob-store-utils.ts";
 
 /** A fresh blob has nlink 1 until its artifact is linked, so a young blob is never swept. */
@@ -13,6 +16,8 @@ const DEFAULT_MAX_REMOVED = 5_000;
 /** Bounds stat calls per sweep: a cache of young or linked blobs removes nothing, so the removal cap alone never ends a scan. */
 const DEFAULT_MAX_INSPECTED = 5_000;
 const MIN_SWEEP_INTERVAL_MS = 30_000;
+/** Small batches keep writer statements short; one per 30s still outpaces ~120k purges a day. */
+const TOMBSTONES_PER_SWEEP = 2_000;
 const BLOB_FILE_NAME = /^[0-9a-f]{64}$/;
 
 type SweepState = { running: boolean; lastStartedAt: number; cursor: string | undefined };
@@ -112,6 +117,13 @@ export const scheduleOrphanT3TeamContextBlobSweep = Effect.fn(
     ...(state.cursor === undefined ? {} : { after: state.cursor }),
   }).pipe(
     Effect.tap((result) => Effect.sync(() => (state.cursor = result.nextCursor))),
+    Effect.andThen(
+      Clock.currentTimeMillis.pipe(
+        Effect.flatMap((now) =>
+          deleteExpiredT3TeamContextBlobTombstones({ now, limit: TOMBSTONES_PER_SWEEP }),
+        ),
+      ),
+    ),
     Effect.catchCause((cause) =>
       Effect.logWarning("t3team.contextCache.sweepOrphanBlobs failed", { workspaceRoot, cause }),
     ),

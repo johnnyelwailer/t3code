@@ -173,20 +173,26 @@ function getDesktopBootstrapCredential(): string | null {
 }
 
 export async function fetchSessionState(): Promise<AuthSessionState> {
-  return retryTransientBootstrap(async () => {
-    try {
-      return await runPrimaryHttp(
-        PrimaryEnvironmentHttpClient.pipe(
-          Effect.flatMap((client) => client.auth.session({ headers: {} })),
-        ),
-      );
-    } catch (error) {
-      throw PrimaryEnvironmentRequestError.fromCause({
-        operation: "fetch-session-state",
-        cause: error,
-      });
-    }
-  });
+  return retryTransientBootstrap(
+    async () => {
+      try {
+        return await runPrimaryHttp(
+          PrimaryEnvironmentHttpClient.pipe(
+            Effect.flatMap((client) => client.auth.session({ headers: {} })),
+          ),
+        );
+      } catch (error) {
+        throw PrimaryEnvironmentRequestError.fromCause({
+          operation: "fetch-session-state",
+          cause: error,
+        });
+      }
+    },
+    {
+      transientStatusCodes: TRANSIENT_SESSION_READ_STATUS_CODES,
+      timeoutMs: SESSION_READ_RETRY_TIMEOUT_MS,
+    },
+  );
 }
 
 function readHttpApiStatus(error: unknown): number | null {
@@ -262,21 +268,37 @@ async function waitForAuthenticatedSessionAfterBootstrap(): Promise<AuthSessionS
   }
 }
 
-const TRANSIENT_BOOTSTRAP_STATUS_CODES = new Set([502, 503, 504]);
+const TRANSIENT_BOOTSTRAP_STATUS_CODES: ReadonlySet<number> = new Set([502, 503, 504]);
+/**
+ * The session read is idempotent, and a server whose event loop is stalled at boot answers it
+ * with 500 (or the request fails before any response, which also reads as 500) for up to a
+ * minute. Keep retrying it so a slow start shows the loading state instead of an error dialog.
+ */
+const TRANSIENT_SESSION_READ_STATUS_CODES: ReadonlySet<number> = new Set([500, 502, 503, 504]);
 const BOOTSTRAP_RETRY_TIMEOUT_MS = 15_000;
+const SESSION_READ_RETRY_TIMEOUT_MS = 90_000;
 const BOOTSTRAP_RETRY_STEP_MS = 500;
 
-async function retryTransientBootstrap<T>(operation: () => Promise<T>): Promise<T> {
+async function retryTransientBootstrap<T>(
+  operation: () => Promise<T>,
+  policy: {
+    readonly transientStatusCodes: ReadonlySet<number>;
+    readonly timeoutMs: number;
+  } = {
+    transientStatusCodes: TRANSIENT_BOOTSTRAP_STATUS_CODES,
+    timeoutMs: BOOTSTRAP_RETRY_TIMEOUT_MS,
+  },
+): Promise<T> {
   const startedAt = Date.now();
   while (true) {
     try {
       return await operation();
     } catch (error) {
-      if (!isTransientBootstrapError(error)) {
+      if (!isTransientBootstrapError(error, policy.transientStatusCodes)) {
         throw error;
       }
 
-      if (Date.now() - startedAt >= BOOTSTRAP_RETRY_TIMEOUT_MS) {
+      if (Date.now() - startedAt >= policy.timeoutMs) {
         throw error;
       }
 
@@ -291,9 +313,12 @@ function waitForBootstrapRetry(delayMs: number): Promise<void> {
   });
 }
 
-function isTransientBootstrapError(error: unknown): boolean {
+function isTransientBootstrapError(
+  error: unknown,
+  transientStatusCodes: ReadonlySet<number>,
+): boolean {
   if (isPrimaryEnvironmentRequestError(error)) {
-    return TRANSIENT_BOOTSTRAP_STATUS_CODES.has(error.status);
+    return transientStatusCodes.has(error.status);
   }
 
   if (error instanceof TypeError) {

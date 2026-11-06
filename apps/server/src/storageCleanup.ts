@@ -42,6 +42,7 @@ import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import { threadHasQueuedTurnStart } from "./orchestration-v2/ThreadSettlementService.ts";
 import { forkParked } from "./serverActivation.ts";
+import { forkParkedHousekeeping } from "./t3team-housekeepingGrace.ts";
 import * as Settings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { isFilesystemRoot, managedWorktreesDirectories } from "./worktreesDirectory.ts";
@@ -67,6 +68,16 @@ const decodePnpmModulesManifest = Schema.decodeUnknownEffect(
 );
 
 const DAY_MS = 86_400_000;
+const ROTATED_LOG_FILE = /\.(?:log|ndjson)\.\d+$/;
+const SESSION_LOG_FILE = /\.(?:log|ndjson|cpuprofile)$/;
+
+/**
+ * The server's own top-level log stays even when stale. Rotations expire anywhere, and so do the
+ * per-session files under subfolders (provider event logs, stall CPU profiles): each session
+ * appends to its own file, so an old modification time means that session no longer writes it.
+ */
+export const isExpirableLogFile = (name: string, inSubdirectory: boolean) =>
+  ROTATED_LOG_FILE.test(name) || (inSubdirectory && SESSION_LOG_FILE.test(name));
 // Give settle scripts time to open terminals that protect the worktree.
 const SETTLE_SCRIPT_GRACE_MS = 60_000;
 // Worktree creation can precede its thread row, including review-guide checkouts.
@@ -1168,13 +1179,23 @@ const make = Effect.gen(function* () {
         const stat = yield* fs.stat(target);
         if (stat.type === "Directory" && rotatedLogs) {
           yield* visit(target);
-        } else if (stat.type === "File" && (!rotatedLogs || /\.(?:log|ndjson)\.\d+$/.test(name))) {
+        } else if (
+          stat.type === "File" &&
+          (!rotatedLogs || isExpirableLogFile(name, directory !== realRoot))
+        ) {
           const modified = Option.getOrNull(stat.mtime);
           if (modified !== null && modified.getTime() < now - days * DAY_MS) {
             const current = (yield* settingsService.getSettings).storageCleanup;
             if ((rotatedLogs ? current.logsAfterDays : current.browserArtifactsAfterDays) !== days)
               return;
-            yield* fs.remove(target);
+            // Windows refuses to remove a file a provider session still holds open; skip it.
+            if (
+              !(yield* fs.remove(target).pipe(
+                Effect.as(true),
+                Effect.orElseSucceed(() => false),
+              ))
+            )
+              continue;
             removed.files++;
             removed.bytes += Number(stat.size);
           }
@@ -1342,7 +1363,7 @@ const make = Effect.gen(function* () {
     const changes = yield* settingsService.subscribeChanges;
     const events = engine.streamDomainEvents;
     let lastSettings = yield* settingsService.getSettings.pipe(Effect.orDie);
-    yield* forkParked(
+    yield* forkParkedHousekeeping(
       requestSweep.pipe(
         Effect.andThen(worker.drain),
         Effect.repeat(Schedule.spaced("1 hour")),
