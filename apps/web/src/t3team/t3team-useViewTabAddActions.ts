@@ -5,6 +5,7 @@ import type { T3TeamViewTabSource } from "~/t3team/t3team-chatViewExtensions";
 import { useT3TeamSidebarThreadDataStore } from "~/t3team/t3team-sidebarThreadDataStore";
 import { viewTargetIcon, type T3TeamAddSurfaceAction } from "~/t3team/t3team-viewTabPresentation";
 import type { T3TeamViewTarget } from "~/t3team/t3team-viewTarget";
+import { useViewTabProject } from "~/t3team/t3team-useViewTabProject";
 
 /** The view tabs a thread's panel offers: its project's My Work, and its work item when it has one. */
 export function viewTabAddActions(input: {
@@ -58,7 +59,10 @@ export function useViewTabAddActions(
   const projectId = source?.projectId;
   const ticketId = source?.ticketId;
   const ticketDisplayId = source?.ticketDisplayId;
-  if (threadRef === null || projectId === undefined) return undefined;
+  const project = useViewTabProject(projectId ?? "");
+  if (threadRef === null || projectId === undefined || project.status === "unknown") {
+    return undefined;
+  }
   return viewTabAddActions({
     source: {
       projectId,
