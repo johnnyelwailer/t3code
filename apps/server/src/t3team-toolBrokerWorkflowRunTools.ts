@@ -33,6 +33,22 @@ import * as RecipeRun from "./t3team-toolBrokerWorkflowRunRecipe.ts";
 
 export { recentActiveLaunchBlocker } from "./t3team-workflowRunLaunchBlocker.ts";
 
+/**
+ * What the launching agent gets back while the hidden author is still writing the source. The hint
+ * exists because a launching agent told its user "the pipeline is running" while the author was
+ * still writing it; that run then failed unnoticed for two hours (GHE #405).
+ */
+export const workflowAuthoringHandoff = (runId: string): RunWorkflowToolResult => ({
+  ok: true,
+  runId,
+  status: "authoring",
+  handoff: "workflow-ui",
+  hint:
+    "Nothing is running yet: an author agent is still writing this orchestration. End your turn " +
+    "now. If you say anything, say it is being prepared, never that it is running; the run card " +
+    "shows when it starts, and t3_orchestration_status reports its live state.",
+});
+
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const nowIso = () => DateTime.formatIso(DateTime.nowUnsafe());
 
@@ -200,12 +216,7 @@ export function makeWorkflowRunToolHandlers<E>(
         ).pipe(Effect.tapError((error) => Effect.sync(() => admittedReject?.(error))));
         yield* authoring.pipe(Effect.forkDetach({ startImmediately: true }));
         yield* Effect.promise(() => admitted).pipe(Effect.mapError(errorMessage));
-        return {
-          ok: true as const,
-          runId,
-          status: "authoring" as const,
-          handoff: "workflow-ui" as const,
-        } satisfies RunWorkflowToolResult;
+        return workflowAuthoringHandoff(runId);
       });
     },
   });

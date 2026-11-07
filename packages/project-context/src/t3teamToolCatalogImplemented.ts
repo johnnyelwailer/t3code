@@ -71,6 +71,11 @@ const ASK_USER_INPUT_SCHEMA = {
         "The full context plus the question itself; markdown is rendered in the composer panel.",
       minLength: 1,
     },
+    context: {
+      type: "string",
+      description:
+        "Markdown from earlier in the thread that the question refers to; rendered above the question. Pass it whenever the question does not stand on its own.",
+    },
     header: {
       type: "string",
       description: "Short chip label shown beside the question — a few words, not a sentence.",
@@ -194,7 +199,12 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Validate recipe workflow",
     title: "Validate a t3team recipe workflow statically",
     description:
-      "Statically validate a t3team project recipe workflow (.workflow.ts) — t3team project recipes, NOT Claude Code skills or provider-native workflows. Run this after authoring or editing recipe/workflow files: it loads the file through the SDK loader, extracts the meta block (name, description, input/output fields, capabilities), derives the same play-as-shape preview the UI shows (phases + read/agent/ask/act steps), and returns structured errors ({path, phase: discover|load|meta|shape, message}) precise enough to fix the file from. Accepts a path to a .workflow.ts file or to a recipe directory, relative to the project workspace root; paths outside the workspace are rejected. Read-only and safe: the workflow body is never executed.",
+      "Statically validate an agent orchestration before running it: pass 'source' (inline " +
+      "orchestration TypeScript, the body you would pass to t3team.orchestration.run) or 'path' " +
+      "(a .workflow.ts or recipe directory in the workspace). Runs the full launch check: format, " +
+      "determinism, runtime bindings, capabilities, TypeScript types and model slugs. Returns " +
+      "{ok, errors[], meta?, shape?}; fix every error and validate again until ok. Nothing is " +
+      "executed or written. These are t3team orchestrations, not Claude Code skills or CI workflows.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
@@ -207,11 +217,16 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         path: {
           type: "string",
           description:
-            "Path to a .workflow.ts file or a recipe directory, relative to the project workspace root (absolute paths must stay inside the workspace).",
+            "Optional. A .workflow.ts file or recipe directory, relative to the project workspace root (absolute paths must stay inside the workspace).",
+          minLength: 1,
+        },
+        source: {
+          type: "string",
+          description:
+            "Optional. Inline orchestration TypeScript to validate; pass this or 'path'.",
           minLength: 1,
         },
       },
-      required: ["path"],
     },
   },
   "t3team.orchestration.run": {
@@ -219,24 +234,18 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Run ephemeral orchestration",
     title: "Run a temporary agent orchestration in this conversation",
     description:
-      "Agent orchestration: run a structure that fans work out to several agents (parallel or in " +
-      "sequence), enforces result contracts, and can wake itself on durable timers — a durable, " +
-      "journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI " +
-      "workflow. Use it for complex or long work; for a simple single-agent task, just do it " +
-      "directly. You describe, the host authors: pass 'intent' ({goal, expectedOutcome, " +
-      "guardrails} — put constraints such as which provider/model to use in plain language " +
-      "here) and optional 'args' (the orchestration's input); a dedicated author agent writes, " +
-      "validates and launches the source (persisted under .t3team-runs/<runId>/). Pass " +
-      "'workflowPath' only to run an existing saved .workflow.ts as-is (body format: " +
-      `${PROJECT_STATE_DIR}/recipes/AUTHORING.md); pass 'recipe' (an id from the recipe list) ` +
-      "and optional 'action' to run a recipe with its own scripts and tool scope. Returns " +
-      "{runId, status: authoring|accepted, " +
-      "handoff: 'workflow-ui'} " +
-      "immediately; the orchestration card shows authoring → running → the result, and only a " +
-      "genuinely unfixable outcome is reported back, once. After the handoff, end the current " +
-      "turn with no assistant prose. ONE launch per turn: while a run this thread launched is " +
-      "still active, a second call is refused — pass 'replaceRunId' to stop that run and launch " +
-      "the replacement instead. No approval gate; at most 8 live ephemeral runs.",
+      "Agent orchestration: a durable, journaled multi-agent run (parallel or sequential agents, " +
+      "result contracts, durable timers, user decisions); NOT a CI or Claude Code/Codex workflow. " +
+      "Use it for complex or long work; do a simple single-agent task directly. If a saved recipe " +
+      "fits (t3team.recipe.list), pass 'recipe' (and optional 'action'). Otherwise pass 'intent' " +
+      "(a goal string, or {goal, expectedOutcome, guardrails}; constraints such as which model to " +
+      "use go here in plain language) and optional 'args': a host author agent writes, validates " +
+      "and launches the source. 'workflowPath' runs an existing .workflow.ts from your checkout " +
+      "as-is. Returns {runId, status, hint} immediately. status 'authoring' means NOTHING runs " +
+      "yet: never tell the user it is running; follow 'hint' and end your turn. The run card " +
+      "shows authoring, then running, then the result; t3team.orchestration.status reports the " +
+      "live state. One launch per turn: while a run this thread launched is active a second call " +
+      "is refused; pass 'replaceRunId' to stop it and launch the replacement. At most 8 live runs.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -248,12 +257,14 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         source: {
           type: "string",
+          description:
+            "Orchestration TypeScript. A run's author submits its validated source here; from any other thread it is a draft the author starts from.",
           minLength: 1,
         },
         workflowPath: {
           type: "string",
           description:
-            "Path to an existing saved .workflow.ts to run as-is, relative to the project workspace root (absolute paths must stay inside the workspace). Omit to have the orchestration authored from intent.",
+            "Optional. An existing .workflow.ts to run as-is: relative to your checkout (or the project root), and inside one of them. Omit to have the orchestration authored from intent.",
           minLength: 1,
         },
         recipe: {
@@ -271,15 +282,20 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
           description: "Launch arguments decoded by the orchestration's meta.inputs schema.",
         },
         intent: {
-          type: "object",
           description:
-            "The run's contract: goal, expectedOutcome, guardrails (at least one). Natural-language constraints (provider/model, scope) belong here.",
-          properties: {
-            goal: { type: "string", minLength: 1 },
-            expectedOutcome: { type: "string", minLength: 1 },
-            guardrails: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1 },
-          },
-          required: ["goal", "expectedOutcome", "guardrails"],
+            "The run's contract: a goal string, or {goal, expectedOutcome?, guardrails?}. Needed unless you pass source, workflowPath or recipe. Plain-language constraints (provider/model, scope) belong here.",
+          anyOf: [
+            { type: "string", minLength: 1 },
+            {
+              type: "object",
+              properties: {
+                goal: { type: "string", minLength: 1 },
+                expectedOutcome: { type: "string" },
+                guardrails: { type: "array", items: { type: "string" } },
+              },
+              required: ["goal"],
+            },
+          ],
         },
         replaceRunId: {
           type: "string",
@@ -288,7 +304,6 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
           minLength: 1,
         },
       },
-      required: ["intent"],
     },
   },
   "t3team.orchestration.status": {
@@ -297,7 +312,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     title: "Observe an ephemeral agent orchestration run",
     description:
       "Read-only observability for a run launched via t3team.orchestration.run: its status " +
-      "(accepted|completed|suspended|failed), what it is waiting on, and a one-sentence " +
+      "(authoring = the source is still being written, nothing runs yet; queued; running; " +
+      "suspended/sleeping/watching = parked on an ask, timer or event; paused; completed; failed; " +
+      "cancelled), what it is waiting on, and a one-sentence " +
       "next-step hint. Pass 'runId' to inspect one run — scoped to the calling thread's own " +
       "runs, an unknown id and another thread's run answer identically; omit it to list the " +
       "most recently updated runs. Prefer this over guessing from silence after a handoff.",

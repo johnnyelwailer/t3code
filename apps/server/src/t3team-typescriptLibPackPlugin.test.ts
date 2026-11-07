@@ -7,12 +7,37 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { typeCheckCompilerOptions } from "../../../packages/runbook-ts/src/typeCheckHost.ts";
 import { loadTypeScript } from "../../../packages/runbook-ts/src/typescript.ts";
+import {
+  defaultAnchorPath,
+  getTypeCheckHost,
+  resetTypeCheckHosts,
+} from "../../../packages/t3team-sdk/src/t3team-sdk.typeCheckHost.ts";
 import { t3teamTypescriptLibPackPlugin } from "../scripts/t3team-typescriptLibPackPlugin.ts";
+import { checkWorkflowSource } from "./t3team-workflowSourceCheck.ts";
 
 const tempDirs: string[] = [];
 afterEach(() => {
+  resetTypeCheckHosts();
   for (const dir of tempDirs.splice(0)) NodeFS.rmSync(dir, { recursive: true, force: true });
 });
+
+/** The packed server's inlined compiler looks for its libs beside the chunk, i.e. in `dir`. */
+const typeCheckLibsFrom = (dir: string): void => {
+  resetTypeCheckHosts();
+  getTypeCheckHost(defaultAnchorPath()).host.getDefaultLibLocation = () => dir;
+};
+
+const GLOBALS_WORKFLOW = `import { agent } from "@t3team/sdk";
+
+export const meta = { name: "globals", description: "Uses the standard library." } as const;
+
+export default async function run() {
+  const counts: Record<string, number> = { a: Math.max(1, 2) };
+  const done: Promise<string> = agent(JSON.stringify(counts), { capabilities: "inherit" });
+  if ((await done).length === 0) throw new Error("empty");
+  return { counts };
+}
+`;
 
 const writeBundleInto = (): string => {
   const outDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "ts-lib-pack-"));
@@ -45,5 +70,22 @@ describe("t3teamTypescriptLibPackPlugin", () => {
         expect(files, `${file} -> ${match[1]}`).toContain(`lib.${match[1]}.d.ts`);
       }
     }
+  });
+
+  // Fork #713: the audit ran against the packed layout and reported Record/Promise as unknown.
+  it("type-checks a workflow that uses Math, JSON, Record, Promise and Error against the packed libs", () => {
+    typeCheckLibsFrom(writeBundleInto());
+    const result = checkWorkflowSource({ source: GLOBALS_WORKFLOW });
+    expect(result.ok ? [] : result.findings).toEqual([]);
+  });
+
+  it("reports missing libs as one environment finding, never as errors in the workflow", () => {
+    const emptyDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "ts-lib-none-"));
+    tempDirs.push(emptyDir);
+    typeCheckLibsFrom(emptyDir);
+    const result = checkWorkflowSource({ source: GLOBALS_WORKFLOW });
+    const messages = result.ok ? [] : result.findings.map((finding) => finding.message);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("TypeScript lib declarations could not be loaded");
   });
 });

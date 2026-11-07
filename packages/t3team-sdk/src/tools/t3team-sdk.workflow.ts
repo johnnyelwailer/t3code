@@ -17,6 +17,26 @@ export const WorkflowRunIntent = Schema.Struct({
 });
 export type WorkflowRunIntent = typeof WorkflowRunIntent.Type;
 
+/**
+ * What a caller may pass as `intent`. A bare string is the goal, and a missing outcome or guardrail
+ * gets a conservative default: a run refused for a shape detail cost a full round trip on its first
+ * call, every time (`intent` sent as a string was the most common one). The normalized
+ * {@link WorkflowRunIntent} is still always complete.
+ */
+export const WorkflowRunIntentInput = Schema.Union([
+  Schema.String,
+  Schema.Struct({
+    goal: Schema.String,
+    expectedOutcome: Schema.optional(Schema.String),
+    guardrails: Schema.optional(Schema.Array(Schema.String)),
+  }),
+]);
+export type WorkflowRunIntentInput = typeof WorkflowRunIntentInput.Type;
+
+export const DEFAULT_RUN_EXPECTED_OUTCOME = "The goal is done and the result is reported back.";
+export const DEFAULT_RUN_GUARDRAIL =
+  "Stay within the goal; ask the user before anything destructive or irreversible.";
+
 export const RunWorkflowToolArgs = Schema.Struct({
   /** Inline workflow TypeScript source. SUPPORTED, UNDOCUMENTED on the agent surface: a parent
    * supplying one is a draft — it goes through the same author check/fix loop as an
@@ -31,8 +51,9 @@ export const RunWorkflowToolArgs = Schema.Struct({
   action: Schema.optional(Schema.String),
   /** Launch args decoded by the workflow's `meta.inputs` schema. */
   args: Schema.optional(Schema.Unknown),
-  /** Required execution contract for the workflow. */
-  intent: WorkflowRunIntent,
+  /** The run's contract. Required when the host authors the run; a run's own author and a saved
+   * `workflowPath`/`recipe` launch may omit it. */
+  intent: Schema.optional(WorkflowRunIntentInput),
   /** Stop this still-active run (launched from the same thread) before launching the new one. */
   replaceRunId: Schema.optional(Schema.String),
 });
@@ -47,12 +68,38 @@ export const RunWorkflowToolResult = Schema.Struct({
   /** The workflow UI owns all follow-up. The calling host agent must end its current turn
    * without adding explanatory prose after a successful handoff. */
   handoff: Schema.Literal("workflow-ui"),
+  /** What the caller should do or say next, in one sentence. */
+  hint: Schema.optional(Schema.String),
   /** The validated workflow output — present only when status is `completed`. */
   output: Schema.optional(Schema.Unknown),
   /** The run's failure message — present only when status is `failed`; fix and re-run. */
   error: Schema.optional(Schema.String),
 });
 export type RunWorkflowToolResult = typeof RunWorkflowToolResult.Type;
+
+const nonBlank = (values: ReadonlyArray<string>) =>
+  values.map((value) => value.trim()).filter((value) => value.length > 0);
+
+/** The complete contract from whatever the caller passed. `target` names what runs without an
+ * intent (the supplied source, a path, a recipe); empty means the host must author from intent. */
+export function normalizeRunIntent(
+  input: WorkflowRunIntentInput | undefined,
+  target: string,
+): WorkflowRunIntent {
+  const raw = typeof input === "string" ? { goal: input } : input;
+  const goal = raw?.goal.trim() ?? "";
+  if (goal.length === 0 && target.length === 0) {
+    throw new Error(
+      't3_orchestration_run requires intent: pass a goal string, or { goal, expectedOutcome?, guardrails? } — e.g. intent: "Build the release APK and report its path".',
+    );
+  }
+  const guardrails = nonBlank(raw?.guardrails ?? []);
+  return {
+    goal: goal.length > 0 ? goal : `Run ${target} as written.`,
+    expectedOutcome: raw?.expectedOutcome?.trim() || DEFAULT_RUN_EXPECTED_OUTCOME,
+    guardrails: guardrails.length > 0 ? guardrails : [DEFAULT_RUN_GUARDRAIL],
+  };
+}
 
 export const runWorkflowTool = defineTool({
   id: "t3team.orchestration.run",
@@ -76,24 +123,10 @@ export const runWorkflowTool = defineTool({
         "t3_orchestration_run 'action' names an action of 'recipe'; pass 'recipe' too.",
       );
     }
-    const intent = {
-      goal: args.intent.goal.trim(),
-      expectedOutcome: args.intent.expectedOutcome.trim(),
-      guardrails: args.intent.guardrails.map((guardrail) => guardrail.trim()),
-    };
-    if (intent.goal.length === 0 || intent.expectedOutcome.length === 0) {
-      throw new Error(
-        "t3_orchestration_run requires nonblank intent.goal and intent.expectedOutcome.",
-      );
-    }
-    if (
-      intent.guardrails.length === 0 ||
-      intent.guardrails.some((guardrail) => guardrail.length === 0)
-    ) {
-      throw new Error(
-        "t3_orchestration_run requires intent.guardrails with at least one nonblank guardrail.",
-      );
-    }
+    const intent = normalizeRunIntent(
+      args.intent,
+      source ? "the supplied orchestration source" : workflowPath || (recipe && `recipe ${recipe}`),
+    );
     if (!ctx.t3team?.runWorkflow) {
       throw new Error("t3_orchestration_run requires a t3team workflow client in ToolHandlerCtx.");
     }

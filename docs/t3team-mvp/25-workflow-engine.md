@@ -1232,11 +1232,12 @@ structure it wants instead of emitting 60–110 lines of TypeScript into its own
 
 **Risk, stated by PJ** — vision drift: the full idea may not survive the prompt lens.
 
-**Mitigation that already exists.** `t3team.orchestration.run` already _requires_
-`intent: { goal, expectedOutcome, guardrails }` — non-blank goal and expectedOutcome, at least one
-non-blank guardrail (`packages/t3team-sdk/src/tools/t3team-sdk.workflow.ts`). That is already a
-structured contract for carrying intent through a lens, rather than free prose, and a prompt-built
-workflow would inherit it unchanged.
+**Mitigation that already exists.** Every `t3team.orchestration.run` carries a complete
+`intent: { goal, expectedOutcome, guardrails }` (`packages/t3team-sdk/src/tools/t3team-sdk.workflow.ts`).
+Callers may pass just a goal string; a missing outcome or guardrail gets a conservative default
+rather than a refusal, because a refused shape detail cost every small-model caller a round trip on
+its first call. The normalized intent is still a structured contract for carrying intent through a
+lens, rather than free prose, and a prompt-built workflow inherits it unchanged.
 
 **Refinement must not be a rebuild — and the seam is already there.** Two existing mechanisms:
 

@@ -21,6 +21,10 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
+import {
+  DEFAULT_RUN_EXPECTED_OUTCOME,
+  DEFAULT_RUN_GUARDRAIL,
+} from "@t3team/sdk/tools/t3teamWorkflow";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -43,6 +47,8 @@ import { callT3TeamWorkflowRunTool } from "./t3team-toolBrokerBindingWorkflowRun
 import {
   makeWorkflowRunToolHandlers,
   recentActiveLaunchBlocker,
+  workflowAuthoringHandoff,
+  type RunWorkflowHandlerArgs,
   type T3TeamWorkflowRunToolHandlers,
 } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import { WORKFLOW_AUTHOR_TOOL_IDS } from "./t3team-workflowAuthorTurn.ts";
@@ -273,15 +279,36 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
     }),
   );
 
-  it.effect("rejects BOTH source and workflowPath, source WITHOUT intent, and a blank intent", () =>
+  // GHE #405: the launching agent reported "running" while the author was still writing.
+  it.effect("tells the caller that nothing runs while the source is being authored", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const { handlers } = yield* makeHarness();
+        const result = yield* handlers.runWorkflow({ intent });
+        assert.strictEqual(result.status, "authoring");
+        assert.include(result.hint ?? "", "Nothing is running yet");
+        assert.include(result.hint ?? "", "never that it is running");
+      }),
+    ),
+  );
+
+  // A refused shape detail cost a round trip on the first call, every time; `intent` sent as a
+  // string was the most common. Every accepted form still reaches the host as the full contract.
+  it.effect(
+    "normalizes the intent a caller passes and refuses only when nothing says what to run",
+    () =>
+      Effect.gen(function* () {
+        const received: Array<RunWorkflowHandlerArgs> = [];
         const call = (toolArgs: unknown) =>
           callT3TeamWorkflowRunTool({
             scopeLabel: "for this thread",
             toolArgs,
-            workflowRunTools: handlers,
+            workflowRunTools: {
+              runWorkflow: (args) => {
+                received.push(args);
+                return Effect.succeed(workflowAuthoringHandoff("run-intent"));
+              },
+            },
           });
         const errorText = (result: { readonly structuredContent?: unknown }) =>
           String((result.structuredContent as { readonly error?: unknown } | undefined)?.error);
@@ -290,20 +317,36 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         assert.isTrue(both.isError);
         assert.include(errorText(both), "at most one");
 
-        // `source` is supported but never a substitute for the contract: intent stays required.
-        const sourceOnly = yield* call({ source: PURE_SUM_SOURCE });
-        assert.isTrue(sourceOnly.isError);
-        assert.include(errorText(sourceOnly).toLowerCase(), "intent");
-
+        const nothing = yield* call({});
+        assert.isTrue(nothing.isError);
+        assert.include(errorText(nothing), "requires intent: pass a goal string");
         const blankGoal = yield* call({ intent: { ...intent, goal: "  " } });
         assert.isTrue(blankGoal.isError);
-        assert.include(errorText(blankGoal), "nonblank intent.goal");
 
-        const blankGuardrail = yield* call({ intent: { ...intent, guardrails: [" "] } });
-        assert.isTrue(blankGuardrail.isError);
-        assert.include(errorText(blankGuardrail), "nonblank guardrail");
+        yield* call({ intent: "  Build the release APK  " });
+        yield* call({ intent: { goal: "Sweep PRs", guardrails: [" "] } });
+        yield* call({ source: PURE_SUM_SOURCE });
+        assert.deepStrictEqual(
+          received.map((args) => args.intent),
+          [
+            {
+              goal: "Build the release APK",
+              expectedOutcome: DEFAULT_RUN_EXPECTED_OUTCOME,
+              guardrails: [DEFAULT_RUN_GUARDRAIL],
+            },
+            {
+              goal: "Sweep PRs",
+              expectedOutcome: DEFAULT_RUN_EXPECTED_OUTCOME,
+              guardrails: [DEFAULT_RUN_GUARDRAIL],
+            },
+            {
+              goal: "Run the supplied orchestration source as written.",
+              expectedOutcome: DEFAULT_RUN_EXPECTED_OUTCOME,
+              guardrails: [DEFAULT_RUN_GUARDRAIL],
+            },
+          ],
+        );
       }),
-    ),
   );
 
   it.effect(
