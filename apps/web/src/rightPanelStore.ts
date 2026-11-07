@@ -12,6 +12,7 @@ import { resolveStorage } from "./lib/storage";
 import type { ThreadPanelPresentation } from "./rightPanelLayout";
 import type { ChatFileAttachment } from "./types";
 import { pullRequestDetailTabFromSearch } from "./components/pullRequest/t3team-prDetailViewState.logic";
+import { settlePendingSideChat } from "./t3team/chat/t3team-sideChatPending";
 
 const RIGHT_PANEL_KINDS = [
   "diff",
@@ -149,6 +150,12 @@ interface RightPanelStoreState {
     kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
   ) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
+  /** t3team: swaps an optimistic side-chat tab for the started one, or drops it (`null`). */
+  settleSideChat: (
+    ref: ScopedThreadRef,
+    pendingThreadId: ThreadId,
+    threadId: ThreadId | null,
+  ) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
@@ -786,6 +793,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) =>
             upsertSurface(current, { id: `side-chat:${threadId}`, kind: "side-chat", threadId }),
+          ),
+        ),
+      settleSideChat: (ref, pendingThreadId, threadId) =>
+        set((state) =>
+          automaticUpdate(state, scopedThreadKey(ref), (current) =>
+            settlePendingSideChat(current, pendingThreadId, threadId),
           ),
         ),
       renameDevice: (ref, surfaceId, title) =>
