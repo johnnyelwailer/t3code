@@ -82,6 +82,8 @@ export type PackFeatureFlagRegistration = {
   readonly defaultEnabled: boolean;
   readonly requiresRestart: boolean;
   readonly envAliases?: readonly string[];
+  /** `YYYY-MM-DD` the switch first shipped; Settings → Features marks it New for 30 days. */
+  readonly addedOn?: string;
 };
 
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {

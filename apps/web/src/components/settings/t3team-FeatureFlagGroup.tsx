@@ -47,7 +47,7 @@ export function FeatureFlagGroup({
     <FoldedSettingsSection
       id={id}
       title={section.group}
-      summary={featureFlagGroupSummary(section)}
+      summary={featureFlagGroupSummary(section, state.now)}
       defaultOpen
     >
       <FeatureFlagRows flags={section.flags} state={state} />

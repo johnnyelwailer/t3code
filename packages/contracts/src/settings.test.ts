@@ -41,7 +41,7 @@ const encodeServerSettingsPatch = Schema.encodeSync(ServerSettingsPatch);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
 describe("storage cleanup settings", () => {
-  it("keeps cleanup disabled for existing installations", () => {
+  it("keeps worktree cleanup off and expires diagnostics after 30 days by default", () => {
     expect(decodeServerSettings({}).worktreeCleanup).toBeNull();
     expect(decodeServerSettings({}).storageCleanup).toEqual({
       worktreeAfterDays: null,
@@ -50,9 +50,16 @@ describe("storage cleanup settings", () => {
       worktreeOnDelete: false,
       worktreeUnchanged: false,
       worktreeKeepWhen: "uncommitted-changes",
-      browserArtifactsAfterDays: null,
-      logsAfterDays: null,
+      browserArtifactsAfterDays: 30,
+      logsAfterDays: 30,
     });
+  });
+
+  it("keeps an explicit opt-out of diagnostics retention", () => {
+    expect(
+      decodeServerSettings({ storageCleanup: { logsAfterDays: null } }).storageCleanup
+        .logsAfterDays,
+    ).toBeNull();
   });
 
   it("accepts partial custom patches but requires complete stored project rules", () => {

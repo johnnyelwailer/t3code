@@ -10,6 +10,7 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
       "Folder viewed checkboxes and changed-since-viewed markers in the PR Code file tree.",
     defaultEnabled: false,
     requiresRestart: false,
+    addedOn: "2026-11-03",
   },
   MYWORK_DIGEST: {
     group: "My Work",
@@ -97,6 +98,7 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
       "Run a thread on a cloud machine: create, list, cancel and claim sessions, with queued sends.",
     defaultEnabled: false,
     requiresRestart: false,
+    addedOn: "2026-09-14",
   },
   CLOUD_THREAD_HANDOFF: {
     group: "Cloud & machines",
@@ -124,5 +126,6 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
       "delegate_task accepts extensions.cloudSession: the child runs its turns on a Nexi cloud session of its project (a fitting one, or one it starts), and its messages and completion come back here. Off: the option is not offered and no remote environment instance exists.",
     defaultEnabled: false,
     requiresRestart: true,
+    addedOn: "2026-10-24",
   },
 } as const satisfies Record<string, FeatureFlagDefinition>;

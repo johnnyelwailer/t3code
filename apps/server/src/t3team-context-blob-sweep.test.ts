@@ -16,7 +16,11 @@ import {
   hashT3TeamContextBytes,
   writeT3TeamContextCasFile,
 } from "./t3team-context-blob-store.ts";
-import { markT3TeamContextBlobPurgedIfUnreferenced } from "./t3team-context-blob-store-tables.ts";
+import {
+  deleteExpiredT3TeamContextBlobTombstones,
+  markT3TeamContextBlobPurgedIfUnreferenced,
+  T3TEAM_CONTEXT_BLOB_TOMBSTONE_RETENTION_MS,
+} from "./t3team-context-blob-store-tables.ts";
 import {
   claimOrphanT3TeamContextBlobSweep,
   sweepOrphanT3TeamContextBlobs,
@@ -175,6 +179,43 @@ layer("t3team context blob sweep", (it) => {
       assert.isNull(yield* purgedAt('{"race":2}'));
       yield* markT3TeamContextBlobPurgedIfUnreferenced(sha('{"race":1}'));
       assert.isNumber(yield* purgedAt('{"race":1}'));
+    }),
+  );
+
+  it.effect("expires old unreferenced tombstones in bounded batches", () =>
+    Effect.gen(function* () {
+      yield* ensureT3TeamContextCacheTables();
+      const sql = yield* SqlClient.SqlClient;
+      const day = T3TEAM_CONTEXT_BLOB_TOMBSTONE_RETENTION_MS;
+      // Earlier cases purge at NOW_MS; anchoring there keeps their tombstones inside the window.
+      const now = NOW_MS;
+      const rows: ReadonlyArray<readonly [string, number | null]> = [
+        ["tomb-old-1", now - 2 * day],
+        ["tomb-old-2", now - 2 * day],
+        ["tomb-old-3", now - 3 * day],
+        ["tomb-young", now - day / 2],
+        ["tomb-live", null],
+        ["tomb-linked", now - 5 * day],
+      ];
+      for (const [sha256, purgedAt] of rows) {
+        yield* sql`
+          INSERT INTO t3team_context_blobs (sha256, path, size_bytes, updated_at, last_accessed_at, purged_at)
+          VALUES (${sha256}, ${sha256}, 1, 0, 0, ${purgedAt})
+        `;
+      }
+      yield* sql`
+        INSERT INTO t3team_context_artifacts (workspace_root, relative_path, kind, size_bytes, updated_at, last_accessed_at, blob_sha256)
+        VALUES ('/root', 'a.json', 'context', 1, 0, 0, 'tomb-linked')
+      `;
+      const remaining = sql<{ readonly sha256: string }>`
+        SELECT sha256 FROM t3team_context_blobs WHERE sha256 LIKE 'tomb-%' ORDER BY sha256
+      `.pipe(Effect.map((found) => found.map((row) => row.sha256)));
+
+      assert.equal(yield* deleteExpiredT3TeamContextBlobTombstones({ now, limit: 2 }), 2);
+      assert.lengthOf(yield* remaining, 4);
+      assert.equal(yield* deleteExpiredT3TeamContextBlobTombstones({ now, limit: 2 }), 1);
+      assert.deepEqual(yield* remaining, ["tomb-linked", "tomb-live", "tomb-young"]);
+      assert.equal(yield* deleteExpiredT3TeamContextBlobTombstones({ now, limit: 2 }), 0);
     }),
   );
 

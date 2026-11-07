@@ -1,20 +1,19 @@
 import { Navigate } from "@tanstack/react-router";
+import { useState } from "react";
 
-import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
-import { SettingsPageContainer } from "./settingsLayout";
 import { FeatureFlagGroup } from "./t3team-FeatureFlagGroup";
-import { PressureThresholdSettings } from "./t3team-PressureThresholdSettings";
 import { groupFeatureFlags } from "./t3team-featureFlagsSettings.logic";
-import {
-  useFeatureFlagsSettings,
-  type FeatureFlagsSettingsController,
-} from "./t3team-useFeatureFlagsSettings";
+import type { FeatureFlagsSettingsController } from "./t3team-useFeatureFlagsSettings";
 
 export function FeatureFlagsSettings({
   controller,
+  now: fixedNow,
 }: {
   readonly controller: FeatureFlagsSettingsController;
+  /** Pins which flags count as New; stories fix it so the baseline does not age. */
+  readonly now?: Date;
 }) {
+  const [openedAt] = useState(() => new Date());
   const { view, loadError, canEdit, pending, errors, setEnabled, reset } = controller;
   if (view === null) {
     return (
@@ -26,6 +25,7 @@ export function FeatureFlagsSettings({
   const state = {
     preset: view.preset,
     canEdit,
+    now: fixedNow ?? openedAt,
     pending,
     errors,
     onSetEnabled: setEnabled,
@@ -33,10 +33,6 @@ export function FeatureFlagsSettings({
   };
   return (
     <div className="flex flex-col gap-4">
-      <p className="px-3 text-xs text-muted-foreground sm:px-4">
-        An env override wins over your choice, your choice over the release preset, the preset over
-        the default.
-      </p>
       {groupFeatureFlags(view).map((section) => (
         <FeatureFlagGroup key={section.group} section={section} state={state} />
       ))}
@@ -44,22 +40,7 @@ export function FeatureFlagsSettings({
   );
 }
 
-function FeatureFlagsSettingsPanel() {
-  return (
-    <>
-      <FeatureFlagsSettings controller={useFeatureFlagsSettings()} />
-      <PressureThresholdSettings />
-    </>
-  );
-}
-
+/** Features and upstream's Labs are one page now; old links and group anchors land there. */
 export function FeatureFlagsSettingsPage() {
-  if (!useFeatureFlag("SETTINGS_FEATURES_PAGE")) {
-    return <Navigate to="/settings/general" replace />;
-  }
-  return (
-    <SettingsPageContainer>
-      <FeatureFlagsSettingsPanel />
-    </SettingsPageContainer>
-  );
+  return <Navigate to="/settings/labs" search hash replace />;
 }

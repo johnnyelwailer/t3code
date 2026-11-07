@@ -119,6 +119,55 @@ describe("isTransientT3TeamOutboxError", () => {
     ).toBe(false);
     expect(isTransientT3TeamOutboxError("plain string error")).toBe(false);
   });
+
+  it("retries in-flight transport failures by tag, like the upstream mobile outbox", () => {
+    // Effect RPC wraps a dropped-socket failure in an RpcClientError; the tag —
+    // not the message text — decides. SocketReadError/SocketWriteError read as
+    // transport failures even though their text matches no transport pattern.
+    expect(
+      isTransientT3TeamOutboxError({
+        _tag: "RpcClientError",
+        message: "SocketReadError: An error occurred during Read",
+      }),
+    ).toBe(true);
+    expect(
+      isTransientT3TeamOutboxError({
+        _tag: "RpcClientError",
+        message: "SocketWriteError: An error occurred during Write",
+      }),
+    ).toBe(true);
+    expect(
+      isTransientT3TeamOutboxError({
+        _tag: "ConnectionTransientError",
+        message: "The environment connection is not ready.",
+      }),
+    ).toBe(true);
+    expect(
+      isTransientT3TeamOutboxError({
+        _tag: "EnvironmentRpcUnavailableError",
+        message: "Home is not connected.",
+      }),
+    ).toBe(true);
+    expect(
+      isTransientT3TeamOutboxError({
+        _tag: "EnvironmentNotRegisteredError",
+        message: "No environment named env-a.",
+      }),
+    ).toBe(true);
+    // A server answer is permanent even when wrapped in a transport-tagged error.
+    expect(
+      isTransientT3TeamOutboxError({
+        _tag: "OrchestrationDispatchCommandError",
+        message: "Message dispatch was rejected.",
+      }),
+    ).toBe(false);
+    expect(
+      isTransientT3TeamOutboxError({
+        _tag: "EnvironmentAuthorizationError",
+        message: "Missing scope orchestration:operate",
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("makeT3TeamOutboxEntry", () => {

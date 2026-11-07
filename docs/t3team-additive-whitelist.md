@@ -565,8 +565,9 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 ## Settings → Features page (2026-10-22)
 
 - `apps/web/src/components/settings/FoldedSettingsSection.tsx` — optional `defaultOpen`, so the Features page's group sections start open; the default keeps every existing fold closed.
-- `apps/web/src/routes/settings.features.tsx` (unprefixed new file) — TanStack's file router derives the URL from the file name, like `settings.connected-tools.tsx`.
-- Already listed, each gains only the Features seam: `SettingsSidebarNav.tsx` (the nav entry, hidden while `SETTINGS_FEATURES_PAGE` is off), `routeTree.gen.ts` (generated entry), `packages/client-runtime/src/state/server.ts` (spreads `createFeatureFlagAtoms` from `t3team-featureFlags.ts`).
+- `apps/web/src/routes/settings.features.tsx` (unprefixed new file) — TanStack's file router derives the URL from the file name, like `settings.connected-tools.tsx`. Since 2026-11-06 it only redirects to `/settings/labs`, keeping search and hash.
+- Already listed, each gains only the Features seam: `SettingsSidebarNav.tsx` (no Features entry of its own since 2026-11-06: the page lives on `/settings/labs`, which keeps its own route and labels it Features), `routeTree.gen.ts` (generated entry), `packages/client-runtime/src/state/server.ts` (spreads `createFeatureFlagAtoms` from `t3team-featureFlags.ts`).
+- `apps/web/src/components/settings/LabsSettingsPanel.tsx` (approved by Phil, 2026-11-06): two slots that put Nexi's feature switches on upstream's Labs page, labelled Features, so Settings has one entry instead of Labs plus Features. Both render nothing while `SETTINGS_FEATURES_PAGE` is off.
 - `apps/server/src/bin.ts` — one `await import("./t3team-featureFlagBoot.ts")` ahead of the CLI graph, so the release preset is installed before any module reads a startup-only flag or resolves the state directory.
 - `packages/client-runtime/src/rpc/session.ts` — advertises the `featureFlags` capability so the server streams `featureFlagsUpdated`.
 - `packages/client-runtime/src/state/serverConfigProjection.ts` — one `featureFlagsUpdated` case that replaces `config.featureFlags`.

@@ -29,6 +29,7 @@ import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.t
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { forkParked } from "../serverActivation.ts";
+import { forkParkedHousekeeping } from "../t3team-housekeepingGrace.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
@@ -693,7 +694,7 @@ export const make = Effect.gen(function* () {
     const events = orchestrator.streamDomainEvents;
     const initialSettings = yield* settingsService.getSettings.pipe(Effect.orDie);
     let lastSettlementSettings = autoSettlementSettingsKey(initialSettings);
-    yield* forkParked(
+    yield* forkParkedHousekeeping(
       Effect.gen(function* () {
         yield* fullSweeps.enqueue(undefined);
         yield* fullSweeps.drain;
