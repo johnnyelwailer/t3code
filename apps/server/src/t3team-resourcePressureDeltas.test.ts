@@ -147,7 +147,11 @@ describe("sample step", () => {
         serverPid: 10,
         sampleIntervalMs: 20_000,
         latest: yield* Ref.make<ResourcePressureSnapshot | null>(null),
-        hysteresis: yield* Ref.make<HysteresisState>({ level: input.level, lowerStreak: 0 }),
+        hysteresis: yield* Ref.make<HysteresisState>({
+          level: input.level,
+          lowerStreak: 0,
+          criticalSinceMs: null,
+        }),
       };
     });
 

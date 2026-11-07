@@ -6,12 +6,15 @@ const percent = Schema.Number.check(Schema.isBetween({ minimum: 0.1, maximum: 50
 const usagePercent = Schema.Number.check(Schema.isBetween({ minimum: 1, maximum: 100 }));
 const cpuPercent = Schema.Number.check(Schema.isBetween({ minimum: 1, maximum: 1600 }));
 const minutes = Schema.Number.check(Schema.isBetween({ minimum: 1, maximum: 120 }));
+/** How long available memory must stay under the critical line before it escalates to critical. */
+const sustainMs = Schema.Number.check(Schema.isBetween({ minimum: 1000, maximum: 1_800_000 }));
 
 export const ResourcePressureThresholds = Schema.Struct({
   warningAvailableGiB: gib.pipe(Schema.withDecodingDefault(Effect.succeed(6))),
   criticalAvailableGiB: gib.pipe(Schema.withDecodingDefault(Effect.succeed(3))),
   warningRamPercent: percent.pipe(Schema.withDecodingDefault(Effect.succeed(15))),
   criticalRamPercent: percent.pipe(Schema.withDecodingDefault(Effect.succeed(10))),
+  criticalSustainMs: sustainMs.pipe(Schema.withDecodingDefault(Effect.succeed(60_000))),
   recoveryGiB: gib.pipe(Schema.withDecodingDefault(Effect.succeed(1))),
   recoveryRamPercent: percent.pipe(Schema.withDecodingDefault(Effect.succeed(2))),
   noticeUsageWarnPercent: usagePercent.pipe(Schema.withDecodingDefault(Effect.succeed(80))),

@@ -97,6 +97,7 @@ const makeEnabled = (
     const hysteresis = yield* Ref.make<HysteresisState>({
       level: lastEvent[0]?.toLevel ?? "ok",
       lowerStreak: 0,
+      criticalSinceMs: null,
     });
 
     const readOsLevel: Effect.Effect<OsMemoryPressureLevel | null> =
