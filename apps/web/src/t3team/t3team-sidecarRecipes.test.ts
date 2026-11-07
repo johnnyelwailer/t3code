@@ -34,6 +34,17 @@ function createProject(profileId: string, workspaceRoot?: string): ProjectShellP
 }
 
 describe("buildT3TeamSidecarRecipeQuickStarts", () => {
+  it("offers no bundled recipe to the in-thread composer until one declares thread.context", () => {
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
+      surface: "thread.context",
+      project: createProject("engineering-copilot", "/workspace/alpha"),
+      profileId: "engineering-copilot",
+      selectedWorkLabel: "Project Alpha",
+    });
+
+    expect(quickStarts).toEqual([]);
+  });
+
   it("surfaces engineering-biased recipes for the engineering copilot profile", () => {
     const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",

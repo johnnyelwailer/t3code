@@ -23,6 +23,7 @@ import {
   detachT3TeamComposerRecipe,
 } from "~/t3team/composer/t3team-composerAttachedRecipeStore";
 import { appendT3TeamRecipeMenuItems } from "~/t3team/composer/t3team-composerRecipeMenuItems";
+import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import {
   STORY_PROVIDER_SLASH_COMMANDS,
   STORY_RECIPES,
@@ -39,6 +40,7 @@ function ComposerRecipeAttachPreview(props: {
   readonly width: number;
   readonly initialText: string;
   readonly attachedRecipeIndex?: number;
+  readonly recipes?: ReadonlyArray<T3TeamSidecarRecipeQuickStart>;
 }) {
   const reactId = useId();
   const [target] = useState(() => {
@@ -60,7 +62,7 @@ function ComposerRecipeAttachPreview(props: {
   const items = appendT3TeamRecipeMenuItems({
     items: hostSlashItemsFor(trigger),
     trigger,
-    recipes: STORY_RECIPES,
+    recipes: props.recipes ?? STORY_RECIPES,
     providerSlashCommands: STORY_PROVIDER_SLASH_COMMANDS,
   });
   const menuOpen = trigger?.kind === "slash-command";
@@ -185,6 +187,13 @@ export const SlashMenu: Story = {
 
 export const SlashMenuDark: Story = { ...SlashMenu, globals: { theme: "dark" } };
 
+/** No recipe declares `thread.context` (the default): `/` lists built-ins and skills only. */
+export const SlashMenuNoRecipes: Story = {
+  render: () => <ComposerRecipeAttachPreview width={760} initialText="/" recipes={[]} />,
+};
+
+export const SlashMenuNoRecipesDark: Story = { ...SlashMenuNoRecipes, globals: { theme: "dark" } };
+
 /** `/rech` narrows recipes by alias, then id, then title; host matches still lead. */
 export const SlashMenuFiltered: Story = {
   render: () => <ComposerRecipeAttachPreview width={760} initialText="/rech" />,
@@ -192,7 +201,7 @@ export const SlashMenuFiltered: Story = {
 
 export const SlashMenuFilteredDark: Story = { ...SlashMenuFiltered, globals: { theme: "dark" } };
 
-/** A picked recipe sits above the input with a remove control; the note is typed below it. */
+/** The picked recipe as a one-line chip above the input; its description shows on hover. */
 export const AttachedRecipe: Story = {
   render: () => (
     <ComposerRecipeAttachPreview
