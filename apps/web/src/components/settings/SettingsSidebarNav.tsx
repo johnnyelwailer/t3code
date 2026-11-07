@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   ArchiveIcon,
-  FlaskConicalIcon,
   BotIcon,
   createLucideIcon,
   CalendarClockIcon,
@@ -63,7 +62,6 @@ import { useSettingsSectionNavigation } from "./useSettingsSectionNavigation";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { AccountSidebarEntry } from "../account/t3team-AccountSidebarEntry";
 import { useConnectedToolsSettingsVisible } from "./t3team-connectedToolsSettingsVisible";
-import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
   [
@@ -79,21 +77,15 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
 
 /**
  * Sections this fork adds on top of upstream's. `settingsSearch.ts` is upstream's single source of
- * truth for sections, and it is NOT modified here — the fork's extra sections are declared alongside
- * it and spliced into the derived nav list after the upstream section they follow. Upstream's
- * `/settings/beta` is gone (folded into Legacy features, #5664), so the fork drops it too.
+ * truth for sections — the fork's extra sections are declared alongside it and spliced into the
+ * derived nav list after the upstream section they follow. Nexi's feature switches live on
+ * upstream's Labs page, labelled Features there, so they need no section of their own.
  */
-export type T3TeamSettingsSectionPath = "/settings/connected-tools" | "/settings/features";
+export type T3TeamSettingsSectionPath = "/settings/connected-tools";
 export type SettingsSectionPath = SettingsPath | T3TeamSettingsSectionPath;
-
-const T3TEAM_SECTION_LABELS: Readonly<Record<T3TeamSettingsSectionPath, string>> = {
-  "/settings/connected-tools": "Connected Tools",
-  "/settings/features": "Features",
-};
 
 /** Keyed by the upstream section each fork section follows, so upstream's order stays intact. */
 const T3TEAM_SECTIONS_AFTER: Readonly<Partial<Record<SettingsPath, T3TeamSettingsSectionPath>>> = {
-  "/settings/appearance": "/settings/features",
   "/settings/providers": "/settings/connected-tools",
 };
 
@@ -121,7 +113,6 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/snap-shot": SnapShotIcon,
   "/settings/providers": BotIcon,
   "/settings/connected-tools": Link2Icon,
-  "/settings/features": FlagIcon,
   "/settings/threads": MessagesSquareIcon,
   "/settings/browser": GlobeIcon,
   "/settings/devices": SmartphoneIcon,
@@ -132,7 +123,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/access": ShieldCheckIcon,
   "/settings/secrets": KeyRoundIcon,
   "/settings/maintenance": WrenchIcon,
-  "/settings/labs": FlaskConicalIcon,
+  "/settings/labs": FlagIcon,
   "/settings/about": InfoIcon,
   "/settings/archived": ArchiveIcon,
 };
@@ -160,9 +151,7 @@ const T3TEAM_NAV_GROUPS: ReadonlyArray<{
 }));
 
 function settingsSectionLabel(to: SettingsSectionPath): string {
-  return to === "/settings/connected-tools" || to === "/settings/features"
-    ? T3TEAM_SECTION_LABELS[to]
-    : SETTINGS_SECTION_LABELS[to];
+  return to === "/settings/connected-tools" ? "Connected Tools" : SETTINGS_SECTION_LABELS[to];
 }
 
 function SettingsSectionIcon({ to }: { to: SettingsPath }) {
@@ -176,15 +165,10 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const currentHash = useLocation({ select: (location) => location.hash });
   const currentSearch = useLocation({ select: (location) => location.search });
   const scopeSearch = validateSettingsScopeSearch(currentSearch);
-  const featuresPageEnabled = useFeatureFlag("SETTINGS_FEATURES_PAGE");
   const connectedToolsVisible = useConnectedToolsSettingsVisible();
   const navGroups = T3TEAM_NAV_GROUPS.map((group) => ({
     heading: group.heading,
-    paths: group.paths.filter(
-      (to) =>
-        (to !== "/settings/features" || featuresPageEnabled) &&
-        (to !== "/settings/connected-tools" || connectedToolsVisible),
-    ),
+    paths: group.paths.filter((to) => to !== "/settings/connected-tools" || connectedToolsVisible),
   })).filter((group) => group.paths.length > 0);
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
   const navPaths = navGroups.flatMap((group) => group.paths);
