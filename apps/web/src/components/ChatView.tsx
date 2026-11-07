@@ -3188,10 +3188,12 @@ export default function ChatView(props: ChatViewProps) {
       composerContextAttachments,
       prepareComposerContextAttachments,
       beforeDispatchTurnStart,
-      dispatchTurnStartOverride: withT3TeamAttachedRecipeTurnStart(
-        composerDraftTarget,
-        dispatchTurnStartOverride,
-      ),
+      dispatchTurnStartOverride: withT3TeamAttachedRecipeTurnStart({
+        target: composerDraftTarget,
+        hostOverride: dispatchTurnStartOverride,
+        setOptimisticUserMessages,
+        setThreadError,
+      }),
       onComposerContextAttachmentsConsumed,
     },
   });

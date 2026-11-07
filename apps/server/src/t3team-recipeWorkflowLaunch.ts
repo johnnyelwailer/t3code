@@ -33,6 +33,7 @@ import type { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore
 import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
+import { forkUntilAdmitted } from "./t3team-workflowForkUntilAdmitted.ts";
 
 export interface RecipeWorkflowLaunchInput {
   readonly threadId: ThreadId;
@@ -49,6 +50,8 @@ export interface RecipeWorkflowLaunchInput {
     readonly version?: string | undefined;
     readonly action?: string | undefined;
   };
+  /** Reply once the run is admitted and keep running detached, instead of until it settles. */
+  readonly detach?: boolean;
 }
 
 export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* (
@@ -118,39 +121,50 @@ export const launchRecipeWorkflow = Effect.fn("launchRecipeWorkflow")(function* 
   // `t3team.orchestration.run` tool drives through.
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  return yield* launchPreparedWorkflow(
-    {
-      registry,
-      runRepository,
-      journalStore,
-      rearmScheduler: () => scheduler.rearm(),
-      host,
-      fileSystem,
-      path,
-      ...(signalStore === undefined
-        ? {}
-        : {
-            signalStore,
-            ...(signalReconciler === undefined
-              ? {}
-              : { pokeSignalReconcile: () => void signalReconciler.reconcile().catch(() => {}) }),
-          }),
-    },
-    {
-      runId,
-      workflowPath,
-      args: input.args,
-      // Scripts, host tools, script host and the recipe dir, persisted for rehydration.
-      ...bindings,
-      workspaceRoot: project.workspaceRoot,
-      checkoutRoot: threadCheckoutRoot(thread, project.workspaceRoot),
-      launchThreadId: threadId,
-      projectId: thread.projectId,
-      modelSelection: input.modelSelection,
-      runtimeMode: input.runtimeMode,
-      interactionMode: input.interactionMode,
-      origin: "recipe",
-      ...(onAdmitted === undefined ? {} : { onAdmitted }),
-    },
-  );
+  const launch = (admitted?: () => void) =>
+    launchPreparedWorkflow(
+      {
+        registry,
+        runRepository,
+        journalStore,
+        rearmScheduler: () => scheduler.rearm(),
+        host,
+        fileSystem,
+        path,
+        ...(signalStore === undefined
+          ? {}
+          : {
+              signalStore,
+              ...(signalReconciler === undefined
+                ? {}
+                : { pokeSignalReconcile: () => void signalReconciler.reconcile().catch(() => {}) }),
+            }),
+      },
+      {
+        runId,
+        workflowPath,
+        args: input.args,
+        // Scripts, host tools, script host and the recipe dir, persisted for rehydration.
+        ...bindings,
+        workspaceRoot: project.workspaceRoot,
+        checkoutRoot: threadCheckoutRoot(thread, project.workspaceRoot),
+        launchThreadId: threadId,
+        projectId: thread.projectId,
+        modelSelection: input.modelSelection,
+        runtimeMode: input.runtimeMode,
+        interactionMode: input.interactionMode,
+        origin: "recipe",
+        ...(onAdmitted === undefined && admitted === undefined
+          ? {}
+          : {
+              onAdmitted: async () => {
+                await onAdmitted?.();
+                admitted?.();
+              },
+            }),
+      },
+    );
+  if (input.detach !== true) return yield* launch();
+  yield* forkUntilAdmitted(launch);
+  return { runId, status: "accepted" as const };
 });

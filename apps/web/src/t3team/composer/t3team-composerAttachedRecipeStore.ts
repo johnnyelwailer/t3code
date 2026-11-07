@@ -20,6 +20,15 @@ export const useT3TeamComposerAttachedRecipeStore = create<AttachedRecipeState>(
   byTargetKey: {},
 }));
 
+/** A recipe runs on an existing thread, so a draft offers it only once its first send created one. */
+export function t3teamRecipeAttachDisabledReason(
+  target: T3TeamComposerRecipeTarget,
+): string | null {
+  return typeof target === "string"
+    ? "Send a first message to start the thread, then attach a recipe"
+    : null;
+}
+
 /** Selecting another recipe replaces the attached one: one composer, one recipe. */
 export function attachT3TeamComposerRecipe(
   target: T3TeamComposerRecipeTarget,
