@@ -506,6 +506,7 @@
     "apps/web/src/modelSelection.test.ts",
     "apps/web/src/localApi.ts",
     "apps/web/src/providerInstances.ts",
+    "apps/web/src/reopenClosedView.ts",
     "apps/web/src/reviewCommentContext.test.ts",
     "apps/web/src/rightPanelStore.test.ts",
     "apps/web/src/rightPanelStore.ts",

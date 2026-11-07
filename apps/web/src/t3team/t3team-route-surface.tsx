@@ -179,18 +179,6 @@ export function T3TeamRouteSurface() {
               search: buildRouteSearch(search),
             });
           }}
-          onCloseEmbeddedThread={() => {
-            void navigate({
-              to: pathname,
-              // Keep the current parent route and all of its search state; only close the pane.
-              search: (current) => {
-                const { chatThreadId: _ignoredChatThreadId, ...rest } = current;
-                return rest;
-              },
-              replace: true,
-              resetScroll: false,
-            });
-          }}
           onProjectCreated={(project: ProjectShellProject) => {
             // Replace, not push: Back must not return to a form for a project that now exists.
             void navigate({

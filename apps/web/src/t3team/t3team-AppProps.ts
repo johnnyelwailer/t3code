@@ -25,7 +25,6 @@ export type AppProps = {
   ) => void;
   onOpenTicket?: (projectId: string, ticketId: string, embeddedThreadId?: string | null) => void;
   onOpenThread?: (projectId: string, threadId: string) => void;
-  onCloseEmbeddedThread?: () => void;
   onProjectCreated?: (project: ProjectShellProject) => void;
 };
 
