@@ -16,7 +16,7 @@ import { mergeRecipesByPrecedence, PROJECT_LOCAL_ORIGIN } from "./t3team-project
 import { T3TEAM_PROJECT_RECIPES_ROOT } from "./t3team-projectSetupShared.ts";
 import { listRecipeAtPath, type MutableListResult } from "./t3team-recipeAgentListEntry.ts";
 import { listPackRecipesForAgent } from "./t3team-recipeAgentListPack.ts";
-import { offeredRecipes } from "./t3team-workItemDeliveryRecipesFlag.ts";
+import { offeredDiscoveredRecipes } from "./t3team-workItemDeliveryRecipesFlag.ts";
 
 /** Enumerate `<workspaceRoot>/.t3team/recipes/*`, appending each recipe directory to `out`. */
 const listProjectLocalRecipes = Effect.fn("listProjectLocalRecipes")(function* (input: {
@@ -60,7 +60,7 @@ export const listProjectRecipesForAgent = Effect.fn("listProjectRecipesForAgent"
     return {
       ok: true as const,
       workspaceRoot,
-      recipes: offeredRecipes(merged.recipes).toSorted((left, right) =>
+      recipes: offeredDiscoveredRecipes(merged.recipes).toSorted((left, right) =>
         left.id.localeCompare(right.id),
       ),
       errors: out.errors,

@@ -73,7 +73,8 @@ export const t3teamRecipeHeadlessLaunchRouteLayer = HttpRouter.add(
 
       // The agent-facing list (pack + project-local, one precedence), so a caller cannot address a
       // path the recipe does not own. It leaves out `fix-this-bug` and `implement-this` while
-      // `WORKITEM_DELIVERY_RECIPES` is off, so launching either answers "not found" until it is on.
+      // `WORKITEM_DELIVERY_RECIPES` is off, and the retired bundled copies while
+      // `BUNDLED_RECIPE_EXAMPLES` is off, so launching either answers "not found" until it is on.
       const library = yield* listProjectRecipesForAgent({ workspaceRoot: row.workspaceRoot });
       const entry = library.recipes.find((candidate) => candidate.id === recipeId);
       if (entry === undefined) {

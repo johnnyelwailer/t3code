@@ -2,7 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { areQuickStartsEqual } from "~/t3team/t3team-sidecarRecipeQuickStartEquality";
-import { buildT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
+import { buildT3TeamSidecarRecipeQuickStarts as buildQuickStarts } from "~/t3team/t3team-sidecarRecipes";
+
+/** These cases assert the bundled examples, so they run with `BUNDLED_RECIPE_EXAMPLES` on. */
+const buildT3TeamSidecarRecipeQuickStarts = (input: Parameters<typeof buildQuickStarts>[0]) =>
+  buildQuickStarts(input, true);
 
 function createProject(profileId: string): ProjectShellProject {
   return {

@@ -9,6 +9,12 @@ import { createMockBackend } from "~/t3team/backend/t3team-mockBackend";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
 
+const flags = vi.hoisted(() => ({ BUNDLED_RECIPE_EXAMPLES: false }));
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
+  useFeatureFlag: (key: string) =>
+    key === "ORCHESTRATION_RECIPES" || (flags as Record<string, boolean>)[key] === true,
+}));
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((promiseResolve) => {
@@ -253,7 +259,7 @@ describe("useT3TeamSidecarRecipeQuickStarts", () => {
       root.render(<QuickStartProbe backend={backend} project={project} renderToken={1} epicMode />);
     });
 
-    expect(host.textContent).not.toContain("tshirt-size-epic");
+    expect(host.textContent).not.toContain("explain-selected-work");
 
     await act(async () => {
       root.render(
@@ -267,10 +273,46 @@ describe("useT3TeamSidecarRecipeQuickStarts", () => {
       );
     });
 
-    expect(host.textContent).not.toContain("tshirt-size-epic");
+    expect(host.textContent).not.toContain("explain-selected-work");
 
     await act(async () => {
       root.unmount();
     });
+  });
+  it("follows BUNDLED_RECIPE_EXAMPLES: pack recipes stay, bundled examples come and go", async () => {
+    const baseBackend = createMockBackend();
+    const project = createProject();
+    const backend: BackendApi = {
+      ...baseBackend,
+      projectWorkspace: {
+        ...baseBackend.projectWorkspace,
+        discoverRecipes: async () => ({
+          workspaceRoot: project.workspace!.rootPath,
+          hasProjectLocalRecipes: false,
+          recipes: [
+            { ...createPackRecipe("pack-recipe"), surfaces: ["workitem.detail.sidepanel"] },
+          ],
+        }),
+      },
+    };
+    const render = async () => {
+      const host = document.createElement("div");
+      const root = createRoot(host);
+      await act(async () => {
+        root.render(
+          <QuickStartProbe backend={backend} project={project} renderToken={1} epicMode />,
+        );
+      });
+      await act(async () => Promise.resolve());
+      const text = host.textContent ?? "";
+      await act(async () => root.unmount());
+      return text;
+    };
+
+    flags.BUNDLED_RECIPE_EXAMPLES = false;
+    expect(await render()).toBe("pack-recipe,manage-project-recipes");
+    flags.BUNDLED_RECIPE_EXAMPLES = true;
+    expect(await render()).toContain("explain-selected-work");
+    flags.BUNDLED_RECIPE_EXAMPLES = false;
   });
 });
