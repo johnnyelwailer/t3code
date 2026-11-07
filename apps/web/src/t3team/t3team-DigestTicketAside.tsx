@@ -33,11 +33,16 @@ export function DigestTicketAside({
   ticket,
   projectThreads,
   onRememberEmbeddedThread,
+  onOpenTicket,
+  onClose = closeDigestPullRequest,
 }: {
   project: ProjectShellProject;
   ticket: DigestAsideTicket;
   projectThreads: ProjectThread[];
   onRememberEmbeddedThread: (threadId: string) => void;
+  /** Where a parent or child clicked inside opens; by default it replaces this aside. */
+  onOpenTicket?: ((ticketId: string) => void) | undefined;
+  onClose?: (() => void) | undefined;
 }) {
   const { showAgentContextMenu } = useAgentContext();
   const chatActions = useDigestTicketChatActions();
@@ -73,7 +78,7 @@ export function DigestTicketAside({
     projectThreads,
     onRememberEmbeddedThread,
   });
-  const openTicket = useCallback(
+  const openTicketInAside = useCallback(
     (ticketId: string) =>
       openDigestTicket({
         projectId: project.id,
@@ -82,6 +87,7 @@ export function DigestTicketAside({
       }),
     [project.id, ticket.openFullPage],
   );
+  const openTicket = onOpenTicket ?? openTicketInAside;
   return (
     <div className="@container/workitem-header flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border/60 px-2">
@@ -135,13 +141,7 @@ export function DigestTicketAside({
             <ExternalLink className="size-3.5" />
           </Button>
         ) : null}
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          onClick={closeDigestPullRequest}
-          aria-label="Close"
-          title="Close"
-        >
+        <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close" title="Close">
           <XIcon className="size-3.5" />
         </Button>
       </div>

@@ -5,6 +5,13 @@ import type { ChatMessage } from "~/types";
 
 export type TurnStartOverrideResult = boolean | "resolved-input";
 
+/** The Team project, and work item if any, a thread belongs to: what its panel offers as views. */
+export type T3TeamViewTabSource = {
+  readonly projectId: string;
+  readonly ticketId?: string;
+  readonly ticketDisplayId?: string;
+};
+
 export type ChatViewT3TeamExtensionProps = {
   readonly syntheticMessages?: ReadonlyArray<ChatMessage>;
   readonly onBack?: () => void;
@@ -47,6 +54,7 @@ export type ChatViewT3TeamExtensionProps = {
    * here: one queue surface, one place.
    */
   readonly composerBannerLeading?: ReactNode;
+  readonly viewTabSource?: T3TeamViewTabSource;
   readonly composerContextAttachmentSlot?: ReactNode;
   readonly composerContainerProps?: HTMLAttributes<HTMLDivElement>;
   readonly composerContainerOverlay?: ReactNode;

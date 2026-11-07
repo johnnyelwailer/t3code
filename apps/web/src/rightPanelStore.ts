@@ -12,6 +12,13 @@ import { resolveStorage } from "./lib/storage";
 import type { ThreadPanelPresentation } from "./rightPanelLayout";
 import type { ChatFileAttachment } from "./types";
 import { pullRequestDetailTabFromSearch } from "./components/pullRequest/t3team-prDetailViewState.logic";
+import {
+  isT3TeamViewTarget,
+  normalizeViewTarget,
+  viewSurfaceId,
+  type T3TeamViewSurfaceId,
+  type T3TeamViewTarget,
+} from "./t3team/t3team-viewTarget";
 
 const RIGHT_PANEL_KINDS = [
   "diff",
@@ -23,6 +30,7 @@ const RIGHT_PANEL_KINDS = [
   "pull-request",
   "pull-requests",
   "side-chat",
+  "view",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -83,7 +91,8 @@ export type RightPanelSurface =
       detailTab?: PullRequestDetailTab;
     }
   | { id: "pull-requests"; kind: "pull-requests" }
-  | { id: `side-chat:${string}`; kind: "side-chat"; threadId: ThreadId };
+  | { id: `side-chat:${string}`; kind: "side-chat"; threadId: ThreadId }
+  | { id: T3TeamViewSurfaceId; kind: "view"; target: T3TeamViewTarget };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v14 removes the agents surface; lineage lives in the thread title bar.
@@ -146,9 +155,10 @@ interface RightPanelStoreState {
   ) => boolean;
   open: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat" | "view">,
   ) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
+  openView: (ref: ScopedThreadRef, target: T3TeamViewTarget) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
@@ -218,7 +228,7 @@ interface RightPanelStoreState {
   toggleVisibility: (ref: ScopedThreadRef) => void;
   toggle: (
     ref: ScopedThreadRef,
-    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat">,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "pull-request" | "side-chat" | "view">,
   ) => void;
   setThreadPanelOpen: (
     ref: ScopedThreadRef,
@@ -241,7 +251,10 @@ const DEFAULT_THREAD_PANEL_VISIBILITY: ThreadPanelVisibility = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "pull-request" | "side-chat">,
+  kind: Exclude<
+    RightPanelKind,
+    "file" | "preview" | "terminal" | "pull-request" | "side-chat" | "view"
+  >,
 ): RightPanelSurface => {
   switch (kind) {
     case "diff":
@@ -352,6 +365,12 @@ export function pullRequestSurface(target: {
     ...(target.detailTab === undefined ? {} : { detailTab: target.detailTab }),
   };
 }
+
+const viewSurface = (target: T3TeamViewTarget): RightPanelSurface => ({
+  id: viewSurfaceId(target),
+  kind: "view",
+  target: normalizeViewTarget(target),
+});
 
 const upsertSurface = (
   current: ThreadRightPanelState,
@@ -592,6 +611,11 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                         }),
                       ];
                     }
+                    if (surface.kind === "view") {
+                      return isT3TeamViewTarget(surface.target)
+                        ? [viewSurface(surface.target)]
+                        : [];
+                    }
                     if (surface.kind !== "terminal") return [surface];
                     if (
                       !("resourceId" in surface) ||
@@ -786,6 +810,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) =>
             upsertSurface(current, { id: `side-chat:${threadId}`, kind: "side-chat", threadId }),
+          ),
+        ),
+      openView: (ref, target) =>
+        set((state) =>
+          userAction(state, scopedThreadKey(ref), (current) =>
+            upsertSurface(current, viewSurface(target)),
           ),
         ),
       renameDevice: (ref, surfaceId, title) =>

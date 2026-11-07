@@ -161,6 +161,7 @@ export function ThreadChatView({
       threadId={threadId}
       projectId={projectId}
       {...(ticketId ? { ticketId } : {})}
+      {...(ticketDisplayId ? { ticketDisplayId } : {})}
       hasServerThread={hasServerThread}
       showKickoffPlaceholder={showKickoffPlaceholder}
       kickoffMessage={kickoffMessage}

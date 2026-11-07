@@ -109,6 +109,8 @@ import {
   useCanDetachSurface,
 } from "~/t3team/detached/t3team-openDetachedSurface";
 import { detachedSurfaceRequestForRightPanelSurface } from "~/t3team/detached/t3team-rightPanelSurfaceDetach";
+import { viewTargetTitle } from "~/t3team/t3team-viewTarget";
+import { ViewTabIcon, type T3TeamAddSurfaceAction } from "~/t3team/t3team-viewTabPresentation";
 import { observeResize } from "~/lib/observeResize";
 import { surfaceShortcutKey } from "~/lib/surfaceShortcutKey";
 
@@ -160,6 +162,7 @@ export interface RightPanelTabsProps {
   sideChatAvailable?: boolean;
   /** Overrides the default reason while side chats are available but cannot start. */
   sideChatDisabledReason?: string | null;
+  t3teamAddSurfaceActions?: ReadonlyArray<T3TeamAddSurfaceAction> | undefined;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   /**
    * Replaces the surface launcher when nothing is selected. My Work passes Agent kickoff here so
@@ -345,6 +348,7 @@ function RightPanelEmptyState(props: {
   deviceAvailable: boolean;
   sideChatAvailable: boolean;
   sideChatDisabledReason: string | null;
+  t3teamAddSurfaceActions: ReadonlyArray<T3TeamAddSurfaceAction> | undefined;
 }) {
   const [highlight, setHighlight] = useState(-1);
 
@@ -419,6 +423,7 @@ function RightPanelEmptyState(props: {
           },
         ]
       : []),
+    ...(props.t3teamAddSurfaceActions ?? []),
   ] as const;
 
   type SurfaceAction = (typeof actions)[number];
@@ -606,6 +611,8 @@ function surfaceTitle(
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
       return "Side chat";
+    case "view":
+      return viewTargetTitle(surface.target);
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -696,6 +703,8 @@ function SurfaceIcon({
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
+    case "view":
+      return <ViewTabIcon target={surface.target} />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -1173,6 +1182,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           },
         ]
       : []),
+    ...(props.t3teamAddSurfaceActions ?? []),
   ] as const;
 
   const handleAddSurfaceMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -1568,6 +1578,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
               deviceAvailable={props.deviceAvailable}
               sideChatAvailable={props.sideChatAvailable === true}
               sideChatDisabledReason={props.sideChatDisabledReason ?? null}
+              t3teamAddSurfaceActions={props.t3teamAddSurfaceActions}
             />
           )
         ) : (

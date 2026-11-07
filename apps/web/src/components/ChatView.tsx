@@ -392,6 +392,7 @@ import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
 import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import { useT3TeamThreadContextQueue } from "~/t3team/chat/t3team-useThreadContextQueue";
+import { useViewTabAddActions } from "~/t3team/t3team-useViewTabAddActions";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -1035,6 +1036,7 @@ export default function ChatView(props: ChatViewProps) {
   })();
   const activeThreadRef = useActiveThreadRef(activeThread);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const t3teamViewTabActions = useViewTabAddActions(activeThreadRef, t3teamExtension.viewTabSource);
   const activeEnvironmentServerBrowser = useEnvironmentSupportsServerBrowser(
     activeThreadRef?.environmentId ?? null,
   );
@@ -4278,6 +4280,7 @@ export default function ChatView(props: ChatViewProps) {
           deviceAvailable={activeThreadRef !== null}
           sideChatAvailable={sideChat.available}
           sideChatDisabledReason={sideChatDisabledReason}
+          t3teamAddSurfaceActions={t3teamViewTabActions}
         >
           {rightPanelContent}
         </ChatRightPanel>
