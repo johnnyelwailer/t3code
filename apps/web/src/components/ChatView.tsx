@@ -62,6 +62,7 @@ import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
 import { useCloudSessionRestartProjectId } from "~/cloud/t3team-useCloudSessionOwnProject";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
+import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
 import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
 import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
@@ -3788,7 +3789,10 @@ export default function ChatView(props: ChatViewProps) {
                   >
                     <T3TeamCompanionSlot
                       placement="thread.new"
-                      mood="newThread"
+                      mood={threadCompanionMood({
+                        working: isWorking,
+                        latestRunStatus: activeLatestRun?.status,
+                      })}
                       size="md"
                       className="mb-2 flex justify-center"
                     />

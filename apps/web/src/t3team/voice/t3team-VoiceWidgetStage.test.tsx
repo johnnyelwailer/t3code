@@ -11,6 +11,7 @@ import {
 import { IDLE_VOICE_LIVE, useVoiceUiStore } from "./surface/t3team-voiceUiStore";
 import { activateAppViewPacks } from "~/t3team/packs/t3team-appViewRegistry";
 import { blobCompanionPackWebModule } from "~/t3team/packs/t3team-companionPackFixtures";
+import { T3TEAM_COMPANION_ENABLED_STORAGE_KEY } from "~/t3team/packs/t3team-companionSetting";
 
 import { VoiceWidgetStage } from "./t3team-VoiceWidgetStage";
 
@@ -97,7 +98,15 @@ describe("VoiceWidgetStage", () => {
     expect(widget()).toBeNull();
   });
 
+  it("leaves the voice companion out while the viewer has companions off (the default)", () => {
+    show("recording", { startedAtMs: 0 });
+    advance(50);
+    expect(widget()).not.toBeNull();
+    expect(container!.querySelector("[data-companion-placement]")).toBeNull();
+  });
+
   it("seats the pack's voice companion, at the low tier, following the voice state", () => {
+    window.localStorage.setItem(T3TEAM_COMPANION_ENABLED_STORAGE_KEY, "true");
     const companion = () => container!.querySelector('[data-fixture="blob-companion"]');
     show("recording", { startedAtMs: 0 });
     advance(50);
@@ -113,5 +122,6 @@ describe("VoiceWidgetStage", () => {
     show("idle");
     advance(300);
     expect(companion()).toBeNull();
+    window.localStorage.removeItem(T3TEAM_COMPANION_ENABLED_STORAGE_KEY);
   });
 });
