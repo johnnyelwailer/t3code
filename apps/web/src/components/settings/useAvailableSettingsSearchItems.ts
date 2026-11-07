@@ -16,6 +16,7 @@ import {
   filterAvailableSettingsSearchItems,
   getThreadAutoSettlementSearchAvailability,
 } from "./settingsSearch";
+import { useT3TeamSettingsSearchItems } from "~/t3team/settings/t3team-settingsRegistry";
 
 export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch = {}) {
   const { environments } = useEnvironments();
@@ -58,16 +59,21 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
   const wslSettingsRowVisible =
     isWslSettingsRowVisible({ state: desktopWsl.data, error: desktopWsl.error }) === true;
 
-  return filterAvailableSettingsSearchItems({
-    localEnvironmentDisabled,
-    hasCloudPublicConfig: cloudPublicConfig,
-    hasEnvironment,
-    hasProviderSettingsEnvironment,
-    hasMacProviderSettingsEnvironment,
-    canManageLocalBackend,
-    isWslSettingsRowVisible: wslSettingsRowVisible,
-    hasThreadAutoSettlement,
-    managedTunnelActive,
-    hasPeerLinkHost,
-  });
+  const t3teamItems = useT3TeamSettingsSearchItems();
+
+  return [
+    ...filterAvailableSettingsSearchItems({
+      localEnvironmentDisabled,
+      hasCloudPublicConfig: cloudPublicConfig,
+      hasEnvironment,
+      hasProviderSettingsEnvironment,
+      hasMacProviderSettingsEnvironment,
+      canManageLocalBackend,
+      isWslSettingsRowVisible: wslSettingsRowVisible,
+      hasThreadAutoSettlement,
+      managedTunnelActive,
+      hasPeerLinkHost,
+    }),
+    ...t3teamItems,
+  ];
 }

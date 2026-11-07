@@ -6,7 +6,7 @@
  *     the h-7 row; the parent card uses the md variant)
  *   - the SAME live status summary — `resolveActivityPillDisplay` over the
  *     thread's LLM label ("Reading contracts", else "Working"), gated on
- *     `t3teamActivityLabelsEnabled` exactly like the parent's status slot
+ *     `t3team.activityLabels` exactly like the parent's status slot
  *
  * Production component: `t3team-SidebarSubRunRow.tsx` (rendered below the
  * parent row when its "N sub-runs" chip is expanded). The rows below use
@@ -118,8 +118,8 @@ export const ChildRowStatus: Story = {
           Same building blocks as the parent card: <code className="font-mono">size</code>{" "}
           parameterizes one <code className="font-mono">ThreadActivityMorphIcon</code>; the summary
           is <code className="font-mono">resolveActivityPillDisplay</code> — the detail is only
-          shown while <code className="font-mono">t3teamActivityLabelsEnabled</code> is on, exactly
-          like the parent row.
+          shown while <code className="font-mono">t3team.activityLabels</code> is on, exactly like
+          the parent row.
         </div>
       </div>
     </div>
