@@ -19,6 +19,7 @@ import {
   type T3TeamViewSurfaceId,
   type T3TeamViewTarget,
 } from "./t3team/t3team-viewTarget";
+import { settlePendingSideChat } from "./t3team/chat/t3team-sideChatPending";
 
 const RIGHT_PANEL_KINDS = [
   "diff",
@@ -159,6 +160,12 @@ interface RightPanelStoreState {
   ) => void;
   openSideChat: (ref: ScopedThreadRef, threadId: ThreadId) => void;
   openView: (ref: ScopedThreadRef, target: T3TeamViewTarget) => void;
+  /** t3team: swaps an optimistic side-chat tab for the started one, or drops it (`null`). */
+  settleSideChat: (
+    ref: ScopedThreadRef,
+    pendingThreadId: ThreadId,
+    threadId: ThreadId | null,
+  ) => void;
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
@@ -816,6 +823,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) =>
             upsertSurface(current, viewSurface(target)),
+          ),
+        ),
+      settleSideChat: (ref, pendingThreadId, threadId) =>
+        set((state) =>
+          automaticUpdate(state, scopedThreadKey(ref), (current) =>
+            settlePendingSideChat(current, pendingThreadId, threadId),
           ),
         ),
       renameDevice: (ref, surfaceId, title) =>
