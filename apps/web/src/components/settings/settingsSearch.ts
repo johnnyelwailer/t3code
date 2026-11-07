@@ -105,7 +105,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/access": "Sharing & access",
   "/settings/secrets": "Secrets",
   "/settings/maintenance": "Maintenance",
-  "/settings/labs": "Labs",
+  "/settings/labs": "Features",
   "/settings/about": "About",
   "/settings/archived": "Archive",
 };

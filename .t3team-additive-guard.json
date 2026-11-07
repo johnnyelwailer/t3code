@@ -821,7 +821,20 @@
     "apps/web/src/components/pullRequest/PullRequestsPage.tsx",
     "apps/mobile/src/features/home/HomeRouteScreen.tsx",
     "apps/mobile/src/features/threads/ThreadNavigationSidebar.tsx",
-    "apps/mobile/src/features/pull-requests/PullRequestListFilters.tsx"
+    "apps/mobile/src/features/pull-requests/PullRequestListFilters.tsx",
+    "apps/server/src/mcpApps/McpAppRequests.test.ts",
+    "apps/server/src/mcpApps/McpAppRequests.ts",
+    "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
+    "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.testkit.ts",
+    "apps/server/src/orchestration-v2/Adapters/ClaudeAgentSdkQueryRunner.test.ts",
+    "apps/server/src/orchestration-v2/ClaudeAutomaticDelivery.integration.test.ts",
+    "apps/server/src/provider/model-manifest.json",
+    "docs/user/html-renders.md",
+    "packages/provider-core/src/server/ProviderAdapter.ts",
+    "packages/shared/src/mcpApp.test.ts",
+    "packages/shared/src/mcpApp.ts",
+    "packages/shared/src/toolOutput.test.ts",
+    "apps/web/src/components/settings/LabsSettingsPanel.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

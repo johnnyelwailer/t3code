@@ -28,6 +28,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
       "A cloud-session agent may ask you to let one host be reached through your own computer when the session's network cannot reach it. Off: the tool is not offered.",
     defaultEnabled: false,
     requiresRestart: false,
+    addedOn: "2026-10-30",
   },
   AGENTS_VIEW_CONTEXT: {
     group: "Agent",
@@ -37,6 +38,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
       "The My Work view shares what it shows (filters, visible items, selection) with the thread opened beside it, and agents can read it. Off: nothing is published and the tool is not offered.",
     defaultEnabled: false,
     requiresRestart: false,
+    addedOn: "2026-11-01",
   },
   AGENTS_PREFER_READY_PROVIDER: {
     group: "Agent",
@@ -46,6 +48,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
       "A new thread starts on a provider that is ready when the one it would default to cannot start (CLI missing or failing). Off: the configured default is used as is and shows its error.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-10-24",
   },
   AGENTS_WIDGETS: {
     group: "Agent",
@@ -88,6 +91,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
       "Hide manifest-classified legacy models from orchestrator capabilities unless includeLegacy is requested. Off: preserve pinned and search visibility.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-10-26",
   },
   ORCHESTRATION_CHILD_THREADS: {
     group: "Orchestration",
@@ -127,6 +131,7 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
       "Drag a work item, activity item or thread onto a sidebar thread to open it with that item prefilled in its composer. Off: sidebar threads are not drop targets.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-11-03",
   },
   UI_VOICE_INPUT: {
     group: "UI & rendering",

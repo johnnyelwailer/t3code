@@ -70,6 +70,7 @@ function toView(
       requiresRestart: flag.requiresRestart,
       restartPending: flag.requiresRestart && startup.get(flag.key) !== flag.enabled,
       userToggleable: flag.userToggleable !== false,
+      ...(flag.addedOn === undefined ? {} : { addedOn: flag.addedOn }),
     })),
     ...(preset === undefined ? {} : { preset }),
   };

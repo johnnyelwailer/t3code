@@ -266,8 +266,15 @@ function configureVisibleRemoteUrlWithLocalRewrite(
   localRemotePath: string,
 ): Effect.Effect<void, GitCommandError, GitVcsDriver.GitVcsDriver> {
   return Effect.gen(function* () {
-    yield* runGit(cwd, ["config", `remote.${remoteName}.url`, visibleUrl]);
-    yield* runGit(cwd, ["config", `url.${localRemotePath}.insteadOf`, visibleUrl]);
+    const driver = yield* GitVcsDriver.GitVcsDriver;
+    // Write through the driver: the config cache is per driver service, and a raw `git config`
+    // would leave the repointed remote visible to the next read until the TTL expires.
+    yield* driver.writeConfigValue({ cwd, key: `remote.${remoteName}.url`, value: visibleUrl });
+    yield* driver.writeConfigValue({
+      cwd,
+      key: `url.${localRemotePath}.insteadOf`,
+      value: visibleUrl,
+    });
   });
 }
 
@@ -2541,11 +2548,19 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
         const forkRemote = yield* createBareRemote();
         yield* runGit(repoDir, ["remote", "add", "fork", forkRemote]);
         yield* runGit(repoDir, ["push", "fork", "feature/pr-retarget"]);
-        yield* runGit(repoDir, [
-          "branch",
-          "--set-upstream-to=fork/feature/pr-retarget",
-          "feature/pr-retarget",
-        ]);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        // Retarget through the driver: raw `git branch --set-upstream-to` would leave the
+        // cached branch.<name>.remote value until its TTL expires.
+        yield* driver.writeConfigValue({
+          cwd: repoDir,
+          key: "branch.feature/pr-retarget.remote",
+          value: "fork",
+        });
+        yield* driver.writeConfigValue({
+          cwd: repoDir,
+          key: "branch.feature/pr-retarget.merge",
+          value: "refs/heads/feature/pr-retarget",
+        });
 
         yield* manager.invalidateStatus(repoDir);
         const second = yield* manager.status({ cwd: repoDir });
