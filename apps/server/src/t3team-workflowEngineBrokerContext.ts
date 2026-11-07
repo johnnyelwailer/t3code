@@ -17,6 +17,7 @@ import {
 import { T3TEAM_WIDGET_BUILDER_UNAVAILABLE } from "./t3team-widgetBuilder.ts";
 
 import type { WorkflowEngineBrokerDeps } from "./t3team-workflowEngineBrokerTypes.ts";
+import type { ChildSpawnRefusal } from "./t3team-workflowChildSpawnRefusals.ts";
 import type { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
 
 export type ReplyResolver = Parameters<MessageBroker["send"]>[1];
@@ -38,6 +39,15 @@ export type BrokerCore = {
     detail?: string,
     threadId?: string,
   ) => void;
+  /**
+   * The host's refusal of a `thread.create` on `threadId`, if that child is still missing
+   * (t3team-workflowChildSpawnRefusals.ts). `thread.create` is fired floating, so the ask verb
+   * re-throws `refusal.error` on the child's next awaited turn — where the author's `agent()` can
+   * see it — rather than starting a turn on a thread that was never created. The refusal is
+   * wrapped so a host that threw `undefined` is still a refusal, not "no refusal". Absent when the
+   * broker keeps no refusals (hand-built cores).
+   */
+  readonly childSpawnRefusalFor?: (threadId: string) => ChildSpawnRefusal | undefined;
 };
 
 export type BrokerSend = {
