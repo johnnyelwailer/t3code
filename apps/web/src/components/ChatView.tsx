@@ -414,6 +414,7 @@ const T3TeamThreadSurface = lazy(() =>
     default: module.T3TeamThreadRightPanelSurface,
   })),
 );
+const EMPTY_T3TEAM_CHAT_VIEW_EXTENSION: ChatViewT3TeamExtensionProps = {};
 const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
@@ -438,17 +439,16 @@ type ChatViewProps =
       routeKind: "server";
       draftId?: never;
     } & ChatViewT3TeamExtensionProps)
-  | ({
+  | {
       environmentId: EnvironmentId;
       threadId: ThreadId;
       onDiffPanelOpen?: () => void;
       reserveTitleBarControlInset?: boolean;
       forceExpandedMobileComposer?: boolean;
-      /** A draft hosted in a parent's right panel (the context chat tab), as a side chat is. */
-      embedded?: SideChatParentPanel;
+      embedded?: never;
       routeKind: "draft";
       draftId: DraftId;
-    } & ChatViewT3TeamExtensionProps);
+    };
 
 const DismissedFallbackWindowSchema = Schema.NullOr(Schema.String);
 
@@ -466,8 +466,9 @@ export default function ChatView(props: ChatViewProps) {
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
   const draftId = routeKind === "draft" ? props.draftId : null;
-  // t3team host extension points (ThreadChatView, and a draft embedded in a host panel).
-  const t3teamExtension: ChatViewT3TeamExtensionProps = props;
+  // t3team host extension points (ThreadChatView); the draft route never carries them.
+  const t3teamExtension: ChatViewT3TeamExtensionProps =
+    routeKind === "server" ? props : EMPTY_T3TEAM_CHAT_VIEW_EXTENSION;
   const {
     syntheticMessages,
     beforeDispatchTurnStart,
