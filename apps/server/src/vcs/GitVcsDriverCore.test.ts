@@ -200,6 +200,98 @@ describe("Git output collection", () => {
   );
 });
 
+it.effect("readConfigValue probes git once per key and re-probes after a write", () =>
+  Effect.gen(function* () {
+    const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const configGetProbes = yield* Ref.make(0);
+    const spawner = ChildProcessSpawner.make((command) =>
+      delegate
+        .spawn(command)
+        .pipe(
+          Effect.tap(() =>
+            command._tag === "StandardCommand" &&
+            command.args[0] === "config" &&
+            command.args[1] === "--get"
+              ? Ref.update(configGetProbes, (count) => count + 1)
+              : Effect.void,
+          ),
+        ),
+    );
+    const driver = yield* makeGitVcsDriverCore().pipe(
+      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Effect.provide(layerServerConfig),
+    );
+    const cwd = yield* makeTmpDir();
+    yield* driver.initRepo({ cwd });
+    const key = "t3.probe.cache";
+    const value = "probe-value";
+    yield* driver.writeConfigValue({ cwd, key, value });
+    assert.equal(yield* driver.readConfigValue(cwd, key), value);
+    assert.equal(yield* driver.readConfigValue(cwd, key), value);
+    assert.equal(yield* driver.readConfigValue(cwd, "t3.probe.missing"), null);
+    assert.equal(yield* Ref.get(configGetProbes), 2);
+    yield* driver.writeConfigValue({ cwd, key: "t3.probe.missing", value: "second" });
+    assert.equal(yield* driver.readConfigValue(cwd, "t3.probe.missing"), "second");
+    assert.equal(yield* Ref.get(configGetProbes), 3);
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(layerServerConfig.pipe(Layer.provideMerge(NodeServices.layer))),
+  ),
+);
+
+it.effect(
+  "a config-mutating driver command leaves no stale value for the next readConfigValue",
+  () =>
+    Effect.gen(function* () {
+      const delegate = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const configGetProbes = yield* Ref.make(0);
+      const spawner = ChildProcessSpawner.make((command) =>
+        delegate
+          .spawn(command)
+          .pipe(
+            Effect.tap(() =>
+              command._tag === "StandardCommand" &&
+              command.args[0] === "config" &&
+              command.args[1] === "--get"
+                ? Ref.update(configGetProbes, (count) => count + 1)
+                : Effect.void,
+            ),
+          ),
+      );
+      const driver = yield* makeGitVcsDriverCore().pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.provide(layerServerConfig),
+      );
+      const run = (cwd: string, args: readonly string[]) =>
+        driver.execute({ operation: "test.git", cwd, args, timeoutMs: 10_000 });
+      const cwd = yield* makeTmpDir();
+      yield* driver.initRepo({ cwd });
+      yield* run(cwd, ["branch", "-M", "main"]);
+      const remote = yield* makeTmpDir();
+      yield* run(remote, ["init", "--bare"]);
+      yield* run(cwd, ["remote", "add", "origin", remote]);
+      // Warm the cache: the branch has no upstream yet.
+      assert.equal(yield* driver.readConfigValue(cwd, "branch.main.remote"), null);
+      const warmedProbes = yield* Ref.get(configGetProbes);
+      yield* driver.setBranchUpstream({
+        cwd,
+        branch: "main",
+        remoteName: "origin",
+        remoteBranch: "main",
+      });
+      // No waiting: the mutation invalidated the cache, so the next read probes git again.
+      assert.equal(yield* driver.readConfigValue(cwd, "branch.main.remote"), "origin");
+      assert.equal(yield* driver.readConfigValue(cwd, "branch.main.merge"), "refs/heads/main");
+      assert.ok(
+        (yield* Ref.get(configGetProbes)) > warmedProbes,
+        "the post-mutation read probes git again",
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(layerServerConfig.pipe(Layer.provideMerge(NodeServices.layer))),
+    ),
+);
+
 const makeTmpDir = (
   prefix = "git-vcs-driver-test-",
 ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem | Scope.Scope> =>
@@ -2818,7 +2910,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         yield* git(cwd, ["commit", "-m", "feature work"]);
 
         for (const baseRef of ["upstream/main", "canonical/team/main", "release/v2"]) {
-          yield* git(cwd, ["config", "branch.feature/configured-base.gh-merge-base", baseRef]);
+          yield* driver.writeConfigValue({
+            cwd,
+            key: "branch.feature/configured-base.gh-merge-base",
+            value: baseRef,
+          });
           const status = yield* driver.statusDetailsLocal(cwd, { includeBranchChanges: true });
           assert.deepStrictEqual(status.branchChanges, { baseRef, insertions: 1, deletions: 0 });
           assert.strictEqual(status.aheadCount, 1);
@@ -2831,7 +2927,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
         }
 
         for (const baseRef of ["origin/main", "upstream/missing", "main"]) {
-          yield* git(cwd, ["config", "branch.feature/configured-base.gh-merge-base", baseRef]);
+          yield* driver.writeConfigValue({
+            cwd,
+            key: "branch.feature/configured-base.gh-merge-base",
+            value: baseRef,
+          });
           const status = yield* driver.statusDetailsLocal(cwd, { includeBranchChanges: true });
           assert.deepStrictEqual(status.branchChanges, {
             baseRef: "origin/main",
@@ -2841,11 +2941,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           assert.strictEqual(status.aheadCount, 2);
         }
 
-        yield* git(cwd, [
-          "config",
-          "branch.feature/configured-base.gh-merge-base",
-          "refs/remotes/upstream/main",
-        ]);
+        yield* driver.writeConfigValue({
+          cwd,
+          key: "branch.feature/configured-base.gh-merge-base",
+          value: "refs/remotes/upstream/main",
+        });
         yield* writeTextFile(cwd, "upstream.txt", "feature edits upstream file\n");
         for (const shadowRef of ["refs/heads/upstream/main", "refs/tags/upstream/main"]) {
           yield* git(cwd, ["update-ref", shadowRef, "HEAD~2"]);
@@ -2899,7 +2999,11 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
 
         for (const configuredBase of [undefined, "main", "release/v2"]) {
           if (configuredBase !== undefined) {
-            yield* git(cwd, ["config", "branch.feature/local-base.gh-merge-base", configuredBase]);
+            yield* driver.writeConfigValue({
+              cwd,
+              key: "branch.feature/local-base.gh-merge-base",
+              value: configuredBase,
+            });
           }
           const baseRef = configuredBase ?? "main";
           const status = yield* driver.statusDetailsLocal(cwd, { includeBranchChanges: true });
@@ -3975,7 +4079,7 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           ["1", "1"],
           ["", "0"],
         ] as const) {
-          yield* git(cwd, ["config", "checkout.workers", configured]);
+          yield* driver.writeConfigValue({ cwd, key: "checkout.workers", value: configured });
           const configuredPath = path.join(yield* makeTmpDir("git-worktrees-"), "configured");
           yield* driver.createWorktree({
             cwd,
