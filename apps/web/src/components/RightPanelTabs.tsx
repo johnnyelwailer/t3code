@@ -1,6 +1,5 @@
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
-import { PinnedPanelTab, type PinnedPanelTabProps } from "~/t3team/t3team-PinnedPanelTab";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   threadRuntimeIsActive,
@@ -57,7 +56,6 @@ import {
   type ReactNode,
   useEffect,
   useEffectEvent,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -168,11 +166,6 @@ export interface RightPanelTabsProps {
    * the default body is a recipe host, not the generic "open browser" list.
    */
   emptyState?: ReactNode;
-  /**
-   * A permanent first tab that is not a surface: active while `activeSurfaceId` is null (its
-   * body is `emptyState`), never closable or draggable. Select it with the store's `activatePinned`.
-   */
-  pinnedTab?: PinnedPanelTabProps;
   children: ReactNode;
 }
 
@@ -590,7 +583,6 @@ function surfaceTitle(
   surface: RightPanelSurface,
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>,
   terminalLabelsById: ReadonlyMap<string, string>,
-  threadTitlesById: ReadonlyMap<string, string>,
 ): string {
   switch (surface.kind) {
     case "diff":
@@ -610,8 +602,6 @@ function surfaceTitle(
       return `#${surface.number}`;
     case "pull-requests":
       return "Pull requests";
-    case "thread":
-      return threadTitlesById.get(surface.threadId) ?? "Thread";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
@@ -704,8 +694,6 @@ function SurfaceIcon({
       );
     case "pull-requests":
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
-    case "thread":
-      return <MessagesSquare className="size-3 shrink-0" />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "device":
@@ -1116,14 +1104,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     });
   };
 
-  // Side-chat tab labels: thread shells are the shared title source, falling back to "Thread"
-  // (in surfaceTitle) while a shell is not projected yet.
-  const threadShells = useThreadShells();
-  const threadTitlesById = useMemo(
-    () => new Map(threadShells.map((shell) => [shell.id, shell.title] as const)),
-    [threadShells],
-  );
-
   const addSurfaceActions = [
     {
       label: "Browser",
@@ -1363,7 +1343,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       workspaceFocusKey={`panel:${props.environmentId}:${props.activeSurfaceId ?? "empty"}`}
       workspaceLabel={
         focusedSurface
-          ? `Workspace panel: ${surfaceTitle(focusedSurface, props.previewSessions, props.terminalLabelsById, threadTitlesById)}`
+          ? `Workspace panel: ${surfaceTitle(focusedSurface, props.previewSessions, props.terminalLabelsById)}`
           : "Workspace panel"
       }
       mode={props.mode}
@@ -1392,13 +1372,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           data-right-panel-tab-list
         >
           <div className="flex h-full w-max min-w-full items-center gap-1">
-            {props.pinnedTab ? (
-              <PinnedPanelTab
-                pinned={props.pinnedTab}
-                active={props.activeSurfaceId === null}
-                ownsDesktopTitleBar={ownsDesktopTitleBar}
-              />
-            ) : null}
             <SortableTabList surfaces={props.surfaces} onMove={props.onMoveSurface}>
               {props.surfaces.map((surface) => {
                 const previewTabId = previewTabIdOf(surface, props.previewSessions);
@@ -1414,12 +1387,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     dragDisabled={!props.onMoveSurface || renamingDevice === surface.id}
                     active={surface.id === props.activeSurfaceId}
                     pending={props.pendingSurfaceIds.has(surface.id)}
-                    title={surfaceTitle(
-                      surface,
-                      props.previewSessions,
-                      props.terminalLabelsById,
-                      threadTitlesById,
-                    )}
+                    title={surfaceTitle(surface, props.previewSessions, props.terminalLabelsById)}
                     audio={tabAudioState(
                       previewTabId ? (props.desktopByTabId[previewTabId] ?? null) : null,
                     )}
