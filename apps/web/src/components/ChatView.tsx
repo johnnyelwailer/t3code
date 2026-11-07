@@ -395,6 +395,9 @@ import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
 import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import { useT3TeamThreadContextQueue } from "~/t3team/chat/t3team-useThreadContextQueue";
 import { useViewTabAddActions } from "~/t3team/t3team-useViewTabAddActions";
+import { T3TeamComposerAttachedRecipe } from "~/t3team/composer/t3team-ComposerAttachedRecipe";
+import { T3TeamComposerRecipeCatalogLoader } from "~/t3team/composer/t3team-ComposerRecipeCatalogLoader";
+import { withT3TeamAttachedRecipeTurnStart } from "~/t3team/composer/t3team-startAttachedRecipe";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -3185,7 +3188,10 @@ export default function ChatView(props: ChatViewProps) {
       composerContextAttachments,
       prepareComposerContextAttachments,
       beforeDispatchTurnStart,
-      dispatchTurnStartOverride,
+      dispatchTurnStartOverride: withT3TeamAttachedRecipeTurnStart(
+        composerDraftTarget,
+        dispatchTurnStartOverride,
+      ),
       onComposerContextAttachmentsConsumed,
     },
   });
@@ -3811,6 +3817,10 @@ export default function ChatView(props: ChatViewProps) {
                 >
                   {contextQueue.strip}
                   {composerContextAttachmentSlot}
+                  <T3TeamComposerAttachedRecipe target={composerDraftTarget} />
+                  {embedded ? null : (
+                    <T3TeamComposerRecipeCatalogLoader projectId={activeProject?.id ?? null} />
+                  )}
                   <div
                     ref={draftHeroComposerAnchorRef}
                     className="relative z-10"
