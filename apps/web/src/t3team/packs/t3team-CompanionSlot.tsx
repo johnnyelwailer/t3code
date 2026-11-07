@@ -2,7 +2,7 @@
  * The host side of `surface.companion`: one small, decorative character per placement (My Work
  * loading, My Work empty, a new thread). Unlike the other slots it renders ONE view, not every
  * registration: the first one that lists the placement, in registration order. With none — or
- * with companions switched off — it renders the surface's own `fallback` (the neutral loading
+ * with companions switched off (the default, see `t3team-companionSetting`) — it renders the surface's own `fallback` (the neutral loading
  * mark, or nothing), so mounting the slot changes nothing until a pack fills it. A companion that
  * throws is replaced by that same fallback.
  *
@@ -20,6 +20,7 @@ import { createContext, type ReactNode, useContext, useEffect, useState } from "
 import { cn } from "~/lib/utils";
 
 import { appViewRegistry } from "./t3team-appViewRegistry";
+import { useT3TeamCompanionEnabled } from "./t3team-companionSetting";
 import { ViewInstance } from "./t3team-ViewInstance";
 import type { SurfaceCompanionEntry, ViewRegistry } from "./t3team-viewRegistry";
 
@@ -29,15 +30,17 @@ export interface CompanionPreferences {
   readonly quality: ModelStageQuality;
 }
 
-export const DEFAULT_COMPANION_PREFERENCES: CompanionPreferences = {
-  enabled: true,
-  quality: "auto",
-};
+/**
+ * Stories (before/after, quality) and the voice overlay provide this; without a provider (`null`)
+ * the slot follows the viewer's Settings switch, which is off until they turn it on.
+ */
+export const CompanionPreferencesContext = createContext<CompanionPreferences | null>(null);
 
-/** Stories (before/after, quality) and a future setting provide this; the app default is on/auto. */
-export const CompanionPreferencesContext = createContext<CompanionPreferences>(
-  DEFAULT_COMPANION_PREFERENCES,
-);
+export function useCompanionPreferences(): CompanionPreferences {
+  const provided = useContext(CompanionPreferencesContext);
+  const [enabled] = useT3TeamCompanionEnabled();
+  return provided ?? { enabled, quality: "auto" };
+}
 
 /** Edge of the companion's box per size, in CSS pixels. */
 export const COMPANION_SIZE_PX: Record<SurfaceCompanionSize, number> = { sm: 48, md: 120, lg: 200 };
@@ -67,7 +70,7 @@ export function T3TeamCompanionSlot({
   /** Layout around the companion only; never applied to the fallback. */
   readonly className?: string;
 }) {
-  const { enabled, quality } = useContext(CompanionPreferencesContext);
+  const { enabled, quality } = useCompanionPreferences();
   const entry = enabled ? companionFor(appViewRegistry(), placement) : undefined;
   if (entry === undefined) return fallback;
   const edge = COMPANION_SIZE_PX[size];

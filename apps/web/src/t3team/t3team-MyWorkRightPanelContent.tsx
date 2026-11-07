@@ -1,20 +1,14 @@
 /**
- * Active-surface body for My Work's shared right panel (PR detail, side chat, browser stub).
+ * Active-surface body for My Work's shared right panel (PR detail, browser stub).
  */
 import type { EnvironmentId, ProjectId, PullRequestRef } from "@t3tools/contracts";
-import { lazy, Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { isElectron } from "~/env";
 import { PullRequestDetailPanel } from "~/components/pullRequest/PullRequestDetailPanel";
 import type { RightPanelSurface } from "~/rightPanelStore";
 
 import { openDigestPullRequest } from "./t3team-digestPrAsideStore";
-
-const T3TeamThreadSurface = lazy(() =>
-  import("~/t3team/chat/t3team-ThreadRightPanelSurface").then((module) => ({
-    default: module.T3TeamThreadRightPanelSurface,
-  })),
-);
 
 function getShortcutContext() {
   return {
@@ -59,24 +53,6 @@ export function renderMyWorkRightPanelSurface(input: {
         }}
         onClose={() => onCloseSurface(activeSurface)}
       />
-    );
-  }
-
-  if (activeSurface.kind === "thread") {
-    return (
-      <Suspense
-        fallback={
-          <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
-            Loading thread…
-          </div>
-        }
-      >
-        <T3TeamThreadSurface
-          key={activeSurface.id}
-          environmentId={activeSurface.environmentId}
-          threadId={activeSurface.threadId}
-        />
-      </Suspense>
     );
   }
 

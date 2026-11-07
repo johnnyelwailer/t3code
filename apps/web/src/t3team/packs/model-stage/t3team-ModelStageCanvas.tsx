@@ -22,7 +22,9 @@ export interface ModelStageCanvasProps {
 }
 
 const clipsKey = (clips: ModelStageClips | undefined) =>
-  clips === undefined ? "" : [clips].flat().join("\u0000");
+  clips === undefined ? "" : JSON.stringify(clips);
+const parseClips = (key: string): ModelStageClips | undefined =>
+  key === "" ? undefined : JSON.parse(key);
 
 export default function ModelStageCanvas(props: ModelStageCanvasProps) {
   const { tier, src, size, clips, oneShot, yaw, flight, groundShadow, visible } = props;
@@ -55,10 +57,8 @@ export default function ModelStageCanvas(props: ModelStageCanvasProps) {
 
   useEffect(() => scene?.setSize(size), [scene, size]);
 
-  const sequence = clipsKey(clips);
-  useEffect(() => {
-    scene?.setClips(sequence === "" ? undefined : sequence.split("\u0000"));
-  }, [scene, sequence]);
+  const clipsId = clipsKey(clips);
+  useEffect(() => scene?.setClips(parseClips(clipsId)), [scene, clipsId]);
 
   const oneShotKey = oneShot?.key;
   const oneShotClip = oneShot?.clip;

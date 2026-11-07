@@ -26,7 +26,6 @@ export function useThreadChatComposerState(input: {
   kickoffPending: boolean | undefined;
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   hasServerLaunchActivity: boolean;
-  embeddedMode?: boolean;
 }) {
   const environmentId = usePrimaryEnvironmentId();
   const threadRef = useMemo(
@@ -82,12 +81,7 @@ export function useThreadChatComposerState(input: {
     ],
   );
 
-  // Peer-thread opening for the actor-message card: a side-chat tab in this thread's right panel.
-  const onOpenThread = useT3TeamOpenSenderThread(
-    input.threadId,
-    threadRef,
-    input.embeddedMode ?? false,
-  );
+  const onOpenThread = useT3TeamOpenSenderThread(input.threadId);
 
   return {
     composerDropTarget,

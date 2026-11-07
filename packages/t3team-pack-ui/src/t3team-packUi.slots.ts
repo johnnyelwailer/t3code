@@ -133,12 +133,15 @@ export interface SidecarSectionRegistration {
 /**
  * Where the host mounts a companion: My Work's first-load state, My Work with nothing in it, a
  * new thread (the draft hero above the composer, or an empty timeline), and the floating voice
- * overlay (beside its card, while a recording is live; the host caps it at the `low` tier).
+ * overlay (beside its card, while a recording is live; the host caps it at the `low` tier). In a
+ * conversation, `thread.working` sits under the working row: it thinks while a run is active and
+ * reacts for a few seconds when the run ends well (`success`) or fails (`error`).
  */
 export type SurfaceCompanionPlacement =
   | "myWork.loading"
   | "myWork.empty"
   | "thread.new"
+  | "thread.working"
   | "voice.overlay";
 
 /**
@@ -148,8 +151,12 @@ export type SurfaceCompanionPlacement =
  *   • `cleared`   — the viewer just emptied it (the last item went away while it was on screen);
  *   • `newThread` — a conversation that has not started;
  *   • `flying`    — dedicated airborne beat (arriving / in transit); optional, pack-driven;
+ *   • `thinking`  — work is under way and takes a while (an agent turn, a long request);
+ *   • `success`   — something the viewer asked for just went through (a one-shot reaction);
+ *   • `error`     — something went wrong and the viewer should notice (a one-shot reaction);
  *   • voice (`voice.overlay`): `preparing` (the recognizer warms up), `listening` (recording),
  *     `transcribing`, `heard` (the text was committed), `failed` (an error, or no microphone).
+ * Moods are only ever added, so a companion's lookup must tolerate one it does not know.
  */
 export type SurfaceCompanionMood =
   | "loading"
@@ -157,6 +164,9 @@ export type SurfaceCompanionMood =
   | "cleared"
   | "newThread"
   | "flying"
+  | "thinking"
+  | "success"
+  | "error"
   | "preparing"
   | "listening"
   | "transcribing"

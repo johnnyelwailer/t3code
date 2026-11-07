@@ -12,6 +12,7 @@ import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepair
 import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBacklogView";
 import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
 import { ProjectMyWorkViewSwitch } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import { NewChatHereButton } from "~/t3team/t3team-NewChatHereButton";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 export function ProjectDashboard({
@@ -77,6 +78,9 @@ export function ProjectDashboard({
             </MenuPopup>
           </Menu>
         </div>
+        {dashboardMode === "backlog" ? null : (
+          <NewChatHereButton target={{ kind: "my-work", projectId: project.id }} />
+        )}
       </header>
 
       <ProjectBindingRepairBanner project={project} onProjectUpdated={onProjectUpdated} />
