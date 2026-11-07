@@ -148,8 +148,12 @@ export type SurfaceCompanionPlacement =
  *   • `cleared`   — the viewer just emptied it (the last item went away while it was on screen);
  *   • `newThread` — a conversation that has not started;
  *   • `flying`    — dedicated airborne beat (arriving / in transit); optional, pack-driven;
+ *   • `thinking`  — work is under way and takes a while (an agent turn, a long request);
+ *   • `success`   — something the viewer asked for just went through (a one-shot reaction);
+ *   • `error`     — something went wrong and the viewer should notice (a one-shot reaction);
  *   • voice (`voice.overlay`): `preparing` (the recognizer warms up), `listening` (recording),
  *     `transcribing`, `heard` (the text was committed), `failed` (an error, or no microphone).
+ * Moods are only ever added, so a companion's lookup must tolerate one it does not know.
  */
 export type SurfaceCompanionMood =
   | "loading"
@@ -157,6 +161,9 @@ export type SurfaceCompanionMood =
   | "cleared"
   | "newThread"
   | "flying"
+  | "thinking"
+  | "success"
+  | "error"
   | "preparing"
   | "listening"
   | "transcribing"
