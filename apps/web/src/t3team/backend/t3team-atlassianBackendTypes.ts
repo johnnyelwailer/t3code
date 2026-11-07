@@ -76,6 +76,7 @@ export interface AtlassianBackendApi
     readonly atlassianAccountId?: string;
   }) => Promise<TempoCapacityResponse>;
   readonly setTempoToken: (token: string | null) => Promise<{ configured: boolean }>;
+  readonly getTempoStatus: () => Promise<{ configured: boolean }>;
   readonly connectBasic: (
     input: AtlassianBasicConnectInput,
   ) => Promise<ReadonlyArray<IntegrationAccount>>;

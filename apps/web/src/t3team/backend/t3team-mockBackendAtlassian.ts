@@ -74,6 +74,7 @@ export function createMockAtlassianBackendApi(input: {
       capacities: [],
     }),
     setTempoToken: async () => ({ configured: false }),
+    getTempoStatus: async () => ({ configured: false }),
     listAccounts: async () => input.mockIntegrationProvider.listAccounts(),
     listAccountStatuses: async () =>
       (await input.mockIntegrationProvider.listAccounts()).map((account) => ({
