@@ -10,6 +10,7 @@ import type { ModelStageClips, ModelStageFlight } from "@t3team/pack-ui/contract
 
 import { lightStage, toLambert } from "./t3team-modelStageAssets";
 import { ModelStageClipPlayer } from "./t3team-modelStageClipPlayer";
+import { ModelStageFrameLoop } from "./t3team-modelStageFrameLoop";
 import { ModelStageMotion } from "./t3team-modelStageMotion";
 import { modelStageProbed, recordModelStageProbe } from "./t3team-modelStageSignals";
 import { frameIntervalMs, probeMeanMs } from "./t3team-modelStageTier";
@@ -23,10 +24,8 @@ export class ModelStageScene {
   private readonly camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
   private readonly environment: THREE.Texture | null;
   private readonly motion: ModelStageMotion;
-  private readonly player = new ModelStageClipPlayer(() => this.wake());
-  private running = false;
-  private frame = 0;
-  private last = 0;
+  private readonly player = new ModelStageClipPlayer(() => this.loop.wake());
+  private readonly loop: ModelStageFrameLoop;
   private probe: number[] | null;
   private disposed = false;
   private bounds: THREE.Sphere | null = null;
@@ -52,6 +51,11 @@ export class ModelStageScene {
     this.environment = lightStage(this.scene, this.renderer, tier);
     this.motion = new ModelStageMotion(this.scene);
     this.probe = modelStageProbed(tier) ? null : [];
+    this.loop = new ModelStageFrameLoop(
+      (delta) => this.renderFrame(delta),
+      () => this.animating(),
+      frameIntervalMs(tier),
+    );
   }
 
   get webgl(): THREE.WebGLRenderer {
@@ -84,7 +88,7 @@ export class ModelStageScene {
   setFlight(flight: ModelStageFlight | null | undefined) {
     this.motion.setFlight(flight);
     this.frameCamera();
-    if (this.motion.active()) this.wake();
+    if (this.motion.active()) this.loop.wake();
     else this.renderFrame(0);
   }
 
@@ -106,18 +110,12 @@ export class ModelStageScene {
   }
 
   setRunning(running: boolean) {
-    this.running = running;
-    if (running) this.wake();
-    else {
-      cancelAnimationFrame(this.frame);
-      this.frame = 0;
-      this.last = 0;
-    }
+    this.loop.setRunning(running);
   }
 
   dispose() {
     this.disposed = true;
-    this.setRunning(false);
+    this.loop.setRunning(false);
     this.player.dispose();
     this.motion.dispose();
     this.environment?.dispose();
@@ -140,24 +138,6 @@ export class ModelStageScene {
   private animating(): boolean {
     return this.player.running || this.motion.active();
   }
-
-  private wake() {
-    if (this.running && this.frame === 0 && !this.disposed) {
-      this.frame = requestAnimationFrame(this.tick);
-    }
-  }
-
-  private readonly tick = (now: number) => {
-    this.frame = 0;
-    if (!this.running || this.disposed) return;
-    if (this.last === 0 || now - this.last >= frameIntervalMs(this.tier) - 1) {
-      const delta = this.last === 0 ? 0 : Math.min((now - this.last) / 1000, 0.1);
-      this.last = now;
-      this.renderFrame(delta);
-    }
-    if (this.animating()) this.frame = requestAnimationFrame(this.tick);
-    else this.last = 0;
-  };
 
   private renderFrame(delta: number) {
     if (this.disposed) return;
