@@ -64,6 +64,48 @@ export function t3codeProtocolClaims(env: Env): ReadonlyArray<{
     : [{ name: "T3 Code", schemes: ["t3code", "t3code-dev"] }];
 }
 
+const URL_SCHEME = /^[a-z][a-z0-9+.-]{0,63}$/u;
+
+/**
+ * A distribution's custom URL scheme (e.g. `nexi`) that opens the app. The pack's distribution
+ * manifest declares it and the build hands it in through `T3CODE_DESKTOP_URL_SCHEMES` (comma
+ * separated). Strict: only lowercase RFC 3986 schemes are kept, so a malformed value fails the
+ * build instead of registering a scheme no one can use. `t3code` is owned by the core claim.
+ */
+export function parseDistributionUrlSchemes(env: Env): readonly string[] {
+  const raw = env.T3CODE_DESKTOP_URL_SCHEMES?.trim();
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const schemes: string[] = [];
+  for (const part of raw.split(",")) {
+    const scheme = part.trim().toLowerCase();
+    if (scheme === "") continue;
+    if (!URL_SCHEME.test(scheme)) {
+      throw new Error(
+        `T3CODE_DESKTOP_URL_SCHEMES: "${part}" is not a valid URL scheme (start with a letter, then letters, digits, + . -)`,
+      );
+    }
+    if (scheme === "t3code" || seen.has(scheme)) continue;
+    seen.add(scheme);
+    schemes.push(scheme);
+  }
+  return schemes;
+}
+
+/**
+ * The electron-builder protocol claims for a distribution's custom URL scheme. An isolated instance
+ * leaves scheme registration to the installed app, so it claims none (mirrors t3codeProtocolClaims).
+ */
+export function distributionProtocolClaims(env: Env): ReadonlyArray<{
+  readonly name: string;
+  readonly schemes: readonly string[];
+}> {
+  const schemes = parseDistributionUrlSchemes(env);
+  return isIsolatedInstanceBuild(env) || schemes.length === 0
+    ? []
+    : [{ name: "Deep links", schemes }];
+}
+
 /** Extra `desktop-branding.json` fields for an isolated instance (none for a normal build). */
 export function isolatedBrandingFields(env: Env): { readonly isolatedInstance?: true } {
   return isIsolatedInstanceBuild(env) ? { isolatedInstance: true } : {};

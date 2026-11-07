@@ -3,7 +3,9 @@ import { assert, describe, it } from "@effect/vitest";
 import {
   isIsolatedInstanceBuild,
   assertIsolatedBuildSupported,
+  distributionProtocolClaims,
   isolatedBrandingFields,
+  parseDistributionUrlSchemes,
   resolveAtlassianCallbackPorts,
   resolvePinnedBackendPort,
   t3codeProtocolClaims,
@@ -78,6 +80,45 @@ describe("isolated instance build output", () => {
       assert.deepEqual(t3codeProtocolClaims(off), [
         { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
       ]);
+    }
+  });
+});
+
+describe("distribution URL scheme claims", () => {
+  it("is empty when the build declares no scheme", () => {
+    assert.deepEqual(parseDistributionUrlSchemes({}), []);
+    assert.deepEqual(parseDistributionUrlSchemes({ T3CODE_DESKTOP_URL_SCHEMES: "" }), []);
+    assert.deepEqual(distributionProtocolClaims({}), []);
+  });
+
+  it("parses and claims the declared scheme", () => {
+    assert.deepEqual(parseDistributionUrlSchemes({ T3CODE_DESKTOP_URL_SCHEMES: "nexi" }), ["nexi"]);
+    assert.deepEqual(distributionProtocolClaims({ T3CODE_DESKTOP_URL_SCHEMES: "nexi" }), [
+      { name: "Deep links", schemes: ["nexi"] },
+    ]);
+  });
+
+  it("parses a comma list, dedupes, ignores casing, and keeps t3code out", () => {
+    assert.deepEqual(
+      parseDistributionUrlSchemes({ T3CODE_DESKTOP_URL_SCHEMES: "nexi, Nexi , t3code, foo" }),
+      ["nexi", "foo"],
+    );
+  });
+
+  it("leaves scheme registration to the installed app for an isolated instance", () => {
+    const isolated = {
+      T3CODE_DESKTOP_ISOLATED_INSTANCE: "1",
+      T3CODE_DESKTOP_URL_SCHEMES: "nexi",
+    };
+    assert.deepEqual(distributionProtocolClaims(isolated), []);
+  });
+
+  it("rejects a value that is not a valid URL scheme", () => {
+    for (const bad of ["1abc", "", "nexi bar", "has/slash", "-leading"]) {
+      assert.throws(
+        () => parseDistributionUrlSchemes({ T3CODE_DESKTOP_URL_SCHEMES: bad }),
+        /T3CODE_DESKTOP_URL_SCHEMES/u,
+      );
     }
   });
 });

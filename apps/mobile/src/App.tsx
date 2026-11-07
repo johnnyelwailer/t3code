@@ -2,6 +2,7 @@ import { installPermissionUpdateNotice } from "./features/connection/permissionU
 import { installComposerAttachmentUploads } from "./state/composer-attachment-uploads";
 import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
 import * as Linking from "expo-linking";
+import Constants from "expo-constants";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { StatusBar } from "react-native";
@@ -51,6 +52,7 @@ import { environmentThreadShells } from "./state/threads";
 import { environmentShell } from "./state/shell";
 import { OverlayPortalHost } from "./components/ui/OverlayPortal";
 import { shouldHandleAppLink, restoreDraftLinkState } from "./lib/appLinking";
+import { urlSchemesFromConfig } from "./lib/t3team-mobileUrlSchemes";
 import { hasCloudPublicConfig } from "./features/cloud/publicConfig";
 import { takeScheduledTaskNewLink } from "./features/settings/scheduled-task-editor-state";
 import {
@@ -125,8 +127,21 @@ function getAppStateFromPath(path: string, options: Parameters<typeof getStateFr
   );
 }
 
+// A distribution's custom URL scheme(s) (e.g. nexi) open a thread just like t3code:// does:
+// <scheme>://threads/<env>/<thread> strips to the path and resolves to the Thread route directly,
+// so no extra route mapping is needed. The schemes come from the app's built `extra` config.
+const distributionLinkPrefixes = urlSchemesFromConfig(Constants.expoConfig?.extra).map(
+  (scheme) => `${scheme}://`,
+);
+
 const appLinking = {
-  prefixes: [Linking.createURL("/"), "t3code://", "t3code-dev://", "t3code-preview://"],
+  prefixes: [
+    Linking.createURL("/"),
+    "t3code://",
+    "t3code-dev://",
+    "t3code-preview://",
+    ...distributionLinkPrefixes,
+  ],
   config: { initialRouteName: "Home" },
   filter: (url: string) => shouldHandleAppLink(url, hasCloudPublicConfig()),
   getInitialURL: async () => (await Linking.getInitialURL()) ?? (await launchWorkspaceURL()),

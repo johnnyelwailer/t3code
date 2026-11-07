@@ -107,6 +107,7 @@
     "apps/desktop/src/app/DesktopConfig.ts",
     "apps/desktop/src/app/DesktopEnvironment.test.ts",
     "apps/desktop/src/app/DesktopEnvironment.ts",
+    "apps/desktop/src/app/DesktopClerk.ts",
     "apps/desktop/src/app/DesktopStatePaths.ts",
     "apps/desktop/src/backend/DesktopBackendConfiguration.test.ts",
     "apps/desktop/src/backend/DesktopBackendConfiguration.ts",
