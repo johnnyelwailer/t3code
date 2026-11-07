@@ -14,6 +14,6 @@ export const T3_TEAM_THREAD_SURFACE_KIND = "t3team.thread" as const;
 export const T3_TEAM_RETiredRightPanelKinds: readonly string[] = ["thread"];
 
 /** Whether a persisted right-panel kind was retired by the fork. */
-export function t3TeamIsRetiredRightPanelKind(kind: string): boolean {
-  return T3_TEAM_RETiredRightPanelKinds.includes(kind);
+export function t3TeamIsRetiredRightPanelKind(kind: string | undefined): boolean {
+  return kind !== undefined && T3_TEAM_RETiredRightPanelKinds.includes(kind);
 }
