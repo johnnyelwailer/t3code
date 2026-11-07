@@ -51,6 +51,7 @@ const context: TimelineRowSharedState = {
   onOpenThread: vi.fn(),
   workflowOpening: null,
   onForkFromRun: async () => {},
+  onQuoteMessage: undefined,
   onToggleTurnFold: vi.fn(),
   onToggleAttemptFold: vi.fn(),
   onFileOpen: vi.fn(),

@@ -3,6 +3,7 @@ import {
   sourceControlClients,
 } from "@t3tools/client-runtime/source-control-clients";
 import {
+  COMPOSER_CONTEXT_QUOTE_TEXT_MAX_CHARS,
   COMPOSER_CONTEXT_REVIEW_DIFF_MAX_CHARS,
   COMPOSER_CONTEXT_REVIEW_TEXT_MAX_CHARS,
 } from "@t3tools/contracts";
@@ -15,6 +16,7 @@ import type {
   ImageContextRecord,
   KnownComposerContextRecord,
   MessageId,
+  MessageQuoteContextRecord,
   OrchestrationMessageContext,
   PreviewAnnotationContextRecord,
   PreviewAnnotationPayload,
@@ -176,6 +178,49 @@ export function environmentContextRecord(
     label: sanitizeComposerContextLabel(label, "environment"),
     environmentId,
   };
+}
+
+const MESSAGE_QUOTE_LABEL_FIRST_LINE_MAX_CHARS = 120;
+
+function messageQuoteContextId(messageId: MessageId): ComposerContextId {
+  return toKindScopedComposerContextId("message-quote", messageId);
+}
+
+function messageQuoteFirstLine(text: string): string {
+  const line =
+    text
+      .split(/\r?\n/)
+      .find((candidate) => candidate.trim().length > 0)
+      ?.trim() ?? "";
+  return line.length > MESSAGE_QUOTE_LABEL_FIRST_LINE_MAX_CHARS
+    ? `${line.slice(0, MESSAGE_QUOTE_LABEL_FIRST_LINE_MAX_CHARS - 1)}…`
+    : line;
+}
+
+export function messageQuoteContextRecord(input: {
+  messageId: MessageId;
+  author: string;
+  text: string;
+}): MessageQuoteContextRecord {
+  const author = sanitizeComposerContextLabel(input.author, "message-quote");
+  return {
+    version: 1,
+    kind: "message-quote",
+    contextId: messageQuoteContextId(input.messageId),
+    label: sanitizeComposerContextLabel(
+      `${author}: ${messageQuoteFirstLine(input.text)}`,
+      "message-quote",
+    ),
+    author,
+    messageId: input.messageId,
+    quotedText: clampContextText(input.text, COMPOSER_CONTEXT_QUOTE_TEXT_MAX_CHARS),
+  };
+}
+
+export function messageQuoteContextReference(
+  record: MessageQuoteContextRecord,
+): ComposerContextReference {
+  return { kind: "message-quote", contextId: record.contextId, label: record.label };
 }
 
 /**
@@ -371,6 +416,7 @@ export function buildMessageContext(input: {
   threadContexts?: ReadonlyArray<ThreadContextRecord>;
   environmentContexts?: ReadonlyArray<EnvironmentContextRecord>;
   workItems?: ReadonlyArray<WorkItemContextDraft>;
+  messageQuotes?: ReadonlyArray<MessageQuoteContextRecord>;
   attachments?: ReadonlyArray<BoundComposerAttachment>;
 }): OrchestrationMessageContext | undefined {
   const screenshotAttachmentIds = new Set(
@@ -384,6 +430,7 @@ export function buildMessageContext(input: {
     ...(input.threadContexts ?? []),
     ...(input.environmentContexts ?? []),
     ...(input.workItems ?? []).map(workItemContextRecord),
+    ...(input.messageQuotes ?? []).map((record) => ({ ...record })),
     ...input.previewAnnotations.map((annotation) =>
       previewAnnotationContextRecord(annotation, {
         screenshotContextId: screenshotAttachmentIds.has(annotation.id) ? annotation.id : undefined,
