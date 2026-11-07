@@ -24,6 +24,7 @@ export interface ThreadChatViewBodyProps {
   projectId: string;
   /** Absent on threads that do not belong to a work item — nothing can be staged for those. */
   ticketId?: string | undefined;
+  ticketDisplayId?: string | undefined;
   hasServerThread: boolean;
   showKickoffPlaceholder: boolean;
   kickoffMessage: string | undefined;
@@ -50,6 +51,7 @@ export function ThreadChatViewBody({
   threadId,
   projectId,
   ticketId,
+  ticketDisplayId,
   hasServerThread,
   showKickoffPlaceholder,
   kickoffMessage,
@@ -155,6 +157,11 @@ export function ThreadChatViewBody({
           {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
           onOpenThread={onOpenThread}
           {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
+          viewTabSource={{
+            projectId,
+            ...(ticketId ? { ticketId } : {}),
+            ...(ticketDisplayId ? { ticketDisplayId } : {}),
+          }}
         />
       </ComposerHandleContext>
     </div>

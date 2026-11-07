@@ -428,6 +428,7 @@
     "apps/web/src/components/chat/ProviderModelPicker.tsx",
     "apps/web/src/components/chat/ProviderStatusBanner.test.tsx",
     "apps/web/src/components/chat/ProviderStatusBanner.tsx",
+    "apps/web/src/components/chat/RightPanelSurfaceContent.tsx",
     "apps/web/src/components/chat/ThreadDetailsPanel.test.tsx",
     "apps/web/src/components/chat/ThreadDetailsPanel.tsx",
     "apps/web/src/components/chat/ThreadDetailsPrRow.tsx",
