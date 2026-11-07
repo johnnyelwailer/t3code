@@ -423,22 +423,34 @@ describe("ServerSettings linked environments", () => {
   });
 });
 
-describe("ServerSettings sidebar pin persistence", () => {
-  it("defaults to undefined so server config stays sparse", () => {
-    expect(DEFAULT_SERVER_SETTINGS.t3teamStoredSidebarPinsJson).toBeUndefined();
-    expect(DEFAULT_SERVER_SETTINGS.t3teamStoredSidecarCompositionJson).toBeUndefined();
-    expect(decodeServerSettingsPatch({}).t3teamStoredSidebarPinsJson).toBeUndefined();
+describe("ServerSettings t3team namespace", () => {
+  it("defaults to sparse so server config stays sparse", () => {
+    expect(DEFAULT_SERVER_SETTINGS.t3team.storedSidebarPinsJson).toBeUndefined();
+    expect(DEFAULT_SERVER_SETTINGS.t3team.storedSidecarCompositionJson).toBeUndefined();
+    expect(decodeServerSettingsPatch({}).t3team).toBeUndefined();
   });
 
   it("trims pin and sidecar composition JSON in patches", () => {
     const pinPatch = decodeServerSettingsPatch({
-      t3teamStoredSidebarPinsJson: '  [{"id":"pin-1"}]  ',
-      t3teamStoredSidecarCompositionJson:
-        '  {"sections":[{"sectionId":"quick-starts","collapsed":true}]}  ',
+      t3team: {
+        storedSidebarPinsJson: '  [{"id":"pin-1"}]  ',
+        storedSidecarCompositionJson:
+          '  {"sections":[{"sectionId":"quick-starts","collapsed":true}]}  ',
+      },
     });
-    expect(pinPatch.t3teamStoredSidebarPinsJson).toBe('[{"id":"pin-1"}]');
-    expect(pinPatch.t3teamStoredSidecarCompositionJson).toBe(
+    expect(pinPatch.t3team?.storedSidebarPinsJson).toBe('[{"id":"pin-1"}]');
+    expect(pinPatch.t3team?.storedSidecarCompositionJson).toBe(
       '{"sections":[{"sectionId":"quick-starts","collapsed":true}]}',
+    );
+  });
+
+  it("keeps fork toggle defaults on", () => {
+    const decoded = decodeServerSettings({});
+    expect(decoded.t3team.activityLabels).toBe(true);
+    expect(decoded.t3team.projectScopePills).toBe(true);
+    expect(decoded.t3team.projectSourceIconIngest).toBe(true);
+    expect(decodeServerSettings({ t3team: { activityLabels: false } }).t3team.activityLabels).toBe(
+      false,
     );
   });
 });

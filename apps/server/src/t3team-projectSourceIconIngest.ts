@@ -7,7 +7,7 @@
  * path: `t3team-projectSourceIconReactor` runs this off the command queue
  * and, on success, dispatches a follow-up `project.meta.update` carrying
  * the stored path (normal dispatch: queue-backed, receipt-emitting). Gated
- * by the `t3teamProjectSourceIconIngestEnabled` server setting (on by
+ * by the `t3team.projectSourceIconIngest` server setting (on by
  * default, fail-open). Any failure — including missing platform services —
  * yields `null` and the project keeps its fallback icon.
  */
@@ -73,7 +73,7 @@ export const ingestFlagEnabled = Effect.fn("ProjectSourceIconIngest.flagEnabled"
   const serverSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
   if (Option.isNone(serverSettings)) return false;
   const enabled = yield* serverSettings.value.getSettings.pipe(
-    Effect.map((settings) => settings.t3teamProjectSourceIconIngestEnabled !== false),
+    Effect.map((settings) => settings.t3team?.projectSourceIconIngest !== false),
     Effect.orElseSucceed(() => false),
   );
   return enabled;

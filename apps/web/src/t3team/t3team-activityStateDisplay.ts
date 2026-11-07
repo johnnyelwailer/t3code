@@ -13,7 +13,7 @@
  * is present (it is shorter and already names the activity) — the two never
  * render side by side. So the pill reads the enrichment alone when available,
  * else the deterministic state word, else the stable status label. The label
- * is present only while the `t3teamActivityLabelsEnabled` flag is on (the pill
+ * is present only while the `t3team.activityLabels` flag is on (the pill
  * resolvers gate `activityLabel` on the flag before it reaches this module).
  *
  * Fail-open: flag off or LLM failure leaves `activityLabel` empty and the

@@ -25,7 +25,7 @@ function parseSidebarNavPreferences(raw: string | undefined): T3TeamSidebarNavPr
 export function readStoredSidebarNavPreferencesFromClientSettings(
   settings: ClientSettings | null | undefined,
 ): T3TeamSidebarNavPreferences {
-  return parseSidebarNavPreferences(settings?.t3teamStoredSidebarNavPreferencesJson);
+  return parseSidebarNavPreferences(settings?.t3team.storedSidebarNavPreferencesJson);
 }
 
 export async function hydrateStoredSidebarNavPreferences(): Promise<T3TeamSidebarNavPreferences> {
@@ -39,13 +39,16 @@ export async function hydrateStoredSidebarNavPreferences(): Promise<T3TeamSideba
     const currentSettings = settings ?? DEFAULT_CLIENT_SETTINGS;
     const preferencesByProjectId = readStoredSidebarNavPreferencesFromClientSettings(settings);
     const nextJson = encodeSidebarNavPreferences(preferencesByProjectId);
-    const currentJson = settings?.t3teamStoredSidebarNavPreferencesJson ?? "";
+    const currentJson = settings?.t3team.storedSidebarNavPreferencesJson ?? "";
 
     if (currentJson !== nextJson && (currentJson.length > 0 || nextJson.length > 2)) {
       await localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...currentSettings,
-        t3teamStoredSidebarNavPreferencesJson: nextJson,
+        t3team: {
+          ...currentSettings.t3team,
+          storedSidebarNavPreferencesJson: nextJson,
+        },
       });
     }
 
@@ -71,7 +74,10 @@ export function persistStoredSidebarNavPreferences(
       return localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...currentSettings,
-        t3teamStoredSidebarNavPreferencesJson: nextJson,
+        t3team: {
+          ...currentSettings.t3team,
+          storedSidebarNavPreferencesJson: nextJson,
+        },
       });
     })
     .catch(() => {
