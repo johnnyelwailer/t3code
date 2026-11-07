@@ -42,7 +42,7 @@ const APP_WARN_TOTAL_FRACTION = 0.25;
 const APP_CRITICAL_TOTAL_FRACTION = 0.4;
 export const DEESCALATE_SAMPLES = 2;
 /** A critical is only under the available-memory line; escalate once it has held for this long. */
-export const CRITICAL_SUSTAIN_MS = 60_000;
+const CRITICAL_SUSTAIN_MS = 60_000;
 const TOP_CONSUMER_COUNT = 8;
 
 const RANK: Record<ResourcePressureLevel, number> = { ok: 0, warn: 1, critical: 2 };
