@@ -2,16 +2,11 @@ import type { ServerProvider } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
-import {
-  T3TEAM_FIRST_PROJECT_SETUP_REASON,
-  type T3TeamSetupSurfaceReason,
-} from "~/t3team/t3team-setupSurfaceReason";
 
 import { ProjectBrowserEmptyWithChat } from "./t3team-AppMainContentShell";
 
 export function AppMainContentHomeEmptyState({
   onCreate,
-  setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   showAside,
   shouldInsetDesktopHeader = false,
   scratchProject,
@@ -22,7 +17,6 @@ export function AppMainContentHomeEmptyState({
   onKickoffHomeThread,
 }: {
   onCreate: () => void;
-  setupSurfaceReason?: T3TeamSetupSurfaceReason;
   showAside: boolean;
   shouldInsetDesktopHeader?: boolean;
   scratchProject: ProjectShellProject | null;
@@ -35,7 +29,6 @@ export function AppMainContentHomeEmptyState({
   return (
     <ProjectBrowserEmptyWithChat
       onCreate={onCreate}
-      setupSurfaceReason={setupSurfaceReason}
       showAside={showAside}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       project={scratchProject}

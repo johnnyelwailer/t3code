@@ -32,7 +32,7 @@ import { DesktopRouteAnswerObserver } from "../cloud/t3team-DesktopRouteAnswerOb
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
-import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
+import { T3TeamChatGptWelcomeCoordinator } from "../components/onboarding/t3team-ChatGptWelcomeGate";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { Button } from "../components/ui/button";
@@ -245,7 +245,7 @@ function RootRouteBranch() {
 
   return (
     <>
-      <ChatGptWelcomeCoordinator />
+      <T3TeamChatGptWelcomeCoordinator />
       <FirstRunGate
         enabled={primaryEnvironmentAuthenticated}
         hostedStatic={authGateState.status === "hosted-static"}

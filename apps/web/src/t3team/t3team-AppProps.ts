@@ -11,7 +11,6 @@ export type AppProps = {
   view?: ViewState | null;
   dashboardMode?: ProjectDashboardMode;
   showCreate?: boolean;
-  reopenInitialSetup?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
   /** The project whose linked-repositories dialog is open; when given, the route owns the state. */
   manageRepositoriesProjectId?: string | null;

@@ -8,13 +8,8 @@ import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRe
 import { bindProjectKickoffThread } from "~/t3team/t3team-bindProjectKickoffThread";
 import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
-import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
-import { T3TeamSetupWelcomeSurface } from "~/t3team/t3team-SetupWelcomeSurface";
+import { T3TeamMyWorkNoWorkSourceEmpty } from "~/t3team/t3team-MyWorkNoWorkSourceEmpty";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
-import {
-  T3TEAM_FIRST_PROJECT_SETUP_REASON,
-  type T3TeamSetupSurfaceReason,
-} from "~/t3team/t3team-setupSurfaceReason";
 import { Button } from "~/components/ui/button";
 import { readActiveThreadIdFromView, type ViewState } from "~/t3team/t3team-types";
 
@@ -52,27 +47,14 @@ export function useSyncActiveChatTarget(view: ViewState | null) {
   }, [setActiveChatTarget, view]);
 }
 
+/** The home without a work project: My Work's own empty state, plus the connect-Jira hint. */
 function ProjectBrowserEmpty({
   onCreate,
-  setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
-  setupSurfaceReason?: T3TeamSetupSurfaceReason;
   shouldInsetDesktopHeader?: boolean;
 }) {
-  // The welcome surface beside this header already titles itself with the pack's
-  // `labels.appName`; hardcoding the product name here made the distribution read
-  // "Set up t3team" next to "Bring your Jira work into Nexi Work".
-  const appearance = useT3TeamPackAppearance();
-  const productName = appearance?.labels?.appName ?? "t3team";
-  // Projects already exist but none is bound to a work source: this is not a
-  // first-run setup, so the header must not claim it is one.
-  const headerLabel =
-    setupSurfaceReason.kind === "no-work-project"
-      ? "Connect a work source"
-      : `Set up ${productName}`;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header
@@ -81,11 +63,11 @@ function ProjectBrowserEmpty({
         })}
       >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-        <span className="text-sm font-medium text-muted-foreground/70">{headerLabel}</span>
+        <span className="text-sm font-medium text-muted-foreground/70">My Work</span>
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full min-h-0">
-          <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />
+          <T3TeamMyWorkNoWorkSourceEmpty onConnect={onCreate} />
         </div>
       </div>
     </div>
@@ -101,7 +83,6 @@ export function ProjectBrowserEmptyWithChat({
   onKickoffProjectThread,
   onStartScratch,
   showAside = true,
-  setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   shouldInsetDesktopHeader = false,
 }: {
   onCreate: () => void;
@@ -113,14 +94,12 @@ export function ProjectBrowserEmptyWithChat({
   /** Creates the Scratch project the project-less chat lives in, while it does not exist yet. */
   onStartScratch?: (() => void) | undefined;
   showAside?: boolean;
-  setupSurfaceReason?: T3TeamSetupSurfaceReason;
   shouldInsetDesktopHeader?: boolean;
 }) {
   if (!showAside) {
     return (
       <ProjectBrowserEmpty
         onCreate={onCreate}
-        setupSurfaceReason={setupSurfaceReason}
         shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       />
     );
@@ -138,7 +117,6 @@ export function ProjectBrowserEmptyWithChat({
         main={
           <ProjectBrowserEmpty
             onCreate={onCreate}
-            setupSurfaceReason={setupSurfaceReason}
             shouldInsetDesktopHeader={shouldInsetDesktopHeader}
           />
         }

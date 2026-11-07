@@ -1,4 +1,4 @@
-/* The setup welcome surface's backdrop art (t3team-SetupWelcomeSurface.tsx): a sky glow
+/* Backdrop art for full-page surfaces (t3team-CreateProjectPage.tsx): a sky glow
  * at the top edge over a diagonal wash that tints the page background warm in light mode
  * and cool in dark mode. Artwork, not a theme surface, so the palette colors are fixed. */
 @utility t3team-welcome-glow {

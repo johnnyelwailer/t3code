@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { CreateProjectChooseStep } from "~/t3team/t3team-CreateProjectChooseStep";
-import { T3TeamSetupWelcomeSurface } from "~/t3team/t3team-SetupWelcomeSurface";
 import {
   ConnectFrame,
   StoryFrame,
@@ -108,19 +107,4 @@ export const NotConnectedTokenFallback: Story = {
     catalogState: catalogState({ catalog: [], connected: false }),
     connectPanel: <ConnectFrame connect={connectFixture()} initialShowTokenForm />,
   }),
-};
-
-/** First run: the same full-page flow opens over the welcome surface, no separate inline copy. */
-export const FirstRunOverWelcome: Story = {
-  args: chooseProps(),
-  render: (args) => (
-    <>
-      <div className="flex h-screen flex-col bg-background">
-        <T3TeamSetupWelcomeSurface onCreate={() => {}} />
-      </div>
-      <StoryFrame>
-        <CreateProjectChooseStep {...args} />
-      </StoryFrame>
-    </>
-  ),
 };

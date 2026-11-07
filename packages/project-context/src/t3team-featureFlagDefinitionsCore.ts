@@ -44,6 +44,15 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
   },
   // Temporarily disabled 2026-10-07: only the developer profile is tailored, so the chooser
   // costs a setup step without changing the UX. Relanding: nexplore.ghe.com/hive/nx-nexi/issues/60.
+  FIRST_RUN_WORK_SOURCE: {
+    group: "UI & rendering",
+    subgroup: "Onboarding",
+    label: "Work-source first run",
+    description:
+      "The setup wizard connects Jira, a first project and GitHub instead of importing Claude Code and Codex history, and skips the ChatGPT sharing notice. Off: the standard wizard.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   WORK_PROFILE_CHOOSER: {
     group: "UI & rendering",
     subgroup: "Onboarding",

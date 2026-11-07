@@ -3,7 +3,6 @@ import { useState } from "react";
 
 import type { EnvironmentSetupProfile } from "@t3tools/contracts";
 
-import { T3TeamSetupWelcomeProfileColumn } from "~/t3team/t3team-SetupWelcomeProfileColumn";
 import {
   T3TeamProjectSetupProfileCards,
   listT3TeamProjectSetupCardOptions,
@@ -32,10 +31,8 @@ const packProfiles: readonly EnvironmentSetupProfile[] = [
 
 /**
  * The working-style cards: chosen once (behind `WORK_PROFILE_CHOOSER`, default off — see
- * `t3team-workProfileChooser.ts`), reachable from Settings ("Reopen initial setup") or first run,
- * never per project. `T3TeamProjectSetupProfileCards` itself does not read the flag — the gate
- * lives one level up, in `T3TeamSetupWelcomeSurface` — so these stories render the real cards
- * directly rather than faking server config.
+ * `t3team-workProfileChooser.ts`), from Settings, never per project. The cards do not read the
+ * flag themselves, so these stories render the real cards directly.
  */
 const meta = {
   title: "T3Team/Create Project/Working Style",
@@ -63,13 +60,4 @@ export const Default: Story = {
 
 export const DeveloperSelected: Story = {
   render: () => <Cards initial="engineer" />,
-};
-
-/** The full first-run / "Reopen initial setup" column, as it renders with the flag on. */
-export const WelcomeColumn: Story = {
-  render: () => (
-    <div className="min-h-screen bg-background p-8">
-      <T3TeamSetupWelcomeProfileColumn packProfiles={packProfiles} />
-    </div>
-  ),
 };
