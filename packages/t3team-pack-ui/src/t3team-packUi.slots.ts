@@ -133,12 +133,15 @@ export interface SidecarSectionRegistration {
 /**
  * Where the host mounts a companion: My Work's first-load state, My Work with nothing in it, a
  * new thread (the draft hero above the composer, or an empty timeline), and the floating voice
- * overlay (beside its card, while a recording is live; the host caps it at the `low` tier).
+ * overlay (beside its card, while a recording is live; the host caps it at the `low` tier). In a
+ * conversation, `thread.working` sits under the working row: it thinks while a run is active and
+ * reacts for a few seconds when the run ends well (`success`) or fails (`error`).
  */
 export type SurfaceCompanionPlacement =
   | "myWork.loading"
   | "myWork.empty"
   | "thread.new"
+  | "thread.working"
   | "voice.overlay";
 
 /**

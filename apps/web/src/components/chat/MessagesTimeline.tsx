@@ -28,6 +28,7 @@ import { createThreadJobsController } from "~/t3team/backend/t3team-thread-jobsB
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
+import { T3TeamRunCompanion } from "~/t3team/chat/t3team-RunCompanion";
 import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
@@ -1446,6 +1447,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
           </div>
         </TimelineRowCtx>
       ) : null}
+      <T3TeamRunCompanion
+        key={listIdentityKey}
+        working={isWorking}
+        latestRunStatus={latestRun?.status}
+      />
     </TimelineListFooter>
   );
 
