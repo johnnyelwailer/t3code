@@ -49,12 +49,7 @@ function ViewSurfaceContent(props: {
       {target.kind === "my-work" ? (
         <MyWorkViewTab threadRef={threadRef} project={project.project} />
       ) : (
-        <WorkItemViewTab
-          threadRef={threadRef}
-          surfaceId={surface.id}
-          target={target}
-          project={project.project}
-        />
+        <WorkItemViewTab threadRef={threadRef} target={target} project={project.project} />
       )}
     </DigestTicketChatProvider>
   );

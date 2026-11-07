@@ -42,7 +42,8 @@ export function DigestTicketAside({
   onRememberEmbeddedThread: (threadId: string) => void;
   /** Where a parent or child clicked inside opens; by default it replaces this aside. */
   onOpenTicket?: ((ticketId: string) => void) | undefined;
-  onClose?: (() => void) | undefined;
+  /** `null` leaves the close to a host that already has one (a panel tab). */
+  onClose?: (() => void) | null | undefined;
 }) {
   const { showAgentContextMenu } = useAgentContext();
   const chatActions = useDigestTicketChatActions();
@@ -141,9 +142,11 @@ export function DigestTicketAside({
             <ExternalLink className="size-3.5" />
           </Button>
         ) : null}
-        <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close" title="Close">
-          <XIcon className="size-3.5" />
-        </Button>
+        {onClose === null ? null : (
+          <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close" title="Close">
+            <XIcon className="size-3.5" />
+          </Button>
+        )}
       </div>
       {/* A flex column, as on the ticket page: the detail layout's own scroll area fills it and
           scrolls, instead of growing with its content and being clipped. */}

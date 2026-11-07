@@ -48,11 +48,10 @@ export function MyWorkViewTab(props: {
 
 export function WorkItemViewTab(props: {
   readonly threadRef: ScopedThreadRef;
-  readonly surfaceId: string;
   readonly target: Extract<T3TeamViewTarget, { kind: "work-item" }>;
   readonly project: ProjectShellProject;
 }) {
-  const { threadRef, surfaceId, target, project } = props;
+  const { threadRef, target, project } = props;
   const openTicketPage = useOpenTicketPage();
   return (
     <DigestTicketAside
@@ -70,7 +69,7 @@ export function WorkItemViewTab(props: {
           .getState()
           .openView(threadRef, { kind: "work-item", projectId: project.id, ticketId })
       }
-      onClose={() => useRightPanelStore.getState().closeSurface(threadRef, surfaceId)}
+      onClose={null}
     />
   );
 }
