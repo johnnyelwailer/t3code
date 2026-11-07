@@ -56,7 +56,6 @@ import {
   type ReactNode,
   useEffect,
   useEffectEvent,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -584,7 +583,6 @@ function surfaceTitle(
   surface: RightPanelSurface,
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>,
   terminalLabelsById: ReadonlyMap<string, string>,
-  threadTitlesById: ReadonlyMap<string, string>,
 ): string {
   switch (surface.kind) {
     case "diff":
@@ -604,8 +602,6 @@ function surfaceTitle(
       return `#${surface.number}`;
     case "pull-requests":
       return "Pull requests";
-    case "thread":
-      return threadTitlesById.get(surface.threadId) ?? "Thread";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
@@ -698,8 +694,6 @@ function SurfaceIcon({
       );
     case "pull-requests":
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
-    case "thread":
-      return <MessagesSquare className="size-3 shrink-0" />;
     case "side-chat":
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "device":
@@ -1110,14 +1104,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     });
   };
 
-  // Side-chat tab labels: thread shells are the shared title source, falling back to "Thread"
-  // (in surfaceTitle) while a shell is not projected yet.
-  const threadShells = useThreadShells();
-  const threadTitlesById = useMemo(
-    () => new Map(threadShells.map((shell) => [shell.id, shell.title] as const)),
-    [threadShells],
-  );
-
   const addSurfaceActions = [
     {
       label: "Browser",
@@ -1357,7 +1343,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       workspaceFocusKey={`panel:${props.environmentId}:${props.activeSurfaceId ?? "empty"}`}
       workspaceLabel={
         focusedSurface
-          ? `Workspace panel: ${surfaceTitle(focusedSurface, props.previewSessions, props.terminalLabelsById, threadTitlesById)}`
+          ? `Workspace panel: ${surfaceTitle(focusedSurface, props.previewSessions, props.terminalLabelsById)}`
           : "Workspace panel"
       }
       mode={props.mode}
@@ -1401,12 +1387,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     dragDisabled={!props.onMoveSurface || renamingDevice === surface.id}
                     active={surface.id === props.activeSurfaceId}
                     pending={props.pendingSurfaceIds.has(surface.id)}
-                    title={surfaceTitle(
-                      surface,
-                      props.previewSessions,
-                      props.terminalLabelsById,
-                      threadTitlesById,
-                    )}
+                    title={surfaceTitle(surface, props.previewSessions, props.terminalLabelsById)}
                     audio={tabAudioState(
                       previewTabId ? (props.desktopByTabId[previewTabId] ?? null) : null,
                     )}

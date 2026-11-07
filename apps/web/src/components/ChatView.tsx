@@ -130,16 +130,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveThreadReferenceCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import { resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
 import { useAtomValue } from "@effect/atom-react";
-import {
-  lazy,
-  type SetStateAction,
-  Suspense,
-  use,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type SetStateAction, use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { assistantCitationFromLocation } from "../lib/assistantCitationNavigation";
@@ -408,12 +399,6 @@ import {
 } from "./ChatView.logic";
 
 const EMPTY_PROVIDERS: ServerProvider[] = [];
-// t3team: a peer thread opened as a side chat — a nested ThreadChatView in a standard right-panel tab.
-const T3TeamThreadSurface = lazy(() =>
-  import("~/t3team/chat/t3team-ThreadRightPanelSurface").then((module) => ({
-    default: module.T3TeamThreadRightPanelSurface,
-  })),
-);
 const EMPTY_T3TEAM_CHAT_VIEW_EXTENSION: ChatViewT3TeamExtensionProps = {};
 const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
@@ -3426,66 +3411,55 @@ export default function ChatView(props: ChatViewProps) {
   }
 
   const rightPanelContent = activeThreadRef ? (
-    renderedRightPanelSurface?.kind === "thread" ? (
-      // t3team: a peer thread opened as a side chat — its full transcript in a right-panel tab.
-      <Suspense fallback={null}>
-        <T3TeamThreadSurface
-          key={renderedRightPanelSurface.id}
-          environmentId={renderedRightPanelSurface.environmentId}
-          threadId={renderedRightPanelSurface.threadId}
-        />
-      </Suspense>
-    ) : (
-      <RightPanelSurfaceContent
-        surface={renderedRightPanelSurface}
-        activeSurfaceId={activeRightPanelSurface?.id ?? null}
-        threadRef={activeThreadRef}
-        environmentId={activeThread.environmentId}
-        visible={rightPanelOpen}
-        composerDraftTarget={composerDraftTarget}
-        keybindings={keybindings}
-        configuredPreviewUrls={configuredPreviewUrls}
-        workspaceMutationId={workspaceMutationId}
-        getShortcutContext={getShortcutContextStable}
-        onSendAnnotation={sendPreviewAnnotationStable}
-        onCloseSurface={closeRightPanelSurface}
-        sideChatParentPanel={sideChatParentPanel}
-        terminal={{
-          launchContext: activeTerminalLaunchContext ?? null,
-          keybindings,
-          onAddTerminalContext: addTerminalContextToDraftStable,
-          onSplitTerminal: splitPanelTerminalStable,
-          onSplitTerminalVertical: splitPanelTerminalVerticalStable,
-          onNewTerminal: addTerminalSurfaceStable,
-          onActiveTerminalChange: activatePanelTerminalStable,
-          onCloseTerminal: closePanelTerminalStable,
-          splitShortcutLabel: splitTerminalShortcutLabel ?? undefined,
-          splitVerticalShortcutLabel: splitTerminalVerticalShortcutLabel ?? undefined,
-          newShortcutLabel: newTerminalShortcutLabel ?? undefined,
-          closeShortcutLabel: closeTerminalShortcutLabel ?? undefined,
-        }}
-        pullRequest={{
-          capabilityKnown: pullRequestsCapabilityKnown,
-          supported: supportsPullRequests,
-          projectId: activeThread.projectId,
-          pullRequests: visiblePullRequests,
-          linkedPullRequest: linkedThreadPullRequest,
-          branchPullRequest: activeThreadShell?.branchPullRequest ?? activeThread.branchPullRequest,
-          onBack:
-            pullRequestsSurfaceAvailable && visiblePullRequestCount > 1
-              ? addPullRequestsSurfaceStable
-              : undefined,
-        }}
-        files={{
-          projectName: activeProject?.title ?? null,
-          workspaceRoot: activeWorkspaceRoot,
-          availableEditors,
-          pendingSurfaceIds: pendingFileSurfaceIds,
-          onOpenFile: openFileSurfaceStable,
-          onPendingChange: handleFilePendingChangeStable,
-        }}
-      />
-    )
+    <RightPanelSurfaceContent
+      surface={renderedRightPanelSurface}
+      activeSurfaceId={activeRightPanelSurface?.id ?? null}
+      threadRef={activeThreadRef}
+      environmentId={activeThread.environmentId}
+      visible={rightPanelOpen}
+      composerDraftTarget={composerDraftTarget}
+      keybindings={keybindings}
+      configuredPreviewUrls={configuredPreviewUrls}
+      workspaceMutationId={workspaceMutationId}
+      getShortcutContext={getShortcutContextStable}
+      onSendAnnotation={sendPreviewAnnotationStable}
+      onCloseSurface={closeRightPanelSurface}
+      sideChatParentPanel={sideChatParentPanel}
+      terminal={{
+        launchContext: activeTerminalLaunchContext ?? null,
+        keybindings,
+        onAddTerminalContext: addTerminalContextToDraftStable,
+        onSplitTerminal: splitPanelTerminalStable,
+        onSplitTerminalVertical: splitPanelTerminalVerticalStable,
+        onNewTerminal: addTerminalSurfaceStable,
+        onActiveTerminalChange: activatePanelTerminalStable,
+        onCloseTerminal: closePanelTerminalStable,
+        splitShortcutLabel: splitTerminalShortcutLabel ?? undefined,
+        splitVerticalShortcutLabel: splitTerminalVerticalShortcutLabel ?? undefined,
+        newShortcutLabel: newTerminalShortcutLabel ?? undefined,
+        closeShortcutLabel: closeTerminalShortcutLabel ?? undefined,
+      }}
+      pullRequest={{
+        capabilityKnown: pullRequestsCapabilityKnown,
+        supported: supportsPullRequests,
+        projectId: activeThread.projectId,
+        pullRequests: visiblePullRequests,
+        linkedPullRequest: linkedThreadPullRequest,
+        branchPullRequest: activeThreadShell?.branchPullRequest ?? activeThread.branchPullRequest,
+        onBack:
+          pullRequestsSurfaceAvailable && visiblePullRequestCount > 1
+            ? addPullRequestsSurfaceStable
+            : undefined,
+      }}
+      files={{
+        projectName: activeProject?.title ?? null,
+        workspaceRoot: activeWorkspaceRoot,
+        availableEditors,
+        pendingSurfaceIds: pendingFileSurfaceIds,
+        onOpenFile: openFileSurfaceStable,
+        onPendingChange: handleFilePendingChangeStable,
+      }}
+    />
   ) : null;
   const panelToggleControlProps = {
     terminalAvailable: activeProject !== null,

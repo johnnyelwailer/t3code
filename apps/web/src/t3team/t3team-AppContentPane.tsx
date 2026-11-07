@@ -20,7 +20,6 @@ export function AppContentPane({
   onOpenThread,
   onOpenFullThread,
   onOpenEmbeddedThread,
-  onCloseEmbeddedThread,
   onKickoffProjectThread,
   onKickoffTicketThread,
   onKickoffTicketThreadBeside,
@@ -38,7 +37,6 @@ export function AppContentPane({
   onOpenThread: (projectId: string, threadId: string) => void;
   onOpenFullThread: (projectId: string, threadId: string) => void;
   onOpenEmbeddedThread: (projectId: string, threadId: string) => void;
-  onCloseEmbeddedThread?: () => void;
   onKickoffProjectThread: Parameters<typeof AppMainContent>[0]["onKickoffProjectThread"];
   onKickoffTicketThread: Parameters<typeof AppMainContent>[0]["onKickoffTicketThread"];
   onKickoffTicketThreadBeside: Parameters<typeof AppMainContent>[0]["onKickoffTicketThread"];
@@ -80,7 +78,6 @@ export function AppContentPane({
               onOpenThread={onOpenThread}
               onOpenFullThread={onOpenFullThread}
               onOpenEmbeddedThread={onOpenEmbeddedThread}
-              {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
               onKickoffProjectThread={onKickoffProjectThread}
               onKickoffTicketThread={onKickoffTicketThread}
               onThreadKickoffConsumed={onThreadKickoffConsumed}

@@ -20,7 +20,6 @@ apps/web/src/cloud/t3team-useCloudSessionOwnProject.ts
 apps/web/src/cloud/t3team-useCloudSessionProjectFollow.ts
 apps/web/src/components/BranchToolbar.tsx
 apps/web/src/components/BranchToolbarEnvironmentSelector.tsx
-apps/web/src/components/RightPanelTabs.tsx
 apps/web/src/components/Sidebar.tsx
 apps/web/src/components/account/t3team-AccountSignInDialog.tsx
 apps/web/src/components/chat/BackgroundJobOutputPanel.tsx
@@ -55,7 +54,6 @@ apps/web/src/state/t3team-toolauth.ts
 apps/web/src/state/t3team-watchedPullRequests.ts
 apps/web/src/t3team/chat/t3team-AgentsPanelSubRunRow.tsx
 apps/web/src/t3team/chat/t3team-SystemTimelineShapeRow.tsx
-apps/web/src/t3team/chat/t3team-ThreadRightPanelSurface.tsx
 apps/web/src/t3team/chat/t3team-activeAgentsStepLabel.tsx
 apps/web/src/t3team/chat/t3team-activeWorkflowDock.tsx
 apps/web/src/t3team/chat/t3team-splitFlipText.tsx
@@ -231,7 +229,6 @@ apps/web/src/t3team/stories/t3team-CloudSessionProvisionPanel.stories.tsx
 apps/web/src/t3team/stories/t3team-DotColorVariants.stories.tsx
 apps/web/src/t3team/stories/t3team-ProjectBacklogTable.stories.tsx
 apps/web/src/t3team/stories/t3team-ProviderRetryBanner.stories.tsx
-apps/web/src/t3team/stories/t3team-SideChatRightPanelTab.stories.tsx
 apps/web/src/t3team/stories/t3team-StateMotionDots.stories.tsx
 apps/web/src/t3team/stories/t3team-WorkItemAgentRewriteControl.stories.tsx
 apps/web/src/t3team/stories/t3team-WorkItemSectionsEditable.stories.tsx

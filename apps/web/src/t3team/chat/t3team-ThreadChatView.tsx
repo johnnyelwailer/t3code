@@ -149,7 +149,6 @@ export function ThreadChatView({
     kickoffPending,
     kickoffWorkflow,
     hasServerLaunchActivity,
-    embeddedMode,
   });
 
   if (!environmentId) {
