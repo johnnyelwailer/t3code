@@ -11,7 +11,17 @@ import { useClosedViewStore } from "./closedViewStore";
 import { resolveStorage } from "./lib/storage";
 import type { ThreadPanelPresentation } from "./rightPanelLayout";
 import type { ChatFileAttachment } from "./types";
-import { pullRequestDetailTabFromSearch } from "./components/pullRequest/t3team-prDetailViewState.logic";
+// t3team: the fork's right-panel surface data lives in the surface registry.
+import {
+  isT3TeamSessionScopedPanelKey,
+  parsePullRequestSurfaceView,
+  pullRequestSurfaceViewEqual,
+  t3TeamIsRetiredRightPanelKind,
+} from "~/t3team/layout/t3team-surfaceRegistry";
+import type { PullRequestSurfaceView } from "~/t3team/layout/t3team-surfaceRegistry";
+
+export { MY_WORK_PANEL_REF } from "~/t3team/layout/t3team-surfaceRegistry";
+export type { PullRequestSurfaceView } from "~/t3team/layout/t3team-surfaceRegistry";
 
 const RIGHT_PANEL_KINDS = [
   "diff",
@@ -94,22 +104,6 @@ export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
   EnvironmentId.make("pull-requests-panel"),
   ThreadId.make("pull-requests-panel"),
 );
-
-/**
- * Fixed workspace-level ref for My Work's shared aside (project dashboard + all-projects home).
- * Same session-scoped rule as the pull-request list: restart must not restore stale tabs.
- */
-export const MY_WORK_PANEL_REF = scopeThreadRef(
-  EnvironmentId.make("my-work-panel"),
-  ThreadId.make("my-work-panel"),
-);
-
-/**
- * Shared workspace panels are session state: reopening the app should show the
- * list/home, not last session's tabs and detail fetches.
- */
-const isSessionScopedPanelKey = (threadKey: string) =>
-  threadKey.endsWith(":pull-requests-panel") || threadKey.endsWith(":my-work-panel");
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -290,31 +284,6 @@ const terminalSurface = (terminalId: string): RightPanelSurface => ({
 });
 
 export type PullRequestSurface = Extract<RightPanelSurface, { kind: "pull-request" }>;
-
-/**
- * The detail panel view a pull-request surface remembers: the open tab, and on the Code tab the
- * focused file and the commit whose diff is open (null keeps the whole-change diff selected).
- */
-export interface PullRequestSurfaceView {
-  readonly tab: PullRequestDetailTab;
-  readonly file: string | null;
-  readonly commit: string | null;
-}
-
-/**
- * Coerces a persisted view back into shape: a value is only written by the panel, but the stored
- * JSON is still user-reachable, so a torn or hostile entry must not reach the panel as a tab it
- * does not know. An absent view stays absent rather than becoming a default.
- */
-export function normalizePullRequestView(raw: unknown): PullRequestSurfaceView | undefined {
-  if (raw === null || typeof raw !== "object") return undefined;
-  const candidate = raw as Record<string, unknown>;
-  return {
-    tab: pullRequestDetailTabFromSearch(candidate.tab) ?? "summary",
-    file: typeof candidate.file === "string" ? candidate.file : null,
-    commit: typeof candidate.commit === "string" ? candidate.commit : null,
-  };
-}
 
 export function pullRequestSurfaceId(target: {
   environmentId?: string;
@@ -542,14 +511,15 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
     typeof persistedState.byThreadKey === "object"
       ? Object.fromEntries(
           Object.entries(persistedState.byThreadKey as Record<string, ThreadRightPanelState>)
-            .filter(([threadKey]) => !isSessionScopedPanelKey(threadKey))
+            .filter(([threadKey]) => !isT3TeamSessionScopedPanelKey(threadKey))
             .map(([threadKey, threadState]) => {
               const validThreadState =
                 threadState && typeof threadState === "object" ? threadState : null;
               const surfaces = Array.isArray(validThreadState?.surfaces)
                 ? validThreadState.surfaces.flatMap<RightPanelSurface>((surface) => {
                     const kind = (surface as { kind?: string }).kind;
-                    if (kind === "plan" || kind === "agents" || kind === "thread") return [];
+                    if (kind === "plan" || kind === "agents" || t3TeamIsRetiredRightPanelKind(kind))
+                      return [];
                     if (
                       (surface.kind === "file" || surface.kind === "files") &&
                       "folderTrail" in surface &&
@@ -583,7 +553,7 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                         return [];
                       }
                       const { environmentId, view: rawView, ...rest } = surface;
-                      const view = normalizePullRequestView(rawView);
+                      const view = parsePullRequestSurfaceView(rawView);
                       return [
                         pullRequestSurface({
                           ...rest,
@@ -840,13 +810,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             if (!surface || surface.kind !== "pull-request") return current;
             // A view the panel reports on every mount is the one already stored: writing it back
             // would only churn the surfaces array for no change.
-            const previous = surface.view;
-            if (
-              previous !== undefined &&
-              previous.tab === view.tab &&
-              previous.file === view.file &&
-              previous.commit === view.commit
-            ) {
+            if (pullRequestSurfaceViewEqual(surface.view, view)) {
               return current;
             }
             const surfaces = [...current.surfaces];
@@ -1255,7 +1219,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       partialize: (state) => ({
         byThreadKey: Object.fromEntries(
           Object.entries(state.byThreadKey).filter(
-            ([threadKey]) => !isSessionScopedPanelKey(threadKey),
+            ([threadKey]) => !isT3TeamSessionScopedPanelKey(threadKey),
           ),
         ),
         threadPanelVisibilityByThreadKey: Object.fromEntries(

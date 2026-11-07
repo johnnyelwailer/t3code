@@ -8,7 +8,6 @@ import {
   hostRightPanel,
   migratePersistedRightPanelState,
   MY_WORK_PANEL_REF,
-  normalizePullRequestView,
   pullRequestSurface,
   pullRequestSurfaceId,
   selectActiveRightPanel,
@@ -18,6 +17,7 @@ import {
   selectThreadRightPanelState,
   useRightPanelStore,
 } from "./rightPanelStore";
+import { parsePullRequestSurfaceView } from "./t3team/layout/t3team-surfaceRegistry";
 
 const refA = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-A"));
 const refB = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-B"));
@@ -1391,18 +1391,18 @@ describe("rightPanelStore", () => {
     });
 
     it("coerces a malformed persisted view back to a known tab", () => {
-      expect(normalizePullRequestView({ tab: "nonsense", file: 7, commit: null })).toEqual({
+      expect(parsePullRequestSurfaceView({ tab: "nonsense", file: 7, commit: null })).toEqual({
         tab: "summary",
         file: null,
         commit: null,
       });
-      expect(normalizePullRequestView({ tab: "guide" })).toEqual({
+      expect(parsePullRequestSurfaceView({ tab: "guide" })).toEqual({
         tab: "guide",
         file: null,
         commit: null,
       });
-      expect(normalizePullRequestView(undefined)).toBeUndefined();
-      expect(normalizePullRequestView("code")).toBeUndefined();
+      expect(parsePullRequestSurfaceView(undefined)).toBeUndefined();
+      expect(parsePullRequestSurfaceView("code")).toBeUndefined();
     });
 
     it("drops the view when the surface is closed", () => {
