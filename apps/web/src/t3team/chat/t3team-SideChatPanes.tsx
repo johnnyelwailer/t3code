@@ -53,7 +53,7 @@ export function SideChatPanes(props: {
   const nextKept = keptSideChatIds(kept, activeId, new Set(sideChats.keys()));
   if (!sameIds(nextKept, kept)) setKept(nextKept);
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {activeId === null ? props.children : null}
       {nextKept.map((id) => {
         const surface = sideChats.get(id);
@@ -66,8 +66,8 @@ export function SideChatPanes(props: {
             aria-hidden={!shown}
             className={
               shown
-                ? "absolute inset-0 flex min-h-0 min-w-0 flex-col"
-                : "pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0 flex-col"
+                ? "flex min-h-0 flex-1 flex-col"
+                : "pointer-events-none invisible absolute inset-0 flex min-h-0 flex-col overflow-hidden"
             }
           >
             <SideChatBody
