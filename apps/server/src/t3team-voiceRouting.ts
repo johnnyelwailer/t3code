@@ -31,6 +31,8 @@ export const VOICE_ROUTE_SYSTEM_PROMPT = [
   "spawn a thread for the login bug -> control",
   "nudge the migration thread -> control",
   "watch pull request 412 -> control",
+  "nudge it -> synthesis",
+  "spawn a thread -> synthesis",
   "what is blocked right now -> synthesis",
   "summarize what the auth thread did and start a review -> synthesis",
   "the migration seems slow -> synthesis",

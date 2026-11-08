@@ -8,6 +8,11 @@ import {
 } from "./t3team-voiceRouting.ts";
 
 describe("parseVoiceTier", () => {
+  it("keeps bare and ambiguous fragments out of the control tier in the few-shot examples", () => {
+    expect(VOICE_ROUTE_SYSTEM_PROMPT).toContain("nudge it -> synthesis");
+    expect(VOICE_ROUTE_SYSTEM_PROMPT).toContain("spawn a thread -> synthesis");
+  });
+
   it.each(["control", "Control.", "  CONTROL\n", "control — spawn"])(
     "reads %j as control",
     (answer) => {
