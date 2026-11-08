@@ -668,3 +668,8 @@ A draft can wait for an environment the catalog does not list yet (a cloud sessi
 ## Mobile provider icon for the `nexplore` driver (2026-11-03)
 
 - `apps/mobile/src/components/ProviderIcon.tsx` — one branch before the package-icon lookup: the `nexplore` driver draws `NexploreMark` (`t3team-NexploreMark.tsx`), as the web's `PROVIDER_ICON_BY_PROVIDER` already does. Without it the driver fell through to the generic default glyph.
+
+## Settings registry: fork settings move out of the hot files (2026-11-07)
+
+- `apps/web/src/clientPersistenceStorage.ts` — the browser's client-settings load path runs the fork's legacy-key alias (`migrateLegacyT3TeamClientSettingsJson`, `packages/contracts/src/t3team-settings.ts`) before decoding, so values persisted under the old flat `t3team*` keys keep reading after the fork's settings moved under the `t3team` namespace. Write path unchanged; two lines.
+- `apps/web/src/components/settings/useAvailableSettingsSearchItems.ts` — joins the fork's registered search items (`useT3TeamSettingsSearchItems`, `~/t3team/settings/t3team-settingsRegistry.tsx`) after the upstream availability filter, so the command palette and the settings nav search find the fork rows (connected tools, Nexi feature switches, voice). Flag-gated fork sections join here, where a hook can decide their visibility; three lines.

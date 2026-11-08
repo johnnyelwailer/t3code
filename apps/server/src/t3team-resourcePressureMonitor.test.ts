@@ -10,6 +10,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { ChildProcessSpawner } from "effect/process";
+import * as TestClock from "effect/testing/TestClock";
 
 import { runMigrations } from "./persistence/Migrations.ts";
 import { ResourcePressureEventRepositoryLive } from "./persistence/t3team-ResourcePressureEvents.ts";
@@ -91,38 +92,49 @@ describe("ResourcePressureMonitor", () => {
     }).pipe(Effect.scoped, Effect.provide(stubs)),
   );
 
-  it.effect("flag on: one sample classifies, persists the transition, and serves agents", () =>
-    Effect.gen(function* () {
-      events.length = 0;
-      const monitor = yield* makeResourcePressureMonitor({
-        enabled: true,
-        sampleIntervalMs: 20_000,
-      });
-      for (let i = 0; i < 10; i += 1) yield* Effect.yieldNow;
-      const report = yield* monitor.report;
-      assert.strictEqual(report.enabled, true);
-      assert.strictEqual(report.snapshot?.level, "critical");
-      // The sampled critical level fed the auto-pause state machine: new turns now hold.
-      assert.strictEqual(report.autoPause?.phase, "pausing");
-      assert.deepStrictEqual(report.autoPause?.threads, []);
-      assert.strictEqual(report.recentEvents.length, 1);
-      assert.strictEqual(report.recentEvents[0]?.toLevel, "critical");
-      assert.strictEqual(report.recentEvents[0]?.topProcessName, "claude");
+  it.effect(
+    "flag on: holds a first below-line sample at warn, then escalates after it sustains",
+    () =>
+      Effect.gen(function* () {
+        events.length = 0;
+        const monitor = yield* makeResourcePressureMonitor({
+          enabled: true,
+          sampleIntervalMs: 20_000,
+        });
+        for (let i = 0; i < 10; i += 1) yield* Effect.yieldNow;
+        // First sample is under the critical line: held at warn until it sustains for 60 s, so a
+        // brief dip does not flip auto-pause and the agent advisory to critical.
+        const held = yield* monitor.report;
+        assert.strictEqual(held.enabled, true);
+        assert.strictEqual(held.snapshot?.level, "warn");
+        assert.strictEqual(held.autoPause?.phase, "running");
+        assert.strictEqual(held.recentEvents.length, 1);
+        assert.strictEqual(held.recentEvents[0]?.toLevel, "warn");
+        // Once it has stayed under the line for the sustain window, it escalates to critical.
+        yield* TestClock.adjust("60 seconds");
+        for (let i = 0; i < 10; i += 1) yield* Effect.yieldNow;
+        const report = yield* monitor.report;
+        assert.strictEqual(report.snapshot?.level, "critical");
+        // The escalated critical level fed the auto-pause state machine: new turns now hold.
+        assert.strictEqual(report.autoPause?.phase, "pausing");
+        assert.deepStrictEqual(report.autoPause?.threads, []);
+        assert.strictEqual(report.recentEvents[0]?.toLevel, "critical");
+        assert.strictEqual(report.recentEvents[0]?.topProcessName, "claude");
 
-      assert.strictEqual(report.snapshot?.processDataStale, false);
-      assert.strictEqual(report.snapshot?.accumulation?.worktreeThreadCount, 45);
+        assert.strictEqual(report.snapshot?.processDataStale, false);
+        assert.strictEqual(report.snapshot?.accumulation?.worktreeThreadCount, 45);
 
-      const snapshot = report.snapshot!;
-      assert.strictEqual(snapshot.topConsumers[0]?.pid, 4242);
-      assert.strictEqual(snapshot.classes.appSpawned.agentSessionCount, 1);
-      assert.strictEqual(snapshot.classes.restOfMachineBytes, 8.5 * GIB);
-      // What agents see instead of polling: the pushed line on pressure-impacting results.
-      assert.strictEqual(
-        pressureLine(snapshot),
-        "[host] memory pressure: critical · app tree 7.0 GiB · machine: 3% available · " +
-          `critical: ${PRESSURE_ADVISORY.critical}`,
-      );
-    }).pipe(Effect.scoped, Effect.provide(stubs)),
+        const snapshot = report.snapshot!;
+        assert.strictEqual(snapshot.topConsumers[0]?.pid, 4242);
+        assert.strictEqual(snapshot.classes.appSpawned.agentSessionCount, 1);
+        assert.strictEqual(snapshot.classes.restOfMachineBytes, 8.5 * GIB);
+        // What agents see instead of polling: the pushed line on pressure-impacting results.
+        assert.strictEqual(
+          pressureLine(snapshot),
+          "[host] memory pressure: critical · app tree 7.0 GiB · machine: 3% available · " +
+            `critical: ${PRESSURE_ADVISORY.critical}`,
+        );
+      }).pipe(Effect.scoped, Effect.provide(stubs)),
   );
 
   it.effect("flag off exposes no auto-pause, so the turn gate and tool wrapper are no-ops", () =>

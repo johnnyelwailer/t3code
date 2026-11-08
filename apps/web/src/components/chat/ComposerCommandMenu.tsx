@@ -33,6 +33,7 @@ import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { ComposerBanner } from "./ComposerBanner";
+import { T3TeamRecipeMenuBadge } from "~/t3team/chat/t3team-RecipeKickoffBadge";
 import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation";
 
 export type ComposerCommandItem =
@@ -264,6 +265,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
             showSkillSuffix={props.triggerKind === "skill"}
           />
         ) : null}
+        {props.item.type === "recipe-slash-command" ? <T3TeamRecipeMenuBadge /> : null}
       </span>
     </CommandItem>
   );

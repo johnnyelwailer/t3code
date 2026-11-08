@@ -1327,7 +1327,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
   // t3team: one-click recent-project pills in place of the dropdown alone (feature flag).
   const projectScopePillsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamProjectScopePillsEnabled,
+    (settings) => settings.t3team.projectScopePills,
   );
   const threadSearch = useThreadSearch(
     environmentFilter.narrowEnvironmentIds(connectedEnvironmentIds),

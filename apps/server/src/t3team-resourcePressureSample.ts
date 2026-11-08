@@ -81,7 +81,7 @@ export const makeSampleOnce = (deps: ResourcePressureSampleDeps) =>
       previousLevel: previous.level,
       thresholds,
     });
-    const next = applyHysteresis(previous, candidate.level);
+    const next = applyHysteresis(previous, candidate, nowMs, thresholds.criticalSustainMs);
     yield* Ref.set(deps.hysteresis, next);
     const reasons = [...candidate.reasons];
     if (stale) {
@@ -91,7 +91,13 @@ export const makeSampleOnce = (deps: ResourcePressureSampleDeps) =>
     }
     if (next.level !== candidate.level) {
       reasons.push(
-        `holding ${next.level} until ${DEESCALATE_SAMPLES} lower samples (now ${candidate.level})`,
+        candidate.level === "critical" &&
+          previous.level !== "critical" &&
+          candidate.belowCriticalLine
+          ? `critical held: available must stay under the line for ${Math.round(
+              thresholds.criticalSustainMs / 1000,
+            )} s`
+          : `holding ${next.level} until ${DEESCALATE_SAMPLES} lower samples (now ${candidate.level})`,
       );
     }
     const published = buildPressureSnapshot({
