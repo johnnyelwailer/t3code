@@ -12,7 +12,7 @@
  * The label is written as the thread's `activityLabel` fact (side stream,
  * never chat). The 4-state word (thinking/writing/working/waiting) is no longer
  * computed here: clients derive it from V2 turn items. Gated live by the
- * `UI_ACTIVITY_LABELS` feature flag and then the `t3teamActivityLabelsEnabled` setting;
+ * `UI_ACTIVITY_LABELS` feature flag and then the `t3team.activityLabels` setting;
  * fail-open everywhere.
  * @module t3team-activityLabelReactor
  */
@@ -65,11 +65,11 @@ export const makeT3TeamActivityLabelReactor = (timing: ActivityLabelTiming = {})
     // Hosts without a label-capable text-generation driver have no labels.
     if (generateActivityLabel === undefined) return;
 
-    let enabled = (yield* serverSettings.getSettings).t3teamActivityLabelsEnabled === true;
+    let enabled = (yield* serverSettings.getSettings).t3team.activityLabels === true;
     yield* forkParked(
       Stream.runForEach(serverSettings.streamChanges, (settings) =>
         Effect.sync(() => {
-          enabled = settings.t3teamActivityLabelsEnabled === true;
+          enabled = settings.t3team.activityLabels === true;
         }),
       ),
     );

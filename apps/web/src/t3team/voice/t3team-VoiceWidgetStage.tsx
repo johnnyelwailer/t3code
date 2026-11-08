@@ -1,9 +1,10 @@
 import { VOICE_WIDGET_EXIT_MS } from "@t3tools/contracts";
-import { useContext, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { cn } from "~/lib/utils";
 import {
   CompanionPreferencesContext,
+  useCompanionPreferences,
   T3TeamCompanionSlot,
 } from "~/t3team/packs/t3team-CompanionSlot";
 import { AnimatedHeight } from "./surface/t3team-AnimatedHeight";
@@ -46,7 +47,7 @@ export function VoiceWidgetStage(props: {
   const { mounted, expanded } = useExpandPresence(open, VOICE_WIDGET_EXIT_MS);
   const shownState = frozen?.snapshot.state ?? state;
   const faces = useFaceTransition(shownState === "committed" ? "heard" : "recording");
-  const companions = voiceCompanionPreferences(useContext(CompanionPreferencesContext));
+  const companions = voiceCompanionPreferences(useCompanionPreferences());
   const companionMood = voiceCompanionMood(shownState);
 
   if (!mounted) return null;
