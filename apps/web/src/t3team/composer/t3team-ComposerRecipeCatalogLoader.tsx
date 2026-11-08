@@ -8,8 +8,8 @@ import { useEffect } from "react";
 import { useProjects } from "~/state/entities";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { publishT3TeamComposerRecipeCatalog } from "~/t3team/composer/t3team-composerRecipeCatalogStore";
+import { resolveComposerRecipeProject } from "~/t3team/composer/t3team-composerRecipeProject";
 import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
-import { findLiveProjectForShellProject } from "~/t3team/hooks/t3team-useLiveProjectForShellProject";
 import { useHydratedStoredProjects } from "~/t3team/t3team-myWorkBoundProjects";
 import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
 
@@ -17,12 +17,7 @@ export function T3TeamComposerRecipeCatalogLoader(props: { readonly projectId: s
   const storedProjects = useHydratedStoredProjects();
   const liveProjects = useProjects();
   const { projectId } = props;
-  const shellProject =
-    projectId === null
-      ? null
-      : (storedProjects?.find(
-          (candidate) => findLiveProjectForShellProject(candidate, liveProjects)?.id === projectId,
-        ) ?? null);
+  const shellProject = resolveComposerRecipeProject({ projectId, storedProjects, liveProjects });
   return projectId === null || shellProject === null ? null : (
     <RecipeCatalogDiscovery projectId={projectId} project={shellProject} />
   );
