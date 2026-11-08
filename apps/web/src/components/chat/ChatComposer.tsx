@@ -206,10 +206,7 @@ import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { VoiceComposerDock } from "../../t3team/voice/t3team-VoiceComposerDock";
 import { VoiceComposerInline } from "../../t3team/voice/t3team-VoiceComposerInline";
 import { applyT3TeamComposerMenuReplacement } from "~/t3team/composer/t3team-composerMenuApply";
-import {
-  attachT3TeamComposerRecipe,
-  t3teamRecipeAttachDisabledReason,
-} from "~/t3team/composer/t3team-composerAttachedRecipeStore";
+import { attachT3TeamComposerRecipe } from "~/t3team/composer/t3team-composerAttachedRecipeStore";
 import { useT3TeamComposerRecipeMenuItems } from "~/t3team/composer/t3team-composerRecipeMenuItems";
 import {
   ComposerAttachButton,
@@ -1211,7 +1208,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     items: hostComposerMenuItems,
     trigger: composerTrigger,
     projectId: activeProjectId,
-    target: composerDraftTarget,
     providerSlashCommands: selectedProviderSlashCommands,
   });
 
@@ -2013,7 +2009,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       return;
     }
     if (item.type === "recipe-slash-command") {
-      if (t3teamRecipeAttachDisabledReason(composerDraftTarget) !== null) return;
       const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
         expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
       });

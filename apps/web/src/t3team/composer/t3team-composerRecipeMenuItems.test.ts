@@ -1,5 +1,11 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { EnvironmentId, MessageId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  EnvironmentId,
+  MessageId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import type { SetStateAction } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -10,11 +16,11 @@ import {
   attachT3TeamComposerRecipe,
   detachT3TeamComposerRecipe,
   readT3TeamComposerAttachedRecipe,
-  t3teamRecipeAttachDisabledReason,
   type T3TeamComposerRecipeTarget,
 } from "~/t3team/composer/t3team-composerAttachedRecipeStore";
 import { appendT3TeamRecipeMenuItems } from "~/t3team/composer/t3team-composerRecipeMenuItems";
 import {
+  type T3TeamAttachedRecipeDeps,
   type T3TeamComposerTurnStart,
   withT3TeamAttachedRecipeTurnStart,
 } from "~/t3team/composer/t3team-startAttachedRecipe";
@@ -95,7 +101,15 @@ describe("withT3TeamAttachedRecipeTurnStart", () => {
     },
   };
 
-  function hostFor(target: T3TeamComposerRecipeTarget) {
+  function depsWith(
+    launch: T3TeamAttachedRecipeDeps["launch"],
+    create: T3TeamAttachedRecipeDeps["draftThreads"]["create"] = async () => undefined,
+    deleteUnused: T3TeamAttachedRecipeDeps["draftThreads"]["deleteUnused"] = async () => undefined,
+  ): T3TeamAttachedRecipeDeps {
+    return { launch, draftThreads: { create, deleteUnused } };
+  }
+
+  function hostFor(target: T3TeamComposerRecipeTarget, onError: () => void = () => undefined) {
     const state: { messages: ChatMessage[] } = {
       messages: [
         {
@@ -110,7 +124,7 @@ describe("withT3TeamAttachedRecipeTurnStart", () => {
       ],
     };
     const hostOverride = vi.fn(async () => true);
-    const setThreadError = vi.fn();
+    const setThreadError = vi.fn(onError);
     return {
       state,
       hostOverride,
@@ -136,7 +150,9 @@ describe("withT3TeamAttachedRecipeTurnStart", () => {
     });
     const launch = vi.fn(() => failed);
 
-    await expect(withT3TeamAttachedRecipeTurnStart(host, launch)(turnStart)).resolves.toBe(true);
+    await expect(
+      withT3TeamAttachedRecipeTurnStart(host, depsWith(launch))(turnStart),
+    ).resolves.toBe(true);
     expect(readT3TeamComposerAttachedRecipe(thread)).toBeNull();
     expect(hostOverride).not.toHaveBeenCalled();
     expect(launch).toHaveBeenCalledTimes(1);
@@ -160,23 +176,87 @@ describe("withT3TeamAttachedRecipeTurnStart", () => {
     detachT3TeamComposerRecipe(thread);
   });
 
-  it("leaves drafts and composers without a recipe to the host override", async () => {
-    const draft = DraftId.make("draft-1");
-    const { host, hostOverride } = hostFor(draft);
+  it("leaves a composer without a recipe to the host override", async () => {
+    const { host, hostOverride } = hostFor(DraftId.make("draft-plain"));
     const launch = vi.fn(async () => undefined);
-    await expect(withT3TeamAttachedRecipeTurnStart(host, launch)(turnStart)).resolves.toBe(true);
+    await expect(
+      withT3TeamAttachedRecipeTurnStart(host, depsWith(launch))(turnStart),
+    ).resolves.toBe(true);
     expect(hostOverride).toHaveBeenCalledWith(turnStart);
     expect(launch).not.toHaveBeenCalled();
+  });
 
-    const items = appendT3TeamRecipeMenuItems({
-      items: [],
-      trigger: slashTrigger("/rech"),
-      recipes: [workflowRecipe],
-      providerSlashCommands: [],
-      disabledReason: t3teamRecipeAttachDisabledReason(draft),
+  function seedDraft(draftId: DraftId) {
+    useComposerDraftStore
+      .getState()
+      .setProjectDraftThreadId(
+        scopeProjectRef(EnvironmentId.make("env"), ProjectId.make("project-1")),
+        draftId,
+        { threadId: ThreadId.make(turnStart.threadId), envMode: "local" },
+      );
+    attachT3TeamComposerRecipe(draftId, workflowRecipe);
+  }
+
+  it("creates a draft's thread without a turn, then launches the recipe on it once", async () => {
+    const draftId = DraftId.make("draft-recipe");
+    seedDraft(draftId);
+    const { host, hostOverride } = hostFor(draftId);
+    let markLaunched: () => void = () => undefined;
+    const launched = new Promise<void>((resolve) => {
+      markLaunched = resolve;
     });
-    expect(items.map((item) => item.description)).toEqual([
-      "Send a first message to start the thread, then attach a recipe",
-    ]);
+    const create = vi.fn(async () => undefined);
+    const launch = vi.fn(async () => markLaunched());
+
+    await expect(
+      withT3TeamAttachedRecipeTurnStart(host, depsWith(launch, create))(turnStart),
+    ).resolves.toBe(true);
+    expect(readT3TeamComposerAttachedRecipe(draftId)).toBeNull();
+    await launched;
+
+    expect(hostOverride).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith(
+      EnvironmentId.make("env"),
+      expect.objectContaining({ threadId: "thread-1", projectId: "project-1", branch: null }),
+    );
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledWith(
+      EnvironmentId.make("env"),
+      expect.objectContaining({
+        threadId: "thread-1",
+        composerKickoff: { messageId: "message-1" },
+      }),
+    );
+    expect(create.mock.invocationCallOrder[0]).toBeLessThan(launch.mock.invocationCallOrder[0]!);
+  });
+
+  it("gives a draft back with a fresh thread id when its recipe fails to launch", async () => {
+    const draftId = DraftId.make("draft-recipe-failed");
+    seedDraft(draftId);
+    let markRestored: () => void = () => undefined;
+    const restored = new Promise<void>((resolve) => {
+      markRestored = resolve;
+    });
+    const { host, state } = hostFor(draftId, markRestored);
+    const deleteUnused = vi.fn(async () => undefined);
+    const launch = vi.fn(async () => {
+      throw new Error("Recipes are turned off.");
+    });
+
+    await withT3TeamAttachedRecipeTurnStart(
+      host,
+      depsWith(launch, async () => undefined, deleteUnused),
+    )(turnStart);
+    await restored;
+
+    const drafts = useComposerDraftStore.getState();
+    expect(readT3TeamComposerAttachedRecipe(draftId)?.recipe.id).toBe("rechnung-pruefen");
+    expect(drafts.getComposerDraft(draftId)?.prompt).toBe(turnStart.messageText);
+    expect(drafts.getDraftSession(draftId)?.promotedTo ?? null).toBeNull();
+    expect(drafts.getDraftSession(draftId)?.threadId).not.toBe("thread-1");
+    expect(deleteUnused).toHaveBeenCalledWith(
+      scopeThreadRef(EnvironmentId.make("env"), ThreadId.make("thread-1")),
+    );
+    expect(state.messages).toEqual([]);
   });
 });
