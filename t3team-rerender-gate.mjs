@@ -1,23 +1,8 @@
 #!/usr/bin/env node
 /**
- * Re-render gate for UI PRs.
- *
- * Every PR-touched `.tsx` component under `apps/web/src` that holds state,
- * subscribes to a store, or renders a list must ship a sibling
- * `<Name>.rerender.test.tsx` that uses the shared `renderCounter` helper —
- * the test is the render budget. Alternatively the PR body carries an
- * explicit exemption line:
- *
- *   Rerender: n/a, <reason naming what cannot re-render wrongly>
- *
- * One-word reasons are rejected. The rule, the heuristic table, and the
- * helper live in `docs/internals/t3team-rerender-gate.md`.
- *
- * Usage:
- *   node t3team-rerender-gate.mjs --files <changed-files.txt> [--body <pr-body.txt>]
- *
- * `<changed-files.txt>` holds one changed path per line (e.g. from
- * `git diff --name-only`). `<pr-body.txt>` is optional.
+ * Re-render gate: a PR-touched stateful `.tsx` component needs a sibling `<Name>.rerender.test.tsx`,
+ * or a `Rerender: n/a, <reason>` line in the PR body. Rule and heuristic: docs/internals/t3team-rerender-gate.md.
+ * Usage: node t3team-rerender-gate.mjs --files <changed-files.txt> [--body <pr-body.txt>]
  */
 import * as NodeFS from "node:fs";
 import * as NodeProcess from "node:process";
