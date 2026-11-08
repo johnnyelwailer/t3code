@@ -77,6 +77,8 @@ export const ResourcePressureAccumulation = Schema.Struct({
 export type ResourcePressureAccumulation = typeof ResourcePressureAccumulation.Type;
 
 export const ResourcePressureSnapshot = Schema.Struct({
+  commitHeadroomBytes: Schema.optionalKey(NonNegativeInt),
+  commitLimitBytes: Schema.optionalKey(NonNegativeInt),
   sampledAt: NonNegativeInt,
   level: ResourcePressureLevel,
   /** Human-readable triggers for the level, e.g. "host memory 6% available". */

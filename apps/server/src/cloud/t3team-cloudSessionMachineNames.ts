@@ -23,7 +23,8 @@ const remoteHost = (remote: string): string | null => {
     // An explicit port names a server the session's https fetch would not reach.
     return url === null || url.port !== "" ? null : url.hostname;
   }
-  return /^(?:[^@/\s]+@)?([^:/\s]+):(?!\/)/.exec(remote)?.[1] ?? null;
+  // Host names are case-insensitive; the https form and the host comparison must not depend on it.
+  return /^(?:[^@/\s]+@)?([^:/\s]+):(?!\/)/.exec(remote)?.[1]?.toLowerCase() ?? null;
 };
 
 /**

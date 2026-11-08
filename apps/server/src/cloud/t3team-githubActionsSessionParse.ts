@@ -129,6 +129,7 @@ export function parseJobStepsResponse(body: string): readonly WorkflowJobStep[] 
         name: asString(step["name"]),
         status: asString(step["status"]),
         conclusion: asNullableString(step["conclusion"]),
+        ...(typeof step["started_at"] === "string" ? { startedAt: step["started_at"] } : {}),
       }));
   });
 }

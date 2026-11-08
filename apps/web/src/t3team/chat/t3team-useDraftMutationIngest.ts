@@ -10,6 +10,9 @@
  * Ingestion is one-way and once-only per draft id: a draft already in the store is skipped, so the
  * reviewer's local decision (accepted / dismissed / returned) is never overwritten by a replay when
  * the thread is re-opened.
+ *
+ * While `WORKITEM_DETAIL_DRAFTS` is off nothing is ingested, so the work item views offer no draft
+ * to review or approve; the artifacts stay on the thread and are read once the flag is back on.
  */
 
 import { useEffect } from "react";
@@ -19,9 +22,12 @@ import {
   type T3TeamThreadArtifact,
 } from "@t3tools/contracts";
 
+import { useChangeSetOutcomeStore } from "~/t3team/changeset/t3team-changeSetOutcomeStore";
+import { readChangeSetView } from "~/t3team/changeset/t3team-changeSetModel";
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 export const T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND = "draft-mutation";
 
@@ -50,6 +56,8 @@ export function collectT3TeamDraftMutations(input: {
   readonly artifacts: ReadonlyArray<DraftArtifact>;
   readonly sourceThreadId: string;
   readonly knownDraftIds: ReadonlySet<string>;
+  /** Drafts a change-set card owns: they are reviewed there, not offered a second time. */
+  readonly ownedDraftIds?: ReadonlySet<string>;
 }): ReadonlyArray<T3TeamDraftMutation> {
   const seen = new Set(input.knownDraftIds);
   const collected: T3TeamDraftMutation[] = [];
@@ -58,6 +66,7 @@ export function collectT3TeamDraftMutations(input: {
     if (artifact.kind !== T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND) continue;
     const carrier = decodeDraftCarrier(artifact.payload);
     if (carrier._tag === "None" || seen.has(carrier.value.draft.id)) continue;
+    if (input.ownedDraftIds?.has(carrier.value.draft.id)) continue;
     const raw = carrier.value.draft;
     if (!isPendingT3TeamDraftCarrier((raw as { status?: unknown }).status)) continue;
     const draft = normalizeT3TeamDraftMutation({
@@ -77,19 +86,36 @@ export function collectT3TeamDraftMutations(input: {
   return collected;
 }
 
+/** Moves a thread's pending drafts into the review store, leaving out those a change-set card owns. */
+export function ingestThreadDrafts(input: {
+  readonly threadId: string;
+  readonly artifacts: ReadonlyArray<T3TeamThreadArtifact>;
+}): void {
+  const { drafts, upsertDrafts, removeDraft } = useT3TeamDraftMutationStore.getState();
+  const { ownedDraftIds, settledDraftIds } = readChangeSetView(input.artifacts, input.threadId);
+  // Session results of operations the server now holds a verdict for are no longer needed.
+  useChangeSetOutcomeStore.getState().prune(settledDraftIds);
+  // A member ingested before its change set arrived leaves the per-draft review.
+  for (const draft of drafts) {
+    if (ownedDraftIds.has(draft.id)) removeDraft(draft.id);
+  }
+  const collected = collectT3TeamDraftMutations({
+    artifacts: input.artifacts,
+    sourceThreadId: input.threadId,
+    knownDraftIds: new Set(drafts.map((draft) => draft.id)),
+    ownedDraftIds,
+  });
+  if (collected.length > 0) upsertDrafts(collected);
+}
+
 /** Ingests the drafts of one thread, given that thread's live artifacts. */
 export function useT3TeamDraftMutationIngest(input: {
   readonly threadId: string;
-  readonly artifacts: ReadonlyArray<DraftArtifact>;
+  readonly artifacts: ReadonlyArray<T3TeamThreadArtifact>;
 }): void {
   const { artifacts, threadId } = input;
+  const enabled = useFeatureFlag("WORKITEM_DETAIL_DRAFTS");
   useEffect(() => {
-    const { drafts, upsertDrafts } = useT3TeamDraftMutationStore.getState();
-    const collected = collectT3TeamDraftMutations({
-      artifacts,
-      sourceThreadId: threadId,
-      knownDraftIds: new Set(drafts.map((draft) => draft.id)),
-    });
-    if (collected.length > 0) upsertDrafts(collected);
-  }, [artifacts, threadId]);
+    if (enabled) ingestThreadDrafts({ threadId, artifacts });
+  }, [artifacts, enabled, threadId]);
 }

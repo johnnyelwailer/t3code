@@ -5,7 +5,8 @@ import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { useT3TeamActiveChatStore } from "~/t3team/t3team-activeChatStore";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRecipeActions";
-import type { ProjectDashboardKickoffAsideProps } from "~/t3team/t3team-ProjectDashboardKickoffAsideTypes";
+import { bindProjectKickoffThread } from "~/t3team/t3team-bindProjectKickoffThread";
+import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { T3TeamSetupWelcomeSurface } from "~/t3team/t3team-SetupWelcomeSurface";
@@ -97,7 +98,7 @@ export function ProjectBrowserEmptyWithChat({
   providers,
   isConnected,
   onOpenThread,
-  onKickoffThread,
+  onKickoffProjectThread,
   onStartScratch,
   showAside = true,
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
@@ -108,7 +109,7 @@ export function ProjectBrowserEmptyWithChat({
   providers: ReadonlyArray<import("@t3tools/contracts").ServerProvider>;
   isConnected: boolean;
   onOpenThread: (threadId: string) => void;
-  onKickoffThread: ProjectDashboardKickoffAsideProps["onKickoffThread"];
+  onKickoffProjectThread: CreateProjectKickoffThread;
   /** Creates the Scratch project the project-less chat lives in, while it does not exist yet. */
   onStartScratch?: (() => void) | undefined;
   showAside?: boolean;
@@ -151,7 +152,11 @@ export function ProjectBrowserEmptyWithChat({
               isConnected={isConnected}
               onOpenThread={onOpenThread}
               onThreadKickoffConsumed={() => {}}
-              onKickoffThread={onKickoffThread}
+              onKickoffThread={bindProjectKickoffThread(
+                project.id,
+                undefined,
+                onKickoffProjectThread,
+              )}
             />
           ) : (
             <aside className="flex min-h-0 h-full flex-1 flex-col items-center justify-center gap-3 border-l border-border/70 bg-background px-6 text-center text-sm text-muted-foreground">

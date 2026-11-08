@@ -1,4 +1,5 @@
 import defaultThemeVariables from "../../generated-uniwind-default-theme-variables.json";
+import { mobileExtensions } from "../extensions/t3team-extensions";
 import {
   DEFAULT_MOBILE_THEME_ID,
   getMobileThemeVariables,
@@ -12,11 +13,18 @@ const defaults = defaultThemeVariables as Readonly<
   Record<MobileThemeAppearance, MobileThemeVariables>
 >;
 
-/**
- * Complete palette for native and third-party APIs that cannot consume a
- * Uniwind className. Every palette shares the source that generates its
- * registered CSS theme.
- */
+/** The distribution's variables for the default palette; a throwing distribution leaves the defaults. */
+function distributionThemeVariables(appearance: MobileThemeAppearance): MobileThemeVariables {
+  try {
+    return (
+      mobileExtensions.themeVariables?.(defaults[appearance], appearance) ?? defaults[appearance]
+    );
+  } catch (error) {
+    console.warn("The distribution's theme variables failed; using the defaults.", error);
+    return defaults[appearance];
+  }
+}
+
 export function getMobileThemeRuntimeVariables(
   themeId: MobileThemeId,
   appearance: MobileThemeAppearance,
@@ -24,11 +32,8 @@ export function getMobileThemeRuntimeVariables(
 ): MobileThemeVariables {
   const usesDefaultPalette = themeId === DEFAULT_MOBILE_THEME_ID || themeId === "material-you";
   const variables = usesDefaultPalette
-    ? defaults[appearance]
+    ? distributionThemeVariables(appearance)
     : getMobileThemeVariables(themeId, appearance);
-  // Android's frame surrounds the sidebar and chat panes. Light iPad sidebars
-  // reuse that stronger tonal fill; dark sidebars retain the shared black pane
-  // beneath the near-black chat canvas. System colors replace these roles later.
   const frame = themeColorWithAlpha(
     variables[usesDefaultPalette ? "--color-row-hover" : "--color-drawer"],
     1,

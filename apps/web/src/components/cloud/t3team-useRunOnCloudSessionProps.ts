@@ -6,6 +6,7 @@ import { type ComponentProps, useCallback, useEffect, useMemo } from "react";
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import { cloudSessionDisplayName } from "~/components/cloud/t3team-cloudSessionDisplayName";
 import { useServerConfig } from "~/t3team/t3team-serverState";
+import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useEnvironments } from "~/state/environments";
@@ -38,6 +39,7 @@ type CloudSelectorProps = Pick<
   | "onSelectCloudSession"
   | "onDismissCloudSession"
   | "onCloudMenuOpenChange"
+  | "onCloudMenuHint"
   | "onSetupCloudSessions"
   | "cloudSessionProject"
   | "connectedEnvironmentIds"
@@ -56,12 +58,17 @@ export function useT3TeamRunOnCloudSessionProps(
   readonly available: boolean;
   readonly selectorProps: CloudSelectorProps;
 } {
-  const cloudSessions = useCloudSessionController();
+  const cloudSessions = useCloudSessionController({ scopeKey });
   const navigate = useNavigate();
   const { available, configured, sessions, onCreate, createPending, createPendingSetup } =
     cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
-  const { onCloudMenuOpenChange, onSessionAction, connectFailure: _connectFailure } = cloudSessions;
+  const {
+    onCloudMenuOpenChange,
+    onCloudMenuHint,
+    onSessionAction,
+    connectFailure: _connectFailure,
+  } = cloudSessions;
   // "Move to" connects a ready session first; the connected machine then lists as a choice.
   const onConnectCloudSession = useCallback(
     (session: CloudSession) => {
@@ -114,7 +121,12 @@ export function useT3TeamRunOnCloudSessionProps(
     [cloudSessionProject, onCreate, projectKey, scopeKey],
   );
 
-  const machineSetupEnabled = useServerConfig()?.machineSetup === true;
+  const serverConfig = useServerConfig();
+  const machineSetupEnabled = readServerFeatureFlagOr(
+    serverConfig,
+    "MACHINE_SETUP",
+    serverConfig?.machineSetup === true,
+  );
   const onSetupProjectMachine = useCallback(
     (options?: CloudSessionCreateOptions) =>
       beginCloudSessionCreate({ scopeKey, projectKey }, options, () =>
@@ -185,6 +197,7 @@ export function useT3TeamRunOnCloudSessionProps(
               onSelectCloudSession,
               onDismissCloudSession,
               onCloudMenuOpenChange,
+              onCloudMenuHint,
               onConnectCloudSession,
             }
           : { onSetupCloudSessions },
@@ -197,6 +210,7 @@ export function useT3TeamRunOnCloudSessionProps(
       createPending,
       createPendingSetup,
       onCloudMenuOpenChange,
+      onCloudMenuHint,
       onConnectCloudSession,
       machineSetupEnabled,
       onCreateCloudSession,

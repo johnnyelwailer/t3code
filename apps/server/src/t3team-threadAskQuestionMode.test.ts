@@ -46,7 +46,7 @@ const run = (
   Effect.runPromise(
     callT3TeamSearchThreadTool({
       tool: "t3team.thread.search",
-      scopeLabel: "for this thread.",
+      scopeLabel: "for this thread",
       toolArgs,
       threadId,
       loadThreadDetail: overrides?.loadThreadDetail ?? (() => Effect.succeed(thread)),

@@ -33,6 +33,8 @@ export interface WorkflowAuthorSession {
   readonly intent: WorkflowRunIntent;
   /** Present while a turn is waiting for source. */
   submit: ((source: string) => Promise<WorkflowAuthorSubmitResult>) | undefined;
+  /** Durable candidate capture for validation-only attempts, while initial authoring is active. */
+  retainDraft?: ((source: string) => Promise<void>) | undefined;
   /** Set once the author explicitly could not produce a fix; later repair attempts stop asking. */
   declined: boolean;
 }

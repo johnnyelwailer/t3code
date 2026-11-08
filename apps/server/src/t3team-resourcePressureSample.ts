@@ -11,7 +11,9 @@ import type {
   ResourcePressureAccumulation,
   ResourcePressureSnapshot,
   ResourceTelemetrySnapshot,
+  ResourcePressureThresholds,
 } from "@t3tools/contracts";
+import { DEFAULT_RESOURCE_PRESSURE_THRESHOLDS } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -37,6 +39,7 @@ export interface ResourcePressureSampleDeps {
   readonly sampleIntervalMs: number;
   readonly latest: Ref.Ref<ResourcePressureSnapshot | null>;
   readonly hysteresis: Ref.Ref<HysteresisState>;
+  readonly readThresholds?: Effect.Effect<ResourcePressureThresholds>;
 }
 
 /** A telemetry snapshot older than this many sample periods counts as stale. */
@@ -66,14 +69,19 @@ export const makeSampleOnce = (deps: ResourcePressureSampleDeps) =>
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
     const telemetryAgeMs = nowMs - DateTime.toEpochMillis(telemetry.snapshot.readAt);
     const stale = telemetry.failed || telemetryAgeMs > STALE_AFTER_PERIODS * deps.sampleIntervalMs;
+    const previous = yield* Ref.get(deps.hysteresis);
+    const thresholds = yield* (
+      deps.readThresholds ?? Effect.succeed(DEFAULT_RESOURCE_PRESSURE_THRESHOLDS)
+    );
     const candidate = classifyPressure({
       host,
       osLevel,
       appTreeRssBytes: telemetry.snapshot.groups.allT3.currentRssBytes,
       darwin: deps.darwin,
+      previousLevel: previous.level,
+      thresholds,
     });
-    const previous = yield* Ref.get(deps.hysteresis);
-    const next = applyHysteresis(previous, candidate.level);
+    const next = applyHysteresis(previous, candidate, nowMs, thresholds.criticalSustainMs);
     yield* Ref.set(deps.hysteresis, next);
     const reasons = [...candidate.reasons];
     if (stale) {
@@ -83,7 +91,13 @@ export const makeSampleOnce = (deps: ResourcePressureSampleDeps) =>
     }
     if (next.level !== candidate.level) {
       reasons.push(
-        `holding ${next.level} until ${DEESCALATE_SAMPLES} lower samples (now ${candidate.level})`,
+        candidate.level === "critical" &&
+          previous.level !== "critical" &&
+          candidate.belowCriticalLine
+          ? `critical held: available must stay under the line for ${Math.round(
+              thresholds.criticalSustainMs / 1000,
+            )} s`
+          : `holding ${next.level} until ${DEESCALATE_SAMPLES} lower samples (now ${candidate.level})`,
       );
     }
     const published = buildPressureSnapshot({

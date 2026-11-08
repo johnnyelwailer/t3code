@@ -30,6 +30,7 @@ import {
   type T3TeamWorkflowEngineRegistryShape,
 } from "./t3team-workflowEngineRegistry.ts";
 import {
+  enableWorkItemDraftsFlagForFile,
   findDraftArtifact,
   makeRecordingDraftBroker,
   WORKFLOW_DRAFT_TOOL as DRAFT_TOOL,
@@ -51,6 +52,8 @@ const workflowPath = NodePath.join(runsRoot, "workflow.ts");
 // The scaffolded artifact itself is the unit under test.
 NodeFS.writeFileSync(workflowPath, renderDescriptionRewriteWorkflow(), "utf8");
 afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
+// The draft tools refuse while WORKITEM_DETAIL_DRAFTS is off (its default).
+enableWorkItemDraftsFlagForFile();
 
 const projectId = ProjectId.make("project-1");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");

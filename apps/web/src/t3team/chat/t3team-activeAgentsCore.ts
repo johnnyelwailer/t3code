@@ -124,11 +124,9 @@ export function mergeActiveAgentsAndChildren({
   return entries.length > 0 ? entries : EMPTY_ACTIVE_AGENTS;
 }
 
-// ---------------------------------------------------------------------------
 // Hover coordination: the dots and the step label live in the same working
 // row but are separate subtrees, so the hovered agent is shared through a
 // tiny external store (the t3team idiom for cross-tree UI state).
-// ---------------------------------------------------------------------------
 
 let hoveredEntry: ActiveAgentEntry | null = null;
 const hoverSubscribers = new Set<() => void>();

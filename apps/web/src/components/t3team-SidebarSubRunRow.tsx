@@ -12,7 +12,7 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { ThreadActivityMorphIcon } from "./t3team-ThreadActivityStatus";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
@@ -50,9 +50,7 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
   // "Working". The derivation is the parent's verbatim
   // (resolveActivityPillDisplay over the same fields), so a sub-run and its
   // parent never disagree about what is happening.
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
+  const activityLabelsEnabled = useActivityLabelsEnabled();
   const childLabel =
     child.status === "running"
       ? resolveActivityPillDisplay({

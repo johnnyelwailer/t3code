@@ -160,7 +160,9 @@ function pullRequestServiceLayer(
   const service = PullRequestService.PullRequestService.of({
     list: () => Effect.die("not used"),
     listStats: () => Effect.die("not used"),
+    filterOptions: () => Effect.die("not used"),
     checks: () => Effect.die("not used"),
+    changeBreakdown: () => Effect.die("not used"),
     watchFingerprint: () => Effect.die("not used"),
     summary: () => Effect.die("not used"),
     subscribeMerges: Effect.die("not used"),
@@ -206,6 +208,7 @@ function pullRequestServiceLayer(
     reviewerCandidates: () => Effect.die("not used"),
     requestReviewers: () => Effect.die("not used"),
     invalidate: () => Effect.void,
+    withSharedProjectReads: (effect) => effect,
   });
   return Layer.succeed(PullRequestService.PullRequestService, service);
 }

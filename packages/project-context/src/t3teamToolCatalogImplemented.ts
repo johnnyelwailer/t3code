@@ -2,6 +2,8 @@ import { PROJECT_STATE_DIR } from "./t3teamProjectStateDir.ts";
 import { EMPTY_OBJECT_INPUT_SCHEMA, type T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_FORMAT_DESCRIPTION,
+  T3TEAM_WIDGET_INTENT_DESCRIPTION,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "./t3teamWidgetGuidance.ts";
 
@@ -30,8 +32,7 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
     },
     intent: {
       type: "string",
-      description:
-        "Preferred default: describe what to show. A builder subagent authors the widget (theme/icon contract) and html output goes through the upstream HTML render shim. Omit when passing widget_code.",
+      description: T3TEAM_WIDGET_INTENT_DESCRIPTION,
     },
     widget_code: {
       type: "string",
@@ -40,8 +41,7 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
     format: {
       type: "string",
       enum: ["html", "svg"],
-      description:
-        "html is shimmed onto upstream html_render storage/theme; svg stays on the widget tier.",
+      description: T3TEAM_WIDGET_FORMAT_DESCRIPTION,
     },
     loading_messages: {
       type: "array",
@@ -164,13 +164,18 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.view.read",
     label: "Read view",
     title: "Read current t3team view",
-    description: "Read the latest thread, project, and current t3team view context.",
+    description:
+      "Read what the user is looking at (op read, the default; it never changes the view): the view this thread was opened beside (viewContext: surface, projectId, selection, filters, visibleItemIds, visibleItemCount, publishedAt, ageSeconds), plus this thread and its project. viewContext.published is false when no view shares its state; check ageSeconds before trusting it. Read-only.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
     status: "implemented",
     defaultEnabled: true,
-    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { op: { type: "string", enum: ["read"] } },
+    },
   },
   "t3team.recipe.list": {
     id: "t3team.recipe.list",

@@ -91,11 +91,15 @@ export async function createVoiceThread(deps: VoiceSessionDeps, projectId: Proje
   return threadId;
 }
 
+async function retireStaleHome(deps: VoiceSessionDeps, home: VoiceThreadHome) {
+  deps.forget();
+  const stillLive = deps.threads().some((thread) => thread.id === home.threadId && isLive(thread));
+  if (stillLive) await deps.release(home.threadId).catch(() => undefined);
+}
+
 async function ensureVoiceThread(deps: VoiceSessionDeps): Promise<ThreadId | null> {
   const projectId = await deps.projectlessProject();
   const home = deps.home();
-  // A voice thread remembered from before voice was projectless (it lives in a real project)
-  // is left alone and replaced by a fresh one under "No project".
   if (
     home !== undefined &&
     home.projectId === projectId &&
@@ -103,7 +107,7 @@ async function ensureVoiceThread(deps: VoiceSessionDeps): Promise<ThreadId | nul
   ) {
     return home.threadId;
   }
-  if (home !== undefined) deps.forget();
+  if (home !== undefined) await retireStaleHome(deps, home);
   return projectId === null ? null : createVoiceThread(deps, projectId);
 }
 

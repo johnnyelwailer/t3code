@@ -13,6 +13,13 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
   /** The session id does not correspond to a known session. */
   "unknown_session",
   /**
+   * The session an attach asked for has ended: the broker has not listed it (nor a live session
+   * serving the same environment) for longer than any reconnect or broker restart takes. Terminal,
+   * unlike `unknown_session` (still starting, or the broker has lost sight of it for a moment): a
+   * client stops retrying and offers a new session.
+   */
+  "session_ended",
+  /**
    * No usable T3 Connect credential exists on the creator's machine, so a
    * per-session credential cannot be handed to the VM. The remediation is to
    * sign in to T3 Connect on this machine; the client should surface a link,
@@ -71,5 +78,10 @@ export class CloudSessionFailedError extends Schema.TaggedError<CloudSessionFail
      * cannot land on a different one than the request that failed.
      */
     host: Schema.optionalKey(Schema.String),
+    /**
+     * The project's machine failed, but a plain session in the project can start instead:
+     * repeating the create with `plain: true` does it. Absent when plain is not possible either.
+     */
+    plainAvailable: Schema.optionalKey(Schema.Boolean),
   },
 ) {}

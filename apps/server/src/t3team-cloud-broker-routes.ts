@@ -2,6 +2,7 @@ import {
   AuthRelayReadScope,
   AuthRelayWriteScope,
   CloudSessionFailedError,
+  CloudSessionAttachInputSchema,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,14 +17,15 @@ import { credentialRoute } from "./t3team-credentialRoute.ts";
  * (relay:read / relay:write). Signing in is the account's job (`t3team-account-routes`).
  */
 
-/** The JSON body, read once: a request body is a stream. */
-const readBody = Effect.gen(function* () {
-  const request = yield* HttpServerRequest.HttpServerRequest;
-  return (yield* request.json.pipe(Effect.orElseSucceed(() => ({})))) as {
-    readonly sessionId?: unknown;
-    readonly environmentId?: unknown;
-  };
-});
+const readBody = HttpServerRequest.schemaBodyJson(CloudSessionAttachInputSchema).pipe(
+  Effect.mapError(
+    () =>
+      new CloudSessionFailedError({
+        reason: "unknown_session",
+        message: "That session does not exist.",
+      }),
+  ),
+);
 
 const sessionIdOf = (body: { readonly sessionId?: unknown }) => {
   const sessionId = body.sessionId;
@@ -72,6 +74,7 @@ export const t3teamCloudBrokerRouteLayer = Layer.mergeAll(
       const environmentId = environmentIdOf(body);
       return yield* broker.attach({
         sessionId,
+        ...(body.endsAt === undefined ? {} : { endsAt: body.endsAt }),
         ...(environmentId !== undefined ? { environmentId } : {}),
       });
     }),

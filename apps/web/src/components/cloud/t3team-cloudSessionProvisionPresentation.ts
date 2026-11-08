@@ -1,4 +1,5 @@
 import type { CloudSession, CloudSessionPhase } from "@t3tools/contracts";
+import { cloudSessionProvisionProgress } from "./t3team-cloudSessionProvisionTiming";
 
 /**
  * Presentation logic for provisioning a *cloud session*: a full Nexi workspace
@@ -35,28 +36,6 @@ export function isCloudSessionProvisionPending(phase: CloudSessionProvisionPhase
   );
 }
 
-/**
- * Typical wall-clock for each pending phase, in seconds, measured on run
- * 248523362. Used only to shape a determinate progress hint — a session that
- * overruns its estimate is not a failure, so the bar saturates rather than
- * resetting or flipping to an error.
- */
-const CLOUD_SESSION_PHASE_TYPICAL_SECONDS: Readonly<Record<CloudSessionProvisionPhase, number>> = {
-  requested: 4,
-  queued: 10,
-  preparing: 121,
-  starting: 10,
-  ready: 0,
-  failed: 0,
-  stopped: 0,
-  cancelled: 0,
-};
-
-/** Total typical seconds from dispatch to a connectable environment. */
-const CLOUD_SESSION_TYPICAL_TOTAL_SECONDS = CLOUD_SESSION_PROVISION_PHASES.filter(
-  isCloudSessionProvisionPending,
-).reduce((total, phase) => total + CLOUD_SESSION_PHASE_TYPICAL_SECONDS[phase], 0);
-
 export interface CloudSessionProvisionPresentation {
   readonly title: string;
   /** One line under the title. Never the raw phase id. */
@@ -83,15 +62,6 @@ export function formatDuration(totalSeconds: number): string {
   if (hours > 0) return `${hours}h ${minutes}m`;
   if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
   return `${seconds}s`;
-}
-
-/**
- * Fraction of the typical total that has elapsed, clamped to [0, 1]. Saturates
- * at 1 for a slow-but-healthy session rather than implying it has stalled.
- */
-function cloudSessionProgress(elapsedSeconds: number): number {
-  if (CLOUD_SESSION_TYPICAL_TOTAL_SECONDS <= 0) return 0;
-  return Math.min(1, Math.max(0, elapsedSeconds / CLOUD_SESSION_TYPICAL_TOTAL_SECONDS));
 }
 
 /**
@@ -135,7 +105,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         title: "Requesting",
         detail: "sending to the fleet",
         tone: "working",
-        progress: cloudSessionProgress(session.elapsedSeconds),
+        progress: cloudSessionProvisionProgress(session),
         actionLabel: "Cancel",
         secondaryActionLabel: null,
         liveElapsed: false,
@@ -145,7 +115,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         title: "Queued",
         detail: elapsed,
         tone: "working",
-        progress: cloudSessionProgress(session.elapsedSeconds),
+        progress: cloudSessionProvisionProgress(session),
         actionLabel: "Cancel",
         secondaryActionLabel: null,
         liveElapsed: true,
@@ -154,7 +124,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
       return {
         ...preparingWords(session),
         tone: "working",
-        progress: cloudSessionProgress(session.elapsedSeconds),
+        progress: cloudSessionProvisionProgress(session),
         actionLabel: "Cancel",
         secondaryActionLabel: null,
         liveElapsed: true,
@@ -164,7 +134,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         title: "Connecting",
         detail: elapsed,
         tone: "working",
-        progress: cloudSessionProgress(session.elapsedSeconds),
+        progress: cloudSessionProvisionProgress(session),
         actionLabel: "Cancel",
         secondaryActionLabel: null,
         liveElapsed: true,

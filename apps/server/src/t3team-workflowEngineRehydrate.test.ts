@@ -31,7 +31,8 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import { afterAll } from "vite-plus/test";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
+import { afterAll, afterEach, beforeEach } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
@@ -72,6 +73,8 @@ const signalParkWorkflowPath = NodeURL.fileURLToPath(
 );
 const cwd = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-rehydrate-"));
 afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_SIGNAL_SOURCES", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 const projectId = ProjectId.make("proj-rehydrate");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");

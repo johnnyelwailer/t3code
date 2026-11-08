@@ -23,7 +23,7 @@ export function maybeBackfillKickoffBranch(input: {
 }): void {
   const { backend, threadId, initialBranch, hasServerThread, serverBranch, state } = input;
 
-  // Only fires for a thread THIS hook dispatched with an unresolved branch (`dispatchedBranch ===
+  // Only fires for a thread THIS hook dispatched with an unresolved branch (`dispatchedBranch is
   // null`). `undefined` means nothing was dispatched here (e.g. a server thread that showed up
   // without our bootstrap) and a string means the branch is already set — either way, no backfill.
   // `hasServerThread` gates on the thread provably existing server-side: `kickoffSent` flips

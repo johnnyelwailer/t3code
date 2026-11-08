@@ -6,136 +6,54 @@ You can think of T3 Code as an open source "bring-your-own-subscription" alterna
 
 ## Git / PR Policy
 
-**HARD RULE — NEVER target upstream `pingdotgg/t3code`.**
-
-- **NEVER** open, update, merge, or create pull requests against upstream `pingdotgg/t3code` (or any `pingdotgg/*` upstream remote).
-- All work stays on the user's fork and local branches (`origin`, feature branches).
-- Only commit and push to the user's fork (`origin`) unless the user explicitly instructs otherwise.
-- Closing mistaken upstream PRs is OK; creating or updating them is forbidden.
+**HARD RULE — never target upstream `pingdotgg/t3code`.** Do not open, update or merge PRs against it or any `pingdotgg/*` remote. Push only to the fork (`origin`) unless told otherwise. Closing a mistaken upstream PR is fine.
 
 ## Task Completion Requirements
 
-- Keep local verification focused on the files and packages changed. Run the smallest relevant test set; do not run the full workspace test suite as a routine completion step.
-  - Use `vp test run <test-files>` for focused built-in Vite+ tests. Use `vp run test` only when the affected package specifically requires its `test` script.
-  - Backend changes must include and run focused tests for the changed behavior.
-  - Run targeted formatting, lint, and type checks for the affected scope when available.
-- Do not run repo-wide `vp check`, `vp run typecheck`, `vp run test`, or equivalent full-suite commands locally unless the user explicitly requests them. CI is responsible for the full verification suite.
-- After frontend feature development or any user-visible frontend behavior change, the primary agent must run one integrated verification pass for each affected client surface after integrating the work:
-  - Web: use the `test-t3-app` skill. Launch one isolated environment, authenticate through the printed pairing URL, and verify the affected flow in the controlled browser.
-  - Mobile: use the `test-t3-mobile` skill. Connect one representative iOS Simulator or Android Emulator available on the host to one isolated environment and verify the affected flow. On compatible macOS hosts, prefer iOS for cross-platform changes and stream it through serve-sim in the T3 Code in-app browser or another available agent browser; use Android when it is the affected or viable platform.
-  - Subagents must not independently launch dev servers or repeat integrated client verification unless their delegated task explicitly requires it.
-  - Stop dev servers, watchers, and other long-running verification processes when the focused verification is complete.
-- If changing native mobile code, `vp run lint:mobile` must also pass.
-- For t3team additive/prefix-constrained tasks, agents MUST run `node t3team-additive-guard.mjs` after finishing code changes and before reporting completion.
-- **Editing an upstream file, and adding it to `allowedModifiedFiles`, needs no approval and is never a review blocker.** Do it in the same change and say so in your report. What is forbidden is _gaming_ the guard: never dodge a LOC cap or a prefix rule by relocating code into an exempt or wrong file — extract properly instead. Never delete or weaken an existing entry to silence a finding.
-  - This rule exists because the opposite belief is expensive. An agent avoided two unwhitelisted files it needed, built a worse design around them — a stamped-observation gate instead of extending a live check that already existed — and three review rounds chased symptoms of that one detour. Put the code where it belongs and grow the whitelist.
-- The additive prefix guard is a blocking completion gate for those tasks: if it fails, the task is not complete.
+- Keep verification focused on the files and packages you changed. Use `vp test run <files>`; use `vp run test` only when the package needs its own `test` script. Backend changes ship with focused tests for the changed behavior, plus targeted format, lint and type checks.
+- No repo-wide `vp check`, `vp run typecheck`, `vp run test` or equivalents unless asked. CI runs the full suite.
+- After a user-visible frontend change, the primary agent runs one integrated pass per affected surface, once, after integrating: web with `test-t3-app`, mobile with `test-t3-mobile` (iOS preferred on macOS for cross-platform changes). Subagents don't launch dev servers or repeat this unless their task requires it. Stop every server and watcher you started.
+- Native mobile code changes also need `vp run lint:mobile`.
 - UI work that touches an interactive component must ship a sibling `*.rerender.test.tsx` using the shared `renderCounter` helper, or a `Rerender: n/a` exemption line in the PR body; see `docs/internals/t3team-rerender-gate.md`.
-- The guard caps prefixed (`t3team-*`) production files at **200 non-empty lines** (150 = warning); tests/fixtures/stories/`*.browser.*` get 600/300. This is a **design constraint to honor while writing**, not a formatting fix to do at the end — splitting a finished 1000-line file into compliant modules is expensive rework. Design modules under the cap from the start; when a file passes ~150 lines, split it _then_ into focused siblings (extract pure helpers, sub-components, hooks). A 400+-line file is a planning miss to catch in planning. A `PostToolUse` hook (`scripts/t3team-additive-fast-hook.mjs`, wired in `.claude/settings.json`) surfaces a live LOC warning the moment a new prefixed file crosses the cap — act on it immediately rather than waiting for the commit gate.
+- t3team additive work: run `node t3team-additive-guard.mjs` before reporting completion. It blocks; if it fails the task is not done. Capture a baseline first.
+- Editing an upstream file and adding it to `allowedModifiedFiles` needs no approval and is never a review blocker. Do it in the same change and say so. Gaming the guard is forbidden: never relocate code into an exempt or wrong file to dodge a cap or prefix rule, and never delete or weaken an existing entry.
+- The guard caps `t3team-*` production files at 200 non-empty lines (150 warns); tests, fixtures, stories and `*.browser.*` get 600/300. Design under the cap from the start and split at about 150 into focused siblings (pure helpers, sub-components, hooks). The `PostToolUse` hook `scripts/t3team-additive-fast-hook.mjs` warns when a new prefixed file crosses the cap; act on it.
 
 ## Project Snapshot
 
-T3 Code is a minimal web GUI for using coding agents like Codex and Claude.
-
-This repository is a VERY EARLY WIP. Proposing sweeping changes that improve long-term maintainability is encouraged.
-
-## Core Priorities
-
-1. Performance first.
-2. Reliability first.
-3. Keep behavior predictable under load and during failures (session restarts, reconnects, partial streams).
-
-If a tradeoff is required, choose correctness and robustness over short-term convenience.
+Very early WIP; sweeping changes that improve long-term maintainability are welcome. Priorities, in order: performance, reliability, predictable behavior under load and failure (restarts, reconnects, partial streams). Choose correctness and robustness over short-term convenience.
 
 ## Multi-Host Reuse
 
-This code is used across multiple hosts, consumers, and runtime environments, including Nexi Work,
-Nexi Portal, and external automation hosts. Before changing a shared contract, runtime, capability,
-provider, or workflow, check which hosts consume it and preserve their compatibility. Prefer small,
-host-neutral contracts with host-specific adapters over copying concrete implementations. Build new
-features so their behavior, persistence, and failure modes can be reused outside the first surface
-where they are needed. Verify each affected host or explicitly document why a host does not apply.
-For event-driven or recurring behavior, treat the event-source and trigger design in GHE issue #332
-as foundational prior art; reuse its source registration, durable delivery, and resume model rather
-than inventing a parallel trigger mechanism.
+This code serves several hosts: Nexi Work, Nexi Portal and external automation. Before changing a shared contract, runtime, capability, provider or workflow, check who consumes it and keep them compatible. Prefer small host-neutral contracts with host-specific adapters over copies, and verify each affected host or say why it doesn't apply. For event-driven or recurring behavior, reuse the signal-source model (`docs/t3team-mvp/42-signal-sources.md`: source registration, durable delivery, resume) instead of a parallel trigger mechanism.
 
 ## Maintainability
 
-### ALWAYS check whether the functionality already exists — before writing it
+### Check whether it already exists before writing it
 
-This is the most-violated rule in this repo, and breaking it does not merely duplicate code: the new
-copy is usually **worse than the original**, because the original already absorbed edge cases the
-author had not thought of yet. Real examples from this codebase:
+The most-violated rule here. The new copy is usually worse than the original, because the original already absorbed edge cases. Before adding a component, hook, formatter, helper or write path, grep the concept (`estimate`, `assignee`, `composer`, `diff`) and look at the backlog, planning and kanban surfaces. The backlog is the oldest and most complete; assume it solved your problem.
 
-- A child-create form was written collecting only a title, while `ProjectBacklogSubtaskCreateForm`
-  already collected summary + estimate — and the write path had always accepted description and
-  estimate as well. The newer one was the poorer of the two.
-- A comment box was written as a bare `<textarea>` while `TicketKickoffComposer` already reused the
-  Lexical composer with @-mentions.
-- A work item row formatted estimates as `"N pts"`, while `getProjectTicketEstimatePresentation`
-  already resolved hours-vs-story-points from the project's own Jira configuration. The hand-rolled
-  version showed story points to a team that estimates in hours.
+- Call the `*Remote` / `*Api` wrapper, not the raw backend. The wrapper is where the decisions live: `updateProjectBacklogEstimateRemote` derives `estimateMode` from the ticket, and calling `backend.updateIssueEstimate` directly wrote hours into the story-points field, which Jira rejected.
+- Reuse directly if the props allow. Extract and share if it is nearly right. Write new only after that, and say in your report what you searched and why nothing fit.
+- Known reuse targets: `ProjectBacklogSubtaskCreateForm` (summary and estimate), `TicketKickoffComposer` (Lexical composer with @-mentions), `getProjectTicketEstimatePresentation` (hours vs story points from the project's Jira config).
+- Build features so behavior, persistence and failure modes can be reused outside the first surface that needs them.
+- Two implementations of one job drift, and users find the difference first.
 
-**Before adding any component, hook, formatter or helper, search for it.** Grep the concept
-(`estimate`, `assignee`, `create`, `composer`, `diff`), and look at what the backlog, planning space
-and kanban surfaces already do. The backlog is the oldest and most complete surface — assume it has
-already solved your problem, especially for anything about tickets, estimates, assignees or rows.
-
-This applies to **write paths and helpers**, not just components. Calling `backend.updateIssueEstimate`
-directly when `updateProjectBacklogEstimateRemote` exists is the same mistake wearing different
-clothes: that helper derives `estimateMode` from the ticket, and skipping it wrote an hours estimate
-into the story-points field, which Jira rejected. If a `*Remote` / `*Api` wrapper exists for the call
-you are about to make, use it — the wrapper is where the decisions live.
-
-When you find prior art:
-
-- **Reuse it directly** if its props allow. This is the default.
-- **Extract and share it** if it is nearly right. Extraction is cheap; divergence is not.
-- **Only then write something new** — and say in your report what you searched for and why nothing fit.
-
-Two implementations of one job is not "a bit of duplication". It is two behaviours that will drift,
-and a user will find the difference before you do.
-
-Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.
-
-Keep files small and composable by default (see the 200-line cap under Task Completion Requirements). A large stateful component is a planning signal to decompose up front — a controller hook for state/effects plus presentational sub-components — not a monolith to split later.
+Extract shared logic into its own module instead of adding local fixes; don't be afraid to change existing code. Keep files small and composable (see the 200-line cap above). A large stateful component is a planning signal: decompose up front into a controller hook for state and effects plus presentational sub-components.
 
 ## T3Team MVP Constitution
 
-When working on the t3team MVP docs, packages, or app surfaces, agents MUST follow the t3team engineering constitution:
+For t3team docs, packages and app surfaces follow `docs/t3team-mvp/10-engineering-constitution.md`. In short: reuse the existing T3 Code shell and UI, keep additions isolated, write small composable code, target high-value 90-100% test coverage, add Storybook and snapshot coverage for reusable UI and key screens, persist rich artifacts instead of chat-only output, and verify UI and workflow changes by clicking through the real app.
 
-- `docs/t3team-mvp/10-engineering-constitution.md`
+After a repeatable t3team workflow, mention that it could be saved as a project-scoped action recipe and offer to create it. Never create one silently.
 
-In short: t3team work must reuse the existing T3 Code shell and UI as the baseline, keep additions isolated where possible, favor small composable code, target high-value 90-100% test coverage, provide Storybook and snapshot coverage for reusable UI and important screens, persist rich artifacts instead of chat-only output, and validate UI/workflow changes by opening the app in a browser and clicking through the changed flow end to end.
+### Recipe and workflow mechanisms come from the spec
 
-After completing a repeatable t3team workflow, agents should mention that the workflow could be saved as a project-scoped action recipe and offer to create it. Do not create recipes silently.
+Before adding a visibility gate, context/data path, action kind, authoring field or matcher input to the recipe/orchestration surface, find how the spec says to do it: `docs/t3team-mvp/16-action-recipes.md` first, then 19 and 25. Grep the concept, not just the identifier. A parallel mechanism ships, authors copy it, and unwinding it touches a dozen files.
 
-### The spec is the source of truth for recipe/workflow MECHANISMS — read it before inventing one
-
-Before adding or extending any mechanism in the recipe/orchestration surface — a visibility gate, a
-context/data path, an action kind, an authoring field, a matcher input — **find how the spec already
-says to do it** (`docs/t3team-mvp/16-action-recipes.md` first, then 19/25). Grep the spec for the
-concept, not just the identifier. Inventing a parallel mechanism is the most expensive failure mode
-in this area: it ships, authors copy it, and unwinding it later touches a dozen files.
-
-Two mechanisms already drifted in this way because agents skipped that step:
-
-- **`appliesTo.visiblePredicates` + the `RecipeSignal*` comparison DSL** (`{ signal: "some.key", gt:
-3 }` with `all`/`any`/`not`). Appeared NOWHERE in the MVP docs: a string-keyed mini expression
-  language, the exact shape Phase 1 retired when it replaced `recipe.json`'s `{{ }}` expression
-  strings with typed functions. **REMOVED** — do not reintroduce a predicate DSL. Conditional
-  visibility is a typed field on `appliesTo` (its one real use became
-  `workitemHasChildren: false`), or `visible: (ctx) => …` (Epic 16) / `appliesTo: (item, ctx) => …`
-  (Epic 19) for the module form.
-- **Async / workspace-reading visibility.** `visible` must stay pure and SYNCHRONOUS on high-churn
-  surfaces (a Promise there is an authoring error). Data a recipe needs arrives in the render
-  context: declare `requiredContext: [{ key }]` and let the host supply it. Never a per-recipe
-  fetch, module import, or tool call inside discovery — that cost does not survive 1000 recipes ×
-  a keystroke.
-
-The general rule the spec states as the Reactivity rule: **if a recipe needs to react to some state,
-that state belongs in the render context** — adding a reactive dimension means adding a field there,
-never giving recipes a subscription or fetch API.
+- No predicate DSL (`appliesTo.visiblePredicates`, `RecipeSignal*` were removed; don't reintroduce them). Conditional visibility is a typed field on `appliesTo`, or `visible: (ctx) => …` / `appliesTo: (item, ctx) => …` for module recipes.
+- `visible` stays pure and synchronous on high-churn surfaces. Data a recipe needs arrives in the render context through `requiredContext: [{ key }]`; never a per-recipe fetch, import or tool call inside discovery.
+- State a recipe reacts to belongs in the render context. Add a field there; never give recipes a subscription or fetch API.
 
 ## What makes T3 Code special?
 
@@ -165,30 +83,19 @@ T3 Code has 3 key app surfaces: **web**, **desktop**, and **mobile**.
 
 ## Vendored Repositories
 
-This project vendors external repositories under `.repos/` as read-only reference material for coding agents.
+`.repos/` holds read-only reference copies of external repos. Prefer their patterns over guesses or web search; never import from them, and don't edit them unless asked. Sync with `vpr sync:repos [--repo <id>]`, and sync the matching subtree in the same change as a dependency bump. Read `.repos/effect-smol/LLMS.md` before writing Effect code, and inspect `.repos/alchemy-effect/` before writing Alchemy relay infrastructure.
 
-- Prefer examples and patterns from the vendored source code over generated guesses or web search results.
-- Do not edit files under `.repos/` unless explicitly asked.
-- Do not import from `.repos/`; application code must continue importing from normal package dependencies.
-- Manage vendored subtrees with `vpr sync:repos`; use `vpr sync:repos --repo <id>` to sync one configured repository.
-- When updating a dependency with a configured vendored subtree, sync that subtree in the same change so
-  `.repos/` matches the installed dependency version.
-- When writing Effect code, read `.repos/effect-smol/LLMS.md` first and inspect `.repos/effect-smol/` for
-  examples of idiomatic usage, tests, module structure, and API design.
-- When writing relay infrastructure code with Alchemy, inspect `.repos/alchemy-effect/` for examples of
-  idiomatic usage, tests, module structure, and API design.
+## Gotchas
 
-## Session-learned gotchas (friction-optimizer, 2026-07-07)
-
-- `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes are registered once**, in the route-merge list in `server.ts` — the former `makeT3TeamRoutesLayer` duplicate registry (and the whole `t3team-server.ts` copy of `server.ts`) was removed in the 2026-08 upstream sync, because it drifted on every sync. Verify a new endpoint against the actually-running server/port before claiming done.
-- Run vitest packages **serially** — full concurrent runs die with exit 137 (OOM SIGKILL). A 137 is a kill, not a test failure; re-run that package serially before triaging.
-- Pre-commit hook duplicates lint/test; bypass with `--no-verify` only when test+typecheck already ran green in-session, and say so.
-- Live testing = the **real user path**: never mint tokens, scan storage for credentials, or shim past auth/UI ("NO SHIMS"). If blocked, report the blocker.
-- After `git push`, re-check `gh pr list --head <branch>` **before** `gh pr create` (a push can surface an existing PR).
-- Upstream merges: use a **worktree**, `--no-commit`, resolve, serial regression matrix, then merge back. Known seam files: `ChatView.tsx`, `MessagesTimeline.tsx`. Hand-resolved merges are **consequential** → second-model review (Codex/Cursor/Copilot) queued _before_ final verification.
-- Tempo/capacity rules: probe real Tempo plan data first — off-project time may be booked as ISSUE-type plans (e.g. INT-2), not non-issue plans.
-- Upstream merges/syncs: follow the `merge-upstream` skill (`.claude/skills/merge-upstream/SKILL.md`) — worktree, seam files, guard, serial tests, review-before-finalize.
-- Browser-pane verification (mandated above) has a fixed tool order, and getting it wrong is the largest single source of wasted calls in this repo. `preview_start`/`preview_list` before any `navigate`/`computer`; `read_page` before `find`, `form_input`, or a coordinate `scroll`. A `serverId` or `tabId` held from an earlier turn goes stale — re-resolve it via `preview_list`/`tabs_context` instead of reusing it. Wrap every `javascript_tool` snippet in an IIFE — `(async () => { … })()` — because top-level `const`/`let` persist in the page realm, so a re-run throws `Identifier 'x' has already been declared`; it is plain JS, so no TS syntax (`as`, type annotations). When several agents work this machine at once, create your own tab with `tabs_create` and pass its `tabId` on every browser call: the default/seed tab may hold someone else's live Jira, and a stray click there lands on real data.
+- `vp run dev:desktop` hot-reloads web and desktop only; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server changes run `pnpm -C apps/server build:bundle` and restart, or use `dev:server`. HTTP routes are registered once, in the route-merge list in `server.ts`; verify a new endpoint against the running server and port before claiming done.
+- Run vitest packages serially. Concurrent full runs die with exit 137 (an OOM kill, not a test failure); rerun that package serially.
+- The pre-commit hook duplicates lint and test. Use `--no-verify` only when tests and typecheck already passed in-session, and say so.
+- Live testing uses the real user path: never mint tokens, scan storage for credentials, or shim past auth or the UI. If blocked, report the blocker.
+- After `git push`, run `gh pr list --head <branch>` before `gh pr create`; a push can surface an existing PR.
+- Upstream merges follow the `merge-upstream` skill: worktree, `--no-commit`, serial regression matrix, second-model review before finalizing (hand-resolved merges are consequential). Seam files: `ChatView.tsx`, `MessagesTimeline.tsx`.
+- Browser pane: start the preview (`preview_start`/`preview_list`) before any `navigate`/`computer`, and `read_page` before `find`, `form_input` or a coordinate `scroll`. Re-resolve a `serverId` or `tabId` from an earlier turn; it goes stale. Wrap every `javascript_tool` snippet in an IIFE (top-level `const`/`let` persists in the page realm) and write plain JS, no TS syntax.
+- With several agents on one machine, create your own tab (`tabs_create`) and pass its `tabId` on every browser call. The default tab may hold someone else's live Jira.
+- Tempo capacity: probe real plan data first; off-project time may be booked as ISSUE-type plans (e.g. INT-2), not non-issue plans.
 
 ## A note from Theo
 
@@ -241,44 +148,87 @@ The most common defect in this repo is a change that works on the path you teste
 ## Dev servers
 
 - `vp i` installs. Worktrees get this from the t3.json setup script; if module resolution looks broken, it probably did not run.
+- Setup runs in the background. While `.t3/setup-running` names a live PID, wait for it and do not run `vp i`. It ends with `.t3/setup-done` or `.t3/setup-failed` (with the error tail). With no marker at all, setup never ran here, so run `vp i` yourself.
 - `vp run dev` starts server and web. In a worktree, state defaults to that worktree's gitignored `.t3`, which deliberately outranks an ambient `T3CODE_HOME` so you cannot land on shared state by accident. An explicit `--home-dir` still wins.
 - Ports derive from the worktree path and are stable across restarts, but read the real ones from the `[dev-runner]` line since occupied ports shift.
 - Sharing over the tailnet is three steps: run `vp run dev --share` in the background, wait for the `pairingUrl:` line in its output, then give that full URL to an unpaired browser. Do not wire up `tailscale serve` by hand, open the URL yourself, or consume the user's pairing link. A browser with the reusable dev cookie can use the bare origin. If a normal one-time token was consumed, mint a fresh one with `node apps/server/src/bin.ts pair`. It carries standard scopes, while the startup URL carries admin scopes needed for Connections settings.
 - To reuse web dev auth across worktrees, configure one fixed `T3CODE_DEV_AUTH_TOKEN` in the main checkout's gitignored `.env`. The `t3.json` setup links that file into worktrees. Never commit or publish the token or a startup URL. See [Reusable dev credential](docs/operations/development.md#reusable-dev-credential).
 - Stop what you started, by the PID you tracked. See rule 1.
+- Need a second checkout? `git worktree add` it next to this worktree, not in `/tmp`. Remove it when done.
 
 ## Test data
 
 An empty database is a bad test. Seed your worktree's `.t3` with a copy of real data instead of pointing at live state:
 
-- Run `vp run migrate-dev-db` with your dev server stopped. It rebuilds `<worktree>/.t3/userdata/statev2.sqlite` from a read-only snapshot of `~/.t3/userdata/statev2.sqlite`, the developer's real data. It keeps recent projects and their stopped threads, and drops scheduled tasks, pending work, and auth sessions, so your dev server never runs the developer's agents. Raise `--projects` and `--threads-per-project` for more data.
+- The first `vp run dev` in a worktree does this for you when its database is missing and the source is at most 500 MiB. Larger sources warn and dev starts with an empty database. `--no-seed` or `T3CODE_DEV_SEED=0` skips seeding. Manual migration still accepts larger sources and may use substantial disk space before pruning.
+- Run `vp run migrate-dev-db` with your dev server stopped to refresh. It rebuilds `<worktree>/.t3/userdata/statev2.sqlite` from a read-only snapshot of `~/.t3/userdata/statev2.sqlite`, the developer's real data. It keeps recent projects and their stopped threads, and drops scheduled tasks, pending work, auth sessions, and links to other environments, so your dev server never runs the developer's agents or reaches their other machines. Raise `--projects` and `--threads-per-project` for more data.
 - Refresh `statev2.sqlite`, not `state.sqlite`. The server copies the V1 `state.sqlite` only when `statev2.sqlite` is missing.
 - Bring `secrets` and `settings.json` only if the flow under test needs them.
 - Copy in, never symlink. Data flows one way: into your sandbox, never back out.
 
 ## Verifying
 
-- Smallest proof that the change works. `vp test run <files>` for the tests you touched, targeted lint and typecheck for the scope you changed.
-- Test meaningful logic or observable behavior. Do not render components to static markup to assert props or attributes, or add tests that merely assert callback wiring or mirror the implementation.
+- Before you push, run `vp run check:changed`. It runs CI's fast checks for changed files: format, lint, knip, typecheck of affected packages and dependents, tests beside changes, and the cross-file checks those miss. CI still runs the full test suites.
+- While you iterate, run `vp test run <files>`. For big files, add `-t "<name>"`.
+- Use `vp run typecheck`, not `npx tsc`; it caches per package. Both run tsc-rs (`typescript` is the `@tsc-rs/typescript` drop-in).
+- Run `node -e` snippets from `apps/server` or the owning package. `effect` does not resolve from the repo root.
+- Test behavior that can break, such as orchestration and event-sourcing, provider protocol translation, auth and permission guards, persistence and migrations, external-format parsing, race fixes, and the logic a bug fix changed. Leave out tests for what types already guarantee, trivial logic, copy text, smoke runs, mock-call mirrors, callback wiring, and props rendered to static markup.
+- Extend before you add. When an existing test or table covers the behavior, add a row or an assertion there. Write a new `it` only when no case fits.
+- Test at one layer: the lowest one that fails on `main`. Do not repeat the case in a wrapper test, at each call site, or in web and mobile copies of the same logic.
+- [Testing](docs/internals/testing.md) carries these same test rules, plus review guidance, for review bots. Change both together.
 - **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
 - Backend behavior changes ship with focused tests for that behavior.
-- The server is event-sourced, and side effects run after the command commits. In tests, drain the effect worker (`OrchestrationEffectWorkerV2.drain`) or await the specific persisted event or `Deferred` that marks the milestone. Never wait on sleeps or polling. A test that needs a timeout to pass is wrong.
-- Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
+- Proof for a bug fix depends on the bug. Logic, data, state, and protocol bugs get a failing test first (the fewest that fail on `main` for that reason, in an existing case of the module's test file where one fits), then the fix. Purely visual bugs (spacing, colour, alignment, a layout shift) get before/after captures as their proof and no test: do not add UI tests for nitpicks, and do not ask for one in review when a capture already shows it. A server-only fix with no visible surface ships the test plus a short runtime transcript.
+- The server is event-sourced, and side effects run after the command commits. In tests, drain the effect worker (`OrchestrationEffectWorkerV2.drain`) or await the specific persisted event or `Deferred` that marks the milestone. Never wait on sleeps or polling. A test that needs a timeout to pass is wrong. Concretely:
+  - `it.effect` runs on a `TestClock`; `Effect.sleep` only advances through `TestClock.adjust`. `it.live` is wall-clock and only for subprocess or network fixtures.
+  - No `yieldNow` or `sleep` polling loops. Await the `Deferred`, take from the `Queue`, or drain the worker.
+  - No per-test timeout argument or `retry`. The project timeout is the ceiling, and flaky tests are fixed, not retried.
+  - No `performance.now()` or `Date.now()` deltas. Assert on events and counts, not elapsed time.
+  - Browser tests assert through `expect.element` or `vi.waitFor`, never `requestAnimationFrame` or `transitionend`.
+  - `vi.mock` factories must not spread a real module that pulls in Shiki or the diff workers.
+  - `it.skip` and friends need a tracking issue on the line above: `// quarantine: #1234 <why>`.
+  - Lint enforces this: `t3code/no-test-timeout-or-unreasoned-skip`, `t3code/no-frame-waits-in-browser-tests`, `t3code/no-wall-clock-in-tests`, `t3code/no-real-time-wait-in-tests`, `t3code/no-polling-loop-in-tests`.
+- Web browser tests are `*.browser.test.tsx` or `*.browser.test.ts` and render with `await using screen = await render(...)` from `apps/web/test/render.tsx`. `t3code/require-disposable-render` errors on the old patterns.
+  - Acquire what the test drives after mounting (fake timers it advances, spies it sets up after mounting) after the render, so it disposes before the unmount. Anything the first render reads comes before it.
+  - A helper that renders and then waits or clicks puts the screen in an `AsyncDisposableStack` and `move()`s it out only on success, so a failed wait still unmounts.
+  - `rerender` needs a fresh element on every call.
+  - No lifecycle hooks and no module-level mutable state. Shared mock state that `vi.mock` factories read is reset by a `setup()` call at the top of the test.
+  - `router` is on by default. Pass `router: false` only with a one-line comment saying why.
+
+  ```tsx
+  it("saves on Enter", async () => {
+    const onSave = vi.fn();
+    using _now = vi.spyOn(Date, "now").mockReturnValue(0);
+    await using screen = await render(<TitleEditor onSave={onSave} />, { router: "/threads/1" });
+    await userEvent.type(screen.getByRole("textbox"), "Title{Enter}");
+    expect(onSave).toHaveBeenCalledWith("Title");
+  });
+  ```
+
+- User-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers.
+
+- Real agent turns cost money. To watch a turn stream through the pipeline and UI, use the free `Replay (dev)` provider that `vp run dev` registers; [test-t3-app](.agents/skills/test-t3-app/SKILL.md) shows how to start one. Use a real provider only when the change depends on that provider's behavior, and then pick its cheapest model, such as Haiku for Claude or Luna for Codex.
+
+For mobile verification, a missing or outdated native client is an install step, not a blocker. Run `vp run mobile:install <ios|android> [device-id]` on the device host before starting Metro; it targets the only booted simulator or connected Android device when the id is omitted. It installs the dev client for this checkout's native fingerprint from the shared cache in seconds and builds only when no machine has built it yet, so prefer it over `expo run:*`, `xcodebuild`, or `gradlew`, which rebuild from scratch. Its stdout is one JSON line; build output goes to the log it names. See `test-t3-mobile` for the full workflow.
+
+## Evals
+
+`evals/` checks how real models behave with T3 Code's model-facing text: agent instructions, MCP tool descriptions and schemas, and generated titles. Before you change that text, read [evals/README.md](evals/README.md) and run the evals it names. When you fix a model behavior bug, add a case that fails before the fix.
 
 ## Storybook
 
 Stories start with the real components and realistic sample data — never re-creations, fakes, or parallel mock views. Render the production component (the real PR panel, the real work-item view, the real recipe list) with fixture data shaped like what the app actually receives. If a component fetches its own data, mock at the data seam (the atom/RPC boundary, scoped to the storybook build) rather than building a look-alike around it — and if no seam exists, add one to the real component instead of recreating the view beside it.
-For authorized mobile verification, a missing or outdated native client is a build step, not a blocker. Run `node scripts/mobile-native-client.ts ensure <ios|android> <device-id>` on the simulator host before starting Metro. It checks the local Expo fingerprint and builds/installs when needed. See `test-t3-mobile` for the full workflow.
 
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
+- If `origin` is git.cafe, follow [GitCafe mirror](docs/operations/development.md#gitcafe-mirror-optional): push to `origin`, open and track PRs with `cafe` and their git.cafe URLs, and keep `gh` for merging.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.
 - UI changes need before/after images. Motion or timing needs a short video.
 - Upload PR evidence to GitHub. Never commit PR-only screenshots or assets such as `.github/pr-assets/`.
 - One request is one PR. Split it only when the maintainer asks. Outside contributions follow the stricter [one problem per PR](CONTRIBUTING.md#one-problem) rule.
-- When babysitting: poll checks and comments newer than the last push, verify each bot finding against the source, fix real ones, dismiss false positives with a written reason. Stay quiet when nothing is new. Stop when the bots are green on the latest commit.
+- When babysitting: call `watch_pull_request` and end your turn. T3 Code wakes you on checks, comments, or conflicts. Do not poll or sleep. Verify each bot finding against the source, fix real ones, dismiss false positives with a written reason. Stay quiet when nothing is new. Stop when the bots are green on the latest commit.
 
 ## Documentation
 
@@ -286,7 +236,7 @@ Most code changes do not need an internal documentation change. Agents can read 
 
 - `docs/internals/` is for architectural decisions and their reasons, constraints that span components, and implementation traps that are hard to discover from the source. Before adding a paragraph, ask what a maintainer would get wrong without it. If reading the relevant code answers the question, leave it out.
 - Do not document every feature, enumerate fields or methods, narrate control flow, maintain file catalogs, or append PR summaries. Types, tests, and code already record the implementation. The glossary defines shared vocabulary; it is not a feature index.
-- Keep a local implementation explanation in a nearby code comment. Use an internal doc when the reasoning crosses boundaries or needs context the code cannot carry well. Link to the relevant source instead of copying it.
+- A local reason the code can't show goes in a short nearby code comment. Use an internal doc when the reasoning crosses boundaries or needs context the code cannot carry well. Link to the relevant source instead of copying it.
 - When a documented decision or constraint changes, rewrite or remove the affected text. Do not append another account of the new behavior. A new internal page needs a distinct, durable reason to exist.
 - `docs/user/` helps users accomplish tasks. Give each major feature a concise section explaining what it does, how to start, and anything unintuitive. A settings path is useful; descriptions of visible buttons, icons, layouts, animations, or every UI state are not. Before adding text, ask what task or decision it helps the user with.
 - Keep user docs in the shipped product's voice, without implementation details or contributor tooling. Update the relevant feature section when how to use it changes. A UI tweak does not need a documentation entry, and a new control does not need its own page.
@@ -296,6 +246,7 @@ Most code changes do not need an internal documentation change. Agents can read 
 
 - Do not commit implementation plans, research notes, or agent scratch files. Keep temporary working material outside the worktree. `.plans/` is gitignored only as a safety net for legacy tooling.
 - Track active maintainer work in the GitHub issue or project item that owns it. External proposals follow `CONTRIBUTING.md` and belong in Ideas discussions.
+- Do not reference specific issues or PRs in this file. State the rule and the reason, and link the doc or code that holds the detail.
 - A merged PR is the implementation record. Close or update its tracking item when the work lands; do not preserve a second checklist in the repository.
 
 ## How it works
@@ -311,7 +262,7 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 - `packages/contracts` - Effect/Schema contracts plus small derived helpers. No heavy runtime logic.
 - `packages/shared` - shared runtime utils, subpath exports, no barrel.
 - `packages/client-runtime` - client code shared by web and mobile.
-- `.repos/` - vendored read-only references. Prefer their patterns over invented ones. Never edit or import from them. Sync with `vpr sync:repos` when bumping the matching dependency.
+- `.repos/` - vendored read-only references. Prefer their patterns over invented ones. Never edit or import from them. Sync with `vpr sync:repos` when bumping the matching dependency. If it is missing (sparse checkout), read a file with `git show origin/main:.repos/<path>`.
 
 ## Taste
 
@@ -319,12 +270,18 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 - Client mutations use `createEnvironmentRpcCommand`. Add protected methods to `CLIENT_GUARDED_RPC_SCOPES` in contracts and use the command's `permissionAtom` for UI availability. Grants are checked at execution against the destination environment; the server remains authoritative. Keep raw RPC clients inside `rpc/`, and extend the permission behavior tests when adding a protected method.
 - Server features are services; transports stay thin. A `ws.ts` RPC handler, HTTP route, or MCP tool decodes input, calls one service method, and maps errors. See [Effect services](docs/internals/effect-services.md).
 - `apps/web/src/components/ui` exports own their look. Pick a `variant` or `size`; do not restyle one with `className`. If none fits and the look is a generic concept, add a variant to the component; a look that belongs to one feature stays in that feature's own component, not in `components/ui`. Layout classes (width, flex, margin, position) belong on the parent. `shadcn/no-restyle` fails lint on violations. See [Web UI](docs/internals/web-ui.md).
+- Reusable Effect functions use `Effect.fn("Service.operation")` with a stable span name, not a
+  function wrapping `Effect.gen`. Keep `Effect.gen` for inline programs and layer construction.
+  Use `Effect.fnUntraced` only when spans would be too frequent (stream chunks, per-event
+  projection, tight loops) or duplicate an existing tracing boundary; explain that choice nearby.
+  Named `Effect.fn` creates a span; the unnamed form does not. Preserve existing span names and
+  options, and pass combinators as additional function-builder arguments.
 - Inferred types over annotations. `any` is the enemy.
-- Comments describe how a thing is used, and move when the code moves. To be used mostly to describe functions, not to annotate every line of behavior.
+- Default to no comment. Write one only for a constraint, an external quirk, or an invariant the code can't show, in one line where you can and four at most. Don't restate names or signatures, narrate steps, record history, or explain the fix you just made; the PR carries that. `t3code/no-low-value-comments` enforces the length cap and the mechanical cases.
+- React effects are for synchronizing with something outside React. Derive in render and act in handlers instead of syncing state, but don't hide real lifecycle work in refs or stores to dodge one. The `t3code/no-unreasoned-state-sync` lint rule reports every effect; one that stays states its reason with `// oxlint-disable-next-line t3code/no-unreasoned-state-sync -- <why>`.
 - Our users drive agents all day and notice a dropped frame, a lying spinner, and a stale label. No continuously repainting animations; they peg the GPU on high-refresh displays.
 - If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
 
 ## Additional tips
 
-- Don't verify with browsers or computer use unless the user explicitly agrees or requests it.
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.

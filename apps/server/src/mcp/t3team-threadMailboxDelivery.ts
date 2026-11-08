@@ -13,8 +13,21 @@
  * providing this reference to `McpHttpServer.layer` (server.ts).
  */
 import type { MessageId, OrchestratorMcpFailure, ThreadId } from "@t3tools/contracts";
+import {
+  readFeatureFlag,
+  type ReadFeatureFlagEnv,
+} from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+
+/** With `AGENTS_MAILBOX` off, a mailbox send becomes a plain follow-up turn (`queue`), the
+ * upstream mode that, like the mailbox, never steers a running turn. Read live per send. */
+export function resolveThreadSendMode<Mode extends string>(
+  mode: Mode,
+  readEnv?: ReadFeatureFlagEnv,
+): Mode | "queue" {
+  return mode === "mailbox" && !readFeatureFlag("AGENTS_MAILBOX", readEnv) ? "queue" : mode;
+}
 
 export interface ThreadMailboxSendInput {
   readonly senderThreadId: ThreadId;

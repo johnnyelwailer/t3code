@@ -1,4 +1,5 @@
-import { assert, describe, it } from "@effect/vitest";
+import { afterEach, assert, describe, it } from "@effect/vitest";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import {
   CommandId,
   MessageId,
@@ -128,6 +129,38 @@ const mailboxOf = (store: T3TeamActorMailboxStore["Service"]) =>
   });
 
 it.layer(TestLayer)("stopThreadCascade", (it) => {
+  afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
+  it.effect("stops only the thread itself while child-thread management is off", () =>
+    Effect.gen(function* () {
+      const lineage = yield* T3TeamThreadLineage;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const [root, child] = ["root", "child"].map((name) =>
+        ThreadId.make(`thread:cascade-off:${name}`),
+      ) as [ThreadId, ThreadId];
+      for (const threadId of [root, child]) yield* createTestThread(threadId);
+      yield* lineage.setThreadLineage({
+        threadId: child,
+        parentThreadId: root,
+        relationshipToParent: "subagent",
+      });
+      yield* startDeferredRun(root);
+      yield* startDeferredRun(child);
+      replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_CHILD_THREADS", false]]));
+
+      const result = yield* stopThreadCascade({
+        threadId: root,
+        commandId: CommandId.make("request-off"),
+      });
+      assert.deepStrictEqual(result, {
+        root: "interrupt_requested",
+        descendants: { found: 0, interrupted: 0, failed: 0 },
+      });
+      const childRecords = yield* orchestrator.getThreadRecords(child, ["turnItems"]);
+      assert.isFalse(childRecords.turnItems.some((item) => item.type === "run_interrupt_request"));
+    }),
+  );
+
   it.effect("interrupts the root and every live descendant, idempotently per request", () =>
     Effect.gen(function* () {
       const lineage = yield* T3TeamThreadLineage;

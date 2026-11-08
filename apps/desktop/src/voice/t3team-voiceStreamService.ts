@@ -8,9 +8,11 @@ import type {
   DesktopVoiceStreamEvent,
 } from "@t3tools/contracts";
 
-import { pcm16FromBase64 } from "./t3team-voicePcm.ts";
+import { createNearFieldGate } from "./t3team-voiceNearFieldGate.ts";
+import { pcm16FromBase64, pcm16ToBase64 } from "./t3team-voicePcm.ts";
 import type { DesktopVoiceService } from "./t3team-voiceService.ts";
 import { createVoiceStreamSession } from "./t3team-voiceStreamSession.ts";
+import type { SpeechDetect } from "./t3team-voiceSpeechTracker.ts";
 
 export type DesktopVoiceStreamService = {
   readonly start: (
@@ -39,6 +41,8 @@ export function makeDesktopVoiceStreamService(deps: {
   readonly voice: DesktopVoiceService;
   readonly emit: (event: DesktopVoiceStreamEvent) => void;
   readonly newSessionId: () => string;
+  /** Silero over 16 kHz PCM16: spans, null when it could not answer, "pending" while it loads. */
+  readonly detectSpeech: (pcm16Base64: string) => ReturnType<SpeechDetect>;
   readonly log: (message: string) => void;
   readonly now?: () => number;
 }): DesktopVoiceStreamService {
@@ -61,7 +65,9 @@ export function makeDesktopVoiceStreamService(deps: {
         silenceMs: config.silenceMs,
         transcribe: ({ pcm16Base64, language }) =>
           deps.voice.transcribe({ config: { ...config, language }, pcm16Base64 }),
+        detect: (pcm) => deps.detectSpeech(pcm16ToBase64(pcm)),
         isWorkerReady: deps.voice.isReady,
+        nearField: createNearFieldGate(),
         emit: (event) => deps.emit({ ...event, sessionId: id }),
         log: (message) => deps.log(`[${id}] ${message}`),
       });

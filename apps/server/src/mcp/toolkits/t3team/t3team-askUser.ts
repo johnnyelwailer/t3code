@@ -38,9 +38,11 @@ export interface T3TeamAskUserResult {
 export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
   input: T3TeamAskUserInput,
   threadId: ThreadId,
+  /** A caller-chosen question id (a machine-readable one); default: the generated ask id. */
+  questionId?: string,
 ) {
   const askId = NodeCrypto.randomUUID();
-  const built = buildAskUserQuestion(input, askId);
+  const built = buildAskUserQuestion(input, questionId ?? askId);
   if ("error" in built) {
     return yield* new T3TeamMcpToolError({ message: built.error });
   }

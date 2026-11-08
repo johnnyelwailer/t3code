@@ -7,10 +7,11 @@ import * as TestClock from "effect/testing/TestClock";
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 
-import * as GitHubApi from "./GitHubApi.ts";
+import * as GitHubApi from "./t3team-GitHubApi.ts";
 import * as GitHubCredentials from "./GitHubCredentials.ts";
+import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubQuota from "./GitHubQuota.ts";
-import { jsonResponse } from "./t3team-githubApiTestHarness.ts";
+import { appSignedOut, jsonResponse } from "./t3team-githubApiTestHarness.ts";
 
 type Step = "dropped" | (() => Response);
 
@@ -44,11 +45,14 @@ function scripted(steps: ReadonlyArray<Step>) {
           source: "gh" as const,
           fingerprint: `${host}:token`,
         }),
+      saved: () => Effect.succeedNone,
+      fingerprint: (host, token) => Effect.succeed(`${host}:${token}`),
       invalidate: () => Effect.void,
     }),
   );
   const layer = GitHubApi.layer.pipe(
-    Layer.provide(Layer.mergeAll(credentials, transport)),
+    Layer.provideMerge(GitHubRest.layer),
+    Layer.provideMerge(Layer.mergeAll(credentials, transport, appSignedOut)),
     Layer.provideMerge(GitHubQuota.layer),
     Layer.provideMerge(SourceControlRateLimit.layer),
   );

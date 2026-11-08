@@ -63,15 +63,6 @@ afterAll(() => {
     Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 });
 
-type Rect = {
-  left: number;
-  right: number;
-  width: number;
-  height: number;
-  top: number;
-  bottom: number;
-};
-
 function withRect(element: Element, box: Box): Element {
   rectStore.set(element, toRect(box));
   return element;

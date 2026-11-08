@@ -117,7 +117,9 @@ describe("stored project hydration", () => {
     expect(applied.projects).toHaveLength(0);
 
     await act(async () => {
-      release({ t3teamStoredProjectsJson: JSON.stringify([makeProject("persisted")]) } as never);
+      release({
+        t3team: { storedProjectsJson: JSON.stringify([makeProject("persisted")]) },
+      } as never);
       await Promise.resolve();
     });
 
@@ -132,7 +134,7 @@ describe("stored project hydration", () => {
   it("hydrates once per page and publishes the result to every reader", async () => {
     settingsHolder.get = async () =>
       ({
-        t3teamStoredProjectsJson: JSON.stringify([makeProject("persisted")]),
+        t3team: { storedProjectsJson: JSON.stringify([makeProject("persisted")]) },
       }) as never;
 
     const persistence = await import("./t3team-projectStorePersistence");

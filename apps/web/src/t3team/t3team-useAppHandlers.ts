@@ -2,7 +2,6 @@ import { useCallback, useRef } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadActions } from "~/hooks/useThreadActions";
 import { useBackend } from "~/t3team/backend/t3team-index";
-import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { matchesProjectThreadTicket } from "~/t3team/t3team-ticketLookup";
 import type {
   ProjectKickoffThreadInput,
@@ -11,6 +10,7 @@ import type {
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { settleBesideKickoffThread } from "~/t3team/t3team-besideKickoffThread";
 import { createProjectKickoffThread } from "~/t3team/t3team-useAppHandlers-kickoffThread";
+import { sendProjectKickoffAtClick } from "~/t3team/t3team-sendProjectKickoffAtClick";
 import { selectProjectDashboardMode } from "~/t3team/t3team-projectThreadViewState";
 import { useLocalWorkspaceCommands } from "~/t3team/hooks/t3team-useLocalWorkspaceCommands";
 import {
@@ -175,8 +175,13 @@ export function useAppHandlers({
 
   const handleCreateProjectKickoffThread = useCallback(
     (input: ProjectKickoffThreadInput) =>
-      createProjectKickoffThread(input, { onOpenDashboard, store }),
-    [onOpenDashboard, store],
+      createProjectKickoffThread(input, {
+        onOpenDashboard,
+        store,
+        sendKickoffAtClick: (thread) =>
+          sendProjectKickoffAtClick({ backend, environmentId, store, thread }),
+      }),
+    [backend, environmentId, onOpenDashboard, store],
   );
 
   const handleCreateTicketThreadFromSidebar = useCallback(

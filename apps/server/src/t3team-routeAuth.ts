@@ -11,9 +11,12 @@
  * server.ts mounts it ONCE on the t3team route group, so a new route there is
  * authenticated by default. The only routes outside it carry their own
  * capability: the cloud broker (relay scopes), the account sign-in routes
- * (`credentialRoute`: environment scopes plus a same-origin check), the
+ * (`credentialRoute`: environment scopes plus a same-origin check) and the
  * Atlassian sign-in callback (the one-time `state`, finished in a browser with
- * no session) and the Atlassian media proxy that `<img>` tags load.
+ * no session). The Atlassian media proxy that `<img>` tags load is NOT one of
+ * them: the web client's `<img>` carries its session cookie, and the desktop
+ * renderer, which has no cookie on this origin, gets its bearer attached by the
+ * main process (apps/desktop t3team-atlassianAssetBearer.ts).
  * @module t3team-routeAuth
  */
 import { AuthOrchestrationOperateScope, AuthOrchestrationReadScope } from "@t3tools/contracts";

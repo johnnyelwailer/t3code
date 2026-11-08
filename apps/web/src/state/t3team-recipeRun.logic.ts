@@ -15,7 +15,7 @@ import {
   type ScopedThreadRef,
   type T3TeamRecipeSummaryFact,
 } from "@t3tools/contracts";
-import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
+import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thread-pull-requests";
 
 import {
   buildWatcher,

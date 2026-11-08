@@ -10,7 +10,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
+import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditorTiptap";
 
 const { recordedTargets, pathEntries, mockUseProjects, mockUsePrimaryEnvironmentId } = vi.hoisted(
   () => ({
@@ -27,8 +27,9 @@ const { recordedTargets, pathEntries, mockUseProjects, mockUsePrimaryEnvironment
   }),
 );
 
-vi.mock("~/lib/composerPathSearchState", () => ({
-  useComposerPathSearch: (target: {
+vi.mock(import("~/state/queries"), async (original) => ({
+  ...(await original()),
+  useComposerPathSearch: ((target: {
     environmentId: string | null;
     cwd: string | null;
     query: string | null;
@@ -40,8 +41,9 @@ vi.mock("~/lib/composerPathSearchState", () => ({
       entries: queryable ? pathEntries.current : [],
       error: null,
       isPending: false,
+      searchedTarget: target,
     };
-  },
+  }) as never,
 }));
 
 vi.mock("~/state/entities", () => ({

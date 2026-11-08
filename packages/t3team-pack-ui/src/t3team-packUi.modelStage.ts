@@ -41,8 +41,23 @@ export type ModelStageLoop =
       readonly fps: number;
     };
 
-/** A clip to play, by its glTF animation name. A list plays in order, then loops the last one. */
-export type ModelStageClips = string | ReadonlyArray<string>;
+/**
+ * Looping clips that take turns: each plays a few loops, then crossfades to a different one (never
+ * the same clip twice in a row), so a long wait does not repeat one motion.
+ */
+export interface ModelStageClipPool {
+  readonly pool: ReadonlyArray<string>;
+  /** Loops each clip plays before the next turn, inclusive; picked at random. Default `[1, 2]`. */
+  readonly loops?: readonly [number, number];
+  /** Crossfade between pool clips, in seconds. Default 0.5. */
+  readonly crossfade?: number;
+}
+
+/**
+ * A clip to play, by its glTF animation name. A list plays in order, then loops the last one. A
+ * pool takes turns between its clips, indefinitely.
+ */
+export type ModelStageClips = string | ReadonlyArray<string> | ModelStageClipPool;
 
 /**
  * Fake flight without a dedicated clip: lift the model, bob it, and (when the rig has shoulder

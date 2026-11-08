@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
 
 import type { RunId } from "@t3tools/contracts";
-import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
+import { TimelineRowActivityCtx } from "~/components/chat/timelineRowContext";
+import { WorkingTimelineRow } from "~/components/chat/TimelineWorkGroupRows";
 import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import {
   buildEntries,
@@ -70,7 +71,6 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
-        activeTurnInProgress: true,
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
@@ -108,10 +108,8 @@ function Card({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Side panel — the clicked agent's thread card (the app opens the real
 // thread / Agents panel; this stand-in keeps the exploration self-contained)
-// ---------------------------------------------------------------------------
 
 function AgentSidePanel({
   entry,
@@ -157,10 +155,6 @@ function AgentSidePanel({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Story
-// ---------------------------------------------------------------------------
-
 type StateMotionDotsProps = {
   /** Pins the thread-level state. "auto" lets it drift with the agents. */
   threadState: "auto" | DotState;
@@ -186,7 +180,6 @@ type StateMotionDotsProps = {
 
 function StateMotionDots({
   threadState,
-  drift,
   activeChildren,
   activeSubagents,
   liveStream,
@@ -295,10 +288,8 @@ function StateMotionDots({
     setSelectedAgent(index >= 0 ? index : null);
   };
 
-  // -------------------------------------------------------------------------
   // Debug overlay: crosshair on the raw pointer + one dashed ring per dot's
   // live home, so trigger vs pointer vs home can be compared pixel-by-pixel.
-  // -------------------------------------------------------------------------
   useEffect(() => {
     const scope = mixedScopeRef.current;
     if (!scope || !debug) return;
@@ -400,9 +391,6 @@ function StateMotionDots({
     return () => scope.removeEventListener("pointerdown", onDown);
   }, [debug]);
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
   const pinnedThread = threadState === "auto" ? null : threadState;
   const threadForMixed: DotState | null = pinnedThread ?? driftState.thread;
 
@@ -477,7 +465,7 @@ function StateMotionDots({
               <div className="mt-2 flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setDriftState((current) => rollDrift(entriesRef.current.length))}
+                  onClick={() => setDriftState(() => rollDrift(entriesRef.current.length))}
                   className="rounded-sm border border-border/70 bg-accent/40 px-2 py-0.5 text-3xs text-muted-foreground hover:text-foreground"
                 >
                   re-roll agent states

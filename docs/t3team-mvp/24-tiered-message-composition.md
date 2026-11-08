@@ -758,10 +758,23 @@ parallel system.
 - **`format: "html" | "svg"` (shipped)** — the ad-hoc/ephemeral tier and the MCP-UI-style
   fallback this doc already anticipates for third-party/instant model-authored UI. The
   widget body is persisted as an Epic 08 RichArtifact (`format: "html"`, content-addressed
-  blob store) and travels on the message as the new `widget` attachment kind — the ad-hoc
-  sibling of the first-party `view` kind in the Epic 16 attachment union. Rendering is a
-  sandboxed iframe (`sandbox="allow-scripts"`, never `allow-same-origin`) with the app's
-  theme CSS variables injected, a transparent background, and auto-sized height.
+  blob store). **Rendering maps to upstream's HTML renders:** `t3_show_widget` is a thin
+  wrapper over the `html_render` path — it validates its arguments as before, wraps the
+  fragment into a page (`t3team-widgetHtmlDocument.ts`: the widget CSP plus the icon sprite;
+  upstream's bootstrap supplies the live theme tokens and content-height reporting), publishes
+  it with `HtmlRender.publish`, and returns the same `htmlRender` result. Every client (web,
+  desktop, mobile) then shows it inline from the tool call exactly like an `html_render` page,
+  for every provider; thread deletion cleans it up the same way. `t3_show_widget` joins
+  upstream's T3 tool inventory with the `html-render` summary action
+  (`packages/shared/src/t3team-mcpToolPresentation.ts`) so `htmlRenderFromToolItem` reads it.
+- **Fork extra — the bridge path.** A widget that drives the bridge (declares
+  `capabilities.tools`, or calls `sendPrompt(...)` / `window.host.callTool(...)`) is not
+  published: upstream's `HtmlRenderFrame` has no parent↔frame channel for it. It travels as the
+  `widget` attachment kind (a `widget` thread artifact — the ad-hoc sibling of the first-party
+  `view` kind in the Epic 16 attachment union) and renders in the fork's sandboxed srcdoc iframe
+  (`sandbox="allow-scripts"`, never `allow-same-origin`) with the app's theme CSS variables
+  snapshotted in, and auto-sized height. A failed publish degrades to the same path, and workflow
+  `thread.showWidget` output still uses it.
 - **`format: "mdx"` (reserved)** — will route to the T1 safe-mdx renderer (trusted
   whitelisted first-party components inline). Calling it today returns a structured
   not-yet-supported error naming the target pipeline.
@@ -773,7 +786,7 @@ but generic; mdx/tsx are design-system-native but staged behind the T1/T2 pipeli
 T2 registered views remain the first-party path (React + design system + typed props,
 typed-event bridge); `show_widget` html/svg is the zero-ceremony escape hatch.
 
-**Bridge and capability gating.** Inside the iframe the bridge exposes `sendPrompt(text)`
+**Bridge and capability gating.** Inside the srcdoc iframe the bridge exposes `sendPrompt(text)`
 (posts a normal user turn on the thread) and `window.host.callTool(name, args)` (a
 promise-returning postMessage RPC). Tool calls leave the sandbox only through
 `POST /api/t3team/widget/tool-call`, which dispatches through the `T3TeamToolBroker`
@@ -800,7 +813,9 @@ properties nor its icon components cross that boundary unless the host puts them
 Both are now contracts the host guarantees, pinned by
 `apps/web/src/t3team/chat/t3team-widgetTheming.test.tsx`.
 
-**Theme tokens.** `collectT3TeamWidgetThemeCss()` snapshots the live document's custom
+**Theme tokens.** Published widgets get upstream's HTML render theme (`htmlRenderTheme` in
+`packages/shared/src/htmlRender.ts`), which carries every token below and follows theme changes
+live. On the bridge path, `collectT3TeamWidgetThemeCss()` snapshots the live document's custom
 properties into the srcdoc's own `:root`, together with an explicit
 `color-scheme: light|dark`. Widgets may therefore use the Epic 37 semantic vocabulary
 directly, and one markup stays readable in both modes:
@@ -817,8 +832,9 @@ The table is the _documented_ contract, mirrored by `T3TEAM_WIDGET_THEME_TOKENS`
 snapshot is not limited to it — a theme pack that introduces further tokens reaches widgets
 automatically, so a pack's palette needs no widget-side change.
 
-**Icons.** The host injects an inline `<symbol>` sprite (`t3team-widgetIconSprite.ts`) into
-every srcdoc, so an author renders a real icon with markup alone:
+**Icons.** The host injects an inline `<symbol>` sprite
+(`packages/shared/src/t3team-widgetIconSprite.ts`) into every widget — the published page and the
+bridge srcdoc alike — so an author renders a real icon with markup alone:
 
 ```html
 <span style="color: var(--success)">
@@ -879,7 +895,7 @@ table records why the higher tiers will be allowed to do more.
 - **Modified upstream files (T2b composer, Phase D):**
   - `packages/contracts/src/settings.ts` — already in the whitelist for
     t3team-prefixed client settings; this addition (`composerModelSelection:
-ModelSelection`) is an upstream-style sibling to the existing
+    ModelSelection`) is an upstream-style sibling to the existing
     `textGenerationModelSelection`, following the same shape. One new whitelist
     entry with the rationale: "Add upstreamable `composerModelSelection` next to
     `textGenerationModelSelection` for the view-composer subagent; same shape,

@@ -4,7 +4,7 @@
  */
 import * as Effect from "effect/Effect";
 
-import type * as GitHubApi from "./GitHubApi.ts";
+import type * as GitHubApi from "./t3team-GitHubApi.ts";
 import {
   encodePathSegments,
   fileFromHostJson,
@@ -32,7 +32,7 @@ const isNotFound = (error: { readonly _tag: string; readonly status?: number | u
  * answered, but not with something this reader understands, or the request was malformed.
  */
 export const readGitHubFileAtRevision = (
-  api: GitHubApi.GitHubApi["Service"],
+  api: Pick<GitHubApi.GitHubApi["Service"], "rest">,
   input: FileAtRevisionRequest,
 ) => {
   if (

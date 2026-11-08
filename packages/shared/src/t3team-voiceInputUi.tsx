@@ -76,6 +76,12 @@ export interface ComposerVoiceInputProps {
   languages?: readonly VoiceLanguageOption[];
   /** Recognition language to start with (default: "en-US"). */
   initialLanguage?: string;
+  /**
+   * Identity of the draft/thread this composer feeds. Switching threads
+   * reuses the component, so hosts pass it to cancel an in-progress
+   * recording (and free the microphone) when the draft changes.
+   */
+  sessionKey?: string;
   /** Imperative handle: stop the recording and exit voice mode. */
   ref?: Ref<ComposerVoiceInputHandle>;
 }
@@ -91,6 +97,7 @@ export function ComposerVoiceInput({
   className,
   languages = DEFAULT_VOICE_LANGUAGES,
   initialLanguage = DEFAULT_LANGUAGE_CODE,
+  sessionKey,
   ref,
 }: ComposerVoiceInputProps) {
   const voice = useVoiceInput({
@@ -100,6 +107,7 @@ export function ComposerVoiceInput({
     ...(onStateChange !== undefined ? { onStateChange } : {}),
     ...(onLevel !== undefined ? { onLevel } : {}),
     initialLanguage,
+    sessionKey,
   });
 
   useImperativeHandle(ref, () => ({ stop: voice.stop, toggle: voice.toggle }), [

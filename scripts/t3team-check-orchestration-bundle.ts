@@ -12,7 +12,7 @@
  * 1. The inlined TypeScript compiler works (#57): `vp pack` bundles
  *    `typescript` into the server chunks (packages/runbook-ts/src/typescript.ts
  *    statically imports it, apps/server's pack config enables CJS shims and
- *    ships dist/lib/). This check runs the bundle from a directory with NO
+ *    ships dist/lib.*.d.ts). This check runs the bundle from a directory with NO
  *    workspace node_modules, so a regression to externalizing typescript
  *    fails here exactly as it failed in the packaged asar.
  *

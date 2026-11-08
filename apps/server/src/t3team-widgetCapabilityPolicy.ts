@@ -49,6 +49,16 @@ const HTML_SVG_POLICY = {
 // render trusted components inline with a relaxed CSP. tsx compiles to a typechecked,
 // registered React view, so it runs with full design-system access. Documented here as the
 // seam for that relaxation; the tool still rejects these formats today.
+const RICH_CHOICE_POLICY = {
+  implemented: true,
+  network: "none",
+  callToolAllowed: false,
+  callToolAllowlistOnly: true,
+  sendPrompt: "gesture+ratelimit",
+  rationale:
+    "Rendered natively from a validated payload: no agent markup runs, and the only output is the user's explicit pick.",
+} as const satisfies Omit<WidgetCapabilityPolicy, "format">;
+
 const MDX_POLICY = {
   implemented: false,
   network: "validated-inline",
@@ -74,6 +84,8 @@ export function resolveWidgetCapabilityPolicy(format: T3TeamWidgetFormat): Widge
     case "html":
     case "svg":
       return { format, ...HTML_SVG_POLICY };
+    case "rich-choice":
+      return { format, ...RICH_CHOICE_POLICY };
     case "mdx":
       return { format, ...MDX_POLICY };
     case "tsx":

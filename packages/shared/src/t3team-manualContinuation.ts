@@ -15,7 +15,7 @@
  * The server's dispatch check and the web retry banner share this rule so the
  * banner is offered exactly when the server will accept it.
  */
-import type { OrchestrationV2Run, OrchestrationV2TurnItem } from "@t3tools/contracts";
+import type { OrchestrationV2Run } from "@t3tools/contracts";
 
 import { latestRootProviderFailure } from "./orchestrationV2ThreadError.ts";
 
@@ -23,7 +23,8 @@ const STOPPED_BY_USER_CODES: ReadonlySet<string> = new Set(["interrupt_no_termin
 
 export function isManuallyContinuableRun(
   run: OrchestrationV2Run | null,
-  turnItems: ReadonlyArray<OrchestrationV2TurnItem>,
+  // Same shape the failure scan reads, so slimmed client turn items qualify too.
+  turnItems: Parameters<typeof latestRootProviderFailure>[1],
 ): boolean {
   if (run === null) return false;
   if (run.status === "interrupted") return true;

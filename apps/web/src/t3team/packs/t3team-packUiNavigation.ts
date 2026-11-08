@@ -3,12 +3,12 @@
  * requests page, resolving the project the way a pasted change request link is resolved.
  */
 import type { ChangeRequestRef, ChangeRequestTab, PackNavigation } from "@t3team/pack-ui/contract";
+import { findProjectForChangeRequest } from "@t3tools/client-runtime/change-request-links";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { findProjectForChangeRequest } from "~/lib/openPullRequestLink";
 import { useProjects, useServerConfigs } from "~/state/entities";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 
@@ -27,7 +27,8 @@ export function findChangeRequestProject(
   const repository = ref.repository.toLowerCase();
   return projects.find(
     (project) =>
-      sourceControlRepositorySelector(project.repositoryIdentity)?.toLowerCase() === repository,
+      sourceControlClients.repositorySelector(project.repositoryIdentity)?.toLowerCase() ===
+      repository,
   );
 }
 

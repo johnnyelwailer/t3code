@@ -92,4 +92,42 @@ layer("t3team context cache purge", (it) => {
       assert.isTrue((yield* sumT3TeamContextBlobBytes()) > 0);
     }),
   );
+
+  it.effect("does not let referenced blobs use up the purge candidate slots", () =>
+    Effect.gen(function* () {
+      const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-cache-purge-"));
+      tempRoots.push(root);
+      yield* ensureT3TeamContextCacheTables();
+      yield* writeT3TeamContextCasFile({
+        workspaceRoot: root,
+        relativePath: ".t3team/context/jira/p1/items/a/summary.json",
+        contents: '{"live":true}',
+      });
+      const bytes = new TextEncoder().encode("second orphan blob");
+      const sha256 = hashT3TeamContextBytes(bytes);
+      const blobRelativePath = buildT3TeamContextBlobRelativePath(sha256);
+      const blobAbsolutePath = NodePath.join(root, blobRelativePath);
+      NodeFS.mkdirSync(NodePath.dirname(blobAbsolutePath), { recursive: true });
+      NodeFS.writeFileSync(blobAbsolutePath, bytes);
+      const sql = yield* SqlClient.SqlClient;
+      // Accessed after the live blob, so it is only reachable if the live one is not a candidate.
+      yield* sql`
+        INSERT INTO t3team_context_blobs (
+          sha256, path, size_bytes, updated_at, last_accessed_at, purged_at
+        ) VALUES (${sha256}, ${blobRelativePath}, ${bytes.byteLength}, 1, 9999999999999, NULL)
+      `;
+      const budget = calculateT3TeamContextCacheBudget({
+        totalBytes: 1_000,
+        freeBytes: 1_000,
+        reserveBytesOverride: 990,
+      });
+      const result = yield* purgeT3TeamContextCache({
+        workspaceRoot: root,
+        budget,
+        maxBlobs: 1,
+      });
+      assert.equal(result.purgedBlobCount, 1);
+      assert.isFalse(NodeFS.existsSync(blobAbsolutePath));
+    }),
+  );
 });

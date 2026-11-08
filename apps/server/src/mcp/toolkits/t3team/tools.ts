@@ -9,12 +9,10 @@ import { Tool, Toolkit } from "effect/ai";
 
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_FORMAT_DESCRIPTION,
+  T3TEAM_WIDGET_INTENT_DESCRIPTION,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "@t3tools/project-context/t3teamWidgetGuidance";
-import {
-  getT3TeamToolDefinition,
-  type T3TeamImplementedToolId,
-} from "@t3tools/project-context/t3teamToolCatalog";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
@@ -22,8 +20,18 @@ import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 import { mcpDescriptionOf } from "./t3team-mcpToolDescription.ts";
 import { T3TeamMyWorkArrangeTool, T3TeamMyWorkDigestTool } from "./t3team-myworkTools.ts";
+import {
+  T3TeamWorkItemChangeSetTool,
+  T3TeamWorkItemDraftTool,
+} from "./t3team-workItemDraftTools.ts";
+import { T3TeamCurrentViewTool } from "./t3team-currentViewTool.ts";
+import { T3TeamWorkItemGetTool, T3TeamWorkItemSearchTool } from "./t3team-workItemReadTools.ts";
 import { T3TeamChangeRequestPublishTool } from "./t3team-changeRequestTools.ts";
 import { T3TeamLinkedRepositorySyncTool } from "./t3team-linkedRepositoryTools.ts";
+import { T3TeamMachineFindDefinitionsTool } from "./t3team-machineDefinitionTools.ts";
+import { T3TeamMachineSetSourceTool } from "./t3team-machineSourceTools.ts";
+import { T3TeamToolHelpTool } from "./t3team-toolHelpTool.ts";
+import { T3TeamDesktopRouteRequestTool } from "./t3team-desktopRouteTools.ts";
 
 /**
  * What every t3team tool fails with. `OrchestratorMcpFailure` is the refusal
@@ -48,16 +56,29 @@ export { mcpDescriptionOf };
  * explicit decision for every implemented catalog tool — mapped above, or listed here.
  *
  * The `draft_*` family is excluded for a structural reason, not convenience: those tools are
- * reachable only from a workflow body's `getTools()` tree (`t3team-workflowHostTools.ts`),
- * and they are gated three ways — the body must declare the group in `meta.capabilities`, the id
- * must be in the thread's tool context, and the recipe's `allowedToolGroups` filters what
- * survives. Their `publishDraft` is also pinned to the launch thread so the draft carrier message
- * lands where the user can review it. Exposing them over `/mcp`, whose invocation scope carries
- * none of that, would bypass all three gates and unpin the target thread.
+ * reachable from a workflow body's `getTools()` tree (`t3team-workflowHostTools.ts`), and they are
+ * gated three ways — the body must declare the group in `meta.capabilities`, the id must be in the
+ * thread's tool context, and the recipe's `allowedToolGroups` filters what survives. Their
+ * `publishDraft` is also pinned to the launch thread so the draft carrier message lands where the
+ * user can review it. Exposing them one by one over `/mcp`, whose invocation scope carries none of
+ * that, would bypass those gates and unpin the target thread.
+ *
+ * Thread agents reach them through ONE tool instead, `t3_work_item_draft` (canonical
+ * `t3team.work_item.draft`, `t3team-toolBrokerBindingWorkItemDraft.ts`), which maps each `op` onto
+ * the canonical draft tool through the same broker path and adds the gates that can hold on `/mcp`:
+ * a usable Jira account bound to the thread's project, `WORKITEM_DETAIL_DRAFTS` on, every named work
+ * item inside the bound project, and `publishDraft` pinned to the calling thread. A recipe's
+ * `allowedToolGroups` (`mutation.draft`) is NOT one of them: `/mcp` binds with no
+ * `allowedToolGroups`, as for every other `/mcp` tool. The canonical draft ids below therefore stay
+ * workflow-body host tools only.
+ *
+ * The work-item READ tools (`t3_work_item_search` / `_get`) are the opposite case and ARE on `/mcp`:
+ * they are read-only and project-scoped, and are offered by account state (a usable Jira account for
+ * the thread's project), not by the thread's synced tool context, which `/mcp` threads do not carry
+ * (`t3team-workItemReadAvailability.ts`). Only a recipe's `allowedToolGroups` can further withhold them.
  */
 export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = new Set([
   "t3team.backlog.set_assignee_filter",
-  "t3team.view.read",
   "t3team.work_item.refresh_context_bundle",
   "t3team.project.refresh_context_bundle",
   // Draft mutations — workflow-body surface only; see the note above.
@@ -388,8 +409,7 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
         "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
     }),
     intent: Schema.optional(Schema.String).annotate({
-      description:
-        "Preferred default: describe what to show. A builder subagent authors the widget (theme/icon contract) and html output goes through the upstream HTML render shim. Omit when passing widget_code.",
+      description: T3TEAM_WIDGET_INTENT_DESCRIPTION,
     }),
     // The full authoring contract rides the property annotation: it is the text the model reads
     // while writing the widget body, and it is the single source of truth for the theme-token,
@@ -398,10 +418,25 @@ export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
     widget_code: Schema.optional(Schema.String).annotate({
       description: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
     }),
-    format: Schema.optional(Schema.Literals(["html", "svg"])).annotate({
-      description:
-        "html is shimmed onto upstream html_render storage/theme; svg stays on the widget tier.",
+    format: Schema.optional(Schema.Literals(["html", "svg", "rich-choice"])).annotate({
+      description: T3TEAM_WIDGET_FORMAT_DESCRIPTION,
     }),
+    choice: Schema.optional(
+      Schema.Struct({
+        prompt: Schema.String,
+        options: Schema.Array(
+          Schema.Struct({
+            id: Schema.String,
+            title: Schema.String,
+            body: Schema.String,
+            tag: Schema.optional(Schema.String),
+            chips: Schema.optional(Schema.Array(Schema.String)),
+          }),
+        ),
+        multiple: Schema.optional(Schema.Boolean),
+        default_id: Schema.optional(Schema.String),
+      }),
+    ),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(
       Schema.Struct({ tools: Schema.optional(Schema.Array(Schema.String)) }),
@@ -504,7 +539,16 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamRecipeValidateTool,
   T3TeamMyWorkDigestTool,
   T3TeamMyWorkArrangeTool,
+  T3TeamCurrentViewTool,
+  T3TeamWorkItemSearchTool,
+  T3TeamWorkItemGetTool,
+  T3TeamWorkItemDraftTool,
+  T3TeamWorkItemChangeSetTool,
   T3TeamChangeRequestPublishTool,
   T3TeamLinkedRepositorySyncTool,
+  T3TeamMachineFindDefinitionsTool,
+  T3TeamMachineSetSourceTool,
+  T3TeamDesktopRouteRequestTool,
   T3TeamThreadSkillMetadataTool,
+  T3TeamToolHelpTool,
 );

@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { ProjectId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ProjectMachineSourceReadout } from "./t3team-projectMachineSource.ts";
 
 /**
  * A project's machine: what a cloud session builds for it, defined once per project and shared
@@ -30,7 +31,6 @@ export const DEVCONTAINER_CANDIDATE_PATHS = [
  */
 export const RepositoryRelativePath = TrimmedNonEmptyString.check(
   Schema.isMaxLength(512),
-  // oxlint-disable-next-line no-control-regex -- rejecting control characters is the point
   Schema.isPattern(/^(?!\/)(?![A-Za-z]:)(?!.*[\\\u0000-\u001f])(?!(?:.*\/)?\.\.(?:\/|$)).+$/),
 );
 export type RepositoryRelativePath = typeof RepositoryRelativePath.Type;
@@ -100,7 +100,7 @@ export type ProjectMachineDefinition = typeof ProjectMachineDefinition.Type;
  * that cannot be resolved into a definition at all is a `ProjectMachineRejectedCandidate`.
  */
 export const ProjectMachineStatus = Schema.Union([
-  Schema.TaggedStruct("None", {}),
+  Schema.TaggedStruct("None", { reason: Schema.optional(TrimmedNonEmptyString) }),
   Schema.TaggedStruct("Detected", { definition: ProjectMachineDefinition }),
   Schema.TaggedStruct("Ready", {
     definition: ProjectMachineDefinition,
@@ -135,13 +135,15 @@ export const ProjectMachineDiscovery = Schema.Struct({
   status: ProjectMachineStatus,
   candidates: Schema.Array(ProjectMachineDefinition),
   rejected: Schema.Array(ProjectMachineRejectedCandidate),
+  /** Where the definition was looked for; absent when the project has no repository to look in. */
+  source: Schema.optional(ProjectMachineSourceReadout),
 });
 export type ProjectMachineDiscovery = typeof ProjectMachineDiscovery.Type;
 
 export class ProjectMachineDiscoveryError extends Schema.TaggedError<ProjectMachineDiscoveryError>()(
   "ProjectMachineDiscoveryError",
   {
-    reason: Schema.Literals(["unknown_project", "unreadable"]),
+    reason: Schema.Literals(["unknown_project", "unreadable", "invalid_source"]),
     /** Safe to show a user. */
     message: Schema.String,
   },

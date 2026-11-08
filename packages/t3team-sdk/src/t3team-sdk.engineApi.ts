@@ -47,7 +47,6 @@ const call =
   (...args: A): R =>
     fromRun<(...a: A) => R>(name)(...args);
 
-// --- Orchestration -----------------------------------------------------------
 /**
  * A one-shot subagent: `spawnThread(opts).askAgent(prompt, opts)`, thread not retained.
  *
@@ -95,7 +94,6 @@ export function workflow<I, O>(
   );
 }
 
-// --- Progress and control ----------------------------------------------------
 export const phase = call<[string], void>("phase");
 export const log = call<[string], void>("log");
 /**
@@ -158,7 +156,6 @@ export function getSignalSource<Params, Signals extends ReadonlyArray<Signal<unk
 /** The journaled wall clock: a resume replays the recorded value, so it stays replay-deterministic. */
 export const now = call<[], number>("now");
 
-// --- Per-run values ----------------------------------------------------------
 /** Validated against `meta.inputs` before the body runs. */
 export function getArgs<T = unknown>(): T {
   return fromRun<T>("args");

@@ -2,7 +2,7 @@
 // The `user.input` payload must carry the derived affordance descriptor and the attachment
 // refs so the host can render the decision card; the chosen literal resolves the ask.
 import { Schema } from "effect";
-import { getArgs, getThread, now } from "@t3team/sdk";
+import { getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ question: Schema.String });
 

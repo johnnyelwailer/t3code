@@ -17,6 +17,7 @@ export const inertPackActivationContext: Omit<PackActivationContext, "pack"> = {
   defineCompletionWakeRenderer: () => undefined,
   defineColdLocalCompactionRoute: () => undefined,
   defineAccount: () => undefined,
+  defineFeatureFlags: () => undefined,
   resolveAssetDataUrl: async () => {
     throw new Error("Asset resolution is only available to pack activation code");
   },

@@ -6,7 +6,7 @@ import type { OrchestrationV2ThreadShell } from "@t3tools/contracts";
 import {
   visibleThreadPullRequests,
   threadPullRequestsOf,
-} from "@t3tools/shared/threadPullRequests";
+} from "./sourceControl/threadPullRequests.ts";
 import type { LaunchedThreadState } from "@t3team/sdk";
 
 export function launchedThreadState(shell: OrchestrationV2ThreadShell): LaunchedThreadState {

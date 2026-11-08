@@ -6,8 +6,10 @@
  *
  * @module t3team-toolBrokerLiveSession
  */
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
 
+import { withAgentNotices } from "./t3team-agentNotices.ts";
 import { withPressureLines } from "./t3team-resourcePressureToolLine.ts";
 import { type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFilter.ts";
@@ -15,14 +17,20 @@ import { createT3TeamThreadToolBinding } from "./t3team-toolBrokerBinding.ts";
 import { callT3TeamReadMessageTool } from "./t3team-toolBrokerBindingReadMessage.ts";
 import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSource.ts";
 import { callT3TeamSearchThreadTool } from "./t3team-toolBrokerBindingSearchThread.ts";
+import { withFlaggedOptInTools } from "./t3team-threadOptInTools.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
+import {
+  refuseWorkItemReadUnlessConnected,
+  withWorkItemDraftTool,
+  withWorkItemReadTools,
+} from "./t3team-workItemReadAvailability.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 
 export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
 export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["bindSession"] {
   const { contextStore, genericThreadToolIds, reads } = deps;
-  const scopeLabel = "for this thread.";
+  const scopeLabel = "for this thread";
 
   return ({ threadId, toolContext, allowedToolGroups, grantedToolIds }) =>
     Effect.gen(function* () {
@@ -37,14 +45,34 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           : {
               surface: "t3team",
               state: null,
-              tools: genericThreadToolIds.map((id) => ({
+              tools: withFlaggedOptInTools(genericThreadToolIds).map((id) => ({
                 id,
                 capabilities: ["write" as const],
               })),
             };
 
-      const toolIds = Array.from(
-        new Set([...resolvedToolContext.tools.map((tool) => tool.id), ...(grantedToolIds ?? [])]),
+      // Whether the work-item read tools exist is the environment's call, read live per bind: no
+      // usable Jira account for this thread's project means neither the list nor a grant has them,
+      // and a usable one adds them even when the synced tool context does not list them (/mcp
+      // threads carry none). They are added before the empty check below, so a connected thread
+      // with an empty context now gets a binding holding just them.
+      const jiraConnected = deps.workItemReadTools
+        ? yield* deps.workItemReadTools.connected(threadId)
+        : false;
+      // The draft tool is held to the same account state and additionally to the drafts flag,
+      // read live here and again by the draft path on every call.
+      const toolIds = withWorkItemDraftTool(
+        withWorkItemReadTools(
+          Array.from(
+            new Set([
+              ...resolvedToolContext.tools.map((tool) => tool.id),
+              ...(grantedToolIds ?? []),
+            ]),
+          ),
+          jiraConnected,
+        ),
+        jiraConnected,
+        readFeatureFlag("WORKITEM_DETAIL_DRAFTS"),
       );
       if (toolIds.length === 0) {
         return undefined;
@@ -97,6 +125,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           }),
         recipeTools: deps.recipeToolsForThread(threadId),
         ...(deps.myWorkTools ? { myWorkTools: deps.myWorkTools } : {}),
+        ...(deps.workItemReadTools ? { workItemReadTools: deps.workItemReadTools } : {}),
         ...(deps.workflowTools.workflowRunToolsForThread
           ? { workflowRunTools: deps.workflowTools.workflowRunToolsForThread(threadId) }
           : {}),
@@ -113,6 +142,9 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           ? { changeRequestTools: deps.changeRequestToolsForThread(threadId) }
           : {}),
       });
-      return withPressureLines(binding, deps.resourcePressure);
+      return refuseWorkItemReadUnlessConnected(
+        withAgentNotices(withPressureLines(binding, deps.resourcePressure), deps.agentNotices),
+        jiraConnected,
+      );
     });
 }

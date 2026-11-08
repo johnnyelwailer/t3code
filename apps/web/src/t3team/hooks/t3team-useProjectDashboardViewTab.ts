@@ -26,7 +26,8 @@ export function useProjectDashboardViewTab(projectId: string) {
   const mode = modeState.dashboardMode;
   const lens = myWorkState.lens;
   const onBacklog = mode === "backlog";
-  // Behind the same flag as the planning-space view mode itself (and its options-menu entry).
+  // `backlogViewMode` already reads a planning space that WORKITEM_PLANNING_SPACE turned off as the
+  // table, so Planning is never active while its segment is not offered.
   const planningActive = onBacklog && backlogViewMode === "planning-space";
   const backlogActive = onBacklog && !planningActive;
 

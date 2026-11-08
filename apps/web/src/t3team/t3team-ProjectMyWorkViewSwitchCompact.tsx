@@ -15,20 +15,17 @@ import type {
   ProjectMyWorkProjectSegment,
 } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 
-const LENS_ITEMS: ReadonlyArray<{ value: ProjectMyWorkLens; label: string }> = [
-  { value: "digest", label: "Digest" },
-  { value: "hierarchy", label: "List" },
-  { value: "board", label: "Board" },
-];
+type LensItem = { readonly value: ProjectMyWorkLens; readonly label: string };
 
 function activeLabel(input: {
   lens: ProjectMyWorkLens;
+  lenses: ReadonlyArray<LensItem>;
   backlog?: ProjectMyWorkProjectSegment;
   planning?: ProjectMyWorkProjectSegment;
 }): string {
   if (input.planning?.kind === "select" && input.planning.active) return "Planning";
   if (input.backlog?.kind === "select" && input.backlog.active) return "Backlog";
-  return LENS_ITEMS.find((item) => item.value === input.lens)?.label ?? "Digest";
+  return input.lenses.find((item) => item.value === input.lens)?.label ?? "List";
 }
 
 function ProjectItems({
@@ -73,11 +70,14 @@ function ProjectItems({
  */
 export function ProjectMyWorkViewSwitchCompact({
   lens,
+  lenses,
   onLensChange,
   backlog,
   planning,
 }: {
   lens: ProjectMyWorkLens;
+  /** The lenses the host offers, in order. */
+  lenses: ReadonlyArray<LensItem>;
   onLensChange: (value: ProjectMyWorkLens) => void;
   backlog?: ProjectMyWorkProjectSegment;
   planning?: ProjectMyWorkProjectSegment;
@@ -92,13 +92,14 @@ export function ProjectMyWorkViewSwitchCompact({
         >
           {activeLabel({
             lens,
+            lenses,
             ...(backlog ? { backlog } : {}),
             ...(planning ? { planning } : {}),
           })}
           <ChevronDownIcon className="size-3.5 shrink-0" />
         </MenuTrigger>
         <MenuPopup align="end" side="bottom" className="min-w-56">
-          {LENS_ITEMS.map((item) => (
+          {lenses.map((item) => (
             <MenuItem key={item.value} onClick={() => onLensChange(item.value)}>
               {item.label}
             </MenuItem>

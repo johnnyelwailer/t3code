@@ -8,12 +8,14 @@ import {
   type T3TeamRecipeQuickStartLaunchCustomization,
   type T3TeamSelectedRecipeQuickStart,
 } from "~/t3team/t3team-recipeQuickStartLaunch";
+import { surfaceRecipeLaunchOutcome } from "~/t3team/t3team-launchFailureFeedback";
 import { type T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipes";
 import { type T3TeamKickoffWorkItemRef } from "~/t3team/t3team-kickoffWorkItemRef";
 import {
   launchBundledSidecarRecipeThread,
   launchSidecarRecipeQuickStartThread,
 } from "~/t3team/t3team-sidecarRecipeLaunch";
+import type { SidecarLaunchToolContextSource } from "~/t3team/t3team-sidecarLaunchToolContext";
 import { buildSidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 import { type T3TeamKickoffComposerHandle } from "~/t3team/t3team-TicketKickoffComposer";
 
@@ -33,6 +35,9 @@ type UseBundledSidecarRecipeLaunchInput = {
   readonly surface: RecipeSurface;
   readonly projectWorkspaceRoot: string | undefined;
   readonly workItem?: T3TeamKickoffWorkItemRef;
+  /** The project (and, on the work item surface, its ticket) the launched thread's tool context names. */
+  readonly project?: SidecarLaunchToolContextSource["project"];
+  readonly ticketId?: string;
   readonly openThread: (threadId: string) => void;
   readonly buildSelectedRecipe: BuildSelectedRecipe;
   readonly createThread: CreateBundledRecipeThread;
@@ -78,6 +83,13 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
     [buildSelectedRecipe],
   );
 
+  const toolContextSource: SidecarLaunchToolContextSource | undefined = input.project
+    ? {
+        project: input.project,
+        ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+        ...(input.ticketId && input.workItem ? { ticketDisplayId: input.workItem.key } : {}),
+      }
+    : undefined;
   const sidecarHost = useMemo(
     () =>
       buildSidecarSectionHost({
@@ -86,7 +98,7 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
         projectId: input.projectId,
         stageKickoff: stageRecipeKickoff,
         launchRecipe: (recipeId, parameters) => {
-          void launchBundledSidecarRecipeThread({
+          const launch = launchBundledSidecarRecipeThread({
             backend: input.backend,
             environmentId: input.environmentId,
             projectId: input.projectId,
@@ -95,17 +107,19 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
             recipeId,
             ...(parameters ? { parameters } : {}),
             ...(input.workItem ? { workItem: input.workItem } : {}),
+            ...(toolContextSource ? { toolContextSource } : {}),
             launchConfig:
               composerRef.current?.getLaunchConfig() ?? createDefaultT3TeamKickoffLaunchConfig(),
             createThread: input.createThread,
           }).then((launched) => {
-            if (!launched) {
-              return;
+            if (launched) {
+              input.onLaunched?.();
+              setSelectedRecipe(null);
             }
-
-            input.onLaunched?.();
-            setSelectedRecipe(null);
+            return launched;
           });
+          // A failed launch toasts and leaves the staged recipe in place so the user can retry.
+          surfaceRecipeLaunchOutcome(launch);
         },
         launchQuickStart: (recipe, customization) =>
           launchSidecarRecipeQuickStartThread({
@@ -115,6 +129,7 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
             quickStart: recipe,
             ...(customization ? { customization } : {}),
             ...(input.workItem ? { workItem: input.workItem } : {}),
+            ...(toolContextSource ? { toolContextSource } : {}),
             launchConfig:
               composerRef.current?.getLaunchConfig() ?? createDefaultT3TeamKickoffLaunchConfig(),
             createThread: input.createThread,
@@ -135,6 +150,7 @@ export function useBundledSidecarRecipeLaunch(input: UseBundledSidecarRecipeLaun
       input.surface,
       input.workItem,
       stageRecipeKickoff,
+      toolContextSource,
     ],
   );
 

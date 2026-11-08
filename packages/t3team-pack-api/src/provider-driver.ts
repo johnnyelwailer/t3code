@@ -44,6 +44,12 @@ export type PackProviderSnapshot = {
    * the built-in Grok provider does the same.
    */
   readonly showInteractionModeToggle?: boolean;
+  /**
+   * Access modes the composer offers (host `RuntimeMode` ids such as `"auto"`,
+   * `"approval-required"`, `"full-access"`). Absent means every host mode. A pack
+   * that switches a mode off behind a flag omits it here.
+   */
+  readonly supportedRuntimeModes?: readonly string[];
 };
 
 export type PackTextGeneration = {

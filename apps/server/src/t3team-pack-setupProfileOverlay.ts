@@ -24,11 +24,6 @@ export function setPackSetupProfileOverlay(
   overlay = profiles && profiles.length > 0 ? profiles : undefined;
 }
 
-/** Full definitions (incl. behavior) for the server-side profile resolver. */
-function getPackSetupProfiles(): readonly SetupProfileDefinition[] | undefined {
-  return overlay;
-}
-
 /** Behavior view mapped to the skill-packs profile shape for the setup resolver. */
 export function getPackProfilesForResolver(): Readonly<Record<string, T3TeamProfile>> | undefined {
   if (!overlay) return undefined;

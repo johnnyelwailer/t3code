@@ -8,7 +8,7 @@ import {
   type PullRequestListPreferencePatch,
 } from "./components/pullRequest/pullRequestListPreferences";
 import { openPreviewSession } from "./components/preview/openPreviewSession";
-import type { PullRequestsSearch } from "./routes/_chat.pull-requests";
+import type { PullRequestsSearch } from "./components/pullRequest/usePullRequestListView";
 import {
   type RightPanelSurface,
   type ThreadRightPanelState,
@@ -18,21 +18,15 @@ import {
 const isPullRequestListSort = Schema.is(PullRequestListSort);
 
 export interface ReopenOwnerState {
-  /** False when the entry's environment is not in the catalog. */
   environmentKnown: boolean;
   catalogReady: boolean;
-  /** Whether the owning thread or draft still exists locally. */
   ownerExists: boolean;
-  /** A live shell that lacks the thread means it was deleted; a cached one may just be stale. */
+  /** False only for a side chat tab whose thread is gone from the shell. */
+  sideChatExists: boolean;
   shellLive: boolean;
   panel: ThreadRightPanelState;
 }
 
-/**
- * Picks the history entry the next reopen press restores, newest first. Entries whose
- * environment is gone or whose tab is already open are dropped. A thread missing from a
- * live shell is skipped but kept; anything not yet knowable stops the scan with no restore.
- */
 export function planNextReopen(
   entries: readonly ClosedViewEntry[],
   ownerState: (entry: ClosedViewEntry) => ReopenOwnerState,
@@ -45,7 +39,7 @@ export function planNextReopen(
       drop.push(entry);
       continue;
     }
-    if (!owner.ownerExists) {
+    if (!owner.ownerExists || !owner.sideChatExists) {
       if (owner.shellLive) continue;
       break;
     }
@@ -76,7 +70,6 @@ type PullRequestsSearchLike = Omit<PullRequestListPreferencePatch, "labels" | "s
   sort?: string | undefined;
 };
 
-/** Selects the restored pull request on the Pull Requests page, keeping the list filters. */
 export function pullRequestsSearchForRestore<S extends PullRequestsSearchLike>(
   previous: S,
   selected: RightPanelSurface | null,
@@ -158,9 +151,12 @@ export async function reopenClosedView(
     case "pull-request":
       panels.openPullRequest(ref, surface);
       break;
-    case "thread":
-      // t3team: side-chat (thread) surfaces are not reopenable yet — open question for Phil
-      return false;
+    case "side-chat":
+      panels.openSideChat(ref, surface.threadId);
+      break;
+    case "view":
+      panels.openView(ref, surface.target);
+      break;
     default:
       panels.open(ref, surface.kind);
   }

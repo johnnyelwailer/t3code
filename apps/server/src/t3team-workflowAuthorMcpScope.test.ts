@@ -1,11 +1,12 @@
 /**
  * The hidden author's MCP credential under V2: resolved with NO capabilities (so every upstream
- * toolkit — delegate_task, create_threads, t3_project_*, t3_pending_request_respond, worktree,
+ * toolkit — delegate_task, create_threads, t3_project_*, t3_pending_request, worktree,
  * preview, devices — refuses it), and admitted by the t3team toolkit only for its own tools.
  */
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { expect, it } from "@effect/vitest";
+import { afterEach, beforeEach, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -135,6 +136,10 @@ it("admits the author only for its own broker tools", () => {
     mayCallT3TeamBrokerTool({ ...ordinary, capabilities: new Set() }, "t3team.orchestration.run"),
   ).toBe(false);
 });
+
+// The scope refusal is what is under test, so the flags of the refused tools are on.
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["AGENTS_THREAD_TOOLS", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 it.effect(
   "the t3team MCP toolkit routes the author's submission and refuses everything else",

@@ -15,7 +15,7 @@ import type { T3TeamThreadToolId } from "~/t3team/t3team-types";
  * Without the union the launch thread exposes only the `thread`-surface defaults, and a workflow whose
  * body calls a draft tool fails at its final step — see `t3team-workflowGrantedToolIds`.
  */
-function resolveSelectedToolIds(
+export function resolveSelectedToolIds(
   selectedToolIds: ReadonlyArray<T3TeamThreadToolId> | undefined,
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined,
 ): ReadonlyArray<T3TeamThreadToolId> | undefined {
@@ -26,7 +26,7 @@ function resolveSelectedToolIds(
   return [...new Set([...(selectedToolIds ?? DEFAULT_T3TEAM_THREAD_TOOL_IDS), ...granted])];
 }
 
-export function useThreadChatTurnToolContext(input: {
+type ThreadChatTurnToolContextInput = {
   readonly embeddedMode: boolean;
   readonly kickoffMessage: string | undefined;
   readonly kickoffPending: boolean | undefined;
@@ -40,7 +40,28 @@ export function useThreadChatTurnToolContext(input: {
   readonly ticketId: string | undefined;
   readonly ticketDisplayId: string | undefined;
   readonly title: string;
-}) {
+};
+
+/** The tool context a thread view hands its turns; `selectedToolIds` is already workflow-resolved. */
+export function createThreadChatTurnToolContext(input: ThreadChatTurnToolContextInput) {
+  return createT3TeamTurnToolContext({
+    ...(input.kickoffMessage ? { kickoffMessage: input.kickoffMessage } : {}),
+    ...(input.kickoffPending !== undefined ? { kickoffPending: input.kickoffPending } : {}),
+    ...(input.kickoffWorkflow ? { kickoffWorkflow: input.kickoffWorkflow } : {}),
+    projectId: input.projectId,
+    projectTitle: input.projectTitle,
+    ...(input.projectSource ? { projectSource: input.projectSource } : {}),
+    ...(input.projectWorkspaceRoot ? { workspaceRoot: input.projectWorkspaceRoot } : {}),
+    threadId: input.threadId,
+    threadTitle: input.title,
+    displayMode: input.embeddedMode ? "embedded" : "thread",
+    ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+    ...(input.ticketDisplayId ? { ticketDisplayId: input.ticketDisplayId } : {}),
+    ...(input.selectedToolIds !== undefined ? { selectedToolIds: input.selectedToolIds } : {}),
+  });
+}
+
+export function useThreadChatTurnToolContext(input: ThreadChatTurnToolContextInput) {
   // Memoized because the union allocates: a fresh array every render would give the tool context a new
   // identity every render, and `useThreadBootstrap` has it in its effect deps.
   const selectedToolIds = useMemo(
@@ -50,20 +71,20 @@ export function useThreadChatTurnToolContext(input: {
 
   return useMemo(
     () =>
-      createT3TeamTurnToolContext({
-        ...(input.kickoffMessage ? { kickoffMessage: input.kickoffMessage } : {}),
-        ...(input.kickoffPending !== undefined ? { kickoffPending: input.kickoffPending } : {}),
-        ...(input.kickoffWorkflow ? { kickoffWorkflow: input.kickoffWorkflow } : {}),
+      createThreadChatTurnToolContext({
+        embeddedMode: input.embeddedMode,
+        kickoffMessage: input.kickoffMessage,
+        kickoffPending: input.kickoffPending,
+        kickoffWorkflow: input.kickoffWorkflow,
         projectId: input.projectId,
         projectTitle: input.projectTitle,
-        ...(input.projectSource ? { projectSource: input.projectSource } : {}),
-        ...(input.projectWorkspaceRoot ? { workspaceRoot: input.projectWorkspaceRoot } : {}),
+        projectSource: input.projectSource,
+        projectWorkspaceRoot: input.projectWorkspaceRoot,
+        selectedToolIds,
         threadId: input.threadId,
-        threadTitle: input.title,
-        displayMode: input.embeddedMode ? "embedded" : "thread",
-        ...(input.ticketId ? { ticketId: input.ticketId } : {}),
-        ...(input.ticketDisplayId ? { ticketDisplayId: input.ticketDisplayId } : {}),
-        ...(selectedToolIds !== undefined ? { selectedToolIds } : {}),
+        ticketId: input.ticketId,
+        ticketDisplayId: input.ticketDisplayId,
+        title: input.title,
       }),
     [
       input.embeddedMode,

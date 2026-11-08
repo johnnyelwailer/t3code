@@ -247,7 +247,6 @@ const STORIES: ReadonlyArray<FixtureStory> = [
     inSprint: true,
     ownHours: 4 * H,
   },
-  // --- context parents: outside the sprint, their subtasks are in it -------
   {
     key: "FLT-13065",
     title: "Dispo Transport: Karte mit Tourleistungen",

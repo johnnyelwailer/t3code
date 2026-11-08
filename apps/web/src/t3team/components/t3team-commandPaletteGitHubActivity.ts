@@ -6,6 +6,7 @@ import { sourceControlEnvironment } from "~/state/sourceControl";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import {
   normalizeCacheList,
   readIntegrationCache,
@@ -32,12 +33,14 @@ type CommandPaletteGitHubCache = {
   readonly items: ReadonlyArray<ProjectGitHubActivitySearchItem>;
 };
 
-/** Cached-first GitHub inbox activity for every bound project, refreshed while the palette is open. */
+/** Cached-first GitHub inbox activity for every bound project, refreshed while the palette is open.
+ * None while the pull request workspace (`CHANGE_REQUEST_WORKSPACE`) is off. */
 export function useCommandPaletteGitHubActivity(
   open: boolean,
   projects: ReadonlyArray<ProjectShellProject>,
 ): ReadonlyArray<ProjectGitHubActivitySearchItem> {
   const backend = useBackend();
+  const enabled = useFeatureFlag("CHANGE_REQUEST_WORKSPACE");
   const environmentId = usePrimaryEnvironmentId();
   const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
     reportFailure: false,
@@ -47,7 +50,7 @@ export function useCommandPaletteGitHubActivity(
   >([]);
 
   useEffect(() => {
-    if (!open || !backend) {
+    if (!open || !backend || !enabled) {
       setGitHubActivityItems([]);
       return;
     }
@@ -130,7 +133,7 @@ export function useCommandPaletteGitHubActivity(
     return () => {
       cancelled = true;
     };
-  }, [backend, discoverSourceControl, environmentId, open, projects]);
+  }, [backend, discoverSourceControl, enabled, environmentId, open, projects]);
 
   return githubActivityItems;
 }

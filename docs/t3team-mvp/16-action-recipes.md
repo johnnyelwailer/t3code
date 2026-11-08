@@ -405,7 +405,8 @@ loading state to the UI:
 
 ```ts
 type VisibilityResult =
-  boolean | { visible: boolean; pending?: boolean; rank?: number; reason?: string };
+  | boolean
+  | { visible: boolean; pending?: boolean; rank?: number; reason?: string };
 ```
 
 `pending: true` lets the action list show a skeleton or a faint indicator instead of

@@ -27,6 +27,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useOrchestrationCommand } from "~/state/use-orchestration-command";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { awaitSuccessorLive, stopSuccessor } from "./t3team-threadHandoffSuccessorLive";
+import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import {
   announceThreadHandoff,
   handoffConfirmMessage,
@@ -53,8 +54,13 @@ export function useT3TeamThreadHandoff(input: {
   const supported =
     input.enabled &&
     shell !== null &&
-    serverConfig?.environment.capabilities.t3team?.threadHandoff === true;
-  const reapSupported = serverConfig?.resourcePressure === true;
+    serverConfig?.environment.capabilities.t3team?.threadHandoff === true &&
+    readServerFeatureFlagOr(serverConfig, "CLOUD_THREAD_HANDOFF", true);
+  const reapSupported = readServerFeatureFlagOr(
+    serverConfig,
+    "RESOURCE_PRESSURE",
+    serverConfig?.resourcePressure === true,
+  );
   const prepare = useAtomCommand(threadHandoffCommands.prepare, { reportFailure: false });
   const record = useAtomCommand(threadHandoffCommands.record, { reportFailure: false });
   const startTurn = useOrchestrationCommand(threadEnvironment.startTurn, { reportFailure: false });

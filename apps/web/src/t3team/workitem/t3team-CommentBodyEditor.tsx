@@ -2,9 +2,9 @@
 import { useRef } from "react";
 
 import {
-  ComposerPromptEditor,
+  ComposerPromptEditorTiptap as ComposerPromptEditor,
   type ComposerPromptEditorHandle,
-} from "~/components/ComposerPromptEditor";
+} from "~/components/ComposerPromptEditorTiptap";
 import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "~/components/composerContextPresentation";
 
 /**

@@ -25,6 +25,22 @@ describe("ToolAuthCard", () => {
     expect(markup).not.toContain("<input");
   });
 
+  it("idle with a sign-in description: it replaces the tool's own, the action stays Connect", () => {
+    const markup = renderToStaticMarkup(
+      <ToolAuthCard
+        meta={CLAUDE_META}
+        state={undefined}
+        signInDescription="We need to sign you in again for this machine."
+        onConnect={noop}
+        onSubmitCode={noop}
+        onCancel={noop}
+      />,
+    );
+    expect(markup).toContain("We need to sign you in again for this machine.");
+    expect(markup).not.toContain(CLAUDE_META.description);
+    expect(markup).toContain("Connect");
+  });
+
   it("idle with onInstall: the single action installs AND signs in", () => {
     const markup = renderToStaticMarkup(
       <ToolAuthCard

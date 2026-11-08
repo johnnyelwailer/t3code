@@ -1,3 +1,4 @@
+import { surfaceRecipeLaunchOutcome } from "~/t3team/t3team-launchFailureFeedback";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { T3TeamKickoffRecipeList } from "~/t3team/t3team-KickoffRecipeList";
 import {
@@ -56,7 +57,7 @@ function QuickStartsSectionList({
           // A Quick Start sends on click — it starts its workflow or sends its prompt on the new
           // thread, with no extra Submit. (The composer `/<alias>` still stages, so a slash pick can
           // be extended before it is sent.)
-          void host.launchQuickStart(recipe, customization);
+          surfaceRecipeLaunchOutcome(host.launchQuickStart(recipe, customization));
         }}
         renderRecipe={
           sectionProps.shell?.wrapItem

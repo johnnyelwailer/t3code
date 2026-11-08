@@ -1,3 +1,6 @@
+import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
+import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
+
 export const ATLASSIAN_OAUTH_CALLBACK_PATH = "/oauth/callback";
 
 /**
@@ -8,13 +11,13 @@ export const ATLASSIAN_OAUTH_CALLBACK_PATH = "/oauth/callback";
  */
 const DESKTOP_DEFAULT_HTTP_BASE_URL = "http://127.0.0.1:3773";
 
+/**
+ * The same backend the sign-in's `begin` request goes to (t3team-atlassianOAuthServerFlow.ts), so the
+ * callback lands on the server holding the flow. A custom-protocol result (bridge not reported yet)
+ * is not an HTTP origin and falls through to the resolver's fallbacks.
+ */
 function readDesktopPrimaryHttpBaseUrl(): string {
-  const bootstraps = window.desktopBridge?.getLocalEnvironmentBootstraps?.() ?? [];
-  const primary = bootstraps.find((entry) => entry.id === "desktopLocal");
-  if (typeof primary?.httpBaseUrl === "string" && primary.httpBaseUrl.length > 0) {
-    return primary.httpBaseUrl;
-  }
-  return "";
+  return window.desktopBridge ? resolveHttpBaseUrl(resolveWsBaseUrl()) : "";
 }
 
 export function isAtlassianOAuthCallbackPath(pathname: string): boolean {

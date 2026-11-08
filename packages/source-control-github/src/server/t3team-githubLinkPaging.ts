@@ -7,7 +7,7 @@
 
 import * as Effect from "effect/Effect";
 
-import * as GitHubApi from "./GitHubApi.ts";
+import * as GitHubApi from "./GitHubRequestPolicy.ts";
 
 /** Each `<url>` of a `Link` header with its parameters (`rel="next"`, ...). */
 const LINK_ENTRY = /<([^>]*)>([^<]*)/g;

@@ -22,6 +22,10 @@ import {
   replaceRunSourceIfRequested,
   type WorkflowResumeToolDeps,
 } from "./t3team-toolBrokerWorkflowResumeActions.ts";
+import {
+  workflowResumeRejection,
+  type WorkflowResumeRejected,
+} from "./t3team-workflowResumeReadiness.ts";
 import { makeResumeFailedRun } from "./t3team-toolBrokerWorkflowResumeFailed.ts";
 
 export interface ResumeWorkflowHandlerArgs {
@@ -33,7 +37,9 @@ export interface ResumeWorkflowHandlerArgs {
   readonly args?: unknown;
 }
 
-export interface WorkflowResumeToolValue {
+export type WorkflowResumeToolValue = WorkflowResumeAccepted | WorkflowResumeRejected;
+
+export interface WorkflowResumeAccepted {
   readonly ok: true;
   readonly runId: string;
   readonly status: "accepted" | "suspended" | "sleeping" | "watching";
@@ -79,6 +85,8 @@ export function makeWorkflowResumeToolHandlers<E>(
             `Workflow run '${runId}' is ${found.value.status}; only a paused or failed run can be resumed.`,
           );
         }
+        const rejection = yield* workflowResumeRejection(deps, found.value, args.source);
+        if (rejection !== undefined) return rejection;
         const run: WorkflowRun = yield* replaceRunArgsIfRequested(deps, found.value, args.args);
         yield* replaceRunSourceIfRequested(deps, threadId, run, args.source);
         if (run.status === "paused") {

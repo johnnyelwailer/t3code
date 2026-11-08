@@ -19,7 +19,7 @@ import type { PackHostCapabilities } from "@t3team/pack-api";
 import {
   ProviderInstanceId,
   type ProviderDriverKind,
-  type ProviderInstanceEnvironment,
+  type ResolvedProviderInstanceEnvironment,
   type ServerProvider,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -56,7 +56,7 @@ export const makeOpenCodeHarnessCapability = (input: {
   readonly driverKind: ProviderDriverKind;
   readonly instanceId: ProviderInstanceId;
   readonly displayName: string | undefined;
-  readonly environment: ProviderInstanceEnvironment;
+  readonly environment: ResolvedProviderInstanceEnvironment;
 }): PackHostCapabilities["createOpenCodeHarness"] => {
   const ambient = input.ambient as Context.Context<OpenCodeDriverEnv>;
   return (options) => {

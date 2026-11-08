@@ -1,15 +1,20 @@
-// @effect-diagnostics globalTimers:off - Display timing for React hooks, outside an Effect runtime.
+const STATUS_SHOW_DELAY_MS = 400;
+const STATUS_MIN_VISIBLE_MS = 400;
 
-/** How long a status must last before a client shows it. */
-export const STATUS_SHOW_DELAY_MS = 400;
-/** How long a shown status stays up, so it cannot flash at the show delay. */
-export const STATUS_MIN_VISIBLE_MS = 400;
-
-/** The status a client should show, and the key it belongs to. */
-export interface ShownStatus<A> {
-  readonly key: string;
-  readonly value: A;
-}
+/**
+ * A status shows only after it has stayed set for a moment, then stays shown
+ * for a minimum time so a quick flicker never flashes on screen.
+ * `deadlinePassed` tells whether `delayedStatusDeadline(state)` has been reached.
+ */
+export type DelayedStatusState<A> =
+  | { readonly phase: "idle"; readonly key: string }
+  | { readonly phase: "pending"; readonly key: string; readonly showAt: number }
+  | {
+      readonly phase: "shown";
+      readonly key: string;
+      readonly value: A;
+      readonly holdUntil: number;
+    };
 
 /** Overrides for one status; a slow-changing surface can ask for longer than the shared defaults. */
 export interface DelayedStatusTiming {
@@ -17,79 +22,64 @@ export interface DelayedStatusTiming {
   readonly minVisibleMs?: number;
 }
 
-export interface DelayedStatus<A> {
-  /** Reports the real status for `key`. A new key drops the shown status at once. */
-  readonly update: (key: string, value: A | null) => void;
-  /** Cancels pending timers. A later `update` starts again from the real status. */
-  readonly dispose: () => void;
+export interface DelayedStatusInput<A> {
+  readonly key: string;
+  /** Compared by identity, so use strings or other stable values. */
+  readonly value: A | null;
+  readonly deadlinePassed: boolean;
+  readonly timing?: DelayedStatusTiming;
+  readonly showDelayMs?: number | undefined;
 }
 
 /**
- * Turns a real status (for example the thread sync phase) into the status a
- * client shows. A status that clears within `STATUS_SHOW_DELAY_MS` is never
- * shown. A shown status stays for at least `STATUS_MIN_VISIBLE_MS`. Values
- * compare by identity, so use strings or other stable values.
- *
- * Web and mobile wrap this in a small `useDelayedStatus` hook.
+ * Returns `state` itself when nothing changes, so it can run on every render.
+ * `now` is read only to stamp a new deadline; it is a function so a memoizing
+ * caller (the React Compiler) cannot cache a stale clock reading.
  */
-export function createDelayedStatus<A>(
-  onChange: (shown: ShownStatus<A> | null) => void,
-  timing: DelayedStatusTiming = {},
-): DelayedStatus<A> {
-  const showDelayMs = timing.showDelayMs ?? STATUS_SHOW_DELAY_MS;
-  const minVisibleMs = timing.minVisibleMs ?? STATUS_MIN_VISIBLE_MS;
-  let key = "";
-  let latest: A | null = null;
-  let shown: A | null = null;
-  // While hidden, this is the show delay. While shown, the minimum visible time.
-  let timer: ReturnType<typeof setTimeout> | undefined;
+export function stepDelayedStatus<A>(
+  state: DelayedStatusState<A> | null,
+  { key, value, deadlinePassed, timing, showDelayMs: inputShowDelayMs }: DelayedStatusInput<A>,
+  now: () => number,
+): DelayedStatusState<A> {
+  const showDelayMs = timing?.showDelayMs ?? inputShowDelayMs ?? STATUS_SHOW_DELAY_MS;
+  const minVisibleMs = timing?.minVisibleMs ?? STATUS_MIN_VISIBLE_MS;
+  const idle = (): DelayedStatusState<A> => ({ phase: "idle", key });
+  const pending = (): DelayedStatusState<A> => ({
+    phase: "pending",
+    key,
+    showAt: now() + showDelayMs,
+  });
+  const shown = (shownValue: A): DelayedStatusState<A> => ({
+    phase: "shown",
+    key,
+    value: shownValue,
+    holdUntil: now() + minVisibleMs,
+  });
 
-  const clearTimer = () => {
-    clearTimeout(timer);
-    timer = undefined;
-  };
-  const hide = () => {
-    shown = null;
-    onChange(null);
-  };
-  // Every shown value, including a new label, gets the full minimum visible time.
-  const show = (value: A) => {
-    shown = value;
-    onChange({ key, value });
-    clearTimer();
-    timer = setTimeout(() => {
-      timer = undefined;
-      if (latest === null) hide();
-    }, minVisibleMs);
-  };
+  if (state === null || state.key !== key) return value === null ? idle() : pending();
+  switch (state.phase) {
+    case "idle":
+      return value === null ? state : pending();
+    case "pending":
+      if (value === null) return idle();
+      return deadlinePassed ? shown(value) : state;
+    case "shown":
+      if (value === null) return deadlinePassed ? idle() : state;
+      return value === state.value ? state : shown(value);
+  }
+}
 
-  return {
-    update: (nextKey, value) => {
-      if (nextKey !== key) {
-        key = nextKey;
-        clearTimer();
-        if (shown !== null) hide();
-      }
-      latest = value;
+export function delayedStatusDeadline<A>(state: DelayedStatusState<A>): number | null {
+  switch (state.phase) {
+    case "idle":
+      return null;
+    case "pending":
+      return state.showAt;
+    case "shown":
+      return state.holdUntil;
+  }
+}
 
-      if (shown === null) {
-        if (value === null) {
-          clearTimer();
-        } else if (timer === undefined) {
-          timer = setTimeout(() => {
-            timer = undefined;
-            if (latest !== null) show(latest);
-          }, showDelayMs);
-        }
-        return;
-      }
-
-      if (value !== null) {
-        if (value !== shown) show(value);
-      } else if (timer === undefined) {
-        hide();
-      }
-    },
-    dispose: clearTimer,
-  };
+export function shownDelayedStatus<A>(state: DelayedStatusState<A>, key: string): A | null {
+  return state.phase === "shown" && state.key === key ? state.value : null;
 }

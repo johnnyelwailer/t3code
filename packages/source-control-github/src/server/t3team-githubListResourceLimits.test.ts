@@ -5,12 +5,23 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as TestSourceControlHost from "@t3tools/source-control-testing/TestSourceControlHost";
 
+import * as GitHubAppAccess from "./GitHubAppAccess.ts";
 import * as GitHubPullRequestApi from "./GitHubPullRequestApi.ts";
 import { jsonResponse, makeGitHubApiHarness } from "./t3team-githubApiTestHarness.ts";
 
 const HOST = "nexplore.ghe.com";
 
+// Every field upstream's listing row decoder requires; a row missing one is skipped as malformed.
 const row = (number: number, rollup: { state: string } | null) => ({
+  author: null,
+  state: "OPEN",
+  isDraft: false,
+  mergeable: "UNKNOWN",
+  reviewDecision: null,
+  latestReviews: { nodes: [] },
+  mergedAt: null,
+  reviewRequests: { nodes: [] },
+  labels: { nodes: [] },
   number,
   title: `Pull request ${number}`,
   url: `https://${HOST}/hive/ops/pull/${number}`,
@@ -33,7 +44,7 @@ const partialAnswer = (errorType: string) =>
   jsonResponse({
     data: {
       search: {
-        pageInfo: { hasNextPage: false },
+        pageInfo: { hasNextPage: false, endCursor: null },
         nodes: [row(1, null), row(2, { state: "SUCCESS" })],
       },
     },
@@ -56,6 +67,7 @@ const listOps = Effect.gen(function* () {
 const serving = (respond: () => Response) => {
   const { layer } = makeGitHubApiHarness(respond);
   return GitHubPullRequestApi.layer.pipe(
+    Layer.provideMerge(GitHubAppAccess.layer),
     Layer.provideMerge(layer),
     Layer.provide(NodeCrypto.layer),
     Layer.provide(TestSourceControlHost.layer()),

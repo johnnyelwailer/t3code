@@ -47,8 +47,8 @@ describe("markdownToAdf", () => {
 
   it("supports h1-h6 without clamping to 2-4", () => {
     const doc = markdownToAdf("# H1\n\n###### H6") as unknown as DocNode;
-    expect((doc.content[0]?.attrs as { level: number }).level).toBe(1);
-    expect((doc.content[1]?.attrs as { level: number }).level).toBe(6);
+    expect((doc.content[0]?.attrs as { level: number } | undefined)?.level).toBe(1);
+    expect((doc.content[1]?.attrs as { level: number } | undefined)?.level).toBe(6);
   });
 
   it("parses markdown tables into ADF table nodes with a header row", () => {
@@ -78,8 +78,8 @@ describe("markdownToAdf", () => {
     expect(list?.type).toBe("taskList");
     expect(list?.attrs).toHaveProperty("localId");
     expect(list?.content).toHaveLength(2);
-    expect((list?.content?.[0]?.attrs as { state: string }).state).toBe("TODO");
-    expect((list?.content?.[1]?.attrs as { state: string }).state).toBe("DONE");
+    expect((list?.content?.[0]?.attrs as { state: string } | undefined)?.state).toBe("TODO");
+    expect((list?.content?.[1]?.attrs as { state: string } | undefined)?.state).toBe("DONE");
   });
 
   it("captures fenced code language into codeBlock attrs", () => {

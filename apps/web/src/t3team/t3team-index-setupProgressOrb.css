@@ -1,0 +1,46 @@
+/* The orb: a calm brand-coloured core with two slow ripples. */
+.t3team-setup-orb {
+  --t3team-setup-orb-color: var(--primary);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  color: var(--t3team-setup-orb-color);
+}
+.t3team-setup-card[data-slow="true"] .t3team-setup-orb {
+  --t3team-setup-orb-color: var(--warning);
+}
+.t3team-setup-card[data-state="failed"] .t3team-setup-orb {
+  --t3team-setup-orb-color: var(--destructive);
+}
+.t3team-setup-card[data-state="ready"] .t3team-setup-orb {
+  --t3team-setup-orb-color: var(--success);
+}
+.t3team-setup-orb-core {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 9999px;
+  background: var(--t3team-setup-orb-color);
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--t3team-setup-orb-color) 55%, transparent);
+  animation: t3team-setup-breathe 3.2s ease-in-out infinite;
+}
+.t3team-setup-orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1.5px solid color-mix(in srgb, var(--t3team-setup-orb-color) 50%, transparent);
+  animation: t3team-setup-ripple 3.2s ease-out infinite;
+}
+.t3team-setup-orb-ring[data-ring="2"] {
+  animation-delay: 1.6s;
+}
+.t3team-setup-card[data-slow="true"] :is(.t3team-setup-orb-core, .t3team-setup-orb-ring) {
+  animation-duration: 5s;
+}
+
+/* The current step's marker echoes the orb at row size. */
+.t3team-setup-step-dot {
+  animation: t3team-setup-breathe 2.6s ease-in-out infinite;
+}

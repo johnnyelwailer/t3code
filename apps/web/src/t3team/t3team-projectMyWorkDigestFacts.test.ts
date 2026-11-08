@@ -61,9 +61,7 @@ describe("host-aware action links", () => {
 
   it("points the action line and the Review button at the GHE PR", () => {
     expect(digestActionLine(graph, "t1")?.pr).toMatchObject({ host: "ghe.example.com", number: 9 });
-    expect(digestItemActions(graph, "t1", 0)[0]?.href).toBe(
-      "https://ghe.example.com/hive/app/pull/9",
-    );
+    expect(digestItemActions(graph, "t1")[0]?.href).toBe("https://ghe.example.com/hive/app/pull/9");
   });
 });
 

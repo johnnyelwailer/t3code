@@ -27,6 +27,17 @@ import {
   isT3TeamMyWorkTool,
   type T3TeamMyWorkToolHandlers,
 } from "./t3team-toolBrokerBindingMyWork.ts";
+import {
+  callT3TeamWorkItemReadTool,
+  isT3TeamWorkItemReadTool,
+  type T3TeamWorkItemReadToolHandlers,
+} from "./t3team-toolBrokerBindingWorkItemRead.ts";
+import { callT3TeamWorkItemDraftTool } from "./t3team-toolBrokerBindingWorkItemDraft.ts";
+import { callT3TeamWorkItemChangeSetTool } from "./t3team-toolBrokerBindingWorkItemChangeSet.ts";
+import {
+  WORK_ITEM_CHANGE_SET_TOOL_ID,
+  WORK_ITEM_DRAFT_TOOL_ID,
+} from "./t3team-workItemReadAvailability.ts";
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
@@ -43,6 +54,7 @@ import {
   tryDispatchThreadScopedToolCall,
   tryDispatchWorkflowToolCall,
 } from "./t3team-toolBrokerBindingDispatchBranches.ts";
+import { optInToolEnableHint } from "./t3team-threadOptInTools.ts";
 
 export function dispatchT3TeamToolCall(input: {
   state: BindingState;
@@ -57,6 +69,7 @@ export function dispatchT3TeamToolCall(input: {
   refreshContextBundle?: T3TeamContextRefreshServiceShape;
   recipeTools?: T3TeamRecipeToolHandlers;
   myWorkTools?: T3TeamMyWorkToolHandlers;
+  workItemReadTools?: T3TeamWorkItemReadToolHandlers;
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
@@ -82,7 +95,12 @@ export function dispatchT3TeamToolCall(input: {
     return Effect.succeed(errorResult(`Unknown MCP server '${server}'.`));
   }
   if (!state.availableToolIdSet.has(tool)) {
-    return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    const hint = optInToolEnableHint(tool);
+    return Effect.succeed(
+      errorResult(
+        `Tool '${tool}' is not enabled ${input.scopeLabel}.${hint === undefined ? "" : ` ${hint}`}`,
+      ),
+    );
   }
   if (state.effectiveGroups && !state.allowedToolIdSet.has(tool)) {
     return Effect.succeed(errorResult(permissionMessage(tool, state.effectiveGroups)));
@@ -103,6 +121,15 @@ export function dispatchT3TeamToolCall(input: {
       ...(input.threadId ? { threadId: input.threadId } : {}),
       ...(input.myWorkTools ? { myWorkTools: input.myWorkTools } : {}),
     });
+  }
+  if (isT3TeamWorkItemReadTool(tool)) {
+    return callT3TeamWorkItemReadTool({ ...input, tool });
+  }
+  if (tool === WORK_ITEM_DRAFT_TOOL_ID) {
+    return callT3TeamWorkItemDraftTool(input);
+  }
+  if (tool === WORK_ITEM_CHANGE_SET_TOOL_ID) {
+    return callT3TeamWorkItemChangeSetTool(input);
   }
   const workflowToolCall = tryDispatchWorkflowToolCall({
     tool,

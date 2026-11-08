@@ -7,13 +7,13 @@
  *
  *   • Tier A — `scm.change-request.watch / .checks / .review` (PullRequestService; provider
  *     agnostic). See t3team-workflowSignalSourceScm.ts.
- *   • Tier B — `work-item.updates` (Jira via the Atlassian provider; GH Issues / Azure Boards
- *     arrive with the work-item provider registry, not this PR). See
+ *   • Tier B — `work-item.updates` (Jira via the Atlassian provider). See
  *     t3team-workflowSignalSourceWorkItem.ts.
+ *   • Project scope — `scm.project.items` and `work-item.project-updates`. See
+ *     t3team-workflowSignalCatalogProject.ts.
  *
- * Every `start` validates its params against the SDK's declaration schema before doing
- * anything: a malformed registration (a hand-written row, an older host) must fail the
- * instance's start, not the whole reconciler sweep.
+ * Every `start` validates its params against the SDK's declaration schema first
+ * (t3team-workflowSignalCatalogParams.ts).
  */
 
 import {
@@ -25,8 +25,6 @@ import {
   type SignalSourceInstance,
 } from "@t3team/sdk";
 
-import * as Schema from "effect/Schema";
-
 import {
   startScmSignalInstance,
   WORKFLOW_SIGNAL_POLL_MS,
@@ -37,6 +35,11 @@ import {
   WORKFLOW_VIEWER_SIGNAL_POLL_MS,
 } from "./t3team-workflowSignalSourceScmViewer.ts";
 import { startWorkItemSignalInstance } from "./t3team-workflowSignalSourceWorkItem.ts";
+import { validateParams } from "./t3team-workflowSignalCatalogParams.ts";
+import {
+  makeProjectScopeHosts,
+  type ProjectScopeHostPorts,
+} from "./t3team-workflowSignalCatalogProject.ts";
 import type { ViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
 import type { PullRequestActivity, PullRequestDetail, PullRequestRef } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -46,11 +49,6 @@ import type { PullRequestError } from "./pullRequest/PullRequestService.ts";
 export interface ScmPollSurface {
   readonly detail: (ref: PullRequestRef) => Effect.Effect<PullRequestDetail, PullRequestError>;
   readonly activity: (ref: PullRequestRef) => Effect.Effect<PullRequestActivity, PullRequestError>;
-}
-
-/** One catalog entry: the host's `start` behavior for a built-in source name. */
-export interface WorkflowSignalSourceHost {
-  readonly start: (ctx: SignalSourceContext<unknown>) => Promise<SignalSourceInstance>;
 }
 
 /** One catalog entry: the host's `start` behavior for a built-in source name. */
@@ -70,25 +68,6 @@ export interface WorkflowSignalSourceCatalog {
   readonly sourceNames: ReadonlySet<string>;
 }
 
-/**
- * Validate raw stored params against a declaration's identity schema (the instance-identity
- * half of the key must match what the SDK hashed at bind time).
- */
-async function validateParams<Value>(
-  schema: Schema.Schema<Value>,
-  params: unknown,
-  sourceName: string,
-): Promise<Value> {
-  try {
-    return await Schema.decodeUnknownPromise(schema as never)(params);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Stored params for signal source '${sourceName}' failed its declaration schema: ${detail}`,
-    );
-  }
-}
-
 export function makeWorkflowSignalSourceCatalog(input: {
   readonly pullRequestService: ScmPollSurface;
   /** Injectable for tests; the built-in sources' default poll cadence. */
@@ -102,6 +81,8 @@ export function makeWorkflowSignalSourceCatalog(input: {
   readonly resolveWorkItemProvider?: (
     accountId?: string,
   ) => Promise<import("@t3tools/integrations-atlassian").AtlassianIntegrationProvider | undefined>;
+  /** The project-scope sources' reads (repository search, Jira mirror); wired by the reconciler. */
+  readonly projectScope?: ProjectScopeHostPorts;
   readonly log?: (message: string, fields?: unknown) => void;
 }): WorkflowSignalSourceCatalog {
   const pollMs = input.pollMs ?? WORKFLOW_SIGNAL_POLL_MS;
@@ -190,6 +171,7 @@ export function makeWorkflowSignalSourceCatalog(input: {
     "scm.change-request.checks": scmHost,
     "scm.change-request.review": scmHost,
     "work-item.updates": workItemHost,
+    ...makeProjectScopeHosts({ ports: input.projectScope ?? {}, log }),
   };
 
   return {

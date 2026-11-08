@@ -46,6 +46,8 @@ export interface WorkflowJobStep {
   readonly name: string;
   readonly status: string;
   readonly conclusion: string | null;
+  /** When the step began (ISO 8601); absent for a step that has not started or a reply without it. */
+  readonly startedAt?: string | null;
 }
 
 /**

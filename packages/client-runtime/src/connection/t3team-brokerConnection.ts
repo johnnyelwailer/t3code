@@ -10,10 +10,11 @@ import * as ClientCapabilities from "../platform/capabilities.ts";
 import { BearerConnectionCredential } from "./catalog.ts";
 import * as ConnectionCredentialStore from "./credentialStore.ts";
 import { mapRemoteEnvironmentError } from "./errors.ts";
-import type {
-  BrokerConnectionTarget,
-  ConnectionAttemptError,
-  PreparedConnection,
+import {
+  ConnectionBlockedError,
+  type BrokerConnectionTarget,
+  type ConnectionAttemptError,
+  type PreparedConnection,
 } from "./model.ts";
 
 /**
@@ -47,6 +48,27 @@ export class BrokerEnvironmentGateway extends Context.Service<
     }) => Effect.Effect<string, ConnectionAttemptError>;
   }
 >()("@t3tools/client-runtime/connection/t3team-brokerConnection/BrokerEnvironmentGateway") {}
+
+/**
+ * A cloud session that no longer exists. Blocked, not transient: the supervisor parks a blocked
+ * connection instead of retrying it on a backoff ladder, so an ended session stops reading as
+ * "reconnecting" forever. `failureCause: "session_ended"` is what the UI keys its ended state on;
+ * the app still retries once on a wake-up, so a session that came back is picked up again.
+ */
+export function sessionEndedError(detail: string): ConnectionBlockedError {
+  return new ConnectionBlockedError({
+    reason: "configuration",
+    detail,
+    hop: "server",
+    via: "direct",
+    failureCause: "session_ended",
+  });
+}
+
+/** True for the failure `sessionEndedError` makes. */
+export function isSessionEndedFailure(failure: ConnectionAttemptError | null): boolean {
+  return failure?._tag === "ConnectionBlockedError" && failure.failureCause === "session_ended";
+}
 
 /** Where the session's bearer lives in the credential store. */
 export const brokerCredentialKey = (sessionId: string) => `nexi-broker:${sessionId}`;

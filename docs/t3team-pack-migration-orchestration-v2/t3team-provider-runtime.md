@@ -69,7 +69,7 @@ The host (`ProviderContinuationRequests.offer`, mapped in `t3team-pack-driverAda
   automatically: the delegating agent was told this run failed" (its parent decides, 3.3); a
   workflow `askAgent` run is left to the workflow's own re-drive; every other run gets
   `message.dispatch{manualContinuationOfRunId, text: "Continue where you left off.", createdBy:
-"system", creationSource: "server"}` (`apps/server/src/t3team-threadTransientTurnRetryReactor.ts`).
+  "system", creationSource: "server"}` (`apps/server/src/t3team-threadTransientTurnRetryReactor.ts`).
 
 ## OpenCode harness
 

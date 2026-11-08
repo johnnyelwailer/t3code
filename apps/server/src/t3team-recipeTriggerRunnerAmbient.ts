@@ -36,6 +36,8 @@ export type TriggerRunnerLaunchServices =
 export interface TriggerRunnerAmbient {
   readonly runProjects: <A, E>(effect: Effect.Effect<A, E, ProjectStoreV2>) => Promise<A>;
   readonly runStore: <A, E>(effect: Effect.Effect<A, E, WorkflowSignalStore>) => Promise<A>;
+  /** The launch ledger's and run repository's already-resolved methods need no services. */
+  readonly runLedger: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
   readonly runFs: <A, E>(effect: Effect.Effect<A, E, TriggerRunnerFsServices>) => Promise<A>;
   readonly runLaunch: <A, E>(
     effect: Effect.Effect<A, E, TriggerRunnerLaunchServices>,
@@ -49,6 +51,8 @@ export function makeTriggerRunnerAmbient(ambient: Context.Context<never>): Trigg
       Effect.runPromiseWith(ambient as Context.Context<ProjectStoreV2>)(effect),
     runStore: <A, E>(effect: Effect.Effect<A, E, WorkflowSignalStore>): Promise<A> =>
       Effect.runPromiseWith(ambient as Context.Context<WorkflowSignalStore>)(effect),
+    runLedger: <A, E>(effect: Effect.Effect<A, E>): Promise<A> =>
+      Effect.runPromiseWith(ambient)(effect),
     runFs: <A, E>(effect: Effect.Effect<A, E, TriggerRunnerFsServices>): Promise<A> =>
       Effect.runPromiseWith(ambient as Context.Context<TriggerRunnerFsServices>)(effect),
     runLaunch: <A, E>(effect: Effect.Effect<A, E, TriggerRunnerLaunchServices>): Promise<A> =>

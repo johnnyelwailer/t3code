@@ -1,9 +1,7 @@
 import {
   lazy,
   Suspense,
-  useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ComponentType,
@@ -11,23 +9,32 @@ import {
 } from "react";
 import {
   ArchiveIcon,
-  BlocksIcon,
   BotIcon,
   createLucideIcon,
   CalendarClockIcon,
+  FileDiffIcon,
+  FlagIcon,
+  FolderTreeIcon,
   GitBranchIcon,
-  HardDriveIcon,
+  GlobeIcon,
+  InfoIcon,
+  MessageSquareTextIcon,
+  MessagesSquareIcon,
   PanelsTopLeftIcon,
   KeyboardIcon,
   KeyRoundIcon,
-  Link2Icon,
   PaletteIcon,
   SearchIcon,
+  ServerIcon,
   Settings2Icon,
+  ShieldCheckIcon,
+  SmartphoneIcon,
+  WrenchIcon,
   XIcon,
 } from "lucide-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
+import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
 import {
@@ -37,20 +44,30 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
   SidebarInput,
 } from "../ui/sidebar";
-import { SidebarUtilityMenu } from "../sidebar/SidebarChrome";
 import { scrollToSettingsTarget } from "./settingsLayout";
 import {
   searchSettings,
-  isSettingsOverviewVisible,
+  revealSettingsSearchTarget,
   SETTINGS_SECTION_LABELS,
   type SettingsPath,
   type SettingsSearchItem,
 } from "./settingsSearch";
+import {
+  T3TEAM_SETTINGS_SECTION_ICONS,
+  t3teamSettingsSectionLabel,
+  useT3TeamSettingsNavGroups,
+  type SettingsSectionPath,
+} from "~/t3team/settings/t3team-settingsRegistry";
+export type {
+  SettingsSectionPath,
+  T3TeamSettingsSectionPath,
+} from "~/t3team/settings/t3team-settingsRegistry";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { validateSettingsScopeSearch } from "./settingsScope";
+import { useSettingsSectionNavigation } from "./useSettingsSectionNavigation";
+import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { AccountSidebarEntry } from "../account/t3team-AccountSidebarEntry";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
@@ -66,22 +83,10 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
 ]);
 
 /**
- * Sections this fork adds on top of upstream's. `settingsSearch.ts` is upstream's single source of
- * truth for sections, and it is NOT modified here — the fork's extra section is declared alongside
- * it and spliced into the derived nav list at the position it used to occupy. Upstream's
- * `/settings/beta` is gone (folded into Legacy features, #5664), so the fork drops it too.
+ * Sections this fork adds on top of upstream's are registered in
+ * `~/t3team/settings/t3team-settingsRegistry.tsx` and re-exported from here for the nav's
+ * widened path type.
  */
-export type T3TeamSettingsSectionPath = "/settings/connected-tools";
-export type SettingsSectionPath = SettingsPath | T3TeamSettingsSectionPath;
-
-const T3TEAM_SECTION_LABELS: Readonly<Record<T3TeamSettingsSectionPath, string>> = {
-  "/settings/connected-tools": "Connected Tools",
-};
-
-/** Keyed by the upstream section each fork section follows, so upstream's order stays intact. */
-const T3TEAM_SECTIONS_AFTER: Readonly<Partial<Record<SettingsPath, T3TeamSettingsSectionPath>>> = {
-  "/settings/providers": "/settings/connected-tools",
-};
 
 const T3ConnectSidebarSignIn = lazy(() =>
   import("../clerk/T3ConnectSidebarSignIn").then((module) => ({
@@ -95,83 +100,83 @@ const T3ConnectSidebarAvatar = lazy(() =>
 );
 
 const SETTINGS_SECTION_ICONS: Readonly<
-  Record<SettingsSectionPath, ComponentType<{ className?: string }>>
+  Record<SettingsPath, ComponentType<{ className?: string }>>
 > = {
   "/settings/general": Settings2Icon,
-  "/settings/diagnostics": Settings2Icon,
+  "/settings/diagnostics": WrenchIcon,
   "/settings/appearance": PaletteIcon,
+  "/settings/chat": MessageSquareTextIcon,
+  "/settings/diffs": FileDiffIcon,
   "/settings/projects": PanelsTopLeftIcon,
   "/settings/keybindings": KeyboardIcon,
   "/settings/snap-shot": SnapShotIcon,
   "/settings/providers": BotIcon,
-  "/settings/connected-tools": KeyRoundIcon,
-  "/settings/integrations": BlocksIcon,
+  "/settings/threads": MessagesSquareIcon,
+  "/settings/browser": GlobeIcon,
+  "/settings/devices": SmartphoneIcon,
   "/settings/scheduled-tasks": CalendarClockIcon,
   "/settings/source-control": GitBranchIcon,
-  "/settings/storage": HardDriveIcon,
-  "/settings/connections": Link2Icon,
+  "/settings/worktrees": FolderTreeIcon,
+  "/settings/connections": ServerIcon,
+  "/settings/access": ShieldCheckIcon,
+  "/settings/secrets": KeyRoundIcon,
+  "/settings/maintenance": WrenchIcon,
+  "/settings/labs": FlagIcon,
+  "/settings/about": InfoIcon,
   "/settings/archived": ArchiveIcon,
 };
 
-const SETTINGS_NAV_ITEMS: ReadonlyArray<{
-  label: string;
-  to: SettingsSectionPath;
-  icon: ComponentType<{ className?: string }>;
-}> = (Object.keys(SETTINGS_SECTION_LABELS) as SettingsPath[])
-  .filter((to) => to !== "/settings/diagnostics")
-  .flatMap((to) => {
-    const upstreamItem = {
-      to,
-      label: SETTINGS_SECTION_LABELS[to],
-      icon: SETTINGS_SECTION_ICONS[to],
-    };
-    const forkTo = T3TEAM_SECTIONS_AFTER[to];
-    return forkTo === undefined
-      ? [upstreamItem]
-      : [
-          upstreamItem,
-          {
-            to: forkTo,
-            label: T3TEAM_SECTION_LABELS[forkTo],
-            icon: SETTINGS_SECTION_ICONS[forkTo],
-          },
-        ];
-  });
+// Detail pages without a nav entry highlight the page that links to them.
+const SETTINGS_DETAIL_PAGE_PARENTS: Readonly<Record<string, SettingsPath>> = {
+  "/settings/diagnostics": "/settings/maintenance",
+  "/settings/open-source-licenses": "/settings/about",
+};
+
+// Attached only to the highlighted result, so it runs whenever the highlight lands on a row.
+function scrollResultIntoView(row: HTMLElement | null) {
+  row?.scrollIntoView({ block: "nearest" });
+}
+
+function settingsSectionLabel(to: SettingsSectionPath): string {
+  return t3teamSettingsSectionLabel(to) ?? SETTINGS_SECTION_LABELS[to as SettingsPath];
+}
 
 function SettingsSectionIcon({ to }: { to: SettingsPath }) {
-  const Icon = SETTINGS_SECTION_ICONS[to];
-  return <Icon className="mt-0.5 size-3.5 shrink-0 text-sidebar-muted-foreground/60" />;
+  const Icon =
+    SETTINGS_SECTION_ICONS[to] ?? T3TEAM_SETTINGS_SECTION_ICONS[to as SettingsSectionPath];
+  return <Icon className="size-4 shrink-0 text-(--sidebar-icon-color)" />;
 }
 
 export function SettingsSidebarNav({ pathname }: { pathname: string }) {
+  const navArea = workspaceAreaProps("settings-nav", 0, "Settings sections");
   const navigate = useNavigate();
   const currentHash = useLocation({ select: (location) => location.hash });
   const currentSearch = useLocation({ select: (location) => location.search });
-  const scopeSearch = useMemo(() => validateSettingsScopeSearch(currentSearch), [currentSearch]);
-  const navItems = SETTINGS_NAV_ITEMS.filter(
-    (item) => item.to !== "/settings/projects" || isSettingsOverviewVisible(scopeSearch),
+  const scopeSearch = validateSettingsScopeSearch(currentSearch);
+  const navGroups = useT3TeamSettingsNavGroups();
+  const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
+  const navPaths = navGroups.flatMap((group) => group.paths);
+  const sectionNavigation = useSettingsSectionNavigation(
+    navPaths.find((to) => activePath === to || activePath.startsWith(`${to}/`)) ??
+      navPaths[0] ??
+      "",
   );
-  const { isMobile, setOpenMobile, open, setOpen } = useSidebar();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  // Below md the nav is an icon rail; searching expands it over the page.
+  const [compactSearchOpen, setCompactSearchOpen] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const searchableItems = useAvailableSettingsSearchItems(scopeSearch);
-  const results = useMemo(() => searchSettings(query, searchableItems), [query, searchableItems]);
+  const results = searchSettings(query, searchableItems);
   const isSearching = query.trim().length > 0;
   const hasResults = results.length > 0;
+  const maxResultIndex = Math.max(results.length - 1, 0);
+  // Persist the clamp so a shrink-then-recover of results keeps the clamped highlight.
+  if (activeResultIndex > maxResultIndex) {
+    setActiveResultIndex(maxResultIndex);
+  }
 
-  useEffect(() => {
-    setActiveResultIndex((index) => Math.min(index, Math.max(results.length - 1, 0)));
-  }, [results.length]);
-
-  useEffect(() => {
-    const result = results[activeResultIndex];
-    if (!result) return;
-    document
-      .getElementById(`settings-search-result-${result.id}`)
-      ?.scrollIntoView({ block: "nearest" });
-  }, [activeResultIndex, results]);
-
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- window keydown listener for the find and slash search shortcuts
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
@@ -191,114 +196,120 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
           (target.tagName === "INPUT" ||
             target.tagName === "TEXTAREA" ||
             target.isContentEditable)) ||
-          // Preserve dialog and popup focus traps, and let shortcut recorders
-          // capture the keypress without moving focus into the sidebar search.
           target.closest(
-            '[role="dialog"], [aria-modal="true"], [data-slot$="popup"], [data-keybinding-capture]',
+            '[role="dialog"]:not([data-app-modal]), [aria-modal="true"]:not([data-app-modal]), [data-slot$="popup"]:not([data-app-modal]), [data-keybinding-capture]',
           ) !== null)
       ) {
         return;
       }
 
       event.preventDefault();
-      if (isMobile) {
-        setOpenMobile(true);
-      } else if (!open) {
-        setOpen(true);
-      }
-      requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      });
+      setCompactSearchOpen(true);
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isMobile, open, setOpen, setOpenMobile]);
+  }, []);
 
-  const handleSectionClick = useCallback(
-    // Widened to include the fork's own sections; both are real router paths.
-    (to: SettingsSectionPath) => {
-      if (isMobile) {
-        setOpenMobile(false);
-      }
-      void navigate({
-        to,
-        hash: "",
-        replace: true,
-        hashScrollIntoView: false,
-      });
-    },
-    [isMobile, navigate, setOpenMobile],
-  );
-  const clearSearch = useCallback(() => {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- focuses the search input DOM node after the compact search opens
+  useEffect(() => {
+    if (compactSearchOpen) searchInputRef.current?.focus();
+  }, [compactSearchOpen]);
+
+  // Widened to include the fork's own sections; both are real router paths.
+  const handleSectionClick = (to: SettingsSectionPath) => {
+    void navigate({
+      to,
+      hash: "",
+      replace: true,
+      hashScrollIntoView: false,
+    });
+  };
+
+  const clearSearch = () => {
     setQuery("");
     setActiveResultIndex(0);
-  }, []);
-  const handleSearchResultClick = useCallback(
-    (item: SettingsSearchItem) => {
+  };
+  const handleSearchResultClick = (item: SettingsSearchItem) => {
+    clearSearch();
+    setCompactSearchOpen(false);
+    const targetId = item.targetId ?? item.id;
+    revealSettingsSearchTarget(targetId);
+    if (pathname === item.to && currentHash.replace(/^#/, "") === targetId) {
+      scrollToSettingsTarget(targetId);
+      return;
+    }
+    void navigate({
+      to: item.to,
+      hash: targetId,
+      replace: true,
+      hashScrollIntoView: false,
+      state: { settingsTargetHighlight: true },
+    });
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (event.key === "Escape" && isSearching) {
+      event.preventDefault();
+      event.stopPropagation();
       clearSearch();
-      if (isMobile) {
-        setOpenMobile(false);
-      }
-      const targetId = item.targetId ?? item.id;
-      if (pathname === item.to && currentHash.replace(/^#/, "") === targetId) {
-        scrollToSettingsTarget(targetId);
-        return;
-      }
-      void navigate({
-        to: item.to,
-        hash: targetId,
-        replace: true,
-        hashScrollIntoView: false,
-        state: { settingsTargetHighlight: true },
-      });
-    },
-    [clearSearch, currentHash, isMobile, navigate, pathname, setOpenMobile],
-  );
-  const handleSearchKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Escape" && isSearching) {
-        event.preventDefault();
-        event.stopPropagation();
-        clearSearch();
-        return;
-      }
-      if (results.length === 0) return;
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setActiveResultIndex((index) => (index + 1) % results.length);
-        return;
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setActiveResultIndex((index) => (index - 1 + results.length) % results.length);
-        return;
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        const result = results[activeResultIndex];
-        if (result) handleSearchResultClick(result);
-      }
-    },
-    [activeResultIndex, clearSearch, handleSearchResultClick, isSearching, results],
-  );
+      return;
+    }
+    if (results.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveResultIndex((activeResultIndex + 1) % results.length);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveResultIndex((activeResultIndex - 1 + results.length) % results.length);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const result = results[activeResultIndex];
+      if (result) handleSearchResultClick(result);
+    }
+  };
+
   return (
-    <>
+    <nav
+      {...navArea}
+      role="navigation"
+      className={cn(
+        "flex w-60 shrink-0 flex-col border-e bg-sidebar text-sidebar-foreground max-md:w-14",
+        compactSearchOpen &&
+          "max-md:absolute max-md:inset-y-0 max-md:start-0 max-md:z-10 max-md:w-full",
+      )}
+    >
       <SidebarContent className="overflow-x-hidden">
         <SidebarGroup>
           <div className="flex flex-col gap-2">
-            <div className="flex h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground">
+            <div
+              className={cn(
+                "flex h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+                !compactSearchOpen && "max-md:hidden",
+              )}
+            >
               <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
+              {/* Native search inputs clear on Escape even during IME composition. */}
               <SidebarInput
                 ref={searchInputRef}
                 nativeInput
-                type="search"
+                type="text"
                 value={query}
                 onChange={(event) => {
                   setQuery(event.currentTarget.value);
                   setActiveResultIndex(0);
                 }}
                 onKeyDown={handleSearchKeyDown}
+                onFocus={() => setCompactSearchOpen(true)}
+                onBlur={() => {
+                  if (!isSearching) setCompactSearchOpen(false);
+                }}
                 placeholder="Search"
                 aria-label="Search settings"
                 role="combobox"
@@ -345,7 +356,11 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                 aria-label={hasResults ? "Settings search results" : undefined}
               >
                 {results.map((item, index) => (
-                  <SidebarMenuItem key={item.id} role="presentation">
+                  <SidebarMenuItem
+                    key={item.id}
+                    role="presentation"
+                    ref={index === activeResultIndex ? scrollResultIntoView : undefined}
+                  >
                     <SidebarMenuButton
                       id={`settings-search-result-${item.id}`}
                       role="option"
@@ -363,7 +378,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                           {item.title}
                         </span>
                         <span className="block truncate text-2xs text-sidebar-muted-foreground/75">
-                          {SETTINGS_SECTION_LABELS[item.to]}
+                          {settingsSectionLabel(item.to)}
                         </span>
                       </span>
                     </SidebarMenuButton>
@@ -371,47 +386,89 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                 ))}
               </SidebarMenu>
             ) : (
-              <SidebarMenu>
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isGeneralDetailPage =
-                    item.to === "/settings/general" &&
-                    pathname === "/settings/open-source-licenses";
-                  const isActive =
-                    isGeneralDetailPage ||
-                    pathname === item.to ||
-                    pathname.startsWith(`${item.to}/`);
-                  return (
-                    <SidebarMenuItem key={item.to}>
+              <div className="flex flex-col gap-4">
+                {compactSearchOpen ? null : (
+                  <SidebarMenu className="md:hidden">
+                    <SidebarMenuItem>
                       <SidebarMenuButton
-                        isActive={isActive}
-                        onClick={() => handleSectionClick(item.to)}
+                        aria-label="Search settings"
+                        onClick={() => setCompactSearchOpen(true)}
                       >
-                        <Icon />
-                        <span className="truncate">{item.label}</span>
+                        <SearchIcon />
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
+                  </SidebarMenu>
+                )}
+                <div
+                  {...sectionNavigation.containerProps}
+                  role="tree"
+                  aria-label="Settings sections"
+                  className="flex flex-col gap-4"
+                >
+                  {navGroups.map((group, index) => (
+                    <div
+                      key={group.heading ?? index}
+                      role="group"
+                      aria-label={group.heading ?? undefined}
+                      className="flex flex-col gap-1 max-md:border-t max-md:border-sidebar-border max-md:pt-4 max-md:first:border-t-0 max-md:first:pt-0"
+                    >
+                      {group.heading ? (
+                        // The group carries this label; a heading is not a valid tree child.
+                        <h3
+                          aria-hidden="true"
+                          className={cn(
+                            "px-2 text-xs font-medium text-sidebar-muted-foreground/80",
+                            !compactSearchOpen && "max-md:hidden",
+                          )}
+                        >
+                          {group.heading}
+                        </h3>
+                      ) : null}
+                      <SidebarMenu role="presentation">
+                        {group.paths.map((to) => {
+                          const Icon =
+                            SETTINGS_SECTION_ICONS[to as SettingsPath] ??
+                            T3TEAM_SETTINGS_SECTION_ICONS[to];
+                          const isActive = activePath === to || activePath.startsWith(`${to}/`);
+                          return (
+                            <SidebarMenuItem key={to} role="presentation">
+                              <SidebarMenuButton
+                                data-settings-section={to}
+                                role="treeitem"
+                                tabIndex={sectionNavigation.tabIndexFor(to)}
+                                aria-selected={isActive}
+                                aria-current={isActive ? "page" : undefined}
+                                isActive={isActive}
+                                onClick={() => handleSectionClick(to)}
+                              >
+                                <Icon />
+                                <span
+                                  className={cn("truncate", !compactSearchOpen && "max-md:sr-only")}
+                                >
+                                  {settingsSectionLabel(to)}
+                                </span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          );
+                        })}
+                      </SidebarMenu>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="max-md:hidden">
         <AccountSidebarEntry />
         <Suspense fallback={null}>
           <T3ConnectSidebarSignIn />
         </Suspense>
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
-            <SidebarUtilityMenu />
-          </div>
-          <Suspense fallback={null}>
-            <T3ConnectSidebarAvatar />
-          </Suspense>
-        </div>
+        <Suspense fallback={null}>
+          <T3ConnectSidebarAvatar />
+        </Suspense>
       </SidebarFooter>
-    </>
+    </nav>
   );
 }

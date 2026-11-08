@@ -99,7 +99,7 @@ export function DigestItemRow({
   dependencies?: boolean;
 }) {
   const action = digestActionLine(graph, ticket.id);
-  const actions = digestItemActions(graph, ticket.id, nowMs);
+  const actions = digestItemActions(graph, ticket.id);
   const claims = graph.claims.filter((c) => c.ticketId === ticket.id);
   const hasPrs = digestPrsFor(graph, ticket.id).length > 0;
   const dots = claims.length > 0 ? <DigestAgentDots claims={claims} nowMs={nowMs} /> : null;

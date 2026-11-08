@@ -32,10 +32,14 @@ function publish(next: Partial<AccountsSnapshot>) {
   for (const listener of listeners) listener();
 }
 
+/** A server that answers with anything but a list (older, or not a T3 server) knows no accounts. */
+const accountsOf = (result: { readonly accounts?: ReadonlyArray<AccountStatus> } | null) =>
+  Array.isArray(result?.accounts) ? result.accounts : null;
+
 const refresh = () =>
   accountsApi
     .list()
-    .then((result) => result.accounts)
+    .then(accountsOf)
     .catch(() => snapshot.accounts);
 
 function syncPolling() {
@@ -55,7 +59,7 @@ function run(call: () => Promise<unknown>) {
   publish({ pending: true, error: null });
   void call()
     .then(() => accountsApi.list())
-    .then((result) => publish({ accounts: result.accounts, pending: false }))
+    .then((result) => publish({ accounts: accountsOf(result), pending: false }))
     .catch((cause: unknown) =>
       publish({
         pending: false,

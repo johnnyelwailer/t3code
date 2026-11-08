@@ -7,8 +7,14 @@ import { detectComposerTrigger } from "~/composer-logic";
 import type { T3TeamComposerMenuAppliedText } from "~/t3team/composer/t3team-composerMenuApply";
 import type { T3TeamComposerMenuSelectionEffect } from "~/t3team/composer/t3team-composerMenuSelection";
 
-vi.mock("~/lib/composerPathSearchState", () => ({
-  useComposerPathSearch: () => ({ entries: [], error: null, isPending: false }),
+vi.mock(import("~/state/queries"), async (original) => ({
+  ...(await original()),
+  useComposerPathSearch: (() => ({
+    entries: [],
+    error: null,
+    isPending: false,
+    searchedTarget: { environmentId: null, cwd: null, query: null },
+  })) as never,
 }));
 
 import { useT3TeamComposerCommandMenu } from "~/t3team/composer/t3team-useComposerCommandMenu";

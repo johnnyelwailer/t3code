@@ -14,7 +14,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import {
   findAuthenticatedGitHubAccounts,
   parseGitHubAuthStatus,
@@ -30,7 +30,12 @@ const GitHubSearchItem = Schema.Struct({
   /** `https://<api root>/repos/<owner>/<name>`; the only place a hit names its repository. */
   repository_url: Schema.String,
   updated_at: Schema.String,
+  created_at: Schema.optional(Schema.String),
   closed_at: Schema.optional(Schema.NullOr(Schema.String)),
+  html_url: Schema.optional(Schema.String),
+  state: Schema.optional(Schema.String),
+  author_association: Schema.optional(Schema.String),
+  labels: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.optional(Schema.String) }))),
   draft: Schema.optional(Schema.Boolean),
   user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(

@@ -2,6 +2,7 @@ import type { VoiceTranscriptMetadata } from "@t3tools/contracts";
 import { useCallback } from "react";
 
 import { toastManager } from "~/components/ui/toast";
+import { deliverToVoiceDraft } from "./t3team-voiceDraftSink";
 import { voiceFailureMessage, type VoiceFailureCode } from "./t3team-voiceFailure";
 import { submitVoiceUtterance } from "./t3team-voiceSession";
 import { makeVoiceSessionDeps } from "./t3team-voiceSessionDeps";
@@ -16,8 +17,9 @@ export function notifyVoiceFailure(code: VoiceFailureCode, detail?: string): voi
 }
 
 /**
- * Where a committed transcript goes: the surfaces learn it was heard, and the utterance is routed
- * to the voice thread. A failure to send is a toast, since what was heard is not the problem.
+ * Where a committed transcript goes: the surfaces learn it was heard; with the voice thread's
+ * composer on screen the words land in its draft, otherwise the utterance is routed to the voice
+ * thread hands-free. A failure to send is a toast, since what was heard is not the problem.
  */
 export function useVoiceCommit(): (text: string, metadata?: VoiceTranscriptMetadata) => void {
   return useCallback((text, metadata) => {
@@ -27,6 +29,7 @@ export function useVoiceCommit(): (text: string, metadata?: VoiceTranscriptMetad
       return;
     }
     dispatchVoiceUi({ type: "commit", text: utterance, now: Date.now() });
+    if (deliverToVoiceDraft(utterance)) return;
     const deps = makeVoiceSessionDeps();
     if (deps === null) {
       notifyVoiceFailure("send-failed", "No server connection.");

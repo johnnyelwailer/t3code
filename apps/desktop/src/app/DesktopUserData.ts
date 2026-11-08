@@ -31,13 +31,15 @@ export class DesktopUserDataInitializationError extends Schema.TaggedError<Deskt
   }
 }
 
-/** Select Electron's profile independently of the server's T3 home. */
 export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPath")(
   function* (input: {
     readonly appDataDirectory: string;
     readonly isDevelopment: boolean;
     readonly platform: NodeJS.Platform;
+    /** t3team: set for an isolated instance, which owns its Chromium profile and instance lock. */
+    readonly isolatedProfileDir?: string | undefined;
   }) {
+    if (input.isolatedProfileDir !== undefined) return input.isolatedProfileDir;
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const names = input.isDevelopment

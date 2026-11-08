@@ -64,7 +64,7 @@ describe("bounded inbox for undrained sources", () => {
     }).pipe(Effect.provide(layer)),
   );
 
-  it("runs on every sweep for the viewer source only, with the documented cap", async () => {
+  it("runs on every sweep for the undrained sources only, with the documented cap", async () => {
     const pruned: Array<{ sourceName: string; olderThanIso: string; keepNewest: number }> = [];
     const store = {
       listLiveRegistrations: () => Effect.succeed([]),
@@ -82,8 +82,13 @@ describe("bounded inbox for undrained sources", () => {
       log: () => Effect.void,
     });
     await core.sweep();
-    assert.deepStrictEqual(pruned, [
-      { sourceName: VIEWER, olderThanIso: "2026-10-01T00:00:00Z", keepNewest: UNDRAINED_INBOX_CAP },
-    ]);
+    assert.deepStrictEqual(
+      pruned,
+      [VIEWER, "scm.project.items", "work-item.project-updates"].map((sourceName) => ({
+        sourceName,
+        olderThanIso: "2026-10-01T00:00:00Z",
+        keepNewest: UNDRAINED_INBOX_CAP,
+      })),
+    );
   });
 });

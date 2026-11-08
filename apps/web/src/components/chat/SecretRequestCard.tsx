@@ -1,9 +1,10 @@
+import { pipe } from "effect/Function";
 import {
   SECRET_REQUEST_DEFAULT_PLACEHOLDER,
-  SECRET_REQUEST_PRIVACY_NOTE,
   secretRequestAnswerInput,
   secretRequestDisplay,
   secretRequestFailureMessage,
+  secretRequestPrivacyNote,
   type SecretRequestItem,
 } from "@t3tools/client-runtime/secret-request";
 import {
@@ -17,14 +18,10 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
+import { T3TeamCredentialSourcesPicker } from "./t3team-CredentialSourcesPicker";
 import { Input } from "../ui/input";
 import { WorkLogRow } from "./WorkLog";
 
-/**
- * Inline card for a secret an agent asked the user for. The typed value lives
- * only in this component's state and the RPC payload: it is never logged,
- * toasted, or persisted, and the field clears once the answer is sent.
- */
 export function SecretRequestCard(props: {
   readonly environmentId: EnvironmentId;
   readonly item: SecretRequestItem;
@@ -70,8 +67,11 @@ function PendingSecretRequestForm(props: {
   });
   const [secret, setSecret] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // A source read in flight: answering by hand or declining waits for it.
+  const [picking, setPicking] = useState(false);
+  const blocked = submitting || picking;
   const [error, setError] = useState<string | null>(null);
-  // Enter then a click can both run before a re-render; this guard is synchronous.
+  // Enter and click can both submit before a render.
   const inFlight = useRef(false);
 
   const send = async (
@@ -87,12 +87,11 @@ function PendingSecretRequestForm(props: {
       setSubmitting(false);
     });
     if (result._tag === "Success") {
-      // The card switches to its answered row once the item updates.
       setSecret("");
       return;
     }
     if (!isAtomCommandInterrupted(result)) {
-      setError(secretRequestFailureMessage(squashAtomCommandFailure(result)));
+      pipe(squashAtomCommandFailure(result), secretRequestFailureMessage, setError);
     }
   };
 
@@ -101,19 +100,19 @@ function PendingSecretRequestForm(props: {
     void send({ type: "save", secret });
   };
 
-  // Same hierarchy as a chat card: what is asked, why, the field, then the
-  // promise about where the value goes.
   return (
     <form
       data-v2-item-type={item.type}
       className="flex min-w-0 flex-col gap-3 rounded-xl border border-border/60 bg-card p-4"
       onSubmit={onSubmit}
       autoComplete="off"
-      // A click anywhere on the card targets its field, so a paste that
-      // follows lands here rather than with the composer.
-      onPointerDown={(event) => {
-        if (!(event.target instanceof HTMLElement)) return;
+      // On click, not pointerdown: the mousedown that follows a pointerdown
+      // moves focus back off the input. A click that ends a text selection
+      // leaves it alone so the reason can still be copied.
+      onClick={(event) => {
+        if (!(event.target instanceof Element)) return;
         if (event.target.closest("input, button, a")) return;
+        if (window.getSelection()?.isCollapsed === false) return;
         document.getElementById(inputId)?.focus();
       }}
     >
@@ -121,33 +120,41 @@ function PendingSecretRequestForm(props: {
         <label htmlFor={inputId} className="text-sm font-medium text-foreground">
           {item.label}
         </label>
-        {item.reason.trim() ? <p className="text-sm text-muted-foreground">{item.reason}</p> : null}
+        {item.reason.trim() ? (
+          <p className="text-sm wrap-anywhere text-muted-foreground">{item.reason}</p>
+        ) : null}
       </div>
+      {item.source === undefined ? null : (
+        <T3TeamCredentialSourcesPicker
+          source={item.source}
+          busy={submitting}
+          onReadingChange={setPicking}
+          onValue={(value) => void send({ type: "save", secret: value })}
+        />
+      )}
       <div className="flex min-w-0 items-center gap-2">
         <div className="min-w-0 flex-1">
           <Input
             id={inputId}
-            // Masked text rather than a password field: browsers offer to
-            // save any submitted password, and this is not a login.
+            // Password fields prompt to save credentials; this secret is not a login.
             type="text"
             className="[-webkit-text-security:disc]"
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
-            // Password managers otherwise offer to save or fill this field.
             data-1p-ignore
             data-lpignore="true"
             data-bwignore
             placeholder={item.placeholder ?? SECRET_REQUEST_DEFAULT_PLACEHOLDER}
             value={secret}
-            disabled={submitting}
+            disabled={blocked}
             aria-invalid={error !== null || undefined}
             aria-describedby={error !== null ? `${privacyId} ${errorId}` : privacyId}
             onChange={(event) => setSecret(event.currentTarget.value)}
           />
         </div>
-        <Button type="submit" disabled={submitting || secret.trim().length === 0}>
+        <Button type="submit" disabled={blocked || secret.trim().length === 0}>
           Save securely
         </Button>
       </div>
@@ -162,13 +169,13 @@ function PendingSecretRequestForm(props: {
           className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
         >
           <ShieldCheckIcon className="size-3.5 shrink-0" aria-hidden />
-          {SECRET_REQUEST_PRIVACY_NOTE}
+          {secretRequestPrivacyNote(item)}
         </p>
         <Button
           type="button"
           size="xs"
           variant="ghost-muted"
-          disabled={submitting}
+          disabled={blocked}
           onClick={() => void send({ type: "decline" })}
         >
           Decline

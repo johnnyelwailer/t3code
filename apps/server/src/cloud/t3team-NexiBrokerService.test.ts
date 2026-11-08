@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { sessionToAttach } from "./t3team-NexiBrokerService.ts";
+import { SESSION_ABSENT_GRACE_MS, makeAbsenceTracker } from "./t3team-brokerAbsence.ts";
+import { attachFailure, sessionToAttach } from "./t3team-brokerAttach.ts";
 
 const live = { runId: "300", environmentId: "env-ws" };
 const other = { runId: "301", environmentId: "env-other" };
@@ -38,5 +39,48 @@ describe("sessionToAttach", () => {
   it("does not take a session that has not reported its environment yet", () => {
     const starting = { runId: "302", environmentId: null };
     expect(sessionToAttach([starting], { sessionId: "302" })).toBeUndefined();
+  });
+});
+
+describe("attachFailure", () => {
+  const gone = { sessionId: "200", environmentId: "env-gone" };
+
+  it("keeps a session missing from the list retryable inside the grace: a broker restart or reconnect", () => {
+    expect(attachFailure([live, other], gone, 0).reason).toBe("unknown_session");
+    expect(attachFailure([], gone, SESSION_ABSENT_GRACE_MS - 1).reason).toBe("unknown_session");
+  });
+
+  it("calls a session absent beyond every recovery ended: terminal, so clients stop retrying", () => {
+    expect(attachFailure([live, other], gone, SESSION_ABSENT_GRACE_MS).reason).toBe(
+      "session_ended",
+    );
+  });
+
+  it("keeps a listed session without an environment retryable however long it takes", () => {
+    const starting = { runId: "302" };
+    expect(
+      attachFailure([live, starting], { sessionId: "302" }, 10 * SESSION_ABSENT_GRACE_MS).reason,
+    ).toBe("unknown_session");
+  });
+});
+
+describe("makeAbsenceTracker", () => {
+  it("measures continuous absence from the first miss", () => {
+    const tracker = makeAbsenceTracker();
+    expect(tracker.absent("200", 1_000)).toBe(0);
+    expect(tracker.absent("200", 61_000)).toBe(60_000);
+  });
+
+  it("starts over when the session is seen again", () => {
+    const tracker = makeAbsenceTracker();
+    tracker.absent("200", 1_000);
+    tracker.present("200");
+    expect(tracker.absent("200", 500_000)).toBe(0);
+  });
+
+  it("tracks sessions independently", () => {
+    const tracker = makeAbsenceTracker();
+    tracker.absent("200", 1_000);
+    expect(tracker.absent("301", 100_000)).toBe(0);
   });
 });

@@ -18,7 +18,7 @@ import type { CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
 export type CloudSessionPlainProject =
   | { readonly kind: "checkout"; readonly checkout: CloudSessionSetup }
   /** `folder` is `plainProjectFolderName(title, projectId)` (contracts), the workflow's `project_name`. */
-  | { readonly kind: "workspace"; readonly folder: string };
+  | { readonly kind: "workspace"; readonly folder: string; readonly title: string };
 
 /** The `workflow_dispatch` inputs that hand the plain session its project. */
 export function plainProjectDispatchInputs(

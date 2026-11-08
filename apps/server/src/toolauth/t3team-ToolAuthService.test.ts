@@ -300,10 +300,15 @@ describe("ToolAuthService", () => {
       Effect.gen(function* () {
         const homeDir = makeTempHome();
         try {
-          const { service, ptyAdapter } = yield* makeService(homeDir, {
-            tools: ["gh"],
-            checkBinaryAvailable: () => Effect.succeed(true),
-          });
+          // A finished sign-in defers to `gh auth status`; stub it so the machine's own gh
+          // login never decides the outcome (a signed-out CI runner never reads connected).
+          const { service, ptyAdapter } = yield* makeService(
+            homeDir,
+            { tools: ["gh"], checkBinaryAvailable: () => Effect.succeed(true) },
+            stubProbeRunner(
+              `${GH.hostname!}\n  ✓ Logged in to ${GH.hostname!} account octocat (keyring)\n  - Active account: true\n`,
+            ),
+          );
           const state = yield* service.start("gh");
           expect(state.phase).toBe("starting");
           const process = ptyAdapter.processes[0]!;

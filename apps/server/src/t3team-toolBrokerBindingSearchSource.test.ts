@@ -38,7 +38,7 @@ const run = (
   Effect.runPromise(
     callT3TeamSearchSourceTool({
       tool: "t3team.thread.search_source",
-      scopeLabel: "for this thread.",
+      scopeLabel: "for this thread",
       toolArgs,
       threadId: overrides?.threadId ?? currentThreadId,
       loadThreadDetail:
@@ -62,7 +62,7 @@ describe("callT3TeamSearchSourceTool", () => {
     const result = await Effect.runPromise(
       callT3TeamSearchSourceTool({
         tool: "t3team.thread.search_source",
-        scopeLabel: "for this thread.",
+        scopeLabel: "for this thread",
         toolArgs: { query: "auth" },
       }),
     );

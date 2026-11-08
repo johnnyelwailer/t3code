@@ -1,9 +1,17 @@
-import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo, useCallback } from "react";
+import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
+import { useAtomValue } from "@effect/atom-react";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { shortcutLabelForCommand } from "../../keybindings";
+import {
+  navigateHistory,
+  useCanNavigateHistory,
+  type HistoryDirection,
+} from "../../navigationHistory";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 import { cn, isMacPlatform } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
@@ -16,6 +24,7 @@ import {
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import {
   SidebarFooter,
   SidebarMenu,
@@ -45,7 +54,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
-    environmentIdentificationMode === "artwork",
+    environmentIdentificationMode,
     // A packaged distribution's stage label is its channel ("Alpha"), so pack art is selected by
     // theme id — without this the nexplore art only ever appeared in dev/nightly builds.
     packAppearance?.themeId,
@@ -56,7 +65,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       : null;
 
   return (
-    // The titlebar row, not a padded SidebarHeader: it aligns to the window controls.
     <div
       className={cn(
         "relative flex h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-2 pr-3",
@@ -67,7 +75,15 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       {/* One visible line: the pill wraps onto the clipped second line once it no longer fits.
           The padding keeps the brand's focus ring inside the clip. */}
       <div className="relative z-10 flex h-8 min-w-0 flex-1 flex-wrap content-start items-center gap-x-2 overflow-hidden py-0.5">
-        <SidebarBrand isElectron={isElectron} backdropVariant={backdropVariant} />
+        <div className="flex shrink-0 items-center gap-1">
+          <SidebarBrand isElectron={isElectron} backdropVariant={backdropVariant} />
+          {isElectron ? (
+            <div className="hidden items-center md:flex">
+              <HistoryNavigationButton direction="back" onBackdrop={backdropVariant !== null} />
+              <HistoryNavigationButton direction="forward" onBackdrop={backdropVariant !== null} />
+            </div>
+          ) : null}
+        </div>
         {pillLabel ? (
           <div className="ml-1 flex h-7 items-center">
             <Badge data-environment-identification="pill" size="sm" variant="secondary">
@@ -87,21 +103,18 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 });
 
-// Measures the brand at its titlebar inset, plus the header's right padding and the
-// sidebar border, so the sidebar minimum follows font size, zoom and macOS window controls.
 export function SidebarBrandWidthProbe({
+  isElectron,
   onWidthChange,
 }: {
+  isElectron: boolean;
   onWidthChange: (width: number) => void;
 }) {
-  const observeWidth = useCallback(
-    (probe: HTMLDivElement) => {
-      return observeResize(probe, ([entry]) => {
-        if (entry) onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? probe.offsetWidth);
-      });
-    },
-    [onWidthChange],
-  );
+  const observeWidth = (probe: HTMLDivElement) => {
+    return observeResize(probe, ([entry]) => {
+      if (entry) onWidthChange(entry.borderBoxSize[0]?.inlineSize ?? probe.offsetWidth);
+    });
+  };
 
   return (
     <div
@@ -109,10 +122,53 @@ export function SidebarBrandWidthProbe({
       className="pointer-events-none invisible fixed top-0 left-0 flex w-max border-r border-transparent pr-3"
       ref={observeWidth}
     >
-      <div className="ml-[var(--workspace-titlebar-content-left)] flex">
+      <div className="ml-[var(--workspace-titlebar-content-left)] flex gap-1">
         <SidebarBrandMark onBackdrop={false} />
+        {isElectron ? <div className="w-[calc(2*var(--workspace-titlebar-control-size))]" /> : null}
       </div>
     </div>
+  );
+}
+
+function HistoryNavigationButton({
+  direction,
+  onBackdrop,
+}: {
+  direction: HistoryDirection;
+  onBackdrop: boolean;
+}) {
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const enabled = useCanNavigateHistory(direction);
+  const label = direction === "back" ? "Go back" : "Go forward";
+  const shortcutLabel = shortcutLabelForCommand(
+    keybindings,
+    direction === "back" ? "navigation.back" : "navigation.forward",
+  );
+  const Icon = direction === "back" ? ArrowLeftIcon : ArrowRightIcon;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            aria-label={label}
+            className={cn(
+              "[-webkit-app-region:no-drag]",
+              onBackdrop && "relative top-auto translate-y-0",
+            )}
+            disabled={!enabled}
+            onClick={() => navigateHistory(direction)}
+            size="icon-sm"
+            variant={onBackdrop ? "media-navigation" : "ghost"}
+          />
+        }
+      >
+        <Icon className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">
+        {label}
+        {shortcutLabel ? ` (${shortcutLabel})` : ""}
+      </TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -139,7 +195,7 @@ function SidebarBrand({
 
   return (
     <Link
-      aria-label="Go to threads"
+      aria-label="T3 Code home"
       className={cn(
         "sidebar-brand relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex",
         // Titlebar inset only where native window buttons exist — on the web the brand docks
@@ -168,8 +224,6 @@ function SidebarBrandMark({
   mutedLabelClass?: string;
 }) {
   return (
-    // Center the visible capitals, without the font's ascender/descender space.
-    // Padding keeps ascenders and round-letter overshoot inside the truncation clip.
     <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
       <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
       <span
@@ -209,7 +263,7 @@ function SidebarUtilityItem({
   );
 }
 
-export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
+const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -217,34 +271,34 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
-  const closeMobileSidebar = useCallback(() => {
+  const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
     }
-  }, [isMobile, setOpenMobile]);
-  const handlePullRequestsClick = useCallback(() => {
+  };
+  const handlePullRequestsClick = () => {
     closeMobileSidebar();
     void navigate({
       to: "/pull-requests",
       search: readPullRequestListPreferences(),
     });
-  }, [closeMobileSidebar, navigate]);
-  const handleSettingsClick = useCallback(() => {
+  };
+  const handleSettingsClick = () => {
     closeMobileSidebar();
     void navigate({ to: "/settings" });
-  }, [closeMobileSidebar, navigate]);
+  };
 
-  const handleUsageClick = useCallback(() => {
+  const handleUsageClick = () => {
     if (isMobile) {
       setOpenMobile(false);
     }
     void navigate({ to: "/usage" });
-  }, [isMobile, navigate, setOpenMobile]);
+  };
 
-  const handleBackClick = useCallback(() => {
+  const handleBackClick = () => {
     closeMobileSidebar();
     void navigateToMainApp();
-  }, [closeMobileSidebar, navigateToMainApp]);
+  };
 
   return (
     <>
@@ -272,7 +326,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             {pullRequestsSupported ? (
               <SidebarUtilityItem
                 icon={<PullRequestGlyph.pullRequest />}
-                label="Pull Requests"
+                label="Pull requests"
                 onClick={handlePullRequestsClick}
               />
             ) : null}
@@ -283,6 +337,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             />
           </>
         )}
+        <SidebarThreadUndoNotice />
         <SidebarUpdatePill />
       </SidebarMenu>
     </>
@@ -292,7 +347,6 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
     <SidebarFooter>
-      <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarConnectSignInPill />
       <SidebarUpdateArchitectureWarning />

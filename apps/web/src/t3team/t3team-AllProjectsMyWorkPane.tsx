@@ -11,7 +11,7 @@ import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRe
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
 import { MyWorkRightPanel } from "~/t3team/t3team-MyWorkRightPanel";
 import { closeDigestPullRequest, useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
-import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
+import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import { useT3TeamMyWorkRightPanelEnabled } from "~/t3team/t3team-myWorkRightPanelFlag";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
 import type { ProjectThread } from "~/t3team/t3team-types";
@@ -45,7 +45,7 @@ export function AllProjectsMyWorkPane({
   onOpenThread: (projectId: string, threadId: string) => void;
   onOpenFullThread: (projectId: string, threadId: string) => void;
   onThreadKickoffConsumed: (threadId: string) => void;
-  onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
+  onKickoffProjectThread: CreateProjectKickoffThread;
 }) {
   const { allProjects } = useProjectStore();
   const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);

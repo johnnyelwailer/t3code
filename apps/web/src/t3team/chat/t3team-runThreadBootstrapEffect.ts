@@ -3,14 +3,12 @@ import { readThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBoo
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { planThreadBootstrap } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { maybeBackfillKickoffBranch } from "~/t3team/chat/t3team-kickoffBranchBackfill";
-import { runThreadBootstrap } from "~/t3team/chat/t3team-runThreadBootstrap";
+import { startThreadBootstrapRun } from "~/t3team/chat/t3team-startThreadBootstrapRun";
 import type { ThreadBootstrapProgress } from "~/t3team/chat/t3team-threadBootstrapProgress";
 import { resolveThreadBootstrapKickoffDefaults } from "~/t3team/chat/t3team-threadBootstrapKickoffDefaults";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
-import { releaseRecipeWorkflowLaunchClaim } from "~/t3team/chat/t3team-recipeLaunchDedup";
 import {
-  recordThreadBootstrapFailure,
   recordThreadBootstrapPlan,
   recordThreadBootstrapSkipped,
 } from "~/t3team/chat/t3team-threadBootstrapInstrumentation";
@@ -143,68 +141,34 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
   // needs may not exist until this very dispatch creates it — holding on it deadlocks the launch).
   // `maybeBackfillKickoffBranch` above sends the real branch via `thread.metadata.update` once the
   // query resolves on a later pass.
-  const dispatchedBranch = initialBranch ?? null;
-  bootstrapPlan.state.dispatchedBranch = dispatchedBranch;
-
-  // Claim the dispatch synchronously, before the first `await` inside runThreadBootstrap can
-  // yield: a second effect pass in the same tick would otherwise still read the un-flagged state.
-  if (bootstrapPlan.action === "kickoff") {
-    bootstrapPlan.state.kickoffSent = true;
-    bootstrapPlan.state.kickoffSettled = false;
-    bootstrapPlan.state.kickoffFailed = false;
-  } else {
-    bootstrapPlan.state.threadCreateSent = true;
-  }
-
   const createdAt = new Date().toISOString();
   const kickoffDefaults = resolveThreadBootstrapKickoffDefaults({
     initialModelSelection,
     initialRuntimeMode,
     initialInteractionMode,
   });
-  void runThreadBootstrap({
-    backend,
-    environmentId,
-    threadId,
-    projectTitle,
-    projectWorkspaceRoot,
-    canonicalProjectId,
-    title,
-    initialUserMessage,
-    ...kickoffDefaults,
-    kickoffBranch: dispatchedBranch,
-    ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
-    ...(initialToolContext !== undefined ? { toolContext: initialToolContext } : {}),
-    createdAt,
-    shouldEnsureProject: bootstrapPlan.shouldEnsureProject,
-    action: bootstrapPlan.action,
-    state: bootstrapPlan.state,
-    onInitialUserMessageSent,
-    onProgress: updateBootstrapProgress,
-    ...(serverThread != null ? { serverThreadExists: true } : {}),
-  })
-    .then(() => {
-      if (bootstrapPlan.action === "kickoff") {
-        bootstrapPlan.state.kickoffSettled = true;
-      }
-      updateBootstrapStatus("idle");
-    })
-    .catch((error) => {
-      updateBootstrapStatus("failed");
-      recordThreadBootstrapFailure({
-        environmentId,
-        threadId,
-        canonicalProjectId,
-        action: bootstrapPlan.action,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      if (bootstrapPlan.action === "kickoff") {
-        bootstrapPlan.state.kickoffSettled = true;
-        bootstrapPlan.state.kickoffFailed = true;
-        releaseRecipeWorkflowLaunchClaim(threadId);
-      } else if (bootstrapPlan.action === "create") {
-        bootstrapPlan.state.threadCreateSent = false;
-      }
-    });
+  startThreadBootstrapRun(
+    {
+      backend,
+      environmentId,
+      threadId,
+      projectTitle,
+      projectWorkspaceRoot,
+      canonicalProjectId,
+      title,
+      initialUserMessage,
+      ...kickoffDefaults,
+      kickoffBranch: initialBranch ?? null,
+      ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
+      ...(initialToolContext !== undefined ? { toolContext: initialToolContext } : {}),
+      createdAt,
+      shouldEnsureProject: bootstrapPlan.shouldEnsureProject,
+      action: bootstrapPlan.action,
+      state: bootstrapPlan.state,
+      onInitialUserMessageSent,
+      onProgress: updateBootstrapProgress,
+      ...(serverThread != null ? { serverThreadExists: true } : {}),
+    },
+    updateBootstrapStatus,
+  );
 }

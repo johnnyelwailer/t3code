@@ -1,8 +1,5 @@
-"use client";
-
 import type { PreviewViewportSetting, PreviewViewportSize } from "@t3tools/contracts";
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -10,7 +7,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { commitBrowserViewportChange } from "./browserViewportActions";
+import { useStableCallback } from "../hooks/useStableCallback";
+import { type BrowserViewportTarget, commitBrowserViewportChange } from "./browserViewportActions";
 import {
   browserViewportSettingKey,
   resizeBrowserViewportFromRail,
@@ -29,7 +27,7 @@ interface ViewportDrag extends PreviewViewportSize {
 const KEYBOARD_RESIZE_COMMIT_DELAY_MS = 150;
 
 export function useBrowserViewportResize(options: {
-  readonly tabId: string;
+  readonly target: BrowserViewportTarget;
   readonly viewport: PreviewViewportSetting;
   readonly zoomFactor: number;
   readonly containerSize: PreviewViewportSize;
@@ -39,7 +37,7 @@ export function useBrowserViewportResize(options: {
   readonly heldScale?: number | undefined;
 }) {
   const {
-    tabId,
+    target,
     viewport,
     zoomFactor,
     containerSize,
@@ -53,8 +51,7 @@ export function useBrowserViewportResize(options: {
   const keyboardViewportRef = useRef<ViewportDrag | null>(null);
   const [dragViewport, setDragViewport] = useState<ViewportDrag | null>(null);
   const sourceViewportKey = browserViewportSettingKey(viewport);
-  const sourceViewportKeyRef = useRef(sourceViewportKey);
-  sourceViewportKeyRef.current = sourceViewportKey;
+  const isCurrentSource = useStableCallback((key: string) => key === sourceViewportKey);
   const activeDrag = dragViewport?.sourceKey === sourceViewportKey ? dragViewport : null;
   const effectiveViewport = activeDrag
     ? ({
@@ -72,6 +69,7 @@ export function useBrowserViewportResize(options: {
       ? resolveBrowserDeviceViewportLayout(containerSize, effectiveViewport, zoomFactor, heldScale)
       : resolveBrowserViewportLayout(containerSize, effectiveViewport, zoomFactor, heldScale);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the drag and the keyboard commit timer when the component unmounts
   useEffect(
     () => () => {
       dragVersionRef.current += 1;
@@ -85,6 +83,7 @@ export function useBrowserViewportResize(options: {
     [],
   );
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the pending keyboard viewport commit timer once the source viewport changes
   useEffect(() => {
     const pending = keyboardViewportRef.current;
     if (!pending || pending.sourceKey === sourceViewportKey) return;
@@ -95,20 +94,17 @@ export function useBrowserViewportResize(options: {
     keyboardViewportRef.current = null;
   }, [sourceViewportKey]);
 
-  const commitViewportChange = useCallback(
-    (next: PreviewViewportSetting) => {
-      dragVersionRef.current += 1;
-      dragCleanupRef.current?.();
-      if (keyboardCommitTimerRef.current !== null) {
-        clearTimeout(keyboardCommitTimerRef.current);
-        keyboardCommitTimerRef.current = null;
-      }
-      keyboardViewportRef.current = null;
-      setDragViewport(null);
-      return commitBrowserViewportChange(tabId, next);
-    },
-    [tabId],
-  );
+  const commitViewportChange = (next: PreviewViewportSetting) => {
+    dragVersionRef.current += 1;
+    dragCleanupRef.current?.();
+    if (keyboardCommitTimerRef.current !== null) {
+      clearTimeout(keyboardCommitTimerRef.current);
+      keyboardCommitTimerRef.current = null;
+    }
+    keyboardViewportRef.current = null;
+    setDragViewport(null);
+    return commitBrowserViewportChange(target, next);
+  };
 
   const clearDrag = () => setDragViewport(null);
   const commitDrag = (next: PreviewViewportSetting) => {
@@ -116,7 +112,7 @@ export function useBrowserViewportResize(options: {
     const clearIfCurrent = () => {
       if (dragVersionRef.current === version) clearDrag();
     };
-    void commitBrowserViewportChange(tabId, next).then(clearIfCurrent, clearIfCurrent);
+    void commitBrowserViewportChange(target, next).then(clearIfCurrent, clearIfCurrent);
   };
 
   const handleResizeKeyDown = (
@@ -159,7 +155,7 @@ export function useBrowserViewportResize(options: {
     keyboardCommitTimerRef.current = setTimeout(() => {
       keyboardCommitTimerRef.current = null;
       const latest = keyboardViewportRef.current;
-      if (!latest || latest.sourceKey !== sourceViewportKeyRef.current) return;
+      if (!latest || !isCurrentSource(latest.sourceKey)) return;
       keyboardViewportRef.current = null;
       commitDrag({ _tag: "freeform", width: latest.width, height: latest.height });
     }, KEYBOARD_RESIZE_COMMIT_DELAY_MS);
@@ -195,11 +191,9 @@ export function useBrowserViewportResize(options: {
     });
     try {
       target.setPointerCapture(pointerId);
-    } catch {
-      // Window listeners below keep the drag functional when capture is unavailable.
-    }
+    } catch {}
 
-    const sourceChanged = () => sourceViewportKeyRef.current !== sourceViewportKey;
+    const sourceChanged = () => !isCurrentSource(sourceViewportKey);
     const move = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
       if (sourceChanged()) {

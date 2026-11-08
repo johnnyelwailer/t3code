@@ -23,6 +23,7 @@ import {
   type JiraIssueLinkType,
 } from "./client.ts";
 import { markdownToAdf } from "./adf/index.ts";
+import { convertAdfToMarkdown } from "./adf/toMarkdown.ts";
 import { JiraApiClient, jiraCloudApiBaseUrl, type JiraApiAuth } from "./jiraApi.ts";
 import {
   normalizeAccount,
@@ -1728,6 +1729,107 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     return items.map((item) => ({
       ref: item,
     }));
+  }
+
+  /**
+   * The subset of `issueKeys` a JQL query matches: one bounded search per 100 keys, so narrowing a
+   * set of already-known changes by JQL never walks the whole project. An invalid JQL rejects.
+   */
+  async filterIssueKeysByJql(input: {
+    readonly accountId: string;
+    readonly jql: string;
+    readonly issueKeys: ReadonlyArray<string>;
+  }): Promise<ReadonlySet<string>> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) throw new Error(`No Atlassian client available for account "${input.accountId}".`);
+    const matched = new Set<string>();
+    for (let at = 0; at < input.issueKeys.length; at += 100) {
+      const batch = input.issueKeys.slice(at, at + 100);
+      const keys = batch.map((key) => `"${key.replace(/"/g, '\\"')}"`).join(", ");
+      const response = await entry.client.searchIssues(
+        `(${input.jql}) AND key in (${keys})`,
+        batch.length,
+      );
+      for (const item of normalizeIssueSearch(response, entry.siteUrl)) {
+        if (item.displayId !== undefined) matched.add(item.displayId);
+      }
+    }
+    return matched;
+  }
+
+  /**
+   * One page of `jql` run as given, as backlog items (sprint, estimate and links stamped like the
+   * mirror walk). The CALLER owns scoping: an agent-facing read passes its JQL through
+   * `restrictJqlToProject` first, because this method runs whatever it is handed.
+   */
+  async searchIssuesByJql(input: {
+    readonly accountId: string;
+    readonly jql: string;
+    readonly limit?: number;
+    readonly cursor?: string;
+  }): Promise<{
+    items: ReadonlyArray<ReturnType<typeof normalizeIssueSearch>[number]>;
+    nextCursor: string | undefined;
+  }> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) throw new Error(`No Atlassian client available for account "${input.accountId}".`);
+    const [estimateField, sprintField] = await Promise.all([
+      this.resolveEstimateField(entry.client),
+      this.resolveSprintField(entry.client),
+    ]);
+    const response = await entry.client.searchIssues(
+      input.jql,
+      input.limit ?? jiraIssueSearchPageSize,
+      [...(estimateField ? [estimateField.id] : []), ...(sprintField ? [sprintField.id] : [])],
+      input.cursor,
+    );
+    return {
+      items: response.issues.map((issue) =>
+        this.toBacklogItem(issue as JiraIssue, entry.siteUrl, estimateField, sprintField),
+      ),
+      nextCursor:
+        response.nextPageToken && response.isLast !== true ? response.nextPageToken : undefined,
+    };
+  }
+
+  /**
+   * The issue's NEWEST `limit` comments, returned oldest-first so they read in order, bodies
+   * rendered to markdown. `truncated` is true when the issue has older comments that were not
+   * returned, so a long thread is reported as cut, never silently shortened.
+   */
+  async listIssueComments(input: {
+    readonly accountId: string;
+    readonly issueIdOrKey: string;
+    readonly limit?: number;
+  }): Promise<{
+    readonly comments: ReadonlyArray<{
+      readonly id: string;
+      readonly author?: string;
+      readonly body: string;
+      readonly created?: string;
+    }>;
+    readonly truncated: boolean;
+  }> {
+    const entry = this.getClientForAccount(input.accountId) ?? this.getDefaultClient();
+    if (!entry) throw new Error(`No Atlassian client available for account "${input.accountId}".`);
+    const limit = input.limit ?? 50;
+    const response = await entry.client.getIssueComments(input.issueIdOrKey, {
+      maxResults: limit,
+      newestFirst: true,
+    });
+    const newest = response.comments.slice(0, limit);
+    return {
+      comments: newest.toReversed().map((comment) => ({
+        id: comment.id,
+        ...(comment.author?.displayName ? { author: comment.author.displayName } : {}),
+        body:
+          typeof comment.body === "string"
+            ? comment.body
+            : convertAdfToMarkdown(comment.body).trim(),
+        ...(comment.created ? { created: comment.created } : {}),
+      })),
+      truncated: response.total > newest.length,
+    };
   }
 
   async getAvailableActions(_ref: unknown): Promise<ReadonlyArray<IntegrationAction>> {

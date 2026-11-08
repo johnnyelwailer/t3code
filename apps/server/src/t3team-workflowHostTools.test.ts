@@ -31,6 +31,7 @@ import { threadId } from "./t3team-toolBrokerTestUtils.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import {
+  enableWorkItemDraftsFlagForFile,
   findDraftArtifact,
   makeRecordingDraftBroker,
   WORKFLOW_DRAFT_TOOL as DRAFT_TOOL,
@@ -47,6 +48,8 @@ const changeRequestWorkflowPath = fixturePath("t3team-hostChangeRequestTool.work
 
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-host-tools-"));
 afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
+// The draft tools refuse while WORKITEM_DETAIL_DRAFTS is off (its default).
+enableWorkItemDraftsFlagForFile();
 
 const projectId = ProjectId.make("project-1");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");

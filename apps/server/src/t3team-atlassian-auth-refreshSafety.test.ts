@@ -82,8 +82,6 @@ function writeSecretAsOtherProcess(entries: ReadonlyArray<Record<string, unknown
   });
 }
 
-// --- 3) client configuration vs dead session -------------------------------------------------
-
 it.effect("a missing client secret skips the refresh and never flags the account", () =>
   Effect.gen(function* () {
     vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
@@ -253,8 +251,6 @@ it.effect("a deferred 401 flag is dropped when a newer token is on disk (CAS)", 
     assert.equal(auth?.kind === "oauth" ? auth.accessToken : undefined, "fresh");
   }).pipe(Effect.provide(testLayer("t3team-atlassian-refresh-cas-"))),
 );
-
-// --- 2) cross-process lock --------------------------------------------------------------------
 
 async function tempLockPath() {
   const dir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3team-atl-lock-"));

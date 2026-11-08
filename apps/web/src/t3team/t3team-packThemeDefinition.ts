@@ -17,10 +17,7 @@ import {
   type ThemeDefinition,
 } from "~/themePalette";
 
-import {
-  T3TEAM_PACK_TOKEN_TO_THEME_ROLE,
-  type T3TeamPackThemeToken,
-} from "./t3team-packThemeRoles";
+import { overlayPackThemeColors } from "@t3tools/shared/t3team-packThemeColors";
 
 /** The subset of `EnvironmentAppearance` this converter needs. */
 export type T3TeamPackThemeInput = {
@@ -62,16 +59,7 @@ function packColorsForAppearance(
   appearance: ThemeAppearance,
   packColors: Readonly<Record<string, string>>,
 ): ThemeColors {
-  const base = { ...getStandardThemeColors(appearance) };
-  for (const [token, role] of Object.entries(T3TEAM_PACK_TOKEN_TO_THEME_ROLE) as Array<
-    [T3TeamPackThemeToken, ThemeColors extends Readonly<Record<infer R, string>> ? R : never]
-  >) {
-    const value = packColors[token];
-    if (typeof value === "string" && value.length > 0) {
-      base[role] = value;
-    }
-  }
-  return base;
+  return overlayPackThemeColors(getStandardThemeColors(appearance), packColors);
 }
 
 /**

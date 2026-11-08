@@ -7,7 +7,10 @@
  * window, and never evaluates strings received from the iframe.
  */
 
-import { buildT3TeamWidgetIconSprite, T3TEAM_WIDGET_ICON_CSS } from "./t3team-widgetIconSprite.ts";
+import {
+  buildT3TeamWidgetIconSprite,
+  T3TEAM_WIDGET_ICON_CSS,
+} from "@t3tools/shared/t3team-widgetIconSprite";
 import { DEFAULT_SANS_FONT_STACK } from "~/appearanceFonts";
 
 /**

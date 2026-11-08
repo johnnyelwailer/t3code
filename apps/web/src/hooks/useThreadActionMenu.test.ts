@@ -19,6 +19,7 @@ function deferred<T>() {
 
 const state = vi.hoisted(() => ({
   granted: new Set<string>(),
+  unreachable: new Set<string>(),
   effects: [] as string[],
   completed: deferred<void>(),
   show: vi.fn<
@@ -47,11 +48,8 @@ vi.mock("../state/session", () => ({
     scope === AuthOrchestrationOperateScope && state.granted.has(environmentId),
 }));
 vi.mock("../state/entities", () => ({
+  readEnvironmentServerConfigLoaded: () => true,
   readEnvironmentSupportsAutoSettleOptOut: () => true,
-  readEnvironmentSupportsPinning: () => true,
-  readEnvironmentSupportsSettlement: () => true,
-  readEnvironmentSupportsSnooze: () => true,
-  readEnvironmentSupportsTitleRegeneration: () => true,
   readThreadShell: () => ({
     id: "thread",
     environmentId: "secondary",
@@ -83,7 +81,7 @@ vi.mock("../localApi", () => ({
     },
   }),
 }));
-vi.mock("../logicalProject", () => ({
+vi.mock("@t3tools/client-runtime/state/project-grouping", () => ({
   deriveLogicalProjectKeyFromSettings: () => "project",
   derivePhysicalProjectKey: () => "project",
   selectProjectGroupingSettings: () => ({}),
@@ -121,7 +119,12 @@ vi.mock("./useSettings", () => ({
       timestampFormat: "12-hour",
     }),
 }));
+vi.mock("../state/t3team-localThreadActions", () => ({
+  readEnvironmentUnreachable: (environmentId: string) => state.unreachable.has(environmentId),
+  isLocalThreadAction: (action: string) => action === "settle" || action === "delete",
+}));
 vi.mock("./useThreadActions", () => ({
+  canTurnThreadIntoProject: () => false,
   useThreadActions: () =>
     Object.fromEntries(
       [
@@ -151,48 +154,24 @@ const target = {
   threadId: ThreadId.make("thread"),
 };
 const position = { x: 10, y: 20 };
-const createMenu = () =>
+const createMenu = (options: { readonly onFind?: (threadRef: typeof target) => void } = {}) =>
   useThreadActionMenu({
     threadRef: target,
     projectCwd: "/project",
     onStartRename: () => recordEffect("rename"),
+    onFind: options.onFind,
+    canShareWithGuest: false,
   });
 
 beforeEach(() => {
   state.granted = new Set(["primary"]);
+  state.unreachable = new Set();
   state.effects = [];
   state.completed = deferred<void>();
   state.show.mockReset().mockResolvedValue(null);
 });
 
 describe("thread menu permissions", () => {
-  it("disables mutations for a denied secondary environment", () => {
-    createMenu().openMenu(position);
-    const items = state.show.mock.calls[0]![0];
-    expect(items.find((item) => item.id === "rename")?.disabled).toBe(true);
-    expect(items.find((item) => item.id === "delete")?.disabled).toBe(true);
-    expect(items.find((item) => item.id === "copy")?.disabled).not.toBe(true);
-  });
-
-  it("allows the target grant even when the primary environment is denied", () => {
-    state.granted = new Set(["secondary"]);
-    createMenu().openMenu(position);
-    expect(state.show.mock.calls[0]![0].find((item) => item.id === "rename")?.disabled).not.toBe(
-      true,
-    );
-  });
-
-  it("refreshes availability when a retained menu opener gains permission", () => {
-    const menu = createMenu();
-    menu.openMenu(position);
-    expect(state.show.mock.calls[0]![0].find((item) => item.id === "rename")?.disabled).toBe(true);
-    state.granted.add("secondary");
-    menu.openMenu(position);
-    expect(state.show.mock.calls[1]![0].find((item) => item.id === "rename")?.disabled).not.toBe(
-      true,
-    );
-  });
-
   it.each(["rename", "regenerate-title", "delete", "pin", "settle", "archive"] as const)(
     "%s rechecks after the native menu closes",
     async (action) => {
@@ -207,15 +186,39 @@ describe("thread menu permissions", () => {
     },
   );
 
-  it.each([
-    ["new-thread-on-branch", "draft"],
-    ["copy-thread-id", "copy"],
-    ["mark-unread", "mark-unread"],
-    ["project-settings", "project-settings"],
-  ] as const)("keeps %s available without task permission", async (action, effect) => {
-    state.show.mockResolvedValue(action);
+  it("settles a thread of an unreachable environment (ended cloud session) without permission", async () => {
+    state.unreachable.add("secondary");
+    state.show.mockResolvedValue("settle");
     createMenu().openMenu(position);
     await state.completed.promise;
-    expect(state.effects).toEqual([effect]);
+    const items = state.show.mock.calls[0]![0];
+    const enabled = (id: string) => items.find((item) => item.id === id)?.disabled !== true;
+    expect(enabled("settle")).toBe(true);
+    expect(enabled("delete")).toBe(true);
+    expect(enabled("pin")).toBe(false);
+    expect(state.effects).toEqual(["settleThread"]);
+  });
+
+  it("keeps settle and delete disabled without permission on a reachable environment", () => {
+    createMenu().openMenu(position);
+    return vi.waitFor(() => {
+      const items = state.show.mock.calls[0]![0];
+      expect(items.find((item) => item.id === "settle")?.disabled).toBe(true);
+      expect(items.find((item) => item.id === "delete")?.disabled).toBe(true);
+    });
+  });
+
+  it("offers find only to a header that can open it, without task permission", async () => {
+    createMenu().openMenu(position);
+    expect(state.show.mock.calls[0]![0].some((item) => item.id === "find")).toBe(false);
+    state.show.mockResolvedValue("find");
+    const onFind = vi.fn(() => recordEffect("find"));
+    createMenu({ onFind }).openMenu(position);
+    await state.completed.promise;
+    const items = state.show.mock.calls[1]![0];
+    expect(items[0]).toMatchObject({ id: "find", label: "Find in thread" });
+    expect(items[0]?.disabled).not.toBe(true);
+    expect(state.effects).toEqual(["find"]);
+    expect(onFind).toHaveBeenCalledExactlyOnceWith(target);
   });
 });

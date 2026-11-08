@@ -91,6 +91,7 @@ export function ProjectDashboardKickoffAside({
       projectId: project.id,
       surface: sidecarSurface,
       projectWorkspaceRoot: project.workspace?.rootPath,
+      project,
       ...(workItemRef ? { workItem: workItemRef } : {}),
       openThread: onOpenThread,
       buildSelectedRecipe: (recipe, customization) =>
@@ -109,7 +110,7 @@ export function ProjectDashboardKickoffAside({
           launchConfig.selectedToolIds,
           injectedContextAttachments,
           kickoffWorkflow,
-        ) as string | undefined,
+        ),
       onLaunched: clearInjectedContextAttachments,
     });
   // A digest recipe pill stages through the same `stageRecipeKickoff` as a quick-start click.
@@ -193,6 +194,7 @@ export function ProjectDashboardKickoffAside({
               selectedToolIds,
               injectedContextAttachments,
               selectedRecipe?.recipe.workflow,
+              !selectedRecipe,
             );
             resetKickoffState();
           });

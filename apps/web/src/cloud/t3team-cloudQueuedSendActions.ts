@@ -12,7 +12,13 @@ import {
   dispatchCloudQueuedSend,
   type StartCloudQueuedTurn,
 } from "./t3team-cloudQueuedSendDispatch";
+import {
+  type CloudProjectWaitLogSink,
+  logCloudProjectWaitOutcome,
+  resolvedOutcomeOf,
+} from "./t3team-cloudProjectWaitLog";
 import type { CloudQueuedSendFlushAction } from "./t3team-cloudQueuedSendFlush";
+import type { MachineProjectBinding } from "./t3team-cloudSessionMachineProject";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   failDraftCloudQueuedSend,
@@ -39,6 +45,12 @@ export interface CloudQueuedSendActionContext {
     environmentId: EnvironmentId,
   ) => Promise<{ readonly id: string } | null>;
   readonly startTurn: StartCloudQueuedTurn;
+  /** What the "Project ready" wait's outcome line says; the clock is the caller's. */
+  readonly projectWaitLog?: {
+    readonly nowMs: number;
+    readonly resolvedBy: MachineProjectBinding | null;
+    readonly sink?: CloudProjectWaitLogSink;
+  };
 }
 
 export function applyCloudQueuedSendAction(
@@ -82,15 +94,49 @@ export function applyCloudQueuedSendAction(
         });
       });
       return;
-    case "fail":
+    case "fail": {
       requests.delete(queued.messageId);
-      failDraftCloudQueuedSend(draftId, queued.messageId, action.message, action.retryable);
+      const failure = action.failure;
+      if (ctx.projectWaitLog !== undefined && failure !== undefined) {
+        logCloudProjectWaitOutcome(
+          {
+            queued,
+            outcome: failure.kind === "session_ended" ? "ended" : "failed",
+            environmentId: failure.environmentId,
+            reason: failure.reason,
+            nowMs: ctx.projectWaitLog.nowMs,
+          },
+          ctx.projectWaitLog.sink,
+        );
+      }
+      failDraftCloudQueuedSend(
+        draftId,
+        queued.messageId,
+        action.message,
+        action.retryable,
+        failure?.kind === "project_not_resolved"
+          ? { kind: failure.kind, reason: failure.reason }
+          : undefined,
+      );
       return;
+    }
     case "delivered":
       completeCloudQueuedSend(draftId, action.environmentId, ctx.threadId);
       retire(action.environmentId);
       return;
     case "dispatch":
+      if (ctx.projectWaitLog !== undefined) {
+        logCloudProjectWaitOutcome(
+          {
+            queued,
+            outcome: resolvedOutcomeOf(ctx.projectWaitLog.resolvedBy),
+            environmentId: action.environmentId,
+            reason: null,
+            nowMs: ctx.projectWaitLog.nowMs,
+          },
+          ctx.projectWaitLog.sink,
+        );
+      }
       void dispatchCloudQueuedSend({
         draftId,
         messageId: queued.messageId,

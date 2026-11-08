@@ -3,10 +3,19 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientResponse, type HttpClientRequest } from "effect/http";
 
-import * as GitHubApi from "./GitHubApi.ts";
+import * as GitHubApi from "./t3team-GitHubApi.ts";
+import * as GitHubRest from "./GitHubRest.ts";
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubQuota from "./GitHubQuota.ts";
+import * as GitHubAppSignIn from "./GitHubAppSignIn.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
+
+/** The app sign-in the request policy reads through, signed out: every request uses the user's credential. */
+export const appSignedOut = Layer.mock(GitHubAppSignIn.GitHubAppSignIn)({
+  enabled: false,
+  token: () => Effect.succeedNone,
+  invalidate: () => Effect.void,
+});
 
 export const jsonResponse = (body: unknown, init?: ResponseInit) =>
   new Response(JSON.stringify(body), {
@@ -32,6 +41,8 @@ export function makeGitHubApiHarness(
           source: "gh" as const,
           fingerprint: `${host}:token`,
         }),
+      saved: () => Effect.succeedNone,
+      fingerprint: (host, token) => Effect.succeed(`${host}:${token}`),
       invalidate: () => Effect.void,
     }),
   );
@@ -45,7 +56,8 @@ export function makeGitHubApiHarness(
     }),
   );
   const layer = GitHubApi.layer.pipe(
-    Layer.provide(Layer.mergeAll(credentials, http)),
+    Layer.provideMerge(GitHubRest.layer),
+    Layer.provideMerge(Layer.mergeAll(credentials, http, appSignedOut)),
     Layer.provideMerge(GitHubQuota.layer),
     Layer.provideMerge(SourceControlRateLimit.layer),
   );

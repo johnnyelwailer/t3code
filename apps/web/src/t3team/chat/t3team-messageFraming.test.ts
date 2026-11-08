@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { MessageId, withT3TeamMessageExtContext } from "@t3tools/contracts";
 
 import { deriveTimelineEntriesFromVisibleTurnItems } from "~/session-logic";
+import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "@t3tools/shared/composerContextReferences";
 import { t3teamDisplayedUserMessage, t3teamMessageExtOf } from "./t3team-messageFraming";
 
 describe("t3teamMessageExtOf", () => {
@@ -25,6 +26,8 @@ describe("t3teamDisplayedUserMessage", () => {
     expect(t3teamDisplayedUserMessage(message).text).toBe("please take a look");
     const plain = { text: "hello" };
     expect(t3teamDisplayedUserMessage(plain)).toBe(plain);
+    const bootstrap = { ...plain, text: ATTACHMENT_ONLY_BOOTSTRAP_PROMPT };
+    expect(t3teamDisplayedUserMessage(bootstrap).text).toBe("");
   });
 });
 

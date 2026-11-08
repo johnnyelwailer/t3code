@@ -19,6 +19,18 @@ export const githubWrite = defineToolGroup({
     "Merge pull requests, push branches, edit issues, and trigger write-side GitHub actions.",
 });
 
+/**
+ * The host's `integration.read` group id (`packages/project-recipes/src/toolGroups.ts`): reads of
+ * external-tracker and source-control state that change nothing. A body names it in
+ * `meta.capabilities`; a recipe names it in `allowedToolGroups`.
+ */
+export const integrationRead = defineToolGroup({
+  id: "integration.read",
+  label: "Read integration data",
+  description:
+    "Read work items, pull requests and other external state of the project without changing it.",
+});
+
 export const jiraRead = defineToolGroup({
   id: "jira.read",
   label: "Read Jira data",
@@ -54,6 +66,7 @@ export const releaseNotesWrite = defineToolGroup({
 export const builtinToolGroups = [
   githubRead,
   githubWrite,
+  integrationRead,
   jiraRead,
   jiraWrite,
   t3teamRecipeRead,

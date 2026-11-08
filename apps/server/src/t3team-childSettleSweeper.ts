@@ -35,6 +35,7 @@ import {
   type SettleSweepShell,
   TTL_SETTLE_COMMAND_PREFIX,
 } from "./t3team-childSettleSweepDecide.ts";
+import { whenFeatureEnabled } from "./t3team-featureGate.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
 export interface ChildSettleSweeperDeps<E1, E2> {
@@ -106,13 +107,18 @@ export const makeChildSettleSweeper = <E1, E2>(
       return candidates.length;
     });
 
-  /** Scheduler entry point: sweeps when the cadence is due. */
+  /** Scheduler entry point: sweeps when the cadence is due and child-thread management is on. */
   const tick = (nowMs: number) =>
-    lastSweepAtMs !== null && nowMs - lastSweepAtMs < childSettleSweepIntervalMs()
-      ? Effect.void
-      : Effect.sync(() => {
-          lastSweepAtMs = nowMs;
-        }).pipe(Effect.andThen(sweepOnce(nowMs)), Effect.asVoid);
+    whenFeatureEnabled(
+      "ORCHESTRATION_CHILD_THREADS",
+      Effect.suspend(() =>
+        lastSweepAtMs !== null && nowMs - lastSweepAtMs < childSettleSweepIntervalMs()
+          ? Effect.void
+          : Effect.sync(() => {
+              lastSweepAtMs = nowMs;
+            }).pipe(Effect.andThen(sweepOnce(nowMs)), Effect.asVoid),
+      ),
+    );
 
   return { sweepOnce, tick };
 };

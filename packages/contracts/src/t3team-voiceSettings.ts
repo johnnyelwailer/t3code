@@ -5,7 +5,11 @@ import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.ts";
 
 /** The large tier: what a machine with a discrete GPU uses while `voice.transcriber.model` is empty. */
 export const DEFAULT_VOICE_TRANSCRIBER_MODEL = "large-v3-turbo";
-export const DEFAULT_VOICE_SILENCE_MS = 1_500;
+/**
+ * Pause after which Silero's last speech commits the utterance. Commits only add text to the
+ * draft, so a short pause cannot split a message; it is what puts each sentence in within ~1 s.
+ */
+export const DEFAULT_VOICE_SILENCE_MS = 600;
 export const DEFAULT_VOICE_LANGUAGES = "de,en";
 export const MAX_VOICE_SILENCE_MS = 10_000;
 

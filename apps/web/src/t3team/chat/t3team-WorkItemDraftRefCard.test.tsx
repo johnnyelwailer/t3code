@@ -13,6 +13,9 @@ import {
 import { T3TeamMessageAttachmentList } from "~/t3team/chat/t3team-messageAttachmentList";
 import { isPendingT3TeamDraftCarrier } from "~/t3team/chat/t3team-useDraftMutationIngest";
 
+// The card under test is the review entry point, so work item drafts are on.
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
+
 const ATTACHMENT = {
   kind: "work-item-draft",
   projectId: "project-1",

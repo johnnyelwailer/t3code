@@ -19,13 +19,13 @@ import {
   type OrchestrationV2ThreadShell,
   type T3TeamLaunchedByFact,
 } from "@t3tools/contracts";
-import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
 import { modelSelectionCommandType } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import type { ThreadLaunchService } from "./orchestration-v2/ThreadLaunchService.ts";
 import type { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import { sourceControlDefinitions } from "./sourceControl/sourceControlDefinitions.ts";
 import type { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { workflowPromptContext } from "./t3team-workflowTurnPrompt.ts";
 import { launchedThreadState } from "./t3team-workflowHostLaunchState.ts";
@@ -79,7 +79,7 @@ export function makeWorkflowHostLaunch(deps: {
     request: string,
   ) =>
     Effect.gen(function* () {
-      const target = parseChangeRequestUrl(url);
+      const target = sourceControlDefinitions.parseChangeRequestUrl(url)?.link ?? null;
       if (target === null) return yield* refuse(`Not a pull request URL: ${url}`);
       const dispatched = yield* threads
         .dispatch({

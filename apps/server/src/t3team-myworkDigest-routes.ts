@@ -27,6 +27,7 @@ import * as Layer from "effect/Layer";
 import { HttpRouter } from "effect/http";
 
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
+import { whenRouteFeatureEnabled } from "./t3team-featureFlagRoute.ts";
 import { loadT3TeamMyWorkDigestGraph } from "./t3team-myworkDigest.ts";
 import { attachDigestArrangement } from "./t3team-myworkDigestArrangement.ts";
 import { t3teamMyWorkDigestArrangementRouteLayer } from "./t3team-myworkDigestArrangement-routes.ts";
@@ -62,41 +63,47 @@ function stampDigestLastVisit(input: T3TeamMyWorkDigestInput, payload: T3TeamMyW
 const t3teamMyWorkDigestGraphRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/mywork-digest/graph",
-  Effect.gen(function* () {
-    const input = yield* readJsonBody<T3TeamMyWorkDigestInput>();
-    const payload = yield* attachDigestArrangement(
-      input,
-      yield* loadT3TeamMyWorkDigestGraph(input),
-    );
-    // Read-only: this route does not record a visit, only reports the receipt.
-    return okJson({ payload: yield* stampDigestLastVisit(input, payload) });
-  }).pipe(Effect.catch(errorResponse)),
+  whenRouteFeatureEnabled(
+    "MYWORK_DIGEST",
+    Effect.gen(function* () {
+      const input = yield* readJsonBody<T3TeamMyWorkDigestInput>();
+      const payload = yield* attachDigestArrangement(
+        input,
+        yield* loadT3TeamMyWorkDigestGraph(input),
+      );
+      // Read-only: this route does not record a visit, only reports the receipt.
+      return okJson({ payload: yield* stampDigestLastVisit(input, payload) });
+    }).pipe(Effect.catch(errorResponse)),
+  ),
 );
 
 const t3teamMyWorkDigestGraphPollRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/mywork-digest/graph/poll",
-  Effect.gen(function* () {
-    const input = yield* readJsonBody<T3TeamMyWorkDigestPollInput>();
-    // The stored arrangement is part of the digest: a new layout must answer CHANGED.
-    const payload = yield* attachDigestArrangement(
-      input,
-      yield* loadT3TeamMyWorkDigestGraph(input),
-    );
-    // Fingerprint over the payload WITHOUT the receipt (see the file header).
-    const result = toT3TeamPollResult(payload, input.poll);
-    if (result.unchanged === true) {
-      return okJson(result);
-    }
-    // A changed round is a visit: stamp the PREVIOUS receipt, then record this one.
-    const value = yield* stampDigestLastVisit(input, payload);
-    const identity = digestLastVisitIdentity(input);
-    if (identity !== undefined) {
-      const atMs = yield* Clock.currentTimeMillis;
-      yield* recordDigestLastVisit(identity, input.scope, atMs);
-    }
-    return okJson({ unchanged: false as const, fingerprint: result.fingerprint, value });
-  }).pipe(Effect.catch(errorResponse)),
+  whenRouteFeatureEnabled(
+    "MYWORK_DIGEST",
+    Effect.gen(function* () {
+      const input = yield* readJsonBody<T3TeamMyWorkDigestPollInput>();
+      // The stored arrangement is part of the digest: a new layout must answer CHANGED.
+      const payload = yield* attachDigestArrangement(
+        input,
+        yield* loadT3TeamMyWorkDigestGraph(input),
+      );
+      // Fingerprint over the payload WITHOUT the receipt (see the file header).
+      const result = toT3TeamPollResult(payload, input.poll);
+      if (result.unchanged === true) {
+        return okJson(result);
+      }
+      // A changed round is a visit: stamp the PREVIOUS receipt, then record this one.
+      const value = yield* stampDigestLastVisit(input, payload);
+      const identity = digestLastVisitIdentity(input);
+      if (identity !== undefined) {
+        const atMs = yield* Clock.currentTimeMillis;
+        yield* recordDigestLastVisit(identity, input.scope, atMs);
+      }
+      return okJson({ unchanged: false as const, fingerprint: result.fingerprint, value });
+    }).pipe(Effect.catch(errorResponse)),
+  ),
 );
 
 export const t3teamMyWorkDigestRouteLayer = Layer.mergeAll(

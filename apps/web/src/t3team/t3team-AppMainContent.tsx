@@ -3,7 +3,7 @@ import { useAllEnvironmentShellsBootstrapped } from "~/state/entities";
 import { useBackendState } from "~/t3team/backend/t3team-index";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
 import type {
-  ProjectKickoffThreadInput,
+  CreateProjectKickoffThread,
   TicketKickoffThreadInput,
 } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
@@ -35,8 +35,7 @@ type MainContentProps = {
   onOpenThread: (projectId: string, threadId: string) => void;
   onOpenFullThread: (projectId: string, threadId: string) => void;
   onOpenEmbeddedThread: (projectId: string, threadId: string) => void;
-  onCloseEmbeddedThread?: () => void;
-  onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
+  onKickoffProjectThread: CreateProjectKickoffThread;
   onKickoffTicketThread: (input: TicketKickoffThreadInput) => void;
   onThreadKickoffConsumed: (threadId: string) => void;
   onThreadDisplayModeChange: (threadId: string, displayMode: ProjectThreadDisplayMode) => void;
@@ -63,7 +62,6 @@ export function AppMainContent({
   onOpenThread,
   onOpenFullThread,
   onOpenEmbeddedThread,
-  onCloseEmbeddedThread,
   onKickoffProjectThread,
   onBackToDashboard,
   onCreate,
@@ -187,9 +185,6 @@ export function AppMainContent({
         resolvedThread={resolvedThread}
         onOpenTicket={onOpenTicket}
         onOpenEmbeddedThread={onOpenEmbeddedThread}
-        onCloseEmbeddedThread={() =>
-          onCloseEmbeddedThread?.() ?? onOpenFullThread(view.projectId, view.threadId)
-        }
         onThreadKickoffConsumed={onThreadKickoffConsumed}
         onRememberFullThread={(threadId) => onThreadDisplayModeChange(threadId, "thread")}
         onBackToDashboard={onBackToDashboard}

@@ -88,7 +88,7 @@ describe("AllProjectsMyWorkPane", () => {
         onOpenThread={() => undefined}
         onOpenFullThread={() => undefined}
         onThreadKickoffConsumed={() => undefined}
-        onKickoffProjectThread={() => undefined}
+        onKickoffProjectThread={() => "thread-1"}
       />,
     );
     expect(markup).toContain("kickoff-aside");

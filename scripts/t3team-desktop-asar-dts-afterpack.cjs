@@ -9,7 +9,7 @@
  *
  * 1. The main file matcher appends a trailing .d.ts exclusion AFTER any user
  *    `files` patterns (fileMatcher.js, `getMainFileMatchers`), so no `files`
- *    include can re-add `apps/server/dist/lib` .d.ts files — the TypeScript
+ *    include can re-add the `apps/server/dist/lib.*.d.ts` files — the TypeScript
  *    lib declarations the inlined compiler's `getDefaultLibFilePath` resolves to.
  * 2. The node-module collector walks each dependency with a hardcoded
  *    `nodeModuleExcludedExts` list that includes `.d.ts`
@@ -53,7 +53,7 @@ const { fail, collectDtsFiles, buildExistingEntryStreams } = (() => {
   }
 })();
 
-module.exports = async function desktopAsarDtsAfterPack(context) {
+async function reinjectDts(context) {
   // electron-builder 26's afterPack context: { appOutDir, outDir, arch,
   // targets, packager, electronPlatformName } — there is no appPath/platform.
   const { appOutDir, electronPlatformName } = context;
@@ -166,4 +166,19 @@ module.exports = async function desktopAsarDtsAfterPack(context) {
   console.log(
     `[desktop-asar-dts] re-injected ${String(fresh.length)} .d.ts file(s) into ${asarPath}`,
   );
+}
+
+/**
+ * electron-builder takes one `afterPack`, and the staged build pins this hook there. Upstream's own
+ * (`prepare-server-compile-cache.cjs`, the server bytecode cache) is chained after the re-injection:
+ * it must see the final app.asar, so a hook that replaced it would silently drop the cache.
+ */
+module.exports = async function desktopAsarDtsAfterPack(context) {
+  await reinjectDts(context);
+  const { repoScriptsPackageJson } = JSON.parse(NodeFS.readFileSync(CONFIG_PATH, "utf8"));
+  const serverCompileCacheHook = NodePath.join(
+    NodePath.dirname(repoScriptsPackageJson),
+    "prepare-server-compile-cache.cjs",
+  );
+  if (NodeFS.existsSync(serverCompileCacheHook)) await require(serverCompileCacheHook)(context);
 };

@@ -1,7 +1,6 @@
 import * as Effect from "effect/Effect";
 
 import {
-  loadT3TeamContextRefreshJob,
   loadT3TeamContextRefreshJobQueue,
   loadT3TeamContextRefreshJobSeen,
   listIncompleteT3TeamContextRefreshJobs,
@@ -77,8 +76,4 @@ export function hydrateT3TeamContextBackgroundJob(input: {
     job.running = match.status === "running";
     return job;
   });
-}
-
-function loadT3TeamContextBackgroundJobRecord(jobId: string) {
-  return loadT3TeamContextRefreshJob(jobId);
 }

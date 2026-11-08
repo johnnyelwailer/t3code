@@ -3,8 +3,8 @@
  *
  * A pending runtime request raised on that thread is settled here, inside the run's provider
  * event stream (`RunExecutionService`), BEFORE it is ingested — so it never becomes a pending
- * request a user or another agent (`t3_pending_request_respond`) could answer. The thread is
- * recognized by the author session registry, the same record the broker uses to treat
+ * request a user or another agent (`t3_pending_request` with `action: "respond"`) could answer.
+ * The thread is recognized by the author session registry, the same record the broker uses to treat
  * `t3team.orchestration.run` as a submission, or by its deterministic `<runId>:author` id (a
  * restart loses the registry, never the id).
  *

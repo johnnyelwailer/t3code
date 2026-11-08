@@ -4,21 +4,28 @@ import type {
   VoiceTranscriptMetadata,
 } from "@t3tools/contracts";
 
-import { createActivityGate, SPEECH_FLOOR_RMS } from "./t3team-voiceActivityGate.ts";
+import { createActivityGate } from "./t3team-voiceActivityGate.ts";
 import { createLanguageLock } from "./t3team-voiceLanguageLock.ts";
+import { isNearSpeaker, type NearFieldGate } from "./t3team-voiceNearFieldGate.ts";
 import { createPartialPacing } from "./t3team-voicePartialPacing.ts";
 import { createPassChain } from "./t3team-voicePassChain.ts";
 import { createStreamFinals } from "./t3team-voiceStreamFinals.ts";
 import { createPcmBuffer } from "./t3team-voicePcmBuffer.ts";
-import { msToSamples, pcm16Rms, pcm16ToBase64, samplesToMs } from "./t3team-voicePcm.ts";
+import { msToSamples, pcm16ToBase64, samplesToMs } from "./t3team-voicePcm.ts";
+import {
+  createSpeechTracker,
+  type SpeechDetect,
+  type UtteranceBounds,
+} from "./t3team-voiceSpeechTracker.ts";
 
 /** A partial re-transcribes the utterance so far, capped to its most recent stretch. */
 const PARTIAL_WINDOW_MS = 15_000;
-const PRE_ROLL_MS = 300;
-/** Silence kept after the last word when an utterance is cut for its final pass. */
-const TRAILING_PAD_MS = 400;
+/** Audio kept before Silero's first speech and after its last: word onsets and endings are soft. */
+const PRE_ROLL_MS = 200;
+const TRAILING_PAD_MS = 300;
 /** No partial starts once the speaker has been quiet this long: the utterance is about to commit and its final must not queue behind it. */
 const PARTIAL_PAUSE_MS = 400;
+const CLEAR_PARTIAL = { type: "partial", text: "", elapsedMs: 0 } as const;
 
 export type VoiceStreamTranscription =
   | {
@@ -41,25 +48,25 @@ export type VoiceStreamTranscribe = (input: {
 export type VoiceStreamEmit = (event: WithoutSession<DesktopVoiceStreamEvent>) => void;
 
 /**
- * One recording session's live pipeline. A hotkey press opens it and the next press closes it; in
- * between it hears any number of utterances. Chunks drive everything, so it needs no timers: the
- * activity gate reports levels and decides when the speaker paused, and while someone is speaking
- * a partial pass re-transcribes the utterance so far. A pause commits the utterance: its audio is
- * written down by a final pass, the text goes out as an `utterance` event, and the session keeps
- * listening. The language lock belongs to the session, so later utterances reuse it. Passes run
- * one at a time and a partial never queues behind anything, so a slow model cannot delay a final.
+ * One recording session's live pipeline, driven by chunks (no timers). Silero
+ * (`createSpeechTracker`) decides where speech starts and when the speaker paused; the energy gate
+ * only meters the level and ends a forgotten session; the near-field gate drops voices far quieter
+ * than the speaker. While someone speaks, partials re-transcribe the utterance so far; a pause
+ * commits it through a final pass and the session keeps listening. Passes run one at a time and a
+ * partial never queues behind anything, so a slow model cannot delay a final.
  */
 export function createVoiceStreamSession(deps: {
   readonly configuredLanguage: string;
   readonly silenceMs: number;
   readonly transcribe: VoiceStreamTranscribe;
+  /** Silero over a stretch of the session's audio; null is "unknown", which never means silence. */
+  readonly detect: SpeechDetect;
   readonly emit: VoiceStreamEmit;
   readonly log: (message: string) => void;
-  /**
-   * False while the model is still loading or warming up. Partials wait for it (nothing is lost:
-   * the next partial re-transcribes the whole utterance so far) instead of queueing behind the load.
-   */
+  /** False while the model loads: partials wait for it (the next one covers the same audio). */
   readonly isWorkerReady?: () => boolean;
+  /** Drops utterances far quieter than the speaker (voices across the room); none keeps all. */
+  readonly nearField?: NearFieldGate;
 }) {
   const pacing = createPartialPacing({
     log: deps.log,
@@ -77,7 +84,13 @@ export function createVoiceStreamSession(deps: {
     log: deps.log,
     isStopped: () => stopped,
   });
-  let utteranceStart: number | null = null;
+  const speech = createSpeechTracker({
+    audio,
+    detect: deps.detect,
+    pauseMs: deps.silenceMs,
+    onUtterance,
+    log: deps.log,
+  });
   let utteranceNo = 0;
   let lastPartialAtMs = Number.NEGATIVE_INFINITY;
   let stopped = false;
@@ -86,12 +99,13 @@ export function createVoiceStreamSession(deps: {
 
   function runPartial() {
     const end = audio.end;
-    const start = Math.max(utteranceStart ?? 0, end - msToSamples(PARTIAL_WINDOW_MS));
+    const opened = (speech.speechStart ?? end) - msToSamples(PRE_ROLL_MS);
+    const start = Math.max(opened, end - msToSamples(PARTIAL_WINDOW_MS));
     const window = audio.slice(start, end);
-    if (pcm16Rms(window) < SPEECH_FLOOR_RMS) return;
     lastPartialAtMs = samplesToMs(end);
     const windowMs = samplesToMs(end - start);
     const forUtterance = utteranceNo;
+    if (deps.nearField?.peek(window).keep === false) return;
     void passes
       .run(() =>
         deps.transcribe({ pcm16Base64: pcm16ToBase64(window), language: language.current() }),
@@ -116,52 +130,54 @@ export function createVoiceStreamSession(deps: {
       .catch((error: unknown) => deps.log(`stream partial failed: ${String(error)}`));
   }
 
-  function onSilence(silentMs: number) {
-    const start = utteranceStart;
-    utteranceStart = null;
+  const isNear = (pcm: Int16Array, what: string) =>
+    isNearSpeaker(deps.nearField, pcm, what, deps.log, () => deps.emit(CLEAR_PARTIAL));
+
+  function onUtterance(bounds: UtteranceBounds) {
     utteranceNo += 1;
     pacing.resetGap();
-    if (start === null) return;
-    const speechEnd = audio.end - msToSamples(Math.max(0, silentMs - TRAILING_PAD_MS));
+    const pcm = utteranceAudio(bounds);
+    if (!isNear(pcm, "utterance")) return;
     deps.log(
-      `stream auto-commit (silence) at ${Math.round(samplesToMs(audio.end))} ms of audio, utterance ${Math.round(samplesToMs(speechEnd - start))} ms`,
+      `stream auto-commit (pause) at ${Math.round(samplesToMs(audio.end))} ms of audio, utterance ${Math.round(samplesToMs(bounds.end - bounds.start))} ms of speech ending at ${Math.round(samplesToMs(bounds.end))} ms`,
     );
     deps.emit({ type: "auto-commit", reason: "silence" });
-    finals.commit(audio.slice(start, speechEnd));
-    audio.trimBefore(audio.end - msToSamples(PRE_ROLL_MS));
+    finals.commit(pcm);
   }
+
+  const utteranceAudio = (bounds: UtteranceBounds) =>
+    audio.slice(bounds.start - msToSamples(PRE_ROLL_MS), bounds.end + msToSamples(TRAILING_PAD_MS));
 
   function stop() {
     if (stopped) return;
     stopped = true;
     audio.clear();
     deps.log(
-      `stream stopped: ${Math.round(samplesToMs(audio.end))} ms of audio in ${chunkCount} chunk(s), ${partialCount} partial(s), ${finals.committed} utterance(s), language ${language.locked() ?? "undetected"}`,
+      `stream stopped: ${Math.round(samplesToMs(audio.end))} ms of audio in ${chunkCount} chunk(s), ${speech.stats()}, ${partialCount} partial(s), ${finals.committed} utterance(s), language ${language.locked() ?? "undetected"}`,
     );
   }
 
   return {
     push(chunk: Int16Array) {
       if (stopped || chunk.length === 0) return;
-      const before = audio.end;
       audio.push(chunk);
       chunkCount += 1;
       const frame = gate.push(chunk);
       deps.emit({ type: "level", level: frame.level });
-      if (frame.speaking && utteranceStart === null) {
-        utteranceStart = Math.max(0, before - msToSamples(PRE_ROLL_MS));
-        lastPartialAtMs = samplesToMs(utteranceStart);
-      }
-      if (frame.commit === "silence") onSilence(frame.silentMs);
-      else if (frame.commit !== null) {
+      const wasOpen = speech.speechStart !== null;
+      speech.push(frame.speaking);
+      if (!wasOpen && speech.speechStart !== null) lastPartialAtMs = samplesToMs(audio.end);
+      if (frame.commit === "no-speech" || frame.commit === "idle") {
         deps.log(
           `stream auto-commit (${frame.commit}) at ${Math.round(samplesToMs(audio.end))} ms of audio`,
         );
         deps.emit({ type: "auto-commit", reason: frame.commit });
       }
+      audio.trimBefore(speech.keepFrom - msToSamples(PRE_ROLL_MS));
       const due = samplesToMs(audio.end) - lastPartialAtMs >= pacing.nextGapMs();
       const paused = frame.silentMs >= PARTIAL_PAUSE_MS;
-      const wanted = pacing.enabled && utteranceStart !== null && !passes.busy && due && !paused;
+      const open = speech.speechStart !== null;
+      const wanted = pacing.enabled && open && !passes.busy && due && !paused;
       if (wanted && pacing.workerReady(samplesToMs(audio.end))) runPartial();
     },
     /**
@@ -171,11 +187,9 @@ export function createVoiceStreamSession(deps: {
      */
     async finish(): Promise<DesktopVoiceStreamStopResult> {
       if (stopped) return { text: "", committed: finals.committed };
-      const start = utteranceStart;
-      utteranceStart = null;
-      const tail = start === null ? null : audio.slice(start, audio.end);
-      const tailPass =
-        tail !== null && pcm16Rms(tail) >= SPEECH_FLOOR_RMS ? finals.writeDown(tail) : null;
+      const tail = await speech.flush();
+      const tailAudio = tail === null ? null : utteranceAudio(tail);
+      const tailPass = tailAudio && isNear(tailAudio, "tail") ? finals.writeDown(tailAudio) : null;
       await passes.idle();
       await finals.settled();
       const result =

@@ -1,8 +1,8 @@
 import { CloudSessionFailedError } from "@t3tools/contracts";
-import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
+import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import {
   repoApiPath,
@@ -28,7 +28,7 @@ import { parseCreatedPayloadIssue } from "./t3team-CloudSessionPayloadCleanup.ts
  * legacy shared-repo-secret path in `session.yml` remains the fallback.
  */
 
-/** Environment override for the handoff flag. `1`/`true` on, `0`/`false` off. */
+/** Environment override for the handoff flag (`SESSION_CRED_ISSUE`). */
 export const SESSION_CREDENTIAL_ISSUE_FLAG_ENV = "NEXI_FF_SESSION_CRED_ISSUE";
 
 /** User-facing text for the `connect_sign_in_required` failure. */
@@ -78,18 +78,13 @@ export function parseCreatedIssueNumber(body: string): number | null {
 }
 
 /**
- * Is the per-session payload-issue handoff enabled? Reads the flag live so a
- * fleet can flip it without a rebuild. Unrecognized values default ON, which
- * is the safe direction: the legacy path is only a fallback, not the default.
+ * Is the per-session payload-issue handoff enabled? The `SESSION_CRED_ISSUE` flag:
+ * `NEXI_FF_SESSION_CRED_ISSUE` > user value > release preset > code default (on), read on every
+ * create. On is the safe direction: the legacy path is only a fallback, not the default.
  */
 export const isSessionCredentialIssueEnabled = Effect.fn("cloud.session.credential_flag")(
   function* () {
-    // `Effect.option` drops the ConfigError channel: the flag is read-only and a
-    // malformed value is indistinguishable from "unset", so both default ON.
-    const raw = yield* Effect.option(Config.String(SESSION_CREDENTIAL_ISSUE_FLAG_ENV));
-    if (Option.isNone(raw)) return true;
-    const normalized = raw.value.trim().toLowerCase();
-    return !(normalized === "0" || normalized === "false");
+    return yield* readFeatureFlagFromConfig("SESSION_CRED_ISSUE");
   },
 );
 

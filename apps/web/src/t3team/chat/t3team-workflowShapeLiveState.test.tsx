@@ -6,7 +6,7 @@
  */
 
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
-import { act, type ReactNode } from "react";
+import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -18,17 +18,6 @@ import { useT3TeamWorkflowShapeLiveState } from "~/t3team/chat/t3team-workflowSh
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mountedRoots: Array<{ root: ReturnType<typeof createRoot>; container: HTMLElement }> = [];
-
-async function renderNode(node: ReactNode) {
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  mountedRoots.push({ root, container });
-  await act(async () => {
-    root.render(node);
-  });
-  return container;
-}
 
 afterEach(async () => {
   while (mountedRoots.length > 0) {

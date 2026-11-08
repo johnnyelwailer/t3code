@@ -318,6 +318,34 @@ it.layer(NodeServices.layer)("Accounts", (it) => {
     }).pipe(Effect.provide(accountsWith(fake, secrets)));
   });
 
+  it.effect("a fresh-token request refreshes even while the normal access token is cached", () => {
+    const fake: IssuerFake = {
+      requests: [],
+      tokenReplies: [
+        {
+          status: 200,
+          body: { access_token: "cached-token", refresh_token: "rt-2", expires_in: 3600 },
+        },
+        {
+          status: 200,
+          body: { access_token: "fresh-token", refresh_token: "rt-3", expires_in: 3600 },
+        },
+      ],
+    };
+    return Effect.gen(function* () {
+      const accounts = yield* Accounts;
+      assert.equal(yield* accounts.accessToken("acme", "broker"), "cached-token");
+      assert.equal(yield* accounts.accessToken("acme", "broker"), "cached-token");
+      assert.equal(fake.requests.length, 1);
+      assert.equal(
+        yield* accounts.accessToken("acme", "broker", { forceRefresh: true }),
+        "fresh-token",
+      );
+      assert.equal(fake.requests.length, 2);
+      assert.equal(fake.requests[1]?.params.get("refresh_token"), "rt-2");
+    }).pipe(Effect.provide(accountsWith(fake, memorySecrets({ [SECRET]: "rt-1" }))));
+  });
+
   it.effect(
     "a revoked refresh token self-heals into 'sign in again' and forgets the dead token",
     () => {

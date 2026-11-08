@@ -14,6 +14,7 @@ import type { ValidateRecipeToolResult } from "@t3team/sdk";
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { validateProjectRecipeWorkflowForAgent } from "./t3team-recipeAgentValidate.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
+import { workflowAuthorSessionForThread } from "./t3team-workflowAuthorSession.ts";
 import { checkWorkflowSourceForValidate } from "./t3team-workflowSourceCheck.ts";
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -58,6 +59,8 @@ export function makeRecipeToolHandlers<E>(deps: {
         // the author's validate and the launch gate can never disagree.
         const source = args.source;
         return Effect.gen(function* () {
+          const retain = workflowAuthorSessionForThread(threadId)?.retainDraft;
+          if (retain !== undefined) yield* Effect.promise(() => retain(source));
           const loaded = yield* deps.loadThreadProject(threadId).pipe(Effect.result);
           const baseModelSelection =
             loaded._tag === "Success"

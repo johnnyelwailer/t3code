@@ -1,14 +1,9 @@
-import type {
-  EnvironmentId,
-  OrchestrationV2TurnItem,
-  RunId,
-  T3TeamThreadFacts,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { EnvironmentId, RunId, T3TeamThreadFacts, ThreadId } from "@t3tools/contracts";
+import type { ThreadStructureTurnItem } from "@t3tools/client-runtime/state/models";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import type { MessagesTimelineT3TeamProps } from "~/components/chat/MessagesTimeline";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { useT3TeamThreadFacts } from "~/state/t3team-threadSideStreams";
 import { deriveT3TeamActivityState } from "~/t3team/t3team-activityStateDerive";
 import type { ChatMessage } from "~/types";
@@ -48,7 +43,7 @@ export function useT3TeamChatTimelineProps(input: {
     readonly isWorking: boolean;
     readonly waitingOnUser: boolean;
     readonly activeRunId: RunId | null;
-    readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem> | undefined;
+    readonly turnItems: ReadonlyArray<ThreadStructureTurnItem> | undefined;
   };
 }): {
   readonly timelineProps: MessagesTimelineT3TeamProps;
@@ -82,7 +77,7 @@ export function useT3TeamChatTimelineProps(input: {
       }),
     [activeRunId, isWorking, turnItems, waitingOnUser],
   );
-  const labelsEnabled = usePrimarySettings((settings) => settings.t3teamActivityLabelsEnabled);
+  const labelsEnabled = useActivityLabelsEnabled();
   const threadActivityLabel = labelsEnabled ? (facts?.activityLabel ?? null) : null;
 
   const [navigationRequest, setNavigationRequest] = useState<NonNullable<

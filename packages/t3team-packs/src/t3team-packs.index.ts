@@ -27,6 +27,7 @@ export type {
   ModelPolicyDefinition,
   PackActivationContext,
   PackActivate,
+  PackFeatureFlagRegistration,
   PackProviderDriverRegistration,
   WorkflowAgentModelPolicyDefinition,
   WorkflowEphemeralConcurrencyPolicyDefinition,

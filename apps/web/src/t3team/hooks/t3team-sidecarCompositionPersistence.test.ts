@@ -31,14 +31,17 @@ describe("sidecar composition persistence", () => {
     expect(
       readStoredSidecarCompositionFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3teamStoredSidecarCompositionJson: JSON.stringify({
-          composition: {
-            sections: [
-              { sectionId: "quick-starts", collapsed: false },
-              { sectionId: "notes", collapsed: true },
-            ],
-          },
-        }),
+        t3team: {
+          ...DEFAULT_SERVER_SETTINGS.t3team,
+          storedSidecarCompositionJson: JSON.stringify({
+            composition: {
+              sections: [
+                { sectionId: "quick-starts", collapsed: false },
+                { sectionId: "notes", collapsed: true },
+              ],
+            },
+          }),
+        },
       }),
     ).toEqual({
       sections: [
@@ -52,11 +55,14 @@ describe("sidecar composition persistence", () => {
     expect(
       readStoredSidecarCompositionFromClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredSidecarCompositionJson: JSON.stringify({
-          composition: {
-            sections: [{ sectionId: "quick-starts", visible: true, collapsed: true }],
-          },
-        }),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedSidecarCompositionJson: JSON.stringify({
+            composition: {
+              sections: [{ sectionId: "quick-starts", visible: true, collapsed: true }],
+            },
+          }),
+        },
       }),
     ).toEqual({
       sections: [{ sectionId: "quick-starts", visible: true, collapsed: true }],
@@ -67,14 +73,17 @@ describe("sidecar composition persistence", () => {
     expect(
       readStoredSidecarCompositionFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3teamStoredSidecarCompositionJson: JSON.stringify({
-          composition: {
-            sections: [
-              { sectionId: "quick-starts", collapsed: false },
-              { sectionId: "quick-starts", collapsed: true },
-            ],
-          },
-        }),
+        t3team: {
+          ...DEFAULT_SERVER_SETTINGS.t3team,
+          storedSidecarCompositionJson: JSON.stringify({
+            composition: {
+              sections: [
+                { sectionId: "quick-starts", collapsed: false },
+                { sectionId: "quick-starts", collapsed: true },
+              ],
+            },
+          }),
+        },
       }),
     ).toEqual({
       sections: [{ sectionId: "quick-starts", collapsed: true }],
@@ -85,9 +94,12 @@ describe("sidecar composition persistence", () => {
     expect(
       readStoredSidecarPersonalizationFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3teamStoredSidecarCompositionJson: JSON.stringify({
-          sections: [{ sectionId: "quick-starts", collapsed: true }],
-        }),
+        t3team: {
+          ...DEFAULT_SERVER_SETTINGS.t3team,
+          storedSidecarCompositionJson: JSON.stringify({
+            sections: [{ sectionId: "quick-starts", collapsed: true }],
+          }),
+        },
       }),
     ).toEqual({
       composition: {
@@ -124,7 +136,10 @@ describe("sidecar composition persistence", () => {
     expect(
       readStoredSidecarPersonalizationFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3teamStoredSidecarCompositionJson: persistJson.mock.calls[0]?.[0],
+        t3team: {
+          ...DEFAULT_SERVER_SETTINGS.t3team,
+          storedSidecarCompositionJson: persistJson.mock.calls[0]?.[0],
+        },
       }),
     ).toEqual({
       composition: {
@@ -163,7 +178,10 @@ describe("sidecar composition persistence", () => {
     expect(
       readStoredSidecarCompositionFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3teamStoredSidecarCompositionJson: persistJson.mock.calls[0]?.[0],
+        t3team: {
+          ...DEFAULT_SERVER_SETTINGS.t3team,
+          storedSidecarCompositionJson: persistJson.mock.calls[0]?.[0],
+        },
       }),
     ).toEqual({
       sections: [

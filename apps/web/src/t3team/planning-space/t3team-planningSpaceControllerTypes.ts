@@ -39,7 +39,6 @@ export interface PlanningSpaceProps {
 
 /** Live mutable context shared by handlers and effects; rebuilt every render. */
 export interface PlanningSpaceCtx {
-  // refs
   stageRef: MutableRefObject<HTMLDivElement | null>;
   engineRef: MutableRefObject<PlanningSpaceEngine | null>;
   edgeRefs: MutableRefObject<Map<string, SVGLineElement>>;

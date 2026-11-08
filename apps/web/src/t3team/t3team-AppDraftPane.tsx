@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import ChatView from "~/components/ChatView";
-import { threadHasStarted } from "~/components/ChatView.logic";
+import { threadShellHasStarted } from "~/components/ChatView.logic";
 import { DraftId, markPromotedDraftThreadByRef, useComposerDraftStore } from "~/composerDraftStore";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { useThreadRefs, useThreadShell } from "~/state/entities";
@@ -32,7 +32,7 @@ export function AppDraftPane({ draftId: rawDraftId }: { draftId: string }) {
     : null;
   const serverThreadRef = draftSession?.promotedTo ?? inferredThreadRef;
   const serverThread = useThreadShell(serverThreadRef);
-  const canonicalThreadRef = threadHasStarted(serverThread) ? serverThreadRef : null;
+  const canonicalThreadRef = threadShellHasStarted(serverThread) ? serverThreadRef : null;
 
   useEffect(() => {
     if (!inferredThreadRef || draftSession?.promotedTo) {

@@ -4,6 +4,7 @@ const { pathToFileURL } = require("node:url");
 const { getDefaultConfig } = require("expo/metro-config");
 const { withUniwindConfig } = require("uniwind/metro");
 const extraThemes = require("./generated-uniwind-theme-names.json");
+const distributionMobile = require("./t3team-distributionMobileMetro.cjs");
 
 /** @type {import("expo/metro-config").MetroConfig} */
 const config = getDefaultConfig(__dirname);
@@ -16,23 +17,8 @@ const licenseGeneratorSource = path.join(
   "third-party-licenses.ts",
 );
 const escapedWorkspaceRoot = workspaceRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const mobileShikiRoot = path.dirname(require.resolve("shiki/package.json", { paths: [__dirname] }));
 const generatedDeviceStreamRoot = path.join(__dirname, ".generated", "device-stream");
 const generatedPreviewStreamRoot = path.join(__dirname, ".generated", "preview-stream");
-const resolveShikiDependencyRoot = (packageName) => {
-  const entryPath = require.resolve(packageName, { paths: [mobileShikiRoot] });
-  let currentDir = path.dirname(entryPath);
-
-  while (!fs.existsSync(path.join(currentDir, "package.json"))) {
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) {
-      throw new Error(`Could not resolve package root for ${packageName}`);
-    }
-    currentDir = parentDir;
-  }
-
-  return currentDir;
-};
 
 config.watchFolders = [...new Set([...(config.watchFolders ?? []), workspaceRoot])];
 config.resolver = {
@@ -50,14 +36,6 @@ config.resolver = {
     "@t3tools/mobile-third-party-licenses": generatedLicenseModuleRoot,
     "@t3tools/mobile-device-stream": generatedDeviceStreamRoot,
     "@t3tools/mobile-preview-stream": generatedPreviewStreamRoot,
-    shiki: mobileShikiRoot,
-    "@shikijs/core": resolveShikiDependencyRoot("@shikijs/core"),
-    "@shikijs/engine-javascript": resolveShikiDependencyRoot("@shikijs/engine-javascript"),
-    "@shikijs/engine-oniguruma": resolveShikiDependencyRoot("@shikijs/engine-oniguruma"),
-    "@shikijs/langs": resolveShikiDependencyRoot("@shikijs/langs"),
-    "@shikijs/themes": resolveShikiDependencyRoot("@shikijs/themes"),
-    "@shikijs/types": resolveShikiDependencyRoot("@shikijs/types"),
-    "@shikijs/vscode-textmate": resolveShikiDependencyRoot("@shikijs/vscode-textmate"),
   },
 };
 
@@ -79,10 +57,6 @@ async function generateMobileThirdPartyLicenses() {
   const manifest = await generateThirdPartyLicenseManifest({
     configFile: path.join(workspaceRoot, "third-party-licenses.config.json"),
     packageManifests: [{ bundle: "mobile", path: path.join(__dirname, "package.json") }],
-    allowMissingGeneratedNotices:
-      process.env.NODE_ENV !== "production" &&
-      process.env.EAS_BUILD !== "true" &&
-      process.env.T3CODE_LICENSES_STRICT !== "1",
   });
 
   await Promise.all([
@@ -117,7 +91,6 @@ async function prepareStreamScripts() {
         ["preview-stream.browser.ts"],
         generatePreviewStreamScript,
       ],
-      // The preview transport also imports `hubAccess.ts`.
       ["packages/client-runtime/src/device", ["stream.ts", "hubAccess.ts"], generateAll],
       [
         "packages/client-runtime/src/preview",
@@ -125,7 +98,6 @@ async function prepareStreamScripts() {
         generatePreviewStreamScript,
       ],
     ]) {
-      // The generated modules participate in Metro's normal Fast Refresh.
       fs.watch(path.join(workspaceRoot, directory), { persistent: false }, (_event, filename) => {
         if (filename && !files.includes(String(filename))) return;
         rebuild = rebuild
@@ -141,8 +113,8 @@ async function prepareStreamScripts() {
 
 module.exports = Promise.all([generateMobileThirdPartyLicenses(), prepareStreamScripts()]).then(
   () =>
-    withUniwindConfig(config, {
-      cssEntryFile: "./global.css",
+    withUniwindConfig(distributionMobile.withDistributionMobile(config, { appRoot: __dirname }), {
+      cssEntryFile: distributionMobile.cssEntryFile("./global.css", { appRoot: __dirname }),
       extraThemes,
       polyfills: { rem: 14 },
     }),

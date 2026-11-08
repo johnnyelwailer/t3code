@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import { Linking } from "react-native";
 
+import { APP_PRIVATE_URL_MESSAGE, isAppPrivateUrl } from "./t3team-urlPolicy";
+
 const ExternalUrlTarget = Schema.Literals([
   "file-preview",
   "markdown-link",
@@ -42,6 +44,8 @@ function externalUrlMetadata(url: string): { readonly scheme: string; readonly h
 
 export async function tryOpenExternalUrl(url: string, target: ExternalUrlTarget): Promise<boolean> {
   try {
+    // A URL that only works inside this app is never handed to another app.
+    if (isAppPrivateUrl(url)) throw new Error(APP_PRIVATE_URL_MESSAGE);
     await Linking.openURL(url);
     return true;
   } catch (cause) {

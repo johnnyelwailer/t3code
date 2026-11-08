@@ -30,6 +30,7 @@ import { clearComposerDraftsEnvironment } from "../state/use-composer-drafts";
 import { clearThreadComposerErrorsForEnvironment } from "../state/thread-composer-error";
 import { mobileApplicationActiveWakeup } from "./app-state-wakeups";
 import * as ConnectionStorage from "./storage";
+import { mobileExtensions } from "../extensions/t3team-extensions";
 
 function networkStatus(state: Network.NetworkState): "unknown" | "offline" | "online" {
   if (state.isConnected === false) {
@@ -83,12 +84,7 @@ const layerConnectivity = Connectivity.layer({
   ),
 });
 
-/**
- * Wakes connections when the device moves between networks while staying
- * online, such as Wi-Fi to cellular. Connectivity only reports online or
- * offline, so leaving home on cellular would otherwise go unnoticed until the
- * LAN socket times out.
- */
+/** Wake connections on network path changes; online/offline misses Wi-Fi-to-cellular moves. */
 const networkPathChanges = Stream.callback<"network-changed">((queue) =>
   Effect.acquireRelease(
     Effect.sync(() => {
@@ -101,8 +97,7 @@ const networkPathChanges = Stream.callback<"network-changed">((queue) =>
         }
         previous = type ?? previous;
       };
-      // The listener reports changes only, so seed the current type; without
-      // it the first Wi-Fi to cellular move would go unnoticed.
+      // Seed the current type: the listener reports only changes and would miss the first move.
       void Network.getNetworkStateAsync()
         .then((state) => {
           if (active && previous === undefined && state.isConnected === true) {
@@ -125,7 +120,7 @@ const networkPathChanges = Stream.callback<"network-changed">((queue) =>
 const layerWakeups = Wakeups.layer({
   changes: Stream.mergeAll(
     [
-      Stream.callback<"application-active-probe" | "application-active-reconnect">((queue) =>
+      Stream.callback<"application-active-probe" | "application-active-long">((queue) =>
         Effect.acquireRelease(
           Effect.sync(() => {
             let backgroundedAtMs = AppState.currentState === "background" ? Date.now() : null;
@@ -150,6 +145,10 @@ const layerWakeups = Wakeups.layer({
         Stream.map(() => "credentials-changed" as const),
       ),
       networkPathChanges,
+      // Read when the stream runs, not at module load: the registry is inside an import cycle.
+      Stream.suspend(() =>
+        Stream.mergeAll(mobileExtensions.wakeups ?? [], { concurrency: "unbounded" }),
+      ),
     ],
     { concurrency: "unbounded" },
   ),
@@ -197,6 +196,10 @@ const layerCapabilities = Layer.effectContext(
           bearerToken: Effect.succeed(Option.none()),
         }),
       ),
+      // The relay device id already persists in secure storage; analytics only sends its hash.
+      Context.add(ClientCapabilities.AnalyticsDevice, {
+        id: storage.loadOrCreateAgentAwarenessDeviceId.pipe(Effect.option),
+      }),
       Context.add(
         ClientCapabilities.RelayDeviceIdentity,
         ClientCapabilities.RelayDeviceIdentity.of({
@@ -254,6 +257,15 @@ const layerCapabilities = Layer.effectContext(
           })(),
         ),
       ),
+      // A distribution that can attach broker sessions on this device replaces the stub above.
+      (context) =>
+        mobileExtensions.brokerGateway === undefined
+          ? context
+          : Context.add(
+              context,
+              BrokerEnvironmentGateway,
+              BrokerEnvironmentGateway.of(mobileExtensions.brokerGateway),
+            ),
     );
   }),
 );

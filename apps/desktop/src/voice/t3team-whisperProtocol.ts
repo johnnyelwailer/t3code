@@ -23,9 +23,15 @@ export type WhisperWorkerCall =
       readonly type: "transcribe";
       readonly pcm16Base64: string;
       readonly language: string;
-      /** Run VAD first and skip whisper when it hears no speech (warm-up passes do not). */
-      readonly vad?: boolean;
+    }
+  | {
+      /** Silero over `pcm16Base64`; whisper is not involved and the call does not queue behind it. */
+      readonly type: "vad";
+      readonly pcm16Base64: string;
     };
+
+/** A stretch Silero heard as speech, in ms from the start of the audio it was given. */
+export type SpeechSpan = { readonly startMs: number; readonly endMs: number };
 
 export type WhisperWorkerRequest = WhisperWorkerCall & { readonly id: number };
 
@@ -44,10 +50,14 @@ export type WhisperWorkerResponse =
       readonly ok: true;
       readonly text: string;
       readonly language?: string;
-      /** Speech VAD found in the audio, when it ran; 0 means whisper was skipped. */
-      readonly speechMs?: number;
       /** Word timings in ms from the start of the pass's audio. */
       readonly words?: readonly WhisperWord[];
+    }
+  | {
+      readonly id: number;
+      readonly ok: true;
+      /** null: no VAD loaded, or it did not answer in time; the caller treats the audio as speech. */
+      readonly speech: readonly SpeechSpan[] | null;
     }
   | { readonly id: number; readonly ok: false; readonly message: string };
 

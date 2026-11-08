@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 
 import * as TestSourceControlHost from "@t3tools/source-control-testing/TestSourceControlHost";
 import { jsonResponse, makeGitHubApiHarness } from "./t3team-githubApiTestHarness.ts";
+import * as GitHubAppAccess from "./GitHubAppAccess.ts";
 import * as GitHubPullRequestApi from "./GitHubPullRequestApi.ts";
 
 const BASE = "a".repeat(40);
@@ -44,6 +45,7 @@ describe("getPullRequestDiffFileContents", () => {
   it.effect("reads a 20-file diff with one refs read, and a re-opened diff from memory", () => {
     const { layer, sent, peak } = harnessWithConcurrencyProbe();
     const stack = GitHubPullRequestApi.layer.pipe(
+      Layer.provideMerge(GitHubAppAccess.layer),
       Layer.provideMerge(layer),
       Layer.provide(NodeCrypto.layer),
       Layer.provide(TestSourceControlHost.layer()),

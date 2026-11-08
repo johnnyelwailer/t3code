@@ -29,6 +29,8 @@ import type {
   PreparedWorkflowLaunchDeps,
   PreparedWorkflowLaunchInput,
 } from "./t3team-workflowEphemeralLaunchTypes.ts";
+import { parkWorkflowAuthorDraft } from "./t3team-workflowAuthorPark.ts";
+import { makeWorkflowAuthorDraft } from "./t3team-workflowAuthorDraft.ts";
 import { checkWorkflowSource } from "./t3team-workflowSourceCheck.ts";
 
 /** Ceiling for one authoring turn; a turn that outlives it is a failed authoring, reported once. */
@@ -83,8 +85,11 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
       prepared,
       authorModelSelection: input.authorModelSelection,
     });
+  const saveDraft = makeWorkflowAuthorDraft({ workflowPath, fileSystem, path });
+  yield* Effect.promise(() =>
+    saveDraft(input.draftSource === undefined ? {} : { source: input.draftSource }),
+  );
   yield* Effect.promise(input.onAdmitted);
-
   let launched = false;
   const session: WorkflowAuthorSession = {
     runId: input.runId,
@@ -94,11 +99,15 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
     intent: input.intent,
     declined: false,
     submit: undefined,
+    retainDraft: async (source) => {
+      await saveDraft({ source });
+    },
   };
   registerWorkflowAuthorSession(session);
   const providers =
     deps.listProviders === undefined ? undefined : yield* Effect.promise(deps.listProviders);
   session.submit = async (source) => {
+    await saveDraft({ source });
     const verdict = checkWorkflowSource({
       source,
       absolutePath: workflowPath,
@@ -135,6 +144,7 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
         draftSource: input.draftSource,
         providers,
       }),
+      retainTurnDraft: true,
       timeoutMs: deps.turnTimeoutMs ?? WORKFLOW_AUTHOR_TURN_TIMEOUT_MS,
     }).then(
       (reply) => ({ kind: "ended" as const, reply }),
@@ -142,6 +152,7 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
     ),
   );
   session.submit = undefined;
+  session.retainDraft = undefined;
   const retire = () => retireWorkflowAuthorThread({ runId: input.runId, host: launch.host });
   if (
     isStopped() ||
@@ -155,15 +166,21 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
     yield* Effect.promise(() => stepActivities.emitResolved(authorStepId, "completed"));
     return;
   }
+  if (outcome.kind === "ended") {
+    const hasDraft = yield* Effect.promise(() => saveDraft({ reply: outcome.reply }));
+    yield* parkWorkflowAuthorDraft({
+      launch,
+      input,
+      authorStepId,
+      stepActivities,
+      hasDraft,
+      nowIso: deps.author.nowIso,
+    });
+    yield* Effect.promise(retire);
+    return;
+  }
   // Unfixable, or the author ran out of time (the failure funnel below retires the author thread): ONE failure, through the run's own terminal funnel.
-  const reason =
-    outcome.kind === "failed"
-      ? outcome.error instanceof Error
-        ? outcome.error.message
-        : String(outcome.error)
-      : outcome.reply.trim().length > 0
-        ? `The orchestration could not be authored: ${outcome.reply.trim().slice(0, 240)}`
-        : "The orchestration could not be authored: the author ended without producing a source.";
+  const reason = outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
   // The session stays registered (with nothing waiting): the author thread must never fall
   // through to launching a NEW run, and a late submission is refused by name.
   yield* Effect.promise(() => stepActivities.emitResolved(authorStepId, "failed", reason));

@@ -20,43 +20,42 @@
  * so no row could bail out. Post-fix: only the two affected rows re-render
  * (the one selected and the one deselected) — 2/12.
  */
-import { act, memo, useMemo, useState } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { act, memo, useMemo, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ProjectShellProject } from '@t3tools/project-context';
+import type { ProjectShellProject } from "@t3tools/project-context";
 
-import { ProjectSidebarThreadRowItem } from '~/t3team/components/t3team-ProjectSidebarThreadRow';
-import { renderCounter } from '~/test/t3team-renderCounter';
-import { useProjectStore } from '~/t3team/hooks/t3team-useProjectStore';
-import { useAppHandlers } from '~/t3team/t3team-useAppHandlers';
-import { resolveViewStoredProject } from '~/t3team/t3team-appMainContentResolution';
-import { readActiveThreadIdFromView } from '~/t3team/t3team-types';
-import type { ProjectThread, ViewState } from '~/t3team/t3team-types';
+import { ProjectSidebarThreadRowItem } from "~/t3team/components/t3team-ProjectSidebarThreadRow";
+import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
+import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
+import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResolution";
+import { readActiveThreadIdFromView } from "~/t3team/t3team-types";
+import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 
 // Keep the real store + handlers + barrier; mock only the heavy external
 // dependencies so the test stays focused on the real wiring under test.
-vi.mock('~/localApi', () => ({ readLocalApi: () => null }));
-vi.mock('~/state/environments', () => ({
-  usePrimaryEnvironmentId: () => null,
+vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
+vi.mock("~/state/environments", () => ({
   usePrimaryEnvironment: () => null,
+  usePrimaryEnvironmentId: () => null,
 }));
-vi.mock('~/state/entities', () => ({
+vi.mock("~/state/entities", () => ({
   useProjects: () => emptyArray,
   useThreadShells: () => emptyArray,
 }));
-vi.mock('~/t3team/backend/t3team-index', () => ({
+vi.mock("~/t3team/backend/t3team-index", () => ({
   useBackend: () => null,
   useBackendState: () => backendState,
 }));
-vi.mock('~/hooks/useThreadActions', () => {
+vi.mock("~/hooks/useThreadActions", () => {
   // One stable `deleteThread` for the whole module registry: `useAppHandlers`
   // depends on its identity, so a fresh mock per hook call would be a false
   // source of instability.
   const deleteThread = vi.fn();
   return { useThreadActions: () => ({ deleteThread }) };
 });
-vi.mock('~/t3team/hooks/t3team-useLocalWorkspaceCommands', () => {
+vi.mock("~/t3team/hooks/t3team-useLocalWorkspaceCommands", () => {
   const noop = () => {};
   return {
     useLocalWorkspaceCommands: () => ({
@@ -68,17 +67,15 @@ vi.mock('~/t3team/hooks/t3team-useLocalWorkspaceCommands', () => {
 
 const { emptyArray, backendState } = vi.hoisted(() => ({
   emptyArray: [] as unknown[],
-  backendState: { connectionStatus: 'disconnected' as const },
+  backendState: { connectionStatus: "disconnected" as const },
 }));
 
 const ROW_COUNT = 12;
-const PROJECT_ID = 'project-1';
+const PROJECT_ID = "project-1";
 
+const renderCounts = new Map<string, number>();
 let lastStore: ReturnType<typeof useProjectStore> | null = null;
 
-// The shared render counter: the memoized wrapper receives the same stable
-// props the real call sites pass, so it bails out exactly when the row does.
-const counter = renderCounter();
 const CountingRow = memo(function CountingRow(props: {
   rowId: string;
   thread: ProjectThread;
@@ -88,7 +85,7 @@ const CountingRow = memo(function CountingRow(props: {
   onDeleteThread: (threadId: string) => void;
   onRenameThread: (threadId: string, newTitle: string) => void;
 }) {
-  counter.count(props.rowId);
+  renderCounts.set(props.rowId, (renderCounts.get(props.rowId) ?? 0) + 1);
   return (
     <ProjectSidebarThreadRowItem
       thread={props.thread}
@@ -132,7 +129,7 @@ function Harness() {
     onOpenDashboard: undefined,
     onOpenTicket: undefined,
     onOpenThread: (projectId, threadId) => {
-      setRouteView({ type: 'thread', projectId, threadId });
+      setRouteView({ type: "thread", projectId, threadId });
     },
   });
 
@@ -163,22 +160,29 @@ function clickRow(container: HTMLElement, title: string): void {
   const buttons = [...container.querySelectorAll<HTMLElement>('[data-sidebar="menu-sub-button"]')];
   const target = buttons.find((button) => button.textContent?.includes(title));
   expect(target, `row "${title}" should be rendered`).toBeTruthy();
-  target!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  target!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 }
 
-describe('Work-lens thread selection re-render regression (real store + handlers wiring)', () => {
+function reRenderedRows(): string[] {
+  return [...renderCounts.entries()]
+    .filter(([, count]) => count > 0)
+    .map(([rowId]) => rowId)
+    .toSorted();
+}
+
+describe("Work-lens thread selection re-render regression (real store + handlers wiring)", () => {
   let container: HTMLElement;
   let root: Root;
 
   beforeEach(() => {
-    container = document.createElement('div');
+    container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    counter.reset();
+    renderCounts.clear();
     lastStore = null;
   });
 
-  it('keeps the store object identity stable across an unrelated re-render', async () => {
+  it("keeps the store object identity stable across an unrelated re-render", async () => {
     await act(async () => {
       root.render(<Harness />);
     });
@@ -192,12 +196,12 @@ describe('Work-lens thread selection re-render regression (real store + handlers
     await act(async () => {
       const tickButton = container.querySelector<HTMLButtonElement>("[data-testid='tick']");
       expect(tickButton).not.toBeNull();
-      tickButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      tickButton!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     expect(lastStore).toBe(firstStore);
   });
 
-  it('selecting a thread re-renders only the two affected rows, not the list', async () => {
+  it("selecting a thread re-renders only the two affected rows, not the list", async () => {
     await act(async () => {
       root.render(<Harness />);
     });
@@ -206,8 +210,8 @@ describe('Work-lens thread selection re-render regression (real store + handlers
     const store = lastStore!;
     const project = {
       id: PROJECT_ID,
-      title: 'Test Project',
-      source: { provider: 'local', raw: {} },
+      title: "Test Project",
+      source: { provider: "local", raw: {} },
     } as unknown as ProjectShellProject;
     await act(async () => {
       store.addProject(project);
@@ -218,23 +222,23 @@ describe('Work-lens thread selection re-render regression (real store + handlers
 
     // Baseline selection (exercises the full real flow once, warms nothing up
     // that the second selection would not exercise).
-    counter.reset();
+    renderCounts.clear();
     await act(async () => {
-      clickRow(container, 'Thread 0');
+      clickRow(container, "Thread 0");
     });
-    expect(counter.rerendered()).toEqual(['row-0', 'row-11']);
+    expect(reRenderedRows()).toEqual(["row-0", "row-11"]);
 
     // The regression: selecting a DIFFERENT thread must re-render only the row
     // that was selected and the row that was deselected.
-    counter.reset();
+    renderCounts.clear();
     await act(async () => {
-      clickRow(container, 'Thread 1');
+      clickRow(container, "Thread 1");
     });
 
     // Pre-fix this was ALL 12 rows (row-0..row-11): the selection changed the
     // store's `view`, which changed the `store` object identity, which changed
     // the handler identities handed to the memo barrier, so no row could bail
     // out.
-    expect(counter.rerendered()).toEqual(['row-0', 'row-1']);
+    expect(reRenderedRows()).toEqual(["row-0", "row-1"]);
   });
 });

@@ -40,11 +40,11 @@ export function isSameDiffSlice(existing: DiffSlice, next: DiffSlice): boolean {
  * from a diff that moved: only a new reference means the slices (and the cursors after them) were
  * replaced and must be re-read from the top.
  */
-export function applyDiffSlicePage(
-  slices: ReadonlyArray<DiffSlice>,
+export function applyDiffSlicePage<S extends DiffSlice>(
+  slices: ReadonlyArray<S>,
   cursor: string | null,
-  next: DiffSlice,
-): ReadonlyArray<DiffSlice> {
+  next: S,
+): ReadonlyArray<S> {
   const index = slices.findIndex((slice) => slice.cursor === cursor);
   if (index === -1) return [...slices, next];
   const existing = slices[index];

@@ -1,5 +1,6 @@
-import { expect, it } from "@effect/vitest";
+import { afterEach, assert, beforeEach, expect, it } from "@effect/vitest";
 import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import { listImplementedT3TeamToolCatalogEntries } from "@t3tools/project-context/t3teamToolCatalog";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,12 +26,33 @@ const t3TeamRegistrationServices = Layer.mergeAll(
   Layer.mock(T3TeamAskUserWriter)({}),
 );
 
+beforeEach(() => replaceFeatureFlagPresetValues(new Map([["AGENTS_THREAD_TOOLS", true]])));
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
 it("maps or explicitly policy-excludes every canonical implemented tool", () => {
   const exposed: ReadonlySet<string> = new Set(Object.values(T3TEAM_MCP_CANONICAL_TOOL_MAP));
   const missing = listImplementedT3TeamToolCatalogEntries()
     .map((tool) => tool.id)
     .filter((id) => !exposed.has(id) && !T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has(id));
   expect(missing).toEqual([]);
+});
+
+it("exposes the work item drafts through the one meta tool, not the canonical draft ids", () => {
+  const mapped: ReadonlySet<string> = new Set(Object.values(T3TEAM_MCP_CANONICAL_TOOL_MAP));
+  assert.strictEqual(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_draft, "t3team.work_item.draft");
+  assert.strictEqual(
+    T3TEAM_MCP_CANONICAL_TOOL_MAP.t3_work_item_change_set,
+    "t3team.work_item.change_set",
+  );
+  assert.isFalse(T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has("t3team.work_item.draft"));
+  const drafts = listImplementedT3TeamToolCatalogEntries()
+    .map((tool) => tool.id)
+    .filter((id) => /\.draft_(update|create|remove)$/.test(id));
+  expect(drafts.length).toBeGreaterThan(0);
+  for (const id of drafts) {
+    expect(mapped.has(id), id).toBe(false);
+    expect(T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS.has(id), id).toBe(true);
+  }
 });
 
 const threadId = ThreadId.make("thread-t3team-mcp-test");
@@ -120,6 +142,48 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   );
 });
 
+it.effect("refuses a flag-switched tool while its flag is off, without dispatching it", () => {
+  replaceFeatureFlagPresetValues(new Map([["AGENTS_WIDGETS", false]]));
+  const dispatched: string[] = [];
+  const binding: T3TeamToolBinding = {
+    threadId,
+    listServers: () => [],
+    readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
+    callTool: ({ tool }) => {
+      dispatched.push(tool);
+      return Effect.succeed({ content: [{ type: "text" as const, text: "ok" }] });
+    },
+  };
+  const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provide(t3TeamRegistrationServices),
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(
+      Layer.succeed(
+        T3TeamToolBroker,
+        T3TeamToolBroker.of({
+          bindSession: () => Effect.succeed(binding),
+          bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+        }),
+      ),
+    ),
+  );
+
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server.callTool({
+      name: "t3_show_widget",
+      arguments: { title: "w", widget_code: "<b>x</b>" },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("Chat widgets");
+    expect(dispatched).toEqual([]);
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(TestLayer),
+  );
+});
+
 // The agent-orchestration rename's MCP aliases are gone: each was a second full tool definition
 // in every agent's context for an operation it already had.
 it("exposes only the t3team_orchestration_* names, not the t3team_workflow_* aliases", () => {
@@ -152,9 +216,12 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
       });
     },
   };
+  const bindInputs: Array<unknown> = [];
   const broker = T3TeamToolBroker.of({
-    bindSession: ({ threadId: boundThreadId }) =>
-      Effect.succeed(boundThreadId === threadId ? binding : undefined),
+    bindSession: (input) => {
+      bindInputs.push(input);
+      return Effect.succeed(input.threadId === threadId ? binding : undefined);
+    },
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
@@ -177,8 +244,49 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
       errors: [],
     });
     expect(calls).toEqual([{ threadId, tool: "t3team.recipe.list", args: {} }]);
+    // `/mcp` binds with the thread alone, so no recipe `allowedToolGroups` filter can apply to a tool.
+    expect(bindInputs).toEqual([{ threadId }]);
   }).pipe(
     Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(TestLayer),
+  );
+});
+
+it.effect("refuses the work item draft tools to a read-only client before the broker", () => {
+  replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFTS", true]]));
+  const bound: Array<unknown> = [];
+  const broker = T3TeamToolBroker.of({
+    bindSession: (input) => {
+      bound.push(input);
+      return Effect.succeed(undefined);
+    },
+    bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+  });
+  const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provide(t3TeamRegistrationServices),
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+  );
+  const readOnly: McpInvocationContext.McpInvocationScope = {
+    ...invocation,
+    client: { sessionId: "session", label: "Claude Code", access: "read-only" },
+  };
+
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const comment = { op: "comment", issue_id: "IES-1", body: "x" };
+    for (const [name, args] of [
+      ["t3_work_item_draft", comment],
+      ["t3_work_item_change_set", { title: "T", operations: [comment] }],
+    ] as const) {
+      const result = yield* server.callTool({ name, arguments: args });
+      expect(result.isError, name).toBe(true);
+      expect(JSON.stringify(result.content)).toContain("read-only access");
+    }
+    expect(bound).toEqual([]);
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, readOnly),
     Effect.provideService(McpSchema.McpServerClient, client),
     Effect.provide(TestLayer),
   );

@@ -6,7 +6,7 @@ import { useClientSettings } from "~/hooks/useSettings";
 import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
-} from "~/logicalProject";
+} from "@t3tools/client-runtime/state/project-grouping";
 import { useProject } from "~/state/entities";
 import { followCloudSessionProject } from "./t3team-cloudSessionProjectFollow";
 

@@ -8,8 +8,6 @@ import { CloudEnvironmentExitActions } from "./t3team-CloudEnvironmentExitAction
 
 const ENV = EnvironmentId.make("env-cloud-1");
 
-type Handlers = ReturnType<typeof makeHandlers>;
-
 function makeHandlers() {
   return {
     onConnect: vi.fn((_environmentId: EnvironmentId) => undefined),

@@ -25,6 +25,7 @@ import {
   withDraftMutationStatus,
 } from "./t3team-draftMutationStatus.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
+import { discardWorkItemChangeSet } from "./t3team-workItemChangeSetVerdict.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 
 const STATUSES: ReadonlySet<string> = new Set(["draft", "applied", "dismissed"]);
@@ -36,6 +37,8 @@ export interface T3TeamDraftMutationStatusInput {
   /** Older clients name the draft by its carrier id (the bare id); same addressing as `draftId`. */
   readonly carrierMessageId?: string;
   readonly status?: string;
+  /** Addresses a work-item change set instead of one draft; its only verdict is `discarded`. */
+  readonly changeSetId?: string;
 }
 
 /**
@@ -50,6 +53,19 @@ const setT3TeamDraftMutationStatus = Effect.fn("setT3TeamDraftMutationStatus")(f
     return yield* new T3TeamAtlassianError({ message: "threadId is required." });
   }
   const status = input.status?.trim() ?? "";
+  if (input.changeSetId !== undefined) {
+    if (status !== "discarded") {
+      return yield* new T3TeamAtlassianError({
+        message: "A change set's status must be discarded.",
+      });
+    }
+    // The body is untyped JSON: a non-string id is a client error, not a defect in `trim()`.
+    if (typeof input.changeSetId !== "string") {
+      return yield* new T3TeamAtlassianError({ message: "changeSetId must be a string." });
+    }
+    const artifacts = yield* T3TeamThreadArtifactsStore;
+    return yield* discardWorkItemChangeSet({ artifacts, threadId, changeSetId: input.changeSetId });
+  }
   if (!STATUSES.has(status)) {
     return yield* new T3TeamAtlassianError({
       message: "status must be one of draft, applied, dismissed.",

@@ -37,7 +37,7 @@ describe("durable workflow engine — deterministic globals", () => {
     expect(result).toEqual({
       workflowErrorIsError: true, // WorkflowError extends the injected host Error
       cancelledIsCancelled: true, // CancelledError is bound and matches itself
-      cancelledIsError: true, // …and is an Error
+      cancelledIsError: true,
       plainThrowIsError: true, // a plain `new Error()` is an Error too
     });
   });

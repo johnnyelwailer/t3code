@@ -18,24 +18,33 @@ import { closeDigestPullRequest, openDigestTicket } from "~/t3team/t3team-digest
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
-import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
+import { useReportMyWorkVisibleItems } from "~/t3team/t3team-useReportMyWorkView";
+import { digestVisibleTicketIds } from "~/t3team/t3team-viewContextBuild";
+import { useDigestVariantFlags } from "~/t3team/t3team-digestVariantFlags";
 import { MyWorkFirstLoadSwap } from "~/t3team/t3team-MyWorkFirstLoadSwap";
 import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRenderState";
 import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
+import {
+  digestSelectedTicket,
+  type DigestSelectedTicket,
+} from "~/t3team/t3team-digestSelectedTicket";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 export function ProjectMyWorkDigestContent({
   project,
   onOpenTicket,
+  onSelectTicket,
   digestFilters,
 }: {
   project: ProjectShellProject;
   onOpenTicket: (projectId: string, ticketId: string) => void;
+  /** Replaces the dashboard aside as where a row's ticket opens (a thread's view tab). */
+  onSelectTicket?: ((ticket: DigestSelectedTicket) => void) | undefined;
   digestFilters?: DigestFilterState | undefined;
 }) {
-  const { flags } = useT3TeamBetaFlags();
+  const flags = useDigestVariantFlags();
   // A row opens its ticket beside the digest (the dashboard aside, a drawer on narrow screens);
   // the full ticket page is one click from there.
   const openTicketInApp = (ticketId: string) =>
@@ -85,6 +94,11 @@ export function ProjectMyWorkDigestContent({
     hasGraph: effectiveGraph !== null,
     ticketCount: graph?.tickets.length ?? 0,
   });
+  // What the user sees is the resolved plan's rows, not the filtered graph's tickets.
+  useReportMyWorkVisibleItems(
+    project.id,
+    renderState === "content" && plan ? digestVisibleTicketIds(plan) : [],
+  );
   // The greeting is timed by the swap (no flash for a quick answer, a minimum dwell once shown,
   // a cross-fade into the content); everything past "loading" is the body below.
   const renderBody = (): ReactNode => {
@@ -139,7 +153,11 @@ export function ProjectMyWorkDigestContent({
         graph={effectiveGraph}
         nowMs={nowMs}
         burndownVariant={flags.digestBurndownVariant}
-        onOpenTicket={openTicketInApp}
+        onOpenTicket={
+          onSelectTicket
+            ? (ticketId) => onSelectTicket(digestSelectedTicket(effectiveGraph, ticketId))
+            : openTicketInApp
+        }
         onResetArrangement={resetArrangement}
         refreshing={refreshing}
         emptyStateAllowed={freshness === "fresh"}

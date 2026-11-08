@@ -9,6 +9,7 @@
  */
 import type {
   ChangeRequestSummaryProps,
+  ConnectionsSettingsProps,
   MyWorkChangeRequestProps,
   SurfaceCompanionPlacement,
   SurfaceCompanionProps,
@@ -73,6 +74,7 @@ export type SurfaceCompanionEntry = ComponentViewEntry<
 
 export type ViewEntry<Ctx> =
   | MessageViewEntry<Ctx>
+  | ComponentViewEntry<"settings.connections", ConnectionsSettingsProps>
   | ComponentViewEntry<"changeRequest.summary", ChangeRequestSummaryProps>
   | ComponentViewEntry<"myWork.changeRequest", MyWorkChangeRequestProps>
   | DashboardWidgetEntry

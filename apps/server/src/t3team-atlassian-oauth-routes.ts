@@ -12,6 +12,7 @@ import {
   readAtlassianOAuthClientId,
   readAtlassianOAuthClientSecret,
 } from "./t3team-atlassian-oauthEnv.ts";
+import { whenRouteFeatureEnabled } from "./t3team-featureFlagRoute.ts";
 
 type OAuthExchangeInput = {
   readonly code: string;
@@ -33,18 +34,25 @@ function requiredAtlassianOAuthEnv(): { clientId: string; clientSecret: string }
 export const t3teamAtlassianOAuthExchangeRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/atlassian/oauth/exchange",
-  Effect.gen(function* () {
-    const input = yield* readJsonBody<OAuthExchangeInput>();
-    const config = requiredAtlassianOAuthEnv();
-    const token = yield* tryAtlassianPromise(
-      () =>
-        exchangeCode({ ...config, redirectUri: input.redirectUri }, input.code, input.codeVerifier),
-      "Failed to exchange Atlassian OAuth code.",
-    );
-    const sites = yield* tryAtlassianPromise(
-      () => listAccessibleResources(token.accessToken),
-      "Failed to load Atlassian sites.",
-    );
-    return okJson({ token, sites });
-  }).pipe(Effect.catch(errorResponse)),
+  whenRouteFeatureEnabled(
+    "INTEGRATIONS_ATLASSIAN",
+    Effect.gen(function* () {
+      const input = yield* readJsonBody<OAuthExchangeInput>();
+      const config = requiredAtlassianOAuthEnv();
+      const token = yield* tryAtlassianPromise(
+        () =>
+          exchangeCode(
+            { ...config, redirectUri: input.redirectUri },
+            input.code,
+            input.codeVerifier,
+          ),
+        "Failed to exchange Atlassian OAuth code.",
+      );
+      const sites = yield* tryAtlassianPromise(
+        () => listAccessibleResources(token.accessToken),
+        "Failed to load Atlassian sites.",
+      );
+      return okJson({ token, sites });
+    }).pipe(Effect.catch(errorResponse)),
+  ),
 );

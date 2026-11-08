@@ -2,6 +2,7 @@ import {
   getProviderSkillsForSlashMenu,
   getProviderSlashCommandsForSlashMenu,
 } from "@t3tools/client-runtime/providerSkills";
+import type { ComposerPathSearchTarget } from "@t3tools/client-runtime/state/threads";
 import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import type {
   ProjectEntry,
@@ -50,14 +51,20 @@ export type T3TeamComposerMenuSources = {
    */
   readonly showSkillsInSlashMenu: boolean;
   readonly pathEntries: ReadonlyArray<T3TeamComposerPathEntry>;
+  /** The query the path entries answered, so a late selection can be matched to its search. */
+  readonly pathSearchTarget: ComposerPathSearchTarget;
 };
 
-function buildPathItems(entries: ReadonlyArray<T3TeamComposerPathEntry>): ComposerCommandItem[] {
+function buildPathItems(
+  entries: ReadonlyArray<T3TeamComposerPathEntry>,
+  searchTarget: ComposerPathSearchTarget,
+): ComposerCommandItem[] {
   return entries.map((entry) => ({
     id: `path:${entry.kind}:${entry.path}`,
     type: "path" as const,
     path: entry.path,
     pathKind: entry.kind,
+    searchTarget,
     label: basenameOfPath(entry.path),
     description: entry.path.slice(0, Math.max(0, entry.path.lastIndexOf("/"))),
   }));
@@ -146,7 +153,7 @@ export function buildT3TeamComposerMenuItems(
     return [];
   }
   if (trigger.kind === "path") {
-    return buildPathItems(sources.pathEntries);
+    return buildPathItems(sources.pathEntries, sources.pathSearchTarget);
   }
   if (trigger.kind === "slash-command") {
     return buildSlashCommandItems(sources, trigger.query);
