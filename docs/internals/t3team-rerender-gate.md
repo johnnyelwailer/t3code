@@ -55,8 +55,8 @@ const CountingRow = memo(function CountingRow(props: { rowId: string }) {
 
 ```tsx
 counter.reset();
-await act(async () => select('thread-1'));
-counter.expectRerendered({ 'row-0': 1, 'row-1': 1 });
+await act(async () => select("thread-1"));
+counter.expectRerendered({ "row-0": 1, "row-1": 1 });
 ```
 
 - The wrapper takes only referentially-stable props.

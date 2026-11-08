@@ -24,22 +24,22 @@
  * selecting a different thread re-renders only the two affected rows — not the
  * whole list.
  */
-import { act, memo, useMemo } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { beforeEach, describe, it, vi } from 'vite-plus/test';
+import { act, memo, useMemo } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { beforeEach, describe, it, vi } from "vite-plus/test";
 
-import { ProjectSidebarThreadRowItem } from './t3team-ProjectSidebarThreadRow';
-import { renderCounter } from '~/test/t3team-renderCounter';
-import type { ProjectThread } from '~/t3team/t3team-types';
+import { ProjectSidebarThreadRowItem } from "./t3team-ProjectSidebarThreadRow";
+import { renderCounter } from "~/test/t3team-renderCounter";
+import type { ProjectThread } from "~/t3team/t3team-types";
 
-vi.mock('~/localApi', () => ({ readLocalApi: () => null }));
+vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
 
 function makeThread(index: number): ProjectThread {
   return {
     id: `thread-${index}`,
-    projectId: 'project-1',
+    projectId: "project-1",
     title: `Thread ${index}`,
-    lastMessageAt: '2026-03-09T10:00:00.000Z',
+    lastMessageAt: "2026-03-09T10:00:00.000Z",
   } as unknown as ProjectThread;
 }
 
@@ -53,7 +53,11 @@ const counter = renderCounter();
 const stableOnSelect = () => {};
 const stableOnDelete = () => {};
 const stableOnRename = () => {};
-const CountingRow = memo(function CountingRow(props: { rowId: string; thread: ProjectThread; isSelected: boolean }) {
+const CountingRow = memo(function CountingRow(props: {
+  rowId: string;
+  thread: ProjectThread;
+  isSelected: boolean;
+}) {
   counter.count(props.rowId);
   return (
     <ProjectSidebarThreadRowItem
@@ -74,24 +78,29 @@ function Harness({ activeThreadId }: { activeThreadId: string | null }) {
   return (
     <div>
       {threads.map((thread, index) => (
-        <CountingRow key={thread.id} rowId={`row-${index}`} thread={thread} isSelected={activeThreadId === thread.id} />
+        <CountingRow
+          key={thread.id}
+          rowId={`row-${index}`}
+          thread={thread}
+          isSelected={activeThreadId === thread.id}
+        />
       ))}
     </div>
   );
 }
 
-describe('Work-lens thread selection re-render regression', () => {
+describe("Work-lens thread selection re-render regression", () => {
   let container: HTMLElement;
   let root: Root;
 
   beforeEach(() => {
-    container = document.createElement('div');
+    container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
     counter.reset();
   });
 
-  it('mounts every row exactly once', async () => {
+  it("mounts every row exactly once", async () => {
     await act(async () => {
       root.render(<Harness activeThreadId="thread-0" />);
     });
@@ -102,7 +111,7 @@ describe('Work-lens thread selection re-render regression', () => {
     counter.expectRerendered(mounted);
   });
 
-  it('selecting a different thread re-renders only the two affected rows, not the list', async () => {
+  it("selecting a different thread re-renders only the two affected rows, not the list", async () => {
     await act(async () => {
       root.render(<Harness activeThreadId="thread-0" />);
     });
@@ -114,6 +123,6 @@ describe('Work-lens thread selection re-render regression', () => {
 
     // Pre-fix this was ALL 12 rows (["row-0".."row-11"]). The fix must keep it
     // to just the row that was selected and the row that was deselected.
-    counter.expectRerendered({ 'row-0': 1, 'row-1': 1 });
+    counter.expectRerendered({ "row-0": 1, "row-1": 1 });
   });
 });

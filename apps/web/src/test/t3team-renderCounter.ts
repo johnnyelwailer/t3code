@@ -1,4 +1,4 @@
-import { expect } from 'vite-plus/test';
+import { expect } from "vite-plus/test";
 
 export interface RenderCounter {
   count: (id: string) => void;
