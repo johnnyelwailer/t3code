@@ -10,6 +10,7 @@ name: T3Team Rerender Gate
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: t3team-rerender-gate-${{ github.event.pull_request.number || github.sha }}
@@ -29,8 +30,10 @@ jobs:
           fetch-depth: 0
 
       - name: Rerender gate
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           BASE="$(git merge-base HEAD "${{ github.event.pull_request.base.sha }}")"
           git diff --name-only --diff-filter=ACMR "$BASE" HEAD > t3team-rerender-changed.txt
-          printf '%s' "${{ github.event.pull_request.body }}" > t3team-rerender-pr-body.txt
+          printf '%s' "$PR_BODY" > t3team-rerender-pr-body.txt
           node t3team-rerender-gate.mjs --files t3team-rerender-changed.txt --body t3team-rerender-pr-body.txt
