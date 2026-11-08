@@ -13,6 +13,7 @@ import { resolveRunInitiatingPrompt } from "@t3tools/client-runtime/t3team-runPr
 import { t3teamDisplayedUserMessage } from "~/t3team/chat/t3team-messageFraming";
 import { getT3TeamRenderableAttachments } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamMessageAttachmentList } from "~/t3team/chat/t3team-messageAttachmentList";
+import { T3TeamRecipeKickoffBadge } from "~/t3team/chat/t3team-RecipeKickoffBadge";
 import { Link } from "@tanstack/react-router";
 import { useQuietThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
@@ -1017,6 +1018,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
               </div>
             ) : null}
             {/* t3team: work-item context cards the composer attached (message ext). */}
+            <T3TeamRecipeKickoffBadge message={row.message} />
             <T3TeamUserMessageAttachments message={row.message} />
             {fileCardsOnly || audioOnly ? null : (
               <div onCopyCapture={onBodyCopyCapture}>
