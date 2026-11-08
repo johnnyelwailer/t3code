@@ -36,8 +36,7 @@ export function useVoiceCommit(): (text: string, metadata?: VoiceTranscriptMetad
       return;
     }
     void submitVoiceUtterance(deps, utterance, metadata).then((result) => {
-      if (result.status === "sent") dispatchVoiceUi({ type: "tier", tier: result.tier });
-      else notifyVoiceFailure(result.code, result.detail);
+      if (result.status === "error") notifyVoiceFailure(result.code, result.detail);
     });
   }, []);
 }
