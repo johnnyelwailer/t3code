@@ -84,6 +84,7 @@
     "scripts/t3team-timer-e2e-live.mjs",
     "scripts/t3team-timer-e2e-workspace.mjs",
     "t3team-additive-guard.test.mjs",
+    "t3team-rerender-gate.test.mjs",
   ],
   // Fork debt baseline (2026-09-09): dependencies declared for fork tooling that knip
   // cannot trace (string-based resolution, external runners, or not yet wired in).
