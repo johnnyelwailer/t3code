@@ -15,7 +15,6 @@ import {
 import { threadEnvironment } from "~/state/threads";
 
 import type { VoiceSessionDeps } from "./t3team-voiceSession";
-import { routeVoiceUtterance } from "./t3team-voiceRouting";
 import { useVoiceThreadStore } from "./t3team-voiceThreadStore";
 
 const projectlessProjectIds = new Map<EnvironmentId, ProjectId>();
@@ -49,7 +48,6 @@ export function makeVoiceSessionDeps(): VoiceSessionDeps | null {
     remember: (home) => store.remember(environmentId, home),
     forget: () => store.forget(environmentId),
     projectlessProject: () => resolveProjectlessProject(environmentId),
-    route: routeVoiceUtterance,
     startTurn: orchestration.startThreadTurn,
     uploadFile: (file) => uploadVoiceFileAttachment({ environmentId, file }),
     pinAndKeep: async (threadId: ThreadId) => {
