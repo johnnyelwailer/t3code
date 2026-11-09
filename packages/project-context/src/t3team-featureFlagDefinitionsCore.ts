@@ -10,6 +10,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Allow Nexi Work Android clients to sign in with Entra and attach enrolled desktop hosts. Enable from an existing paired environment before mobile broker onboarding.",
     defaultEnabled: false,
     requiresRestart: false,
+    addedOn: "2026-10-26",
   },
   MAIN_REPOSITORY: {
     group: "Orchestration",
@@ -19,6 +20,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Pick and switch a project's main repository; delegated worktrees default to it. Off: no switching and no default repository.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-10-03",
   },
   NEXI_STATE_DIR: {
     group: "Platform",
@@ -27,6 +29,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Store project state in .nexi instead of .t3team. Decided by the release so two installs never split project state.",
     defaultEnabled: true,
     requiresRestart: true,
+    addedOn: "2026-10-03",
     userToggleable: false,
   },
   MACHINE_SETUP: {
@@ -37,6 +40,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Set up a project machine from the first message of a cloud session for a project that has none.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-10-07",
   },
   // Temporarily disabled 2026-10-07: only the developer profile is tailored, so the chooser
   // costs a setup step without changing the UX. Relanding: nexplore.ghe.com/hive/nx-nexi/issues/60.
@@ -48,6 +52,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Show the work profile chooser in first-run setup, the add-project wizard and Settings. Off: everyone uses the developer profile.",
     defaultEnabled: false,
     requiresRestart: false,
+    addedOn: "2026-10-08",
   },
   MYWORK_RIGHT_PANEL: {
     group: "My Work",
@@ -56,14 +61,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "My Work aside uses PR, thread and browser tabs with an agent kickoff when empty. Off: the earlier PR aside.",
     defaultEnabled: true,
     requiresRestart: false,
-  },
-  CONTEXT_CHAT_TAB: {
-    group: "My Work",
-    label: "Context chat tab",
-    description:
-      "A pinned Chat tab in the right panel of My Work, dashboards, work items and change requests, bound to what you are looking at. Off: no Chat tab and the binding is not recorded.",
-    defaultEnabled: false,
-    requiresRestart: false,
+    addedOn: "2026-10-09",
   },
   TRANSIENT_AUTO_RESUME: {
     group: "Agent",
@@ -73,6 +71,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "A run that failed on a transient gateway error keeps retrying on a durable backoff, with a composer banner. Off: the run stays failed after the retry budget.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-10-14",
   },
   GHE_REPOSITORY_CATALOG: {
     group: "Orchestration",
@@ -90,6 +89,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Memory-pressure sampling, auto-pause at turn boundaries, per-thread cleanup and the Diagnostics panel.",
     defaultEnabled: false,
     requiresRestart: true,
+    addedOn: "2026-09-25",
   },
   KANBAN_SEMANTIC_ZOOM: {
     group: "My Work",
@@ -98,6 +98,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     description: "Three card-density levels on the kanban board, steered by toolbar or pinch.",
     defaultEnabled: false,
     requiresRestart: false,
+    addedOn: "2026-10-09",
   },
   THREAD_RESUB_STAGGER: {
     group: "Platform",
@@ -106,6 +107,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Spread thread resubscribes after a reconnect instead of reopening every stream at once. Off brings back the disconnect storm.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-09-18",
   },
   CLOUD_BROKER: {
     group: "Cloud & machines",
@@ -115,6 +117,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "Route new cloud sessions through the Nexi broker when the build configures one. Off: T3 Connect.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-10-02",
   },
   SESSION_CRED_ISSUE: {
     group: "Cloud & machines",
@@ -123,6 +126,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     description: "Issue a scoped credential to a new cloud session so it can reach this host.",
     defaultEnabled: true,
     requiresRestart: false,
+    addedOn: "2026-09-14",
   },
   BACKEND_WATCHDOG: {
     group: "Platform",
@@ -131,6 +135,7 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
       "The desktop app restarts a backend that stops answering health probes for about 30 seconds.",
     defaultEnabled: true,
     requiresRestart: true,
+    addedOn: "2026-10-14",
     envAliases: ["T3TEAM_BACKEND_WATCHDOG"],
     // Read by the desktop shell before the backend (and its database) exists.
     userToggleable: false,

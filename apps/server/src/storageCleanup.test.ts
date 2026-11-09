@@ -32,6 +32,7 @@ import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { CodexProviderCapabilitiesV2 } from "./orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { ServerActivation } from "./serverActivation.ts";
+import { HOUSEKEEPING_STARTUP_GRACE } from "./t3team-housekeepingGrace.ts";
 import { describe, expect, it } from "@effect/vitest";
 import {
   EventId,
@@ -58,6 +59,13 @@ const DAY_MS = 24 * 60 * 60 * 1_000;
 function at(offsetMs: number): DateTime.Utc {
   return DateTime.makeUnsafe(NOW_MS + offsetMs);
 }
+
+/** Worktree cases assert exact report entries, so diagnostics retention stays off unless a case enables it. */
+const WORKTREE_ONLY_CLEANUP = {
+  ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+  browserArtifactsAfterDays: null,
+  logsAfterDays: null,
+};
 
 function shell(overrides: Partial<OrchestrationV2ThreadShell> = {}): OrchestrationV2ThreadShell {
   return {
@@ -311,7 +319,7 @@ const allocatedBytes = (fs: FileSystem.FileSystem, file: string) =>
 
 const cleanupFixture = (
   storageCleanup: StorageCleanupSettings = {
-    ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+    ...WORKTREE_ONLY_CLEANUP,
     worktreeAfterDays: 8,
     worktreeOnDelete: true,
   },
@@ -1081,6 +1089,8 @@ describe("deleted thread worktrees", () => {
           ),
         ),
       );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
       yield* fixture.service.reports.pipe(
         Stream.filter((report) => report !== null),
         Stream.take(1),
@@ -1337,6 +1347,8 @@ describe("deleted thread worktrees", () => {
             ),
           ),
         );
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
         yield* fixture.service.reports.pipe(
           Stream.filter((report) => report !== null),
           Stream.take(1),
@@ -2098,6 +2110,36 @@ describe("storage cleanup reports and local file policies", () => {
           expect(report.entries[0]?.reason).toContain(
             file === ".env" ? "ignored files (.env)" : "uncommitted changes (1 file)",
           );
+      }),
+    ),
+  );
+  it.live.each([
+    ["unchanged", "removed", "No commits beyond the project branch"],
+    ["unmerged", "kept", "Has commits beyond the project branch"],
+    ["detached", "kept", "Project branch is unavailable"],
+    ["merged-only", "kept", "No remote is configured for merged-worktree cleanup"],
+  ] as const)("cleans archived local-only worktrees: %s", ([state, outcome, reason]) =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const { service, fs, repo, worktree, command, setThreads } = yield* cleanupFixture({
+          ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+          worktreeUnchanged: state !== "merged-only",
+          worktreeOnMerge: true,
+        });
+        yield* command(repo, ["branch", "-m", "main", "trunk"]);
+        setThreads([shell({ branch: "feature", worktreePath: worktree, archivedAt: at(-DAY_MS) })]);
+        if (state === "unmerged") {
+          yield* fs.writeFileString(`${worktree}/tracked.txt`, "unmerged work\n");
+          yield* command(worktree, ["commit", "-am", "unmerged work"]);
+        }
+        if (state === "detached") yield* command(repo, ["checkout", "--detach"]);
+
+        const report = yield* service.runNow;
+        expect(report.entries[0]).toMatchObject({ outcome, reason });
+        expect(yield* fs.exists(worktree)).toBe(outcome === "kept");
+        expect(
+          (yield* command(repo, ["show-ref", "--verify", "refs/heads/feature"])).stdout,
+        ).not.toBe("");
       }),
     ),
   );

@@ -1,4 +1,8 @@
-import { ClientSettingsSchema, type ClientSettings } from "@t3tools/contracts";
+import {
+  ClientSettingsSchema,
+  migrateLegacyT3TeamClientSettingsJson,
+  type ClientSettings,
+} from "@t3tools/contracts";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import { resolveSymlinkTarget } from "@t3tools/shared/symlink";
 import * as Context from "effect/Context";
@@ -25,9 +29,10 @@ const decodeClientSettingsValue = Schema.decodeUnknownEffect(ClientSettingsSchem
 const decodeClientSettingsJson = Effect.fnUntraced(function* (raw: string) {
   const document = yield* decodeClientSettingsDocument(raw);
   // Select the shape before validation so invalid legacy settings cannot become defaults.
-  return yield* decodeClientSettingsValue(
-    Object.hasOwn(document, "settings") ? document.settings : document,
-  );
+  const documentValue = Object.hasOwn(document, "settings") ? document.settings : document;
+  // Legacy flat `t3team*` keys migrate into the `t3team` namespace before decoding; see
+  // `packages/contracts/src/t3team-settings.ts`.
+  return yield* decodeClientSettingsValue(migrateLegacyT3TeamClientSettingsJson(documentValue));
 });
 const encodeClientSettingsJson = Schema.encodeEffect(ClientSettingsJson);
 

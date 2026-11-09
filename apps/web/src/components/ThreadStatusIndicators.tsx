@@ -992,6 +992,8 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
     thread.environmentId,
     thread.linkedPullRequest,
     leaseLiveStatus,
+    thread.pullRequests,
+    thread.branchPullRequest,
   );
   const gitStatus = useEnvironmentQuery(
     leaseLiveStatus &&
@@ -1014,8 +1016,11 @@ export function ThreadRowLeadingStatus({ thread }: { thread: SidebarThreadSummar
     linkedPullRequest: thread.linkedPullRequest,
     linkedPullRequestStatus: linkedPullRequest,
   };
-  const pr = resolveDisplayedThreadPr(displayedPrInput);
-  const prStatus = prStatusIndicator(pr, resolveDisplayedThreadPrProvider(displayedPrInput));
+  const pr = linkedPullRequest?.pr ?? resolveDisplayedThreadPr(displayedPrInput);
+  const prStatus = prStatusIndicator(
+    pr,
+    linkedPullRequest?.sourceControlProvider ?? resolveDisplayedThreadPrProvider(displayedPrInput),
+  );
   // t3team: fork thread facts (activity label, pre-gated by its setting; workflow run liveness).
   const t3teamRow = useT3TeamSidebarRowFacts(thread.environmentId, thread.id);
   const threadStatus = resolveThreadStatusPill({

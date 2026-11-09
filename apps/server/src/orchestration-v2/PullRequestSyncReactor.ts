@@ -34,6 +34,7 @@ import * as GitManager from "../git/GitManager.ts";
 import { PullRequestProviderError } from "@t3tools/source-control-core/server/PullRequestProvider";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import { forkParked } from "../serverActivation.ts";
+import { forkParkedHousekeeping } from "../t3team-housekeepingGrace.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import {
@@ -218,6 +219,23 @@ function snapshotFieldsOf(summary: PullRequestSummary): SnapshotFields {
     ...(summary.checksState === undefined ? {} : { checksState: summary.checksState }),
     ...(summary.mergeability === undefined ? {} : { mergeability: summary.mergeability }),
   };
+}
+
+// GitHub briefly returns unknown after base pushes; other hosts may mean a lasting condition.
+function withKnownMergeability(
+  previous: ThreadPullRequestSnapshot | null,
+  fields: SnapshotFields,
+  provider: PullRequestSummary["provider"],
+): SnapshotFields {
+  if (
+    provider !== "github" ||
+    fields.state !== "open" ||
+    fields.mergeability !== "unknown" ||
+    previous?.updatedAt !== fields.updatedAt
+  )
+    return fields;
+  const known = previous?.state === "open" ? previous.mergeability : undefined;
+  return known === undefined || known === "unknown" ? fields : { ...fields, mergeability: known };
 }
 
 function snapshotFieldsEqual(left: SnapshotFields, right: SnapshotFields): boolean {
@@ -415,10 +433,12 @@ export const make = Effect.gen(function* () {
     // cache lookup forked inside keeps those frames, so a plain span leaves the sweep collectable.
     const syncEntry = Effect.fnUntraced(function* (
       entry: LinkEntry,
-      fields: SnapshotFields,
+      hostFields: SnapshotFields,
       fetchedStack: { readonly stack: ThreadPullRequestStack | null } | null,
+      provider: PullRequestSummary["provider"],
     ) {
       const { thread, link } = entry;
+      const fields = withKnownMergeability(link.snapshot, hostFields, provider);
       const nextStack = fetchedStack === null ? link.stack : fetchedStack.stack;
       const changed =
         link.snapshot === null ||
@@ -496,7 +516,10 @@ export const make = Effect.gen(function* () {
         entries.some(
           (entry) =>
             entry.link.snapshot === null ||
-            !snapshotFieldsEqual(entry.link.snapshot, fields) ||
+            !snapshotFieldsEqual(
+              entry.link.snapshot,
+              withKnownMergeability(entry.link.snapshot, fields, summary.provider),
+            ) ||
             (summary.stack !== undefined &&
               (entry.link.stack?.number ?? null) !== (summary.stack?.number ?? null)),
         );
@@ -564,7 +587,7 @@ export const make = Effect.gen(function* () {
       yield* Effect.forEach(
         entries,
         (entry) =>
-          syncEntry(entry, fields, fetchedStack).pipe(
+          syncEntry(entry, fields, fetchedStack, summary.provider).pipe(
             persistence.withPermits(1),
             Effect.catchCause((cause) => {
               if (!Cause.hasInterruptsOnly(cause)) retryStacks.add(key);
@@ -742,7 +765,7 @@ export const make = Effect.gen(function* () {
         }
       }).pipe(Effect.catchCause(logSkipped("pull request sync event stream failed", {}))),
     );
-    yield* forkParked(
+    yield* forkParkedHousekeeping(
       Effect.gen(function* () {
         yield* worker.enqueue("all");
         yield* worker.drain;

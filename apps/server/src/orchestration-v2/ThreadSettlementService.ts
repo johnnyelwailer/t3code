@@ -29,6 +29,7 @@ import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.t
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { forkParked } from "../serverActivation.ts";
+import { forkParkedHousekeeping } from "../t3team-housekeepingGrace.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import { sourceControlDefinitions } from "../sourceControl/sourceControlDefinitions.ts";
@@ -380,11 +381,29 @@ export const make = Effect.gen(function* () {
 
     const lookupCandidates = (yield* Effect.forEach(
       candidates,
-      (thread) => settleThread(thread, null),
+      (thread) => {
+        const projectSettings = resolveProjectSettings(settings, thread.projectId).settings;
+        // Skip no-op decisions; actual settlement still reads fresh settings before dispatch.
+        const settledAt = resolveAutoSettlementAt({
+          thread,
+          pullRequest: null,
+          nowMs,
+          autoSettleAfterDays: projectSettings.sidebarAutoSettleAfterDays,
+          autoSettleOnMerge: projectSettings.sidebarAutoSettleOnMerge,
+          autoSettleKeepPullRequests: projectSettings.sidebarAutoSettleKeepPullRequests,
+        });
+        return settledAt === null ? Effect.succeed(thread) : settleThread(thread, null);
+      },
       { concurrency: 8 },
     ))
       .filter((thread) => thread !== null)
-      .filter((thread) => visibleThreadPullRequests(thread.pullRequests ?? []).length === 0);
+      .filter((thread) => visibleThreadPullRequests(thread.pullRequests ?? []).length === 0)
+      .filter(
+        (thread) =>
+          thread.branch !== null ||
+          thread.linkedPullRequest != null ||
+          thread.branchPullRequest != null,
+      );
     const lookupCwdByThreadId = new Map<string, string>();
     yield* Effect.forEach(
       lookupCandidates,
@@ -675,7 +694,7 @@ export const make = Effect.gen(function* () {
     const events = orchestrator.streamDomainEvents;
     const initialSettings = yield* settingsService.getSettings.pipe(Effect.orDie);
     let lastSettlementSettings = autoSettlementSettingsKey(initialSettings);
-    yield* forkParked(
+    yield* forkParkedHousekeeping(
       Effect.gen(function* () {
         yield* fullSweeps.enqueue(undefined);
         yield* fullSweeps.drain;

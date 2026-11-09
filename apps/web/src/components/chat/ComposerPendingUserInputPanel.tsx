@@ -1,4 +1,9 @@
-import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  type RuntimeRequestId,
+  type ScopedThreadRef,
+  desktopRouteCardOf,
+} from "@t3tools/contracts";
+import { markdownProseDirection, textDirection } from "~/textDirection";
 import { memo, use, useEffect, useEffectEvent, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { useStableCallback } from "~/hooks/useStableCallback";
@@ -11,6 +16,7 @@ import { Kbd } from "../ui/kbd";
 import { cn } from "~/lib/utils";
 import { isInSideChatPane } from "~/lib/sideChatPane";
 import { ComposerBanner } from "./ComposerBanner";
+import { T3TeamDesktopRoutePrompt } from "./t3team-DesktopRoutePrompt";
 import { T3TeamPendingQuestionMarkdown } from "./t3team-pendingQuestionMarkdown";
 
 interface PendingUserInputPanelProps {
@@ -41,6 +47,22 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
   if (!activePrompt) return null;
+  const [onlyQuestion] = activePrompt.questions;
+  const routeCard = desktopRouteCardOf(activePrompt.questions);
+  if (routeCard !== null && onlyQuestion) {
+    return (
+      <T3TeamDesktopRoutePrompt
+        key={activePrompt.requestId}
+        card={routeCard}
+        questionId={onlyQuestion.id}
+        threadRef={threadRef}
+        disabled={disabled || activePrompt.responseCapability === "not_resumable"}
+        responding={respondingRequestIds.includes(activePrompt.requestId)}
+        onToggleOption={onToggleOption}
+        onAdvance={onAdvance}
+      />
+    );
+  }
 
   return (
     <ComposerPendingUserInputCard
@@ -179,8 +201,20 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     return null;
   }
 
+  const promptDirection = markdownProseDirection(
+    prompt.questions
+      .flatMap((question) => [
+        question.header,
+        question.question,
+        ...question.options.flatMap((option) => [option.label, option.description ?? ""]),
+      ])
+      .join(" "),
+  );
+  const questionTextAlign = promptDirection === "rtl" ? "text-right" : "text-left";
+
   return (
     <Collapsible
+      dir={promptDirection}
       open={!isCollapsed}
       onOpenChange={(open) => {
         setCollapsedQuestionId(open ? null : activeQuestion.id);
@@ -197,13 +231,17 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         <ComposerBanner.Content>
           <span
             className={cn("min-w-0 truncate text-muted-foreground", isCollapsed && "max-w-1/2")}
+            dir={textDirection(activeQuestion.header)}
           >
             {activeQuestion.header}
           </span>
           {isCollapsed ? (
             <>
               <ComposerBanner.Separator />
-              <span className="min-w-0 flex-1 truncate text-secondary-label">
+              <span
+                className={cn("min-w-0 flex-1 truncate text-secondary-label", questionTextAlign)}
+                dir={markdownProseDirection(activeQuestion.question)}
+              >
                 {activeQuestion.question}
               </span>
             </>
@@ -245,7 +283,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               cwd={cwd}
               threadRef={threadRef}
               text={activeQuestion.question}
-              className="pt-2"
+              className={cn("pt-2 text-foreground/85", questionTextAlign)}
             />
             {/* Rows span the header row's width so the radios align with the question text and the shortcut column sits under the dismiss button. */}
             <div className="-ms-2 mt-1.5 sm:-ms-1.5">
@@ -257,7 +295,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                 const isSelected =
                   isOptimisticallySelected || draftSelectedOptions?.[index] === true;
                 const className = cn(
-                  "group flex w-full items-start gap-2.5 rounded-md bg-transparent py-1.5 ps-2 text-left sm:ps-1.5 outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/25",
+                  questionTextAlign,
+                  "group flex w-full items-start gap-2.5 rounded-md bg-transparent py-1.5 ps-2 sm:ps-1.5 outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/25",
                   isSelected ? "text-foreground" : "text-foreground/70 hover:bg-muted/30",
                   (disabled || isResponding) && "opacity-50 cursor-not-allowed",
                   !disabled && !isResponding && "cursor-pointer",
@@ -273,7 +312,9 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                       )}
                     </span>
                     <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">{option.label}</span>
+                      <span className="text-sm font-medium" dir={textDirection(option.label)}>
+                        {option.label}
+                      </span>
                       {option.description && option.description !== option.label ? (
                         <T3TeamPendingQuestionMarkdown
                           cwd={cwd}

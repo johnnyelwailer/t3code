@@ -95,6 +95,7 @@ import type * as ProviderLatestVersions from "@t3tools/provider-core/server/Prov
 import type * as RelayClient from "@t3tools/shared/relayClient";
 import type * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import type * as NpmRelease from "./cloud/npmRelease.ts";
+import type * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
 import type * as Crypto from "effect/Crypto";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
@@ -139,6 +140,7 @@ export type WsRpcHandlerServices =
   | McpAppRequests.McpAppRequests
   | ModelManifest.ModelManifest
   | NpmRelease.NpmRelease
+  | NativeChildWorkQuery.NativeChildWorkQuery
   | OrchestrationEventStore.OrchestrationEventStore
   | Orchestrator.OrchestratorV2
   | OtlpEndpointCheck.OtlpEndpointCheck

@@ -36,6 +36,7 @@ const DevicePanel = lazy(() =>
   import("../device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
 const FilePreviewPanel = lazy(() => import("../files/FilePreviewPanel"));
+const T3TeamViewSurface = lazy(() => import("~/t3team/t3team-ViewSurface"));
 
 type RightPanelTerminalProps = Omit<
   PersistentThreadTerminalPanelProps,
@@ -82,7 +83,7 @@ export function RightPanelSurfaceContent(props: {
   readonly files: RightPanelFileProps;
   readonly sideChatParentPanel: SideChatParentPanel;
 }) {
-  const { surface, threadRef, visible } = props;
+  const { surface, threadRef, visible, onCloseSurface } = props;
   if (surface === null) return null;
   switch (surface.kind) {
     case "preview":
@@ -182,8 +183,14 @@ export function RightPanelSurfaceContent(props: {
           parentRef={threadRef}
           threadId={surface.threadId}
           parentPanel={props.sideChatParentPanel}
-          onClose={() => props.onCloseSurface(surface)}
+          onClose={() => onCloseSurface(surface)}
         />
+      );
+    case "view":
+      return (
+        <Suspense fallback={null}>
+          <T3TeamViewSurface threadRef={threadRef} surface={surface} visible={visible} />
+        </Suspense>
       );
     case "device":
       return (

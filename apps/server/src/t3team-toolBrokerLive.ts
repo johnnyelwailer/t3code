@@ -15,6 +15,7 @@ import { ServerEnvironmentIdentity } from "./environment/ServerEnvironment.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
+import { makeLiveAgentNotices } from "./t3team-agentNoticesLive.ts";
 import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
@@ -69,6 +70,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   const resourcePressure = Option.getOrUndefined(
     yield* Effect.serviceOption(ResourcePressureMonitor),
   );
+  const agentNotices = yield* makeLiveAgentNotices(threads, providerRegistry);
   // This server's own EnvironmentId: the children `environments` op marks it as the default.
   const serverEnvironmentIdentity = Option.getOrUndefined(
     yield* Effect.serviceOption(ServerEnvironmentIdentity),
@@ -105,6 +107,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     providerRegistry,
     usageLimitSources,
     resourcePressure,
+    agentNotices,
     contextRefresh,
     bindShowWidget: yield* makeT3TeamWidgetShowBinder(),
     bindPublishDraft: yield* makeT3TeamDraftMutationPublisherBinder(),

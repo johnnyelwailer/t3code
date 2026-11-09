@@ -27,7 +27,6 @@ export function fromWidgetSnapshot(widget: DesktopVoiceWidgetSnapshot): VoiceUiS
     startedAtMs: widget.startedAtMs,
     endedAtMs: widget.endedAtMs,
     heardText: widget.heardText,
-    tier: null,
     downloadPercent: null,
     failureDetail: null,
   };

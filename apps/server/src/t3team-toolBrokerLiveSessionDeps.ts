@@ -11,6 +11,7 @@ import type * as Effect from "effect/Effect";
 import type { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
+import type { AgentNotices } from "./t3team-agentNotices.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
@@ -35,6 +36,7 @@ export interface BindSessionDeps {
   readonly providerRegistry: ProviderRegistry["Service"] | undefined;
   readonly usageLimitSources: UsageLimitSources["Service"] | undefined;
   readonly resourcePressure: ResourcePressureMonitorShape | undefined;
+  readonly agentNotices: AgentNotices | undefined;
   readonly contextRefresh: T3TeamContextRefreshServiceShape;
   readonly bindShowWidget: <TLoadError>(
     input: Omit<Parameters<typeof makeT3TeamShowWidget<TLoadError>>[0], "runtime">,

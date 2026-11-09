@@ -65,6 +65,10 @@ import {
   wslRuntimeArchiveStem,
 } from "./build-desktop-artifact.ts";
 import {
+  PREPARED_SERVER_CACHE_DIR,
+  PREPARED_SERVER_CACHE_FILE_LIMIT,
+} from "./lib/t3team-windowsPayloadBudget.ts";
+import {
   ReleasePackageManifestError,
   releasePackageFiles,
 } from "./update-release-package-versions.ts";
@@ -1144,7 +1148,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         });
 
         assert.isFalse(
-          commands.some((command) => command.options.env?.ELECTRON_RUN_AS_NODE === "1"),
+          commands.some(
+            (command) =>
+              command.command === NodePath.join(fixture.packagedAppDir, fixture.appExecutableName),
+          ),
         );
         assert.isTrue(
           commands.some(
@@ -1302,6 +1309,43 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         });
 
         assert.isAbove(result.fileCount, 100);
+      }),
+    ).pipe(Effect.provideService(HostProcess.Platform, "linux")),
+  );
+
+  // t3team: the prepared bytecode cache (19 chunks + manifest) has its own budget.
+  it.effect.each([
+    { cacheFiles: 20, accepted: true },
+    { cacheFiles: PREPARED_SERVER_CACHE_FILE_LIMIT, accepted: true },
+    { cacheFiles: PREPARED_SERVER_CACHE_FILE_LIMIT + 1, accepted: false },
+  ])("budgets $cacheFiles prepared server bytecode cache files apart from the runtime", (input) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+        const cacheDir = path.join(fixture.packagedAppDir, "resources", PREPARED_SERVER_CACHE_DIR);
+        yield* fs.makeDirectory(cacheDir, { recursive: true });
+        for (let index = 0; index < input.cacheFiles; index += 1) {
+          yield* fs.writeFileString(path.join(cacheDir, `cache-${String(index)}`), "bytecode");
+        }
+
+        const outcome = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
+          fileLimit: 10,
+        }).pipe(Effect.match({ onSuccess: () => undefined, onFailure: (error) => error }));
+
+        if (input.accepted) {
+          assert.isUndefined(outcome);
+        } else {
+          assert.instanceOf(outcome, WindowsPackagedPayloadValidationError);
+          assert.equal(outcome?.reason, "file-limit-exceeded");
+          assert.equal(outcome?.fileCount, input.cacheFiles);
+          assert.equal(outcome?.fileLimit, PREPARED_SERVER_CACHE_FILE_LIMIT);
+        }
       }),
     ).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );

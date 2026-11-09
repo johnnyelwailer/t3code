@@ -23,7 +23,8 @@ import { threadContextsOutsideEnvironment } from "@t3tools/shared/composerContex
 import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 
-import { useProjects, useServerConfigs, useThreadShells } from "../../state/entities";
+import { useServerConfigs, useThreadShells } from "../../state/entities";
+import { useCloudAdoptedProjects } from "../../state/t3team-cloudAdoption";
 import type { TurnCommandMetadata } from "../../lib/commandMetadata";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
@@ -95,6 +96,7 @@ import {
 } from "./new-task-context-presentation";
 import { resolveEnvironmentProjectMatch } from "./new-task-project-selection";
 import { useNewTaskProjectDefaults } from "./use-new-task-project-defaults";
+import { resolveNewThreadRuntimeMode } from "./thread-settings-options";
 import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
 import {
   INACTIVE_FLOW_KEY,
@@ -230,7 +232,7 @@ export function NewTaskFlowProvider(
     routeDraftId?: string;
   }>,
 ) {
-  const catalogProjects = useProjects();
+  const catalogProjects = useCloudAdoptedProjects();
   // A pending draft's project is not in the catalog yet: a placeholder stands in for it.
   const { projects, pendingDraft: heldDraft } = usePendingDraftProjects(
     catalogProjects,
@@ -384,7 +386,7 @@ export function NewTaskFlowProvider(
   const prompt = selectedProjectDraft.text;
   const attachments = selectedProjectDraft.attachments;
   const projectGitStatus = useEnvironmentQuery(
-    selectedProject !== null && selectedProject.workspaceRoot !== ""
+    props.active !== false && selectedProject !== null && selectedProject.workspaceRoot !== ""
       ? vcsEnvironment.status({
           environmentId: selectedProject.environmentId,
           input: { cwd: selectedProject.workspaceRoot },
@@ -434,7 +436,12 @@ export function NewTaskFlowProvider(
   const startFromOrigin =
     isGitRepo && (draftStartFromOrigin ?? projectSettings.settings.newWorktreesStartFromOrigin);
   const defaultRuntimeMode = projectSettings.settings.defaultRuntimeMode;
-  const runtimeMode = selectedProjectDraft.runtimeMode ?? defaultRuntimeMode;
+  const managedPolicy = selectedEnvironmentServerConfig?.managedPolicy;
+  const runtimeMode = resolveNewThreadRuntimeMode(
+    selectedProjectDraft.runtimeMode,
+    defaultRuntimeMode,
+    managedPolicy,
+  );
 
   // Antigravity keeps unavailable selections so sign-out or a catalog change
   // cannot switch the user's model.
@@ -767,7 +774,11 @@ export function NewTaskFlowProvider(
       attachments: draft.attachments,
       context: draft.context,
       modelSelection: draftModelSelection,
-      runtimeMode: draft.runtimeMode ?? defaultRuntimeMode,
+      runtimeMode: resolveNewThreadRuntimeMode(
+        draft.runtimeMode,
+        defaultRuntimeMode,
+        managedPolicy,
+      ),
       interactionMode: resolvePendingTaskInteractionMode({
         planModeEnabled: legacyPlanModeEnabled,
         draftInteractionMode: draft.interactionMode,
@@ -887,13 +898,7 @@ export function NewTaskFlowProvider(
     expandedProvider,
     environments,
     selectedProject,
-    pendingDraft: pendingDraftHolding(
-      heldDraft,
-      selectedProject && {
-        environmentId: selectedProject.environmentId,
-        projectId: selectedProject.id,
-      },
-    ),
+    pendingDraft: pendingDraftHolding(heldDraft),
     linkedEnvironments,
     isScratchDraft,
     modelOptions,

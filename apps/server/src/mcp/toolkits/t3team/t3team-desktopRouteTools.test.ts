@@ -17,10 +17,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { McpSchema, McpServer } from "effect/ai";
 
+import { ServerConfig } from "../../../config.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import { withFeatureGatedToolList } from "./t3team-mcpToolFeatureGate.ts";
 import {
   T3TeamAskUserError,
   T3TeamAskUserWriter,
@@ -55,9 +57,21 @@ const client = McpSchema.McpServerClient.of({
   getClient: Effect.die("unused"),
 });
 
+/** Only the mode is read on this path; the rest of the config is irrelevant here. */
+const withServerMode =
+  (mode: "web" | "desktop" | undefined) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    mode === undefined
+      ? effect
+      : effect.pipe(Effect.provideService(ServerConfig, { mode } as ServerConfig["Service"]));
+
 const callTool = (
   args: Record<string, unknown>,
-  options: { readonly asked: Array<T3TeamAskUserAskInput>; readonly askFails?: string },
+  options: {
+    readonly asked: Array<T3TeamAskUserAskInput>;
+    readonly askFails?: string;
+    readonly serverMode?: "web" | "desktop";
+  },
 ) => {
   const services = Layer.mergeAll(
     Layer.mock(ThreadManagementService.ThreadManagementService)({
@@ -97,6 +111,7 @@ const callTool = (
     const server = yield* McpServer.McpServer;
     return yield* server.callTool({ name: "request_desktop_route", arguments: args });
   }).pipe(
+    withServerMode(options.serverMode),
     Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
     Effect.provideService(McpSchema.McpServerClient, client),
     Effect.provide(TestLayer),
@@ -140,7 +155,6 @@ it.effect("posts one question whose id carries the proposal, and grants nothing"
       expect(question?.options.map((option) => option.label)).toEqual([
         DESKTOP_ROUTE_ONCE_LABEL,
         DESKTOP_ROUTE_SESSION_LABEL,
-        DESKTOP_ROUTE_ALWAYS_LABEL,
         DESKTOP_ROUTE_DECLINE_LABEL,
       ]);
       expect(result.isError).toBeFalsy();
@@ -149,6 +163,42 @@ it.effect("posts one question whose id carries the proposal, and grants nothing"
         requestId: "request-desktop-route",
         target: "npm.nexplore.ch",
       });
+    }),
+  );
+});
+
+it.effect("offers 'Always for this host' only for a public host, never an internal one", () => {
+  const publicAsked: Array<T3TeamAskUserAskInput> = [];
+  const hiddenAsked: Array<T3TeamAskUserAskInput> = [];
+  const labels = (asked: Array<T3TeamAskUserAskInput>) =>
+    asked[0]?.questions?.[0]?.options.map((option) => option.label) ?? [];
+  return withFlag(
+    true,
+    Effect.gen(function* () {
+      yield* callTool(
+        { ...ARGS, target: "registry.npmjs.org", internal: false },
+        { asked: publicAsked },
+      );
+      // The agent says public, the address says private: the address wins.
+      yield* callTool({ ...ARGS, target: "10.1.2.3", internal: false }, { asked: hiddenAsked });
+      expect(labels(publicAsked)).toContain(DESKTOP_ROUTE_ALWAYS_LABEL);
+      expect(labels(hiddenAsked)).not.toContain(DESKTOP_ROUTE_ALWAYS_LABEL);
+    }),
+  );
+});
+
+it.effect("normalises internal from the address, so the card and the grant agree", () => {
+  const asked: Array<T3TeamAskUserAskInput> = [];
+  return withFlag(
+    true,
+    Effect.gen(function* () {
+      yield* callTool({ ...ARGS, target: "10.0.0.5", internal: false }, { asked });
+      const [question] = asked[0]?.questions ?? [];
+      expect(decodeDesktopRouteQuestionId(question?.id ?? "")).toEqual({
+        target: "10.0.0.5",
+        internal: true,
+      });
+      expect(question?.question).toContain("internal address");
     }),
   );
 });
@@ -165,6 +215,52 @@ it.effect("is off unless the flag is on", () => {
     }),
   );
 });
+
+it.effect("asks nothing on the user's own computer, where there is nothing to route", () => {
+  const local: Array<T3TeamAskUserAskInput> = [];
+  const cloud: Array<T3TeamAskUserAskInput> = [];
+  return withFlag(
+    true,
+    Effect.gen(function* () {
+      const refused = yield* callTool(ARGS, { asked: local, serverMode: "desktop" });
+      expect(refused.isError).toBe(true);
+      expect(local).toHaveLength(0);
+      expect(JSON.stringify(refused.content)).toContain("already runs on the user's own computer");
+      const asked = yield* callTool(ARGS, { asked: cloud, serverMode: "web" });
+      expect(asked.isError).toBeFalsy();
+      expect(cloud).toHaveLength(1);
+    }),
+  );
+});
+
+it.effect("is left out of tools/list on the user's own computer, even with the flag on", () =>
+  withFlag(
+    true,
+    Effect.gen(function* () {
+      const core = {
+        tools: {
+          list: () => Effect.succeed([{ name: "request_desktop_route" }, { name: "t3_ask_user" }]),
+        },
+      };
+      let installed: typeof core | undefined;
+      const adapter = {
+        installHandlers: (c: typeof core) => Effect.sync(() => void (installed = c)),
+      } as never;
+      yield* (
+        withFeatureGatedToolList(adapter).installHandlers as (
+          ...args: ReadonlyArray<unknown>
+        ) => Effect.Effect<void>
+      )(core, undefined, undefined);
+      const names = (mode: "web" | "desktop") =>
+        installed!.tools.list().pipe(
+          Effect.map((tools) => tools.map((tool) => tool.name)),
+          withServerMode(mode),
+        );
+      expect(yield* names("desktop")).not.toContain("request_desktop_route");
+      expect(yield* names("web")).toContain("request_desktop_route");
+    }),
+  ),
+);
 
 it.effect(
   "refuses a target that is not one plain token, a missing or long reason, and a failing ask",

@@ -102,7 +102,7 @@ const makeMocks = (events: PubSub.PubSub<OrchestrationV2DomainEvent>, contexts: 
     Layer.succeed(ServerSettings.ServerSettingsService, {
       getSettings: Effect.succeed({
         ...DEFAULT_SERVER_SETTINGS,
-        t3teamActivityLabelsEnabled: true,
+        t3team: { ...DEFAULT_SERVER_SETTINGS.t3team, activityLabels: true },
       }),
       streamChanges: Stream.never,
     } as never),

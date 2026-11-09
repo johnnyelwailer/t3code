@@ -1,3 +1,4 @@
+import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
@@ -61,6 +62,7 @@ import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
 import { useCloudSessionRestartProjectId } from "~/cloud/t3team-useCloudSessionOwnProject";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
+import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
 import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
 import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
@@ -129,16 +131,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveThreadReferenceCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import { resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
 import { useAtomValue } from "@effect/atom-react";
-import {
-  lazy,
-  type SetStateAction,
-  Suspense,
-  use,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type SetStateAction, use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { assistantCitationFromLocation } from "../lib/assistantCitationNavigation";
@@ -299,11 +292,14 @@ import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { useCitedHistory } from "./chat/citationProcedure";
 import type { MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
 import { ThreadTimeline } from "./chat/ThreadTimeline";
+import { NativeChildWorkDialog } from "./chat/NativeChildWorkDialog";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
+import { useOptimisticSideChat } from "~/t3team/chat/t3team-useOptimisticSideChat";
+import { SideChatPanes } from "~/t3team/chat/t3team-SideChatPanes";
 import { useRemoteOpenState } from "~/remoteOpen";
 import { shouldShowOpenInPicker } from "./chat/OpenInPicker.logic";
 import { useOpenFavoriteEditorShortcut } from "./chat/OpenInPickerShortcut";
@@ -398,6 +394,11 @@ import { useDraftHeroLayoutTransition } from "./chat/useDraftHeroLayoutTransitio
 import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
 import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
+import { useT3TeamThreadContextQueue } from "~/t3team/chat/t3team-useThreadContextQueue";
+import { useViewTabAddActions } from "~/t3team/t3team-useViewTabAddActions";
+import { T3TeamComposerAttachedRecipe } from "~/t3team/composer/t3team-ComposerAttachedRecipe";
+import { T3TeamComposerRecipeCatalogLoader } from "~/t3team/composer/t3team-ComposerRecipeCatalogLoader";
+import { withT3TeamAttachedRecipeTurnStart } from "~/t3team/composer/t3team-startAttachedRecipe";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -405,12 +406,7 @@ import {
 } from "./ChatView.logic";
 
 const EMPTY_PROVIDERS: ServerProvider[] = [];
-// t3team: a peer thread opened as a side chat — a nested ThreadChatView in a standard right-panel tab.
-const T3TeamThreadSurface = lazy(() =>
-  import("~/t3team/chat/t3team-ThreadRightPanelSurface").then((module) => ({
-    default: module.T3TeamThreadRightPanelSurface,
-  })),
-);
+const EMPTY_T3TEAM_CHAT_VIEW_EXTENSION: ChatViewT3TeamExtensionProps = {};
 const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
@@ -419,6 +415,7 @@ const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_TURN_ITEMS: ThreadStructure["turnItems"] = [];
 const EMPTY_AUTO_UPDATE_ENVIRONMENTS: ReadonlyArray<EnvironmentPresentation> = [];
+const EMPTY_COMPOSER_BANNER_ITEMS: ReadonlyArray<ComposerBannerStackItem> = [];
 
 const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 
@@ -434,17 +431,16 @@ type ChatViewProps =
       routeKind: "server";
       draftId?: never;
     } & ChatViewT3TeamExtensionProps)
-  | ({
+  | {
       environmentId: EnvironmentId;
       threadId: ThreadId;
       onDiffPanelOpen?: () => void;
       reserveTitleBarControlInset?: boolean;
       forceExpandedMobileComposer?: boolean;
-      /** A draft hosted in a parent's right panel (the context chat tab), as a side chat is. */
-      embedded?: SideChatParentPanel;
+      embedded?: never;
       routeKind: "draft";
       draftId: DraftId;
-    } & ChatViewT3TeamExtensionProps);
+    };
 
 const DismissedFallbackWindowSchema = Schema.NullOr(Schema.String);
 
@@ -462,19 +458,17 @@ export default function ChatView(props: ChatViewProps) {
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
   const draftId = routeKind === "draft" ? props.draftId : null;
-  // t3team host extension points (ThreadChatView, and a draft embedded in a host panel).
-  const t3teamExtension: ChatViewT3TeamExtensionProps = props;
+  // t3team host extension points (ThreadChatView); the draft route never carries them.
+  const t3teamExtension: ChatViewT3TeamExtensionProps =
+    routeKind === "server" ? props : EMPTY_T3TEAM_CHAT_VIEW_EXTENSION;
   const {
     syntheticMessages,
     beforeDispatchTurnStart,
     dispatchTurnStartOverride,
     enqueueOfflineTurnStart,
     composerContextAttachmentSlot,
-    composerContextAttachments,
-    prepareComposerContextAttachments,
     composerContainerProps,
     composerContainerOverlay,
-    onComposerContextAttachmentsConsumed,
     onBack,
     headerAccessory,
     titleBarControlsAccessory,
@@ -482,6 +476,15 @@ export default function ChatView(props: ChatViewProps) {
     hideBranchToolbar = false,
     minimalComposer = false,
   } = t3teamExtension;
+  // t3team: the add-to-chat queue is read here, once, for a thread on any environment.
+  const contextQueue = useT3TeamThreadContextQueue({
+    environmentId,
+    threadId,
+    enabled: routeKind === "server",
+  });
+  const composerContextAttachments = contextQueue.attachments;
+  const prepareComposerContextAttachments = contextQueue.prepare;
+  const onComposerContextAttachmentsConsumed = contextQueue.onConsumed;
   const handleNewThread = useNewThreadHandler();
   const routeThreadRef = scopeThreadRef(environmentId, threadId);
   const routeThreadKey = scopedThreadKey(routeThreadRef);
@@ -930,20 +933,18 @@ export default function ChatView(props: ChatViewProps) {
   const sideChatParent = useQuietThreadShell(sideChatParentRef);
   const parentThreadLink = (() => {
     if (sideChatParentRef !== null) {
+      const title = sideChatParent?.title ?? "Parent thread";
+      // Embedded, the parent is the view around it.
+      if (embedded) return { title, sideChat: true };
       return {
-        title: sideChatParent?.title ?? "Parent thread",
+        title,
         sideChat: true,
-        // Embedded, the parent is the view around it.
-        ...(embedded
-          ? {}
-          : {
-              open: (): void => {
-                void navigate({
-                  to: "/$environmentId/$threadId",
-                  params: buildThreadRouteParams(sideChatParentRef),
-                });
-              },
-            }),
+        open: (): void => {
+          void navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(sideChatParentRef),
+          });
+        },
       };
     }
     if (parentSubagentThreadRef !== null) {
@@ -1041,6 +1042,7 @@ export default function ChatView(props: ChatViewProps) {
   })();
   const activeThreadRef = useActiveThreadRef(activeThread);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const t3teamViewTabActions = useViewTabAddActions(activeThreadRef, t3teamExtension.viewTabSource);
   const activeEnvironmentServerBrowser = useEnvironmentSupportsServerBrowser(
     activeThreadRef?.environmentId ?? null,
   );
@@ -2961,12 +2963,15 @@ export default function ChatView(props: ChatViewProps) {
     activeThread?.lineage.sideChat !== true &&
     !isSubagentThread &&
     serverConfig?.environment.capabilities.sideChats === true;
-  const sideChat = useSideChat({
-    threadRef: sideChatsOffered && isServerThread ? activeThreadRef : null,
-    onError: (message) => {
-      if (activeThread) setThreadError(activeThread.id, message);
-    },
-  });
+  const sideChat = useOptimisticSideChat(
+    useSideChat({
+      threadRef: sideChatsOffered && isServerThread ? activeThreadRef : null,
+      onError: (message) => {
+        if (activeThread) setThreadError(activeThread.id, message);
+      },
+    }),
+    activeThreadRef,
+  );
   // A maximized panel covers the terminal drawer the command runs in.
   const runSideChatShellCommandStable = useStableCallback((command: string) => {
     if (activeThreadRef) useRightPanelStore.getState().setMaximized(activeThreadRef, false);
@@ -3184,7 +3189,12 @@ export default function ChatView(props: ChatViewProps) {
       composerContextAttachments,
       prepareComposerContextAttachments,
       beforeDispatchTurnStart,
-      dispatchTurnStartOverride,
+      dispatchTurnStartOverride: withT3TeamAttachedRecipeTurnStart({
+        target: composerDraftTarget,
+        hostOverride: dispatchTurnStartOverride,
+        setOptimisticUserMessages,
+        setThreadError,
+      }),
       onComposerContextAttachmentsConsumed,
     },
   });
@@ -3406,22 +3416,24 @@ export default function ChatView(props: ChatViewProps) {
     (folders: Parameters<ChatComposerHandle["addDroppedFolders"]>[0]) =>
       composerRef.current?.addDroppedFolders(folders),
   );
+  // Above the early return, where React Compiler can cache it for the side chat pane.
+  const sideChatParentPanel = {
+    openToolDiff: onOpenToolDiffStable,
+    runShellCommand: runSideChatShellCommandStable,
+  };
 
   if (!activeThread) {
     return embedded ? null : <NoActiveThreadState />;
   }
 
   const rightPanelContent = activeThreadRef ? (
-    renderedRightPanelSurface?.kind === "thread" ? (
-      // t3team: a peer thread opened as a side chat — its full transcript in a right-panel tab.
-      <Suspense fallback={null}>
-        <T3TeamThreadSurface
-          key={renderedRightPanelSurface.id}
-          environmentId={renderedRightPanelSurface.environmentId}
-          threadId={renderedRightPanelSurface.threadId}
-        />
-      </Suspense>
-    ) : (
+    <SideChatPanes
+      parentRef={activeThreadRef}
+      surfaces={renderedRightPanelSurfaces}
+      activeSurface={renderedRightPanelSurface}
+      parentPanel={sideChatParentPanel}
+      onCloseSurface={closeRightPanelSurface}
+    >
       <RightPanelSurfaceContent
         surface={renderedRightPanelSurface}
         activeSurfaceId={activeRightPanelSurface?.id ?? null}
@@ -3435,10 +3447,7 @@ export default function ChatView(props: ChatViewProps) {
         getShortcutContext={getShortcutContextStable}
         onSendAnnotation={sendPreviewAnnotationStable}
         onCloseSurface={closeRightPanelSurface}
-        sideChatParentPanel={{
-          openToolDiff: onOpenToolDiffStable,
-          runShellCommand: runSideChatShellCommandStable,
-        }}
+        sideChatParentPanel={sideChatParentPanel}
         terminal={{
           launchContext: activeTerminalLaunchContext ?? null,
           keybindings,
@@ -3474,7 +3483,7 @@ export default function ChatView(props: ChatViewProps) {
           onPendingChange: handleFilePendingChangeStable,
         }}
       />
-    )
+    </SideChatPanes>
   ) : null;
   const panelToggleControlProps = {
     terminalAvailable: activeProject !== null,
@@ -3788,7 +3797,10 @@ export default function ChatView(props: ChatViewProps) {
                   >
                     <T3TeamCompanionSlot
                       placement="thread.new"
-                      mood="newThread"
+                      mood={threadCompanionMood({
+                        working: isWorking,
+                        latestRunStatus: activeLatestRun?.status,
+                      })}
                       size="md"
                       className="mb-2 flex justify-center"
                     />
@@ -3809,7 +3821,12 @@ export default function ChatView(props: ChatViewProps) {
                   data-chat-composer-stack="true"
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
+                  {contextQueue.strip}
                   {composerContextAttachmentSlot}
+                  <T3TeamComposerAttachedRecipe target={composerDraftTarget} />
+                  {embedded ? null : (
+                    <T3TeamComposerRecipeCatalogLoader projectId={activeProject?.id ?? null} />
+                  )}
                   <div
                     ref={draftHeroComposerAnchorRef}
                     className="relative z-10"
@@ -3822,6 +3839,7 @@ export default function ChatView(props: ChatViewProps) {
                         : undefined
                     }
                   >
+                    <ChildThreadApprovals threadRef={activeThreadRef} />
                     <ComposerSurface.Shell
                       contextRow={showComposerContextStrip}
                       working={isWorking}
@@ -3845,6 +3863,14 @@ export default function ChatView(props: ChatViewProps) {
                               effortLabel={providerSubagentEffortLabel}
                               status={providerSubagentStatus}
                               onOpenParent={parentThreadLink?.open ?? null}
+                              actions={
+                                selectedProviderEntry?.driverKind === "antigravity" ? (
+                                  <NativeChildWorkDialog
+                                    environmentId={environmentId}
+                                    threadId={threadId}
+                                  />
+                                ) : null
+                              }
                             />
                           ) : null}
                           {!composerMounted ? null : (
@@ -3870,7 +3896,7 @@ export default function ChatView(props: ChatViewProps) {
                               activeThreadId={activeThreadId}
                               activeThread={activeThread}
                               activeThreadShell={activeThreadShell}
-                              promptHistoryMessages={timelineMessages}
+                              promptHistoryEntries={timelineEntries}
                               forceExpandedOnMobile={
                                 forceExpandedMobileComposer && isDraftHeroState
                               }
@@ -3906,7 +3932,11 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
                               bannerLeading={t3teamChat.composerBannerLeading}
-                              bannerItems={isDraftHeroState ? [] : composerBannerItems}
+                              bannerItems={
+                                isDraftHeroState || composerBannerItems.length === 0
+                                  ? EMPTY_COMPOSER_BANNER_ITEMS
+                                  : composerBannerItems
+                              }
                               resumeCompactionTokens={resumeCompactionTokens}
                               keepFullHistory={keepFullHistory}
                               onToggleKeepFullHistory={toggleKeepFullHistoryStable}
@@ -3946,7 +3976,9 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeProjectId={activeProject?.id ?? null}
-                              activeContextWindow={activeContextWindow}
+                              contextWindowEntries={serverVisibleTurnItems}
+                              contextWindowLiveUsage={activeThreadLiveTokenUsage}
+                              contextWindowProviderThread={activeProviderThread}
                               compactThreadUnavailable={compactThreadUnavailable}
                               compactDisabled={compactDisabled}
                               compactDisabledReason={compactDisabledReason}
@@ -4277,6 +4309,7 @@ export default function ChatView(props: ChatViewProps) {
           deviceAvailable={activeThreadRef !== null}
           sideChatAvailable={sideChat.available}
           sideChatDisabledReason={sideChatDisabledReason}
+          t3teamAddSurfaceActions={t3teamViewTabActions}
         >
           {rightPanelContent}
         </ChatRightPanel>

@@ -1,16 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
-import { AgentInstructionsSettingRow } from "./t3team-AgentInstructionsSetting";
-import { T3TeamVoiceSettings } from "./t3team-VoiceSettings";
-import { T3TeamAboutLicensesDescription } from "../../t3team/t3team-AboutLicensesDescription";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { t3teamSettingsRows } from "~/t3team/settings/t3team-settingsRegistry";
 import {
   type DesktopUpdateChannel,
   IDLE_COMPACTION_MODES,
   globalIdleCompaction,
+  managedUpdatesDenial,
+  managedUpdatesMessage,
   ProviderDriverKind,
   type ProviderInstanceId,
   type SidebarProjectGroupingMode,
@@ -26,6 +26,7 @@ import {
 } from "@t3tools/contracts/settings";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { createModelSelection } from "@t3tools/shared/model";
+import { resolvePastedPath } from "@t3tools/shared/path";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
@@ -63,6 +64,7 @@ import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
+import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
 import {
   getCustomModelOptionsByInstance,
   resolveAppModelSelectionState,
@@ -160,6 +162,13 @@ function AboutVersionSection() {
 
   const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
   const selectedUpdateChannel = updateState?.channel ?? "latest";
+  // The desktop updates this machine, whose policy the primary environment reports.
+  const primaryPolicy = usePrimaryManagedPolicy();
+  const updatesDenial = hasDesktopBridge ? managedUpdatesDenial(primaryPolicy) : undefined;
+  const nightlyDeniedBy =
+    hasDesktopBridge && primaryPolicy?.limits?.updates?.allowNightly === false
+      ? primaryPolicy.organization
+      : undefined;
   const selectedHostedAppChannel = hasDesktopBridge ? null : HOSTED_APP_CHANNEL;
   // A switch that failed part way leaves this app or a server on the other track.
   // With its updater off, a switch cannot move this app, so it is not counted.
@@ -249,7 +258,9 @@ function AboutVersionSection() {
               type: "error",
               title: "Could not check for updates",
               description:
-                result.state.message ?? "Automatic updates are not available in this build.",
+                updatesDenial ??
+                result.state.message ??
+                "Automatic updates are not available in this build.",
             }),
           );
         }
@@ -284,7 +295,8 @@ function AboutVersionSection() {
   const description =
     action === "download" || action === "install"
       ? "Update available."
-      : (getDesktopUpdateDisabledReason(updateState) ?? "Current version of the application.");
+      : (getDesktopUpdateDisabledReason(updateState, updatesDenial) ??
+        "Current version of the application.");
 
   return (
     <>
@@ -292,6 +304,7 @@ function AboutVersionSection() {
         id={searchableSetting("app-version").id}
         title={<AboutVersionTitle />}
         description={description}
+        managed={updatesDenial}
         control={
           <Tooltip>
             <TooltipTrigger
@@ -317,7 +330,13 @@ function AboutVersionSection() {
         <SettingsRow
           {...searchableSetting("update-track")}
           description={
-            unswitchedMachines > 0 ? (
+            nightlyDeniedBy !== undefined ? (
+              `${managedUpdatesMessage(nightlyDeniedBy)} Nightly builds are not available${
+                selectedUpdateChannel === "nightly"
+                  ? "; switch to Stable to keep getting updates."
+                  : "."
+              }`
+            ) : unswitchedMachines > 0 ? (
               <>
                 {unswitchedMachines === 1
                   ? "1 machine still runs"
@@ -337,6 +356,7 @@ function AboutVersionSection() {
               "Switches this app and every connected machine whose database the target release supports."
             )
           }
+          managed={updatesDenial}
           control={
             <Select
               value={selectedUpdateChannel}
@@ -358,7 +378,11 @@ function AboutVersionSection() {
                 <SelectItem hideIndicator value="latest">
                   Stable
                 </SelectItem>
-                <SelectItem hideIndicator value="nightly">
+                <SelectItem
+                  hideIndicator
+                  value="nightly"
+                  disabled={nightlyDeniedBy !== undefined && selectedUpdateChannel !== "nightly"}
+                >
                   Nightly
                 </SelectItem>
               </SelectPopup>
@@ -497,7 +521,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(settings.diffLayout !== DEFAULT_UNIFIED_SETTINGS.diffLayout ? ["Diff layout"] : []),
     ...(settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled
-      ? ["Proactive panels"]
+      ? ["Open pull requests and changes panels proactively"]
       : []),
     ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
       ? ["Show skills in slash menu"]
@@ -769,10 +793,7 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="agent-instructions" title="Agent">
-        <AgentInstructionsSettingRow
-          value={settings.agentInstructions}
-          onChange={(agentInstructions) => updateSettings({ agentInstructions })}
-        />
+        {t3teamSettingsRows("agent", { settings, updateSettings })}
       </SettingsSection>
 
       <SettingsSection id="notifications" title="Notifications">
@@ -868,7 +889,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("working-shelf")}
-          description="Fold working and monitoring threads into a Working section. They return to the top of the inbox when they need you. The boring sidebar in Labs has no Working section."
+          description="Fold working and monitoring threads into a Working section. They return to the top of the inbox when they need you. The boring sidebar in Features has no Working section."
           resetAction={
             settings.sidebarWorkingShelfEnabled !==
             DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled ? (
@@ -1013,67 +1034,10 @@ export function GeneralSettingsPanel() {
         ) : null}
       </SettingsSection>
 
-      <T3TeamVoiceSettings
-        transcriber={settings.voice.transcriber}
-        onTranscriberChange={(transcriber) => updateSettings({ voice: { transcriber } })}
-      />
+      {t3teamSettingsRows("voice", { settings, updateSettings })}
 
       <SettingsSection id="display" title="Display">
-        <SettingsRow
-          {...searchableSetting("live-activity-labels")}
-          description="Show a short AI-generated label for what active threads are working on instead of the static “Working” text. Generation is tiny, debounced, and non-thinking; labels clear when a thread goes idle."
-          resetAction={
-            settings.t3teamActivityLabelsEnabled !==
-            DEFAULT_UNIFIED_SETTINGS.t3teamActivityLabelsEnabled ? (
-              <SettingResetButton
-                label="live activity labels"
-                onClick={() =>
-                  updateSettings({
-                    t3teamActivityLabelsEnabled:
-                      DEFAULT_UNIFIED_SETTINGS.t3teamActivityLabelsEnabled,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.t3teamActivityLabelsEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ t3teamActivityLabelsEnabled: Boolean(checked) })
-              }
-              aria-label="Live activity labels"
-            />
-          }
-        />
-
-        <SettingsRow
-          {...searchableSetting("project-scope-pills")}
-          description="Replace the sidebar's project dropdown with one-click pills for your recent projects. The pull request list follows the selected project, including a work-source project's linked repositories."
-          resetAction={
-            settings.t3teamProjectScopePillsEnabled !==
-            DEFAULT_UNIFIED_SETTINGS.t3teamProjectScopePillsEnabled ? (
-              <SettingResetButton
-                label="project scope pills"
-                onClick={() =>
-                  updateSettings({
-                    t3teamProjectScopePillsEnabled:
-                      DEFAULT_UNIFIED_SETTINGS.t3teamProjectScopePillsEnabled,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.t3teamProjectScopePillsEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ t3teamProjectScopePillsEnabled: Boolean(checked) })
-              }
-              aria-label="Project scope pills"
-            />
-          }
-        />
+        {t3teamSettingsRows("display", { settings, updateSettings })}
         <SettingsRow
           {...searchableSetting("time-format")}
           description="System default follows your browser or OS clock preference."
@@ -1467,7 +1431,7 @@ export function DiffsSettingsPanel() {
               onCheckedChange={(checked) =>
                 updateSettings({ proactivePanelsEnabled: Boolean(checked) })
               }
-              aria-label="Proactive panels"
+              aria-label="Open pull requests and changes panels proactively"
             />
           }
         />
@@ -1626,6 +1590,7 @@ export function ThreadsSettingsPanel() {
               className="w-full sm:w-72"
               value={mixedAddProjectBaseDirectory ? "" : settings.addProjectBaseDirectory}
               onCommit={(next) => updateSettings({ addProjectBaseDirectory: next })}
+              normalizeDraft={resolvePastedPath}
               placeholder={mixedAddProjectBaseDirectory ? "Mixed" : "~/"}
               spellCheck={false}
               aria-label="Add project base directory"
@@ -1646,7 +1611,7 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           {...searchableSetting("auto-resume-limited-threads")}
-          description="Resume usage-limit stops at the reported reset time. Each thread can cancel its scheduled continuation."
+          description="Automatically resume threads when their usage limits reset. You can cancel auto-resume in each thread."
           settingKeys={["autoResumeLimitedThreads"]}
           control={
             <ScopedSwitch
@@ -1662,7 +1627,7 @@ export function ThreadsSettingsPanel() {
         <SettingsRow
           serverScoped
           {...searchableSetting("snooze-limited-threads")}
-          description="Snooze usage-limit stops until reset. Pair with resume to continue on wake."
+          description="Snooze threads until their usage limits reset. Enable auto-resume to continue the agent after the reset."
           settingKeys={["snoozeLimitedThreads"]}
           control={
             <ScopedSwitch
@@ -2051,9 +2016,30 @@ export function MaintenanceSettingsPanel() {
 }
 
 export function AboutSettingsPanel() {
+  const primaryPolicy = usePrimaryManagedPolicy();
+  const telemetryOff = managedTelemetryOffMessage(primaryPolicy);
   return (
     <SettingsPageContainer>
       <SettingsSection id="about" title="App">
+        {primaryPolicy ? (
+          <SettingsRow
+            title="Organization"
+            description={`This environment is managed by ${primaryPolicy.organization}. Some settings and features follow its policy.`}
+            control={
+              primaryPolicy.supportUrl ? (
+                <Button
+                  render={
+                    <a href={primaryPolicy.supportUrl} target="_blank" rel="noreferrer noopener" />
+                  }
+                  size="sm"
+                  variant="outline"
+                >
+                  Get help
+                </Button>
+              ) : null
+            }
+          />
+        ) : null}
         {isElectron || HOSTED_APP_CHANNEL ? (
           <AboutVersionSection />
         ) : (
@@ -2071,7 +2057,11 @@ export function AboutSettingsPanel() {
       <SettingsSection id="legal" title="Legal">
         <SettingsRow
           {...searchableSetting("privacy-policy")}
-          description="How we handle your data, including the anonymous usage data T3 Code collects."
+          description={
+            telemetryOff === undefined
+              ? "How we handle your data, including the anonymous usage data T3 Code collects."
+              : `How we handle your data. ${telemetryOff}`
+          }
           control={
             <Button
               render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
@@ -2082,19 +2072,7 @@ export function AboutSettingsPanel() {
             </Button>
           }
         />
-        <SettingsRow
-          {...searchableSetting("open-source-licenses")}
-          description={<T3TeamAboutLicensesDescription />}
-          control={
-            <Button
-              render={<Link to="/settings/open-source-licenses" />}
-              size="sm"
-              variant="outline"
-            >
-              View licenses
-            </Button>
-          }
-        />
+        {t3teamSettingsRows("legal")}
       </SettingsSection>
     </SettingsPageContainer>
   );

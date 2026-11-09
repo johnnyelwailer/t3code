@@ -5,7 +5,7 @@ import { Atom } from "effect/reactivity";
 import { Platform, ScrollView } from "react-native";
 import type { MenuProps } from "../../components/ui/Menu.types";
 import { ListFilterMenu } from "../workspace/ListFilterMenu";
-import { environmentProjects } from "../../state/projects";
+import { cloudAdoptedProjectsAtom } from "../../state/t3team-cloudAdoption";
 import { environmentThreadShells } from "../../state/threads";
 import { useMobileProjectGroupingSettings } from "../../state/project-grouping";
 import { buildHomeProjectScopes, sortHomeProjectScopes } from "../home/homeThreadList";
@@ -62,7 +62,7 @@ const sidebarProjectOrderFamily = Atom.family((mode: SidebarProjectGroupingMode)
   Atom.make((get) =>
     sortHomeProjectScopes({
       scopes: buildHomeProjectScopes({
-        projects: get(environmentProjects.projectsAtom),
+        projects: get(cloudAdoptedProjectsAtom),
         environmentId: null,
         projectGroupingMode: mode,
       }),

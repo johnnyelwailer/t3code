@@ -19,7 +19,8 @@ export function useApplyAnswers(thread: {
     (
       questions: Parameters<typeof machineSource>[0],
       answers: Record<string, unknown>,
+      requestId: string,
     ): (() => Promise<void>) | null =>
-      machineSource(questions, answers) ?? desktopRoute(questions, answers),
+      machineSource(questions, answers) ?? desktopRoute(questions, answers, requestId),
   );
 }

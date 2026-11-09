@@ -91,6 +91,10 @@
       "types": "./src/themePreview.ts",
       "import": "./src/themePreview.ts"
     },
+    "./textDirection": {
+      "types": "./src/textDirection.ts",
+      "import": "./src/textDirection.ts"
+    },
     "./projectFavicon": {
       "types": "./src/projectFavicon.ts",
       "import": "./src/projectFavicon.ts"
@@ -383,6 +387,18 @@
       "types": "./src/nodeRuntime.ts",
       "import": "./src/nodeRuntime.ts"
     },
+    "./AgentScope": {
+      "types": "./src/AgentScope.ts",
+      "import": "./src/AgentScope.ts"
+    },
+    "./managedPolicyFile": {
+      "types": "./src/managedPolicyFile.ts",
+      "import": "./src/managedPolicyFile.ts"
+    },
+    "./HostProcess": {
+      "types": "./src/HostProcess.ts",
+      "import": "./src/HostProcess.ts"
+    },
     "./testing/longTempDir": {
       "types": "./src/testing/longTempDir.ts",
       "import": "./src/testing/longTempDir.ts"
@@ -495,14 +511,6 @@
       "types": "./src/promptLinks.ts",
       "import": "./src/promptLinks.ts"
     },
-    "./AgentScope": {
-      "types": "./src/AgentScope.ts",
-      "import": "./src/AgentScope.ts"
-    },
-    "./HostProcess": {
-      "types": "./src/HostProcess.ts",
-      "import": "./src/HostProcess.ts"
-    },
     "./orchestrationV2BoundedSnapshot": {
       "types": "./src/orchestrationV2BoundedSnapshot.ts",
       "import": "./src/orchestrationV2BoundedSnapshot.ts"
@@ -597,6 +605,7 @@
     "@noble/hashes": "catalog:",
     "@t3tools/contracts": "workspace:*",
     "effect": "catalog:",
+    "ffi-rs": "1.3.2",
     "jose": "catalog:",
     "mdast-util-directive": "catalog:",
     "mdast-util-to-hast": "^13.2.1",

@@ -59,6 +59,10 @@ import {
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import { preflightInlinedTypeScript } from "./lib/t3team-inlined-typescript-preflight.ts";
 import {
+  PREPARED_SERVER_CACHE_DIR,
+  windowsPayloadBudgetViolation,
+} from "./lib/t3team-windowsPayloadBudget.ts";
+import {
   assertIsolatedBuildSupported,
   isolatedBrandingFields,
   T3TeamIsolatedBuildError,
@@ -3284,6 +3288,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   // other (e.g. 20 mounted "Nexi Work 0.0.33 Installer" volumes).
   const artifactTimestampSuffix = artifactTimestamp ? `-${artifactTimestamp}` : "";
   const buildConfig: Record<string, unknown> = {
+    afterPack: (yield* Path.Path).join(yield* RepoRoot, "scripts/prepare-server-compile-cache.cjs"),
     appId,
     productName: resolvedProductName,
     // Built by concatenation, not a template literal: the ${version}/${arch}/
@@ -4131,19 +4136,29 @@ export const validateWindowsPackagedPayload = Effect.fn(
   // Distribution packs are intentionally loose resources: they contain
   // recipes, themes, and branding assets whose count varies by distro. Keep
   // the fixed-runtime budget focused on Electron and native payload growth.
-  const bundledPacksDir = path.join(resourcesDir, "packs");
-  const bundledPackFileCount = (yield* fs
-    .exists(bundledPacksDir)
-    .pipe(Effect.orElseSucceed(() => false)))
-    ? yield* countPayloadFiles(bundledPacksDir)
-    : 0;
-  const guardedFileCount = fileCount - bundledPackFileCount;
-  if (guardedFileCount > fileLimit) {
+  const countLooseDir = (directory: string) =>
+    fs.exists(directory).pipe(
+      Effect.orElseSucceed(() => false),
+      Effect.flatMap((exists) => (exists ? countPayloadFiles(directory) : Effect.succeed(0))),
+    );
+  const bundledPackFileCount = yield* countLooseDir(path.join(resourcesDir, "packs"));
+  // t3team: prepared bytecode cache has its own budget (lib/t3team-windowsPayloadBudget.ts).
+  const preparedCacheFileCount = yield* countLooseDir(
+    path.join(resourcesDir, PREPARED_SERVER_CACHE_DIR),
+  );
+  const budgetViolation = windowsPayloadBudgetViolation({
+    totalFileCount: fileCount,
+    bundledPackFileCount,
+    preparedCacheFileCount,
+    fileLimit,
+  });
+  if (budgetViolation !== undefined) {
+    yield* Effect.logError(`[desktop-artifact] Windows payload budget: ${budgetViolation.detail}`);
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
       packagedAppDir,
-      fileCount: guardedFileCount,
-      fileLimit,
+      fileCount: budgetViolation.fileCount,
+      fileLimit: budgetViolation.fileLimit,
     });
   }
 
@@ -4155,7 +4170,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
   });
 
   yield* Effect.log(
-    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files including ${String(bundledPackFileCount)} distribution-pack files, ${String(unpackedFiles.length)} sidecar natives).`,
+    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files including ${String(bundledPackFileCount)} distribution-pack and ${String(preparedCacheFileCount)} bytecode-cache files, ${String(unpackedFiles.length)} sidecar natives).`,
   );
   return { packagedAppDir, fileCount, unpackedFiles } as const;
 });

@@ -56,7 +56,7 @@ describe("releaseNotesForNotice", () => {
 });
 
 describe("NexiUpdateProvider", () => {
-  it("turns an available release into update info with the manifest's sha512 and the release notes", async () => {
+  it("turns an available release into update info with the manifest's sha512, the release notes and the release page", async () => {
     const provider = make(available);
     const info = await provider.getLatestVersion();
     expect(info).toMatchObject({
@@ -64,6 +64,7 @@ describe("NexiUpdateProvider", () => {
       path: "Nexi-Work-0.1.2-rc.5-arm64-mac.zip",
       sha512: SHA,
       releaseNotes: "- a fix",
+      releaseUrl: "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.5",
       files: [{ url: "Nexi-Work-0.1.2-rc.5-arm64-mac.zip", sha512: SHA, size: 42 }],
     });
   });

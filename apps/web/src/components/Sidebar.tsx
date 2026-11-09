@@ -1,3 +1,4 @@
+import { liveShellEnvironmentIdsAtom } from "../state/shell";
 import { attachSidebarTree, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
@@ -143,6 +144,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import {
   useEnvironmentIdentities,
   useConnectedEnvironmentIds,
+  useEnvironmentConnectionSummaries,
   useEnvironmentMachines,
   usePrimaryEnvironmentId,
 } from "../state/environments";
@@ -193,6 +195,8 @@ import {
   deleteSelectedThreadEntries,
   filterSidebarProjectScopeItems,
   firstValidTimestampMs,
+  belongsInSidebarWorkingShelf,
+  isSidebarEnvironmentDisconnected,
   isSidebarNestedLinkClick,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
@@ -261,11 +265,18 @@ import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarT
 // plus the child-thread relation hook used to hide sub-runbook children and chip their parent.
 import { InboxHeader, InboxWorkItemSection } from "~/t3team/components/t3team-InboxSlots";
 import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
+import {
+  isSidebarReorderTarget,
+  isThreadContextDragPoint,
+  sidebarRowKeyAtPoint,
+} from "~/t3team/t3team-sidebarContextDragPoint";
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import { useT3TeamScopeRouteSync } from "~/t3team/hooks/t3team-useScopeRouteSync";
 import { T3TeamSidebarProjectScopePills } from "./sidebar/t3team-SidebarProjectScopePills";
+import { T3TeamSidebarEnvironmentFilter } from "./sidebar/t3team-SidebarEnvironmentFilter";
+import { useT3TeamSidebarEnvironmentFilter } from "~/t3team/hooks/t3team-useSidebarEnvironmentFilter";
 import { VoiceSidebarRow } from "~/t3team/voice/t3team-VoiceSidebarRow";
 import { VOICE_THREAD_TITLE } from "~/t3team/voice/t3team-voiceRolePrompt";
 import { useVoiceThreadStore } from "~/t3team/voice/t3team-voiceThreadStore";
@@ -377,10 +388,15 @@ interface SidebarThreadPartitionInput {
   readonly workingShelfEnabled: boolean;
   /** Boring mode: folders list active threads by the user's latest message. */
   readonly sortActiveBySend: boolean;
+  readonly disconnectedEnvironmentIds: ReadonlySet<EnvironmentId>;
   // Snooze wakes, the queued-turn grace and the Working shelf's exit grace depend
   // on the clock, so the minute tick, the precise snooze-wake tick and the inbox
   // tracker's expiry version are inputs: a new key repartitions.
   readonly clockKey: string;
+}
+
+function scrollSidebarToTop(content: HTMLElement | null) {
+  content?.closest("[data-slot=scroll-area-viewport]")?.scrollTo({ top: 0 });
 }
 
 function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id">): string {
@@ -458,6 +474,18 @@ function useSidebarThreads(input: {
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
     useClientSettings((s) => s.sidebarWorkingShelfEnabled) && folderGroups === null;
+  const environmentConnections = useEnvironmentConnectionSummaries();
+  const liveShellEnvironmentIds = useAtomValue(liveShellEnvironmentIdsAtom);
+  const disconnectedEnvironmentIds = new Set(
+    environmentConnections
+      .filter((environment) =>
+        isSidebarEnvironmentDisconnected(
+          environment.connectionState,
+          liveShellEnvironmentIds.has(environment.environmentId),
+        ),
+      )
+      .map((environment) => environment.environmentId),
+  );
   const inboxReturnsVersion = useSyncExternalStore(
     inboxReturns.subscribe,
     inboxReturns.getSnapshot,
@@ -502,6 +530,7 @@ function useSidebarThreads(input: {
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend: folderGroups !== null,
+    disconnectedEnvironmentIds,
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
   });
 
@@ -637,6 +666,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend,
+    disconnectedEnvironmentIds,
   } = input;
   const preciseNow = new Date().toISOString();
   const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
@@ -645,8 +675,11 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
   const active: EnvironmentThreadShell[] = [];
   const working: EnvironmentThreadShell[] = [];
   const inbox = (thread: EnvironmentThreadShell, manuallyMoved = false) =>
-    workingShelfEnabled &&
-    (manuallyMoved ? isThreadWorking(thread) : inboxObservation.isWorking(thread))
+    belongsInSidebarWorkingShelf(thread, {
+      enabled: workingShelfEnabled,
+      disconnectedEnvironmentIds,
+      isWorking: manuallyMoved ? isThreadWorking : inboxObservation.isWorking,
+    })
       ? working
       : active;
   const snoozed: EnvironmentThreadShell[] = [];
@@ -1091,6 +1124,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const [renamingTitle, setRenamingTitle] = useState("");
   const settlingThreadKeysRef = useRef(new Set<string>());
   const threadListRef = useRef<HTMLUListElement | null>(null);
+  const sidebarContentRef = useRef<HTMLDivElement | null>(null);
   const dragLabelOffsetRef = useRef(0);
   const listMotionRef = useRef<ReturnType<typeof createSidebarListMotion> | null>(null);
   const [dragState, setDragState] = useState<{
@@ -1103,6 +1137,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   } | null>(null);
   const dragSensorRef = useRef<SidebarPointerSensor | null>(null);
   const contextDragKeyRef = useRef<string | null>(null);
+  const isReorderTargetRef = useRef<(rowKey: string) => boolean>(() => false);
   const [actionSweep, setActionSweep] = useState<{
     action: SidebarSweepAction;
     keys: ReadonlySet<string>;
@@ -1141,14 +1176,22 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const listedThreads = threads.filter((thread) => !childThreadIds.has(thread.id));
 
   // A selection made under one scope can hold threads the next scope hides.
+  // The viewport outlives the scope and does not anchor, so a new list starts at the top.
   const setProjectScopeKeys = (keys: readonly string[]) => {
     clearSelection();
     setPersistedProjectScopeKeys(keys);
+    scrollSidebarToTop(sidebarContentRef.current);
   };
   // A scope whose project is gone reads as all projects once every snapshot has
   // loaded. The stored keys are left alone, so the scope returns with its project.
   // An archived project's scope reads as all projects, matching the menu.
   const scopeGroups = pickableProjectGroups(projectGroups);
+  // t3team: the environment filter narrows the project scope below to one environment.
+  const environmentFilter = useT3TeamSidebarEnvironmentFilter({
+    threads: listedThreads,
+    pickableGroups: scopeGroups,
+  });
+  const selectEnvironment = environmentFilter.select;
   const archivedProjectKeys = new Set(
     projectGroups.filter((project) => project.archived).map((project) => project.projectKey),
   );
@@ -1161,7 +1204,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const chosenProjectGroups = scopeGroups.filter((project) =>
     chosenProjectScopeKeys.includes(project.projectKey),
   );
-  const chosenScopeProjectKeys =
+  const chosenScopeProjectKeys = environmentFilter.narrowScopeKeys(
     chosenProjectGroups.length === 0
       ? null
       : new Set(
@@ -1170,7 +1213,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
             ),
           ),
-        );
+        ),
+    projects,
+  );
   const routeRowThreadKey =
     effectiveRouteThreadRef === null
       ? null
@@ -1215,7 +1260,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     if (!revealWidensScope) return;
     clearSelection();
     setPersistedProjectScopeKeys([]);
-  }, [clearSelection, revealWidensScope, setPersistedProjectScopeKeys]);
+    selectEnvironment(null);
+  }, [clearSelection, revealWidensScope, selectEnvironment, setPersistedProjectScopeKeys]);
   const revealActiveRow = useActiveRowReveal(routeReveal, routeRowThreadKey);
   const showProjectEnvironments = projectGroupsSpanEnvironments(projectGroups);
   const scratchMachineLabelFor = (
@@ -1281,10 +1327,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   );
   // t3team: one-click recent-project pills in place of the dropdown alone (feature flag).
   const projectScopePillsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamProjectScopePillsEnabled,
+    (settings) => settings.t3team.projectScopePills,
   );
   const threadSearch = useThreadSearch(
-    connectedEnvironmentIds,
+    environmentFilter.narrowEnvironmentIds(connectedEnvironmentIds),
     threadSearchQuery,
     scopedProjectGroups.length === 0
       ? {}
@@ -1440,7 +1486,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     folderGroups: boringSidebarEnabled
       ? scopedProjectGroups.length === 0
         ? // An archived project keeps a folder for its active threads, below the rest.
-          [...scopeGroups, ...projectGroups.filter((project) => project.archived)]
+          environmentFilter.narrowGroups([
+            ...scopeGroups,
+            ...projectGroups.filter((project) => project.archived),
+          ])
         : scopedProjectGroups
       : null,
     keepEmptyFolders: (group) =>
@@ -1847,12 +1896,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       return ref ? [ref] : [];
     });
   };
-  const pointerOutsideThreadList = (point: { x: number; y: number }) => {
+  const isContextDragAt = (point: { x: number; y: number }) => {
     const bounds = threadListRef.current?.getBoundingClientRect();
-    return bounds !== undefined && (point.x < bounds.left || point.x > bounds.right);
+    return isThreadContextDragPoint({
+      pointerOutsideList: bounds !== undefined && (point.x < bounds.left || point.x > bounds.right),
+      hoveredRowKey: sidebarRowKeyAtPoint(point),
+      draggedKey: contextDragKeyRef.current,
+      isReorderTarget: (rowKey) => isReorderTargetRef.current(rowKey),
+    });
   };
   const moveThreadContextDrag = (point: { x: number; y: number }) => {
-    const contextDrag = pointerOutsideThreadList(point);
+    const contextDrag = isContextDragAt(point);
     setDragState((current) =>
       current === null || current.contextDrag === contextDrag
         ? current
@@ -1869,7 +1923,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     return true;
   };
   const dropThreadContextDrag = (point: { x: number; y: number }) => {
-    if (!pointerOutsideThreadList(point)) return false;
+    if (!isContextDragAt(point)) return false;
     dropThreadContext(point, contextDragThreads());
     return true;
   };
@@ -2093,10 +2147,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     dragState === null && sidebarListItems.length + visibleDraftSessionCount > 0;
   // Cache on both fields so layout-key changes trigger the effect even when animate is unchanged.
   const listMotionPass = { layoutKey: listMotionLayoutKey, animate: listMotionAnimate };
+  const shelfExpansionKey = [workingShelfExpanded, snoozedShelfExpanded, settledShelfExpanded].join(
+    ":",
+  );
+  const previousShelfExpansionKeyRef = useRef(shelfExpansionKey);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tells the list motion controller to animate or not after each layout-affecting commit
   useLayoutEffect(() => {
-    listMotionRef.current?.update(listMotionPass.animate);
-  }, [listMotionPass]);
+    // Shelf rows would travel over stationary headers below the bottom-anchored shelf.
+    const shelvesUnchanged = previousShelfExpansionKeyRef.current === shelfExpansionKey;
+    previousShelfExpansionKeyRef.current = shelfExpansionKey;
+    listMotionRef.current?.update(listMotionPass.animate && shelvesUnchanged);
+  }, [listMotionPass, shelfExpansionKey]);
   const handleThreadDragOver = (event: DragOverEvent) => {
     const target = event.over
       ? resolveSidebarDropTarget(sidebarListItems, String(event.active.id), String(event.over.id))
@@ -2133,39 +2194,35 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const draggedThreadKey = dragState?.activeKey;
   const draggedFromSection = dragState?.activeSection;
   const dragActivationY = dragState?.activationY;
-  const dndCollisionDetection = (() => {
-    if (draggedThreadKey === undefined || draggedFromSection === undefined)
-      return createSidebarCollisionDetection(() => true);
+  const isReorderTarget = (id: string) => {
+    if (draggedThreadKey === undefined || draggedFromSection === undefined) return true;
     const source = threadByKey.get(draggedThreadKey);
-    if (source === undefined) return createSidebarCollisionDetection(() => false);
-    return createSidebarCollisionDetection(
-      (id) => {
-        const target = resolveSidebarDropTarget(sidebarListItems, draggedThreadKey, id);
-        if (target === null) return false;
-        return (
-          planSidebarThreadDrop({
-            activeKey: draggedThreadKey,
-            activeSection: draggedFromSection,
-            activePinned: source.pinnedAt != null,
-            activeSettled: source.settledOverride === "settled",
-            supportsSettlement: serverConfigs.has(source.environmentId),
-            target,
-            pinnedOrder: pinnedKeys,
-            pinnedKeysById,
-            reorderableKeys: draggableThreadKeys,
-            activeOrder: activeKeys,
-            activeKeysById,
-            activeReorderableKeys: activeReorderableThreadKeys,
-            activeTimeOrdered: workingShelfEnabled,
-          }).kind !== "none"
-        );
-      },
-      {
-        items: sidebarListItems,
-        activationY: dragActivationY ?? null,
-      },
-    );
-  })();
+    if (source === undefined) return false;
+    return isSidebarReorderTarget({
+      items: sidebarListItems,
+      overId: id,
+      activeKey: draggedThreadKey,
+      activeSection: draggedFromSection,
+      activePinned: source.pinnedAt != null,
+      activeSettled: source.settledOverride === "settled",
+      supportsSettlement: serverConfigs.has(source.environmentId),
+      pinnedOrder: pinnedKeys,
+      pinnedKeysById,
+      reorderableKeys: draggableThreadKeys,
+      activeOrder: activeKeys,
+      activeKeysById,
+      activeReorderableKeys: activeReorderableThreadKeys,
+      activeTimeOrdered: workingShelfEnabled,
+    });
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes the committed reorder predicate to the stable pointer-sensor callbacks
+  useLayoutEffect(() => {
+    isReorderTargetRef.current = isReorderTarget;
+  });
+  const dndCollisionDetection = createSidebarCollisionDetection(isReorderTarget, {
+    items: sidebarListItems,
+    activationY: dragActivationY ?? null,
+  });
   const handleThreadDragEnd = (event: DragEndEvent) => {
     const activeKey = String(event.active.id);
     const activeSection = sectionByThreadKey.get(activeKey);
@@ -3143,6 +3200,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       {/* t3team: Team chrome so the Work lens keeps the pack brand + header background. */}
       <InboxHeader />
       <SidebarContent
+        ref={sidebarContentRef}
         className="min-h-full"
         fixedHeader={
           <SidebarGroup className="z-[1]">
@@ -3216,10 +3274,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         <ListFilterIcon className="size-4" />
                       )}
                     </ComboboxTrigger>
+                    {/* Refocusing the trigger after a pointer close shows its focus ring and opens its tooltip. */}
                     <ComboboxPopup
                       align="start"
                       anchor={headerSearchRef}
                       className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
+                      finalFocus={(closeType) => closeType === "keyboard"}
                     >
                       <ComboboxSearchInput
                         aria-label="Search projects"
@@ -3357,7 +3417,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 search glyph when everything fits) is the searchable picker. */}
             {projectScopePillsEnabled && projectGroups.length > 0 ? (
               <T3TeamSidebarProjectScopePills
-                groups={projectGroups}
+                groups={environmentFilter.narrowGroups(projectGroups)}
                 activeScopeKey={t3teamScope.group?.projectKey ?? null}
                 onSelectScope={(scopeKey) =>
                   setProjectScopeKeys(scopeKey === null ? [] : [scopeKey])
@@ -3365,6 +3425,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 onProjectContextMenu={handleProjectSettings}
               />
             ) : null}
+            {/* t3team: one-click environment pills; nothing while only one environment lists. */}
+            <T3TeamSidebarEnvironmentFilter
+              pills={environmentFilter.pills}
+              onSelect={(environmentId) => {
+                selectEnvironment(environmentId);
+                setProjectScopeKeys(
+                  environmentFilter.projectScopeKeysFor(
+                    projectGroups,
+                    projectScopeKeys,
+                    environmentId,
+                  ),
+                );
+              }}
+            />
           </SidebarGroup>
         }
       >

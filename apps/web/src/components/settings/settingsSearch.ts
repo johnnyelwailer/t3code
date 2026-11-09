@@ -14,6 +14,8 @@ import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import type { ResolvedSettingsScope } from "./settingsScope";
+// The fork's settings items live in its own registry; only the id index joins them in here.
+import { T3TEAM_SETTINGS_SEARCH_ITEMS } from "~/t3team/settings/t3team-settingsRegistry";
 
 export type SettingsPath =
   | "/settings/projects"
@@ -51,6 +53,8 @@ export interface SettingsSearchItem {
   readonly id: string;
   readonly title: string;
   readonly to: SettingsPath;
+  /** Fork section names upstream's `SETTINGS_SECTION_LABELS` does not know. */
+  readonly sectionLabel?: string;
   readonly targetId?: string;
   readonly searchTerms?: ReadonlyArray<string>;
   readonly scope?: SettingsSearchScope;
@@ -105,7 +109,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/access": "Sharing & access",
   "/settings/secrets": "Secrets",
   "/settings/maintenance": "Maintenance",
-  "/settings/labs": "Labs",
+  "/settings/labs": "Features",
   "/settings/about": "About",
   "/settings/archived": "Archive",
 };
@@ -239,7 +243,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/worktrees",
     scope: "project-defaults",
     searchTerms: [
-      "disk storage delete deleted archived threads old inactive merged unchanged worktrees retention days project inherit off custom",
+      "disk storage automatic delete deleted archived threads old inactive merged settled unchanged worktrees retention days project inherit off custom",
     ],
   },
   {
@@ -254,7 +258,9 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Artifacts and logs",
     to: "/settings/maintenance",
     scope: "environment-defaults",
-    searchTerms: ["disk storage browser screenshots captures rotated logs cleanup retention"],
+    searchTerms: [
+      "disk storage delete old browser artifacts screenshots captures rotated logs cleanup retention",
+    ],
   },
   {
     id: "project-defaults",
@@ -275,6 +281,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: ["new thread project provider reasoning effort"],
+  },
+  {
+    id: "fallback-model",
+    title: "Fallback model",
+    to: "/settings/threads",
+    scope: "environment-defaults",
+    searchTerms: ["fallback agent provider out of usage new threads"],
+    environmentOnly: true,
   },
   {
     id: "default-permissions",
@@ -399,11 +413,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Word wrap",
     to: "/settings/appearance",
     searchTerms: ["long lines code blocks diffs file previews"],
-  },
-  {
-    id: "agent-personality",
-    title: "Agent personality / instructions",
-    to: "/settings/general",
   },
   {
     id: "composer-context",
@@ -535,17 +544,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["notification toast popup completion input approval failure"],
   },
   {
-    id: "live-activity-labels",
-    title: "Live activity labels",
-    to: "/settings/general",
-  },
-  {
-    id: "project-scope-pills",
-    title: "Project scope pills",
-    to: "/settings/general",
-    searchTerms: ["sidebar recent projects filter pull requests scope experimental"],
-  },
-  {
     id: "time-format",
     title: "Time format",
     to: "/settings/general",
@@ -578,9 +576,9 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "proactive-panels",
-    title: "Proactive panels",
+    title: "Open pull requests and changes panels proactively",
     to: "/settings/diffs",
-    searchTerms: ["automatically open diff pull request pr right panel agent completion"],
+    searchTerms: ["proactive automatically open diff pull request pr right panel agent completion"],
   },
   {
     id: "skills-in-slash-menu",
@@ -745,11 +743,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["logs traces processes resource history failures spans cpu memory"],
   },
   {
-    id: "open-source-licenses",
-    title: "Open source licenses",
-    to: "/settings/about",
-  },
-  {
     id: "legacy-plan-mode",
     title: "Plan mode (legacy)",
     to: "/settings/labs",
@@ -768,48 +761,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["keyboard shortcuts hotkeys commands bindings json"],
   },
   ...KEYBINDING_SEARCH_ITEMS,
-  {
-    id: "voice-hotkey",
-    title: "Voice shortcut",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["talk dictate microphone hotkey chord global keys whisper"],
-  },
-  {
-    id: "voice-model",
-    title: "Voice model",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper transcription dictation speech download large-v3-turbo"],
-  },
-  {
-    id: "voice-model-path",
-    title: "Voice model file",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper ggml bin path transcription dictation"],
-  },
-  {
-    id: "voice-language",
-    title: "Voice language",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper transcription dictation speech locale auto detect"],
-  },
-  {
-    id: "voice-languages",
-    title: "Voice language list",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper dictation speech language picker options german english"],
-  },
-  {
-    id: "voice-silence",
-    title: "Voice silence",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["dictation auto commit stop pause silence seconds end recording"],
-  },
   {
     id: "snap-shot-enabled",
     title: "SnapShots",
@@ -854,7 +805,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Providers",
     to: "/settings/providers",
     searchTerms: [
-      "agents cli codex claude cursor grok fx opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory endpoint arguments environment variables display name accent color custom favorite hidden auto compact",
+      "agents cli codex claude cursor grok fx opencode antigravity google sign in sign out install subscription instances authentication api key models configuration binary path config directory codex_home shadow home endpoint arguments environment variables display name accent color custom favorite hidden auto compact native sessions import resume",
     ],
   },
   {
@@ -974,7 +925,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "browser-search-engine",
     title: "Search engine",
     to: "/settings/browser",
-    searchTerms: ["address bar duckduckgo google bing brave kagi ecosia custom"],
+    searchTerms: ["address bar duckduckgo google bing brave kagi ecosia custom url"],
   },
   {
     id: "pull-request-links-open-in-app",
@@ -1136,7 +1087,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "WSL backend",
     to: "/settings/access",
     searchTerms: [
-      "windows subsystem linux distro second server projects stop windows backend restart",
+      "windows subsystem linux distro second server projects stop windows backend restart wsl only",
     ],
     desktopOnly: true,
     windowsOnly: true,
@@ -1242,9 +1193,15 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
-export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
+export type SettingsSearchItemId =
+  | (typeof SETTINGS_SEARCH_ITEMS)[number]["id"]
+  | (typeof T3TEAM_SETTINGS_SEARCH_ITEMS)[number]["id"];
 
-const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
+const SEARCH_ITEMS_BY_ID = new Map(
+  [...SETTINGS_SEARCH_ITEMS, ...T3TEAM_SETTINGS_SEARCH_ITEMS].map(
+    (item) => [item.id, item] as const,
+  ),
+);
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/diagnostics": "environment",
@@ -1425,7 +1382,7 @@ export function searchSettings(
       const title = normalizeSearchText(item.title);
       const fields = [
         title,
-        normalizeSearchText(SETTINGS_SECTION_LABELS[item.to]),
+        normalizeSearchText(item.sectionLabel ?? SETTINGS_SECTION_LABELS[item.to]),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
       ];
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];

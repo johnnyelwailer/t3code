@@ -12,6 +12,7 @@ export type {
   HomeEmptyStateSlot,
   EnvironmentPickerTopProps,
   HomeFiltersProps,
+  HomeProjectIconFacts,
   MobileExtensions,
   SelectedProjectFacts,
   UrlPolicy,
@@ -24,6 +25,14 @@ export type {
   PendingDraftTone,
 } from "./t3team-pendingDraftTypes";
 export { retargetPendingDraft } from "./t3team-retargetPendingDraft";
+export { draftProjectStamp } from "./t3team-usePendingDraft";
+export {
+  hasSelectableModel,
+  readDraftModelSelection,
+  setDraftModelSelection,
+  useDraftModelSelection,
+  useStickyModelSelection,
+} from "./t3team-draftModel";
 export { useOpenPendingDraft } from "./t3team-useOpenPendingDraft";
 export type { MobileThemeAppearance, MobileThemeVariables } from "../lib/mobileTheme";
 
@@ -37,6 +46,7 @@ export { ConnectionStatusDot } from "../features/connection/ConnectionStatusDot"
 export { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 export { createMobileThemeVariables } from "../lib/mobileTheme";
 export { ListRow } from "../components/ui/ListRow";
+export { HomeProjectIcon } from "./t3team-HomeProjectIcon";
 export { environmentCatalog } from "../connection/catalog";
 export { appAtomRegistry } from "../state/atom-registry";
 export { useProjects, useServerConfigs } from "../state/entities";

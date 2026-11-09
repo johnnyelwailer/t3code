@@ -12,6 +12,7 @@
 @import "./t3team-statusOrb.css";
 @import "./t3team-index-setupProgress.css";
 @import "./t3team-index-setupProgressStill.css";
+@import "./t3team-index-primaryText.css";
 
 /* Jira rich-text (ADF) lists: nested markers cycle like .chat-markdown's. */
 @utility t3team-adf-bullets {

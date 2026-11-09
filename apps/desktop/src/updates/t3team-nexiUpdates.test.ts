@@ -28,6 +28,65 @@ const checkError = (cause: unknown) =>
   new ElectronUpdater.ElectronUpdaterCheckForUpdatesError({ channel: null, cause });
 
 describe("DesktopUpdates with the interim Nexi feed", () => {
+  it.effect("carries the offered release page in the state, kept for the queued installer", () => {
+    const harness = makeHarness({ nexiFeed: feed(true) });
+    const rc8 = "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.8";
+    const rc9 = "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.9";
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        harness.emit("update-available", { version: "0.1.2-rc.8", releaseUrl: rc8 });
+        yield* flushCallbacks;
+        assert.equal((yield* updates.getState).releaseUrl, rc8);
+
+        harness.emit("update-downloaded", { version: "0.1.2-rc.8" });
+        yield* flushCallbacks;
+        harness.emit("update-available", { version: "0.1.2-rc.8" });
+        yield* flushCallbacks;
+        assert.equal((yield* updates.getState).releaseUrl, rc8);
+
+        harness.emit("update-available", { version: "0.1.2-rc.9", releaseUrl: rc9 });
+        yield* flushCallbacks;
+        assert.equal((yield* updates.getState).releaseUrl, rc9);
+
+        harness.emit("update-available", { version: "0.1.3" });
+        yield* flushCallbacks;
+        assert.isUndefined((yield* updates.getState).releaseUrl);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("publishes the actual pending poll time after a startup failure", () => {
+    const harness = makeHarness({
+      nexiFeed: feed(true),
+      env: { T3CODE_DESKTOP_MOCK_UPDATES: "false" },
+      checkForUpdates: Effect.fail(
+        checkError(new NexiUpdateIssue("unreachable", "Feed unavailable.")),
+      ),
+    });
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        yield* flushCallbacks;
+        const scheduled = (yield* updates.getState).nextCheckAt;
+        assert.isString(scheduled);
+        yield* TestClock.adjust("15 seconds");
+        yield* flushCallbacks;
+        const failed = yield* updates.getState;
+        assert.equal(failed.issue, "unreachable");
+        assert.equal(failed.nextCheckAt, scheduled);
+        assert.equal(harness.checkCount(), 1);
+        yield* TestClock.adjust("3 hours");
+        yield* flushCallbacks;
+        assert.equal(harness.checkCount(), 2);
+        assert.notEqual((yield* updates.getState).nextCheckAt, scheduled);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
   it.effect(
     "says signed out, with the message to show, when the check finds no GHE sign-in",
     () => {

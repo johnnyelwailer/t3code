@@ -42,6 +42,7 @@ import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import { threadHasQueuedTurnStart } from "./orchestration-v2/ThreadSettlementService.ts";
 import { forkParked } from "./serverActivation.ts";
+import { forkParkedHousekeeping } from "./t3team-housekeepingGrace.ts";
 import * as Settings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { isFilesystemRoot, managedWorktreesDirectories } from "./worktreesDirectory.ts";
@@ -67,6 +68,16 @@ const decodePnpmModulesManifest = Schema.decodeUnknownEffect(
 );
 
 const DAY_MS = 86_400_000;
+const ROTATED_LOG_FILE = /\.(?:log|ndjson)\.\d+$/;
+const SESSION_LOG_FILE = /\.(?:log|ndjson|cpuprofile)$/;
+
+/**
+ * The server's own top-level log stays even when stale. Rotations expire anywhere, and so do the
+ * per-session files under subfolders (provider event logs, stall CPU profiles): each session
+ * appends to its own file, so an old modification time means that session no longer writes it.
+ */
+export const isExpirableLogFile = (name: string, inSubdirectory: boolean) =>
+  ROTATED_LOG_FILE.test(name) || (inSubdirectory && SESSION_LOG_FILE.test(name));
 // Give settle scripts time to open terminals that protect the worktree.
 const SETTLE_SCRIPT_GRACE_MS = 60_000;
 // Worktree creation can precede its thread row, including review-guide checkouts.
@@ -902,42 +913,66 @@ const make = Effect.gen(function* () {
             : `settled for ${settledDays} days`;
         if (!eligible && (settings.worktreeUnchanged || settings.worktreeOnMerge)) {
           const repositoryCwd = path.resolve(project.workspaceRoot);
-          const remote = yield* git.resolvePrimaryRemoteName(repositoryCwd);
-          const defaultBranchKey = `${repositoryCwd}\0${remote}`;
-          let branch = defaultBranches.get(defaultBranchKey);
-          if (branch === undefined) {
-            branch = yield* git.resolveDefaultBranchName(repositoryCwd, remote);
-            // Without a local HEAD ref, only the remote can identify its default;
-            // a conventional name may be a feature branch.
-            if (branch === null) {
-              branch = yield* git
-                .execute({
-                  operation: "StorageCleanup.resolveDefaultBranch",
-                  cwd: repositoryCwd,
-                  args: ["ls-remote", "--symref", "--", remote, "HEAD"],
-                  timeoutMs: 20_000,
-                })
-                .pipe(
-                  Effect.map(
-                    (result) =>
-                      /^ref: refs\/heads\/(.+)\tHEAD\r?$/m.exec(result.stdout)?.[1] ?? null,
-                  ),
-                  Effect.orElseSucceed(() => null),
-                );
-            }
-            defaultBranches.set(defaultBranchKey, branch);
-          }
-          if (branch === null) return keep("default branch is unavailable");
-          const defaultRef = `refs/remotes/${remote}/${branch}`;
-          const refreshed = refreshedDefaultRefs.get(repositoryCwd) ?? new Set<string>();
-          if (!refreshed.has(defaultRef)) {
-            yield* git.fetchRemoteTrackingBranch({
+          const remotes = yield* git.execute({
+            operation: "StorageCleanup.listRemotes",
+            cwd: repositoryCwd,
+            args: ["remote"],
+          });
+          const remote =
+            remotes.stdout.trim() === ""
+              ? null
+              : yield* git.resolvePrimaryRemoteName(repositoryCwd);
+          let branch: string | null | undefined;
+          let defaultRef: string;
+          if (remote === null) {
+            if (!settings.worktreeUnchanged)
+              return keep("no remote is configured for merged-worktree cleanup");
+            const projectHead = yield* git.execute({
+              operation: "StorageCleanup.resolveProjectBranch",
               cwd: repositoryCwd,
-              remoteName: remote,
-              remoteBranch: branch,
+              args: ["symbolic-ref", "--quiet", "HEAD"],
+              allowNonZeroExit: true,
             });
-            refreshed.add(defaultRef);
-            refreshedDefaultRefs.set(repositoryCwd, refreshed);
+            if (projectHead.exitCode !== 0) return keep("project branch is unavailable");
+            defaultRef = projectHead.stdout.trim();
+            branch = defaultRef.slice("refs/heads/".length);
+          } else {
+            const defaultBranchKey = `${repositoryCwd}\0${remote}`;
+            branch = defaultBranches.get(defaultBranchKey);
+            if (branch === undefined) {
+              branch = yield* git.resolveDefaultBranchName(repositoryCwd, remote);
+              // Without a local HEAD ref, only the remote can identify its default;
+              // a conventional name may be a feature branch.
+              if (branch === null) {
+                branch = yield* git
+                  .execute({
+                    operation: "StorageCleanup.resolveDefaultBranch",
+                    cwd: repositoryCwd,
+                    args: ["ls-remote", "--symref", "--", remote, "HEAD"],
+                    timeoutMs: 20_000,
+                  })
+                  .pipe(
+                    Effect.map(
+                      (result) =>
+                        /^ref: refs\/heads\/(.+)\tHEAD\r?$/m.exec(result.stdout)?.[1] ?? null,
+                    ),
+                    Effect.orElseSucceed(() => null),
+                  );
+              }
+              defaultBranches.set(defaultBranchKey, branch);
+            }
+            if (branch === null) return keep("default branch is unavailable");
+            defaultRef = `refs/remotes/${remote}/${branch}`;
+            const refreshed = refreshedDefaultRefs.get(repositoryCwd) ?? new Set<string>();
+            if (!refreshed.has(defaultRef)) {
+              yield* git.fetchRemoteTrackingBranch({
+                cwd: repositoryCwd,
+                remoteName: remote,
+                remoteBranch: branch,
+              });
+              refreshed.add(defaultRef);
+              refreshedDefaultRefs.set(repositoryCwd, refreshed);
+            }
           }
           const base = yield* git.resolveCommit({
             cwd: worktreePath,
@@ -951,8 +986,12 @@ const make = Effect.gen(function* () {
           });
           const integrated = ancestor.exitCode === 0;
           eligible = integrated && settings.worktreeUnchanged;
-          if (eligible) removalReason = "no commits beyond the default branch";
-          if (!eligible && settings.worktreeOnMerge && thread.branch !== null) {
+          if (eligible)
+            removalReason =
+              remote === null
+                ? "no commits beyond the project branch"
+                : "no commits beyond the default branch";
+          if (!eligible && remote !== null && settings.worktreeOnMerge && thread.branch !== null) {
             const pullRequest = yield* gitManager.branchPullRequest(
               { cwd: worktreePath, branch: thread.branch },
               { refresh: true },
@@ -965,6 +1004,7 @@ const make = Effect.gen(function* () {
             });
             if (eligible) removalReason = "pull request was merged";
           }
+          if (!eligible && remote === null) return keep("has commits beyond the project branch");
         }
         if (!eligible)
           return keep(
@@ -1139,13 +1179,23 @@ const make = Effect.gen(function* () {
         const stat = yield* fs.stat(target);
         if (stat.type === "Directory" && rotatedLogs) {
           yield* visit(target);
-        } else if (stat.type === "File" && (!rotatedLogs || /\.(?:log|ndjson)\.\d+$/.test(name))) {
+        } else if (
+          stat.type === "File" &&
+          (!rotatedLogs || isExpirableLogFile(name, directory !== realRoot))
+        ) {
           const modified = Option.getOrNull(stat.mtime);
           if (modified !== null && modified.getTime() < now - days * DAY_MS) {
             const current = (yield* settingsService.getSettings).storageCleanup;
             if ((rotatedLogs ? current.logsAfterDays : current.browserArtifactsAfterDays) !== days)
               return;
-            yield* fs.remove(target);
+            // Windows refuses to remove a file a provider session still holds open; skip it.
+            if (
+              !(yield* fs.remove(target).pipe(
+                Effect.as(true),
+                Effect.orElseSucceed(() => false),
+              ))
+            )
+              continue;
             removed.files++;
             removed.bytes += Number(stat.size);
           }
@@ -1313,7 +1363,7 @@ const make = Effect.gen(function* () {
     const changes = yield* settingsService.subscribeChanges;
     const events = engine.streamDomainEvents;
     let lastSettings = yield* settingsService.getSettings.pipe(Effect.orDie);
-    yield* forkParked(
+    yield* forkParkedHousekeeping(
       requestSweep.pipe(
         Effect.andThen(worker.drain),
         Effect.repeat(Schedule.spaced("1 hour")),

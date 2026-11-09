@@ -9,8 +9,10 @@ import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
 import {
   JIRA_NOT_CONNECTED_MESSAGE,
+  usableJiraBindingOfProject,
   WORK_ITEM_READ_TOOL_IDS,
 } from "./t3team-workItemReadAvailability.ts";
+import { readWorkItemRecordForProject } from "./t3team-workItemReadLive.ts";
 
 const SEARCH = "t3team.work_item.search";
 const GET = "t3team.work_item.get";
@@ -133,3 +135,26 @@ it.effect("a workflow run's per-call grant cannot conjure them without an accoun
     expect(listed(yield* bind(options))).toEqual([GET, SEARCH]);
   }),
 );
+
+it.effect("the project record read is refused exactly where the tool is, with the same text", () =>
+  Effect.gen(function* () {
+    const read = (source: typeof jiraSource | { readonly provider: "local" } | undefined) =>
+      readWorkItemRecordForProject({
+        project: { source } as Parameters<typeof readWorkItemRecordForProject>[0]["project"],
+        issueKey: "IES-1",
+      }).pipe(Effect.flip, Effect.provide(SqlitePersistenceMemory));
+
+    expect(yield* read(jiraSource)).toBe(JIRA_NOT_CONNECTED_MESSAGE);
+    signIn();
+    expect(yield* read({ provider: "local" })).toBe(JIRA_NOT_CONNECTED_MESSAGE);
+    expect(yield* read(undefined)).toBe(JIRA_NOT_CONNECTED_MESSAGE);
+    setAccountNeedsReconnect("acct-1", true);
+    expect(yield* read(jiraSource)).toBe(JIRA_NOT_CONNECTED_MESSAGE);
+  }),
+);
+
+it("resolves a project's usable binding the way a thread's is resolved", () => {
+  expect(usableJiraBindingOfProject({ source: jiraSource }, () => true)).toEqual(jiraSource);
+  expect(usableJiraBindingOfProject({ source: jiraSource }, () => false)).toBeNull();
+  expect(usableJiraBindingOfProject({ source: { provider: "local" } }, () => true)).toBeNull();
+});

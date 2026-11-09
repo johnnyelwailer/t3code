@@ -1,0 +1,39 @@
+# Re-render gate for UI PRs.
+#
+# Why this file exists: after any interaction or data change, only the UI that
+# changed may re-render. That is only verifiable by a per-component re-render
+# test, so the gate requires one for every interactive component a PR touches
+# (or an explicit `Rerender: n/a` exemption line in the PR body). The gate is
+# plain Node with no workspace install, mirroring the additive-guard job: it
+# runs in seconds and a slow or broken main CI cannot mask a gate regression.
+name: T3Team Rerender Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: t3team-rerender-gate-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  rerender-gate:
+    name: Rerender gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # The gate diffs the branch against its merge-base with the PR
+          # target, so it needs real history, not a shallow clone.
+          fetch-depth: 0
+
+      - name: Rerender gate
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          BASE="$(git merge-base HEAD "${{ github.event.pull_request.base.sha }}")"
+          git diff --name-only --diff-filter=ACMR "$BASE" HEAD > t3team-rerender-changed.txt
+          printf '%s' "$PR_BODY" > t3team-rerender-pr-body.txt
+          node t3team-rerender-gate.mjs --files t3team-rerender-changed.txt --body t3team-rerender-pr-body.txt
