@@ -109,7 +109,7 @@ describe("prepareCloudChild", () => {
       const plain = yield* Effect.flip(prepare({ sessions, withRepository: false }));
       assert.match(
         plain.message,
-        /needs a project with a repository: project ".+" \(.+\) has no git remote/,
+        /needs a project with a repository: project ".+" \(.+\): this server could not resolve its git remote/,
       );
     }),
   );

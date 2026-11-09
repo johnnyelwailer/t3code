@@ -93,7 +93,7 @@ export const prepareCloudChild = Effect.fn("delegateTask.cloudSession.prepare")(
   const identity = input.project.repositoryIdentity;
   if (identity === undefined || identity === null) {
     return yield* invalid(
-      `cloudSession needs a project with a repository: project "${input.project.title}" (${input.project.workspaceRoot}) has no git remote this server can read. A cloud session runs the project's own repository.`,
+      `cloudSession needs a project with a repository: project "${input.project.title}" (${input.project.workspaceRoot}): this server could not resolve its git remote (no remote, a missing folder, or git timed out). A cloud session runs the project's own repository.`,
     );
   }
   if (input.acceptedChild !== undefined) {
