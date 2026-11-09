@@ -1,5 +1,8 @@
 import { ComposerContextId, UnknownContextRecord } from "@t3tools/contracts";
-import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
+import {
+  collectComposerContextReferences,
+  formatComposerContextReference,
+} from "@t3tools/shared/composerContextReferences";
 import * as Schema from "effect/Schema";
 
 import type { QueuedThreadMessage } from "./thread-outbox-model";
@@ -20,15 +23,20 @@ const decodeRecord = Schema.decodeUnknownOption(UnknownContextRecord);
 /**
  * The message with `context` attached as a composer context record that its text references, the
  * way the composer attaches a file or thread, so the agent reads it and the user sees a chip, not
- * typed text. Unchanged without context, when one is already attached, or when it does not fit.
+ * typed text. A missing reference or record is restored; unchanged without context, when both are
+ * there, or when it does not fit.
  */
 export function withFirstTurnContext(
   message: QueuedThreadMessage,
   context: FirstTurnContext | undefined,
 ): QueuedThreadMessage {
-  if (context === undefined || message.context?.records.some((record) => record.kind === KIND)) {
-    return message;
-  }
+  if (context === undefined) return message;
+  const referenced = collectComposerContextReferences(message.text).some(
+    (reference) => reference.contextId === CONTEXT_ID,
+  );
+  const records = message.context?.records ?? [];
+  const others = records.filter((record) => record.contextId !== CONTEXT_ID);
+  if (referenced && others.length < records.length) return message;
   const record = decodeRecord({
     version: 1,
     contextId: CONTEXT_ID,
@@ -40,7 +48,11 @@ export function withFirstTurnContext(
   const reference = formatComposerContextReference(record.value);
   return {
     ...message,
-    text: message.text.length > 0 ? `${message.text}\n\n${reference}` : reference,
-    context: { version: 1, records: [...(message.context?.records ?? []), record.value] },
+    text: referenced
+      ? message.text
+      : message.text.length > 0
+        ? `${message.text}\n\n${reference}`
+        : reference,
+    context: { version: 1, records: [...others, record.value] },
   };
 }

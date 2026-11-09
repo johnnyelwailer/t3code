@@ -16,6 +16,9 @@ const state = vi.hoisted(() => ({
   cleanups: [] as Array<() => void>,
   start: vi.fn(),
   prepare: vi.fn(),
+  threadShells: null as unknown as import("effect/reactivity").Atom.Writable<
+    ReadonlyArray<unknown>
+  >,
   writes: [] as Array<QueuedThreadMessage>,
   manager: null as unknown as ReturnType<
     typeof import("./thread-outbox-manager").createThreadOutboxManager
@@ -63,6 +66,7 @@ vi.mock("./server", async () => {
 });
 vi.mock("./threads", async () => {
   const { Atom, AsyncResult } = await import("effect/reactivity");
+  state.threadShells = Atom.make<ReadonlyArray<unknown>>([]).pipe(Atom.keepAlive);
   return {
     threadEnvironment: {
       startTurn: state.start,
@@ -70,7 +74,7 @@ vi.mock("./threads", async () => {
       setRuntimeMode: vi.fn(),
       setInteractionMode: vi.fn(),
     },
-    environmentThreadShells: { threadShellsAtom: Atom.make([]).pipe(Atom.keepAlive) },
+    environmentThreadShells: { threadShellsAtom: state.threadShells },
     threadFamilies: {
       mount: () => () => {},
       familyAtom: () => Atom.make(AsyncResult.success({})),
@@ -150,6 +154,8 @@ const queuedOnPlaceholder = (
   text: "Fix the build",
   attachments: [],
   modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+  runtimeMode: "full-access",
+  interactionMode: "default",
   creation: {
     projectId: placeholder.projectId,
     projectTitle: "Repo",
@@ -174,8 +180,28 @@ function drain(): { readonly settled: Promise<void> } {
   return { settled: settled.promise };
 }
 
+// A follow-up the user sent in the new thread before it existed (the thread screen's composer).
+const followUp = (): QueuedThreadMessage => {
+  const { creation: _creation, ...message } = queuedOnPlaceholder({
+    messageId: MessageId.make("follow-up"),
+    commandId: CommandId.make("follow-up-command"),
+    text: "Also run the tests",
+    createdAt: "2026-11-09T00:01:00.000Z",
+  });
+  return message;
+};
+const createdThread = {
+  environmentId: "machine",
+  id: "new-thread",
+  modelSelection: { instanceId: "codex", model: "gpt-5.4" },
+  runtimeMode: "full-access",
+  interactionMode: "default",
+  session: null,
+};
+
 beforeEach(() => {
   state.writes = [];
+  appAtomRegistry.set(state.threadShells, []);
   appAtomRegistry.set(state.manager.queuedMessagesByThreadKeyAtom, {});
   appAtomRegistry.set(dispatchingQueuedMessageIdAtom, null);
   state.start.mockReset().mockResolvedValue(AsyncResult.success({}));
@@ -188,6 +214,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   state.cleanups.splice(0).forEach((cleanup) => cleanup());
 });
 
@@ -218,6 +245,66 @@ describe("retargetQueuedCreations", () => {
     expect(state.start).toHaveBeenCalledOnce();
   });
 
+  it("moves the thread's queued follow-up after its creation and delivers both once", async () => {
+    await state.manager.enqueue(followUp());
+    await state.manager.enqueue(queuedOnPlaceholder());
+    state.writes = [];
+
+    const result = await retargetQueuedCreations(placeholder, real);
+    expect(result).toEqual({ complete: true, movedThreadIds: ["new-thread"] });
+    expect(state.writes.map((message) => [message.messageId, message.environmentId])).toEqual([
+      ["message", "machine"],
+      ["follow-up", "machine"],
+    ]);
+
+    // The server publishes the new thread's shell when it accepts the creation.
+    state.start.mockImplementation(async () => {
+      appAtomRegistry.set(state.threadShells, [createdThread]);
+      return AsyncResult.success({});
+    });
+    await drain().settled;
+    if (state.start.mock.calls.length < 2) await drain().settled;
+    expect(
+      state.start.mock.calls.map(([call]) => [call.environmentId, call.input.message.messageId]),
+    ).toEqual([
+      ["machine", "message"],
+      ["machine", "follow-up"],
+    ]);
+    expect(remaining()).toEqual([]);
+  });
+
+  it("does not move a message that is being dispatched, and reports the move incomplete", async () => {
+    await state.manager.enqueue(queuedOnPlaceholder());
+    appAtomRegistry.set(dispatchingQueuedMessageIdAtom, MessageId.make("message"));
+    const result = await retargetQueuedCreations(placeholder, real);
+    expect(result.complete).toBe(false);
+    expect(remaining()[0]?.environmentId).toBe("pending-env");
+  });
+
+  it("re-reads and retries a message whose revision changed during the move", async () => {
+    await state.manager.enqueue(queuedOnPlaceholder());
+    vi.spyOn(state.manager, "update").mockResolvedValueOnce(false);
+    const result = await retargetQueuedCreations(placeholder, real);
+    expect(result.complete).toBe(true);
+    expect(remaining()[0]?.environmentId).toBe("machine");
+  });
+
+  it("reports a queue it could not read, without moving anything", async () => {
+    await state.manager.enqueue(queuedOnPlaceholder());
+    vi.spyOn(state.manager, "load").mockResolvedValueOnce(false);
+    const result = await retargetQueuedCreations(placeholder, real);
+    expect(result).toEqual({ complete: false, movedThreadIds: [] });
+    expect(remaining()[0]?.environmentId).toBe("pending-env");
+  });
+
+  it("moves a follow-up left behind once its creation already moved (a retry)", async () => {
+    await state.manager.enqueue(retargetQueuedCreation(queuedOnPlaceholder(), placeholder, real)!);
+    await state.manager.enqueue(followUp());
+    const result = await retargetQueuedCreations(placeholder, real);
+    expect(result.complete).toBe(true);
+    expect(remaining().map((message) => message.environmentId)).toEqual(["machine", "machine"]);
+  });
+
   it("leaves messages queued on other projects alone", async () => {
     const other = queuedOnPlaceholder({
       messageId: MessageId.make("other"),
@@ -226,38 +313,5 @@ describe("retargetQueuedCreations", () => {
     await state.manager.enqueue(other);
     await retargetQueuedCreations(placeholder, real);
     expect(remaining()).toEqual([other]);
-  });
-});
-
-describe("retargetQueuedCreation", () => {
-  it("moves the thread target and project, dropping the placeholder's workspace path", () => {
-    const moved = retargetQueuedCreation(
-      queuedOnPlaceholder({
-        creation: { ...queuedOnPlaceholder().creation!, projectCwd: "/placeholder" },
-      }),
-      placeholder,
-      real,
-    );
-    expect(moved?.environmentId).toBe("machine");
-    expect(moved?.threadId).toBe("new-thread");
-    expect(moved?.creation).toEqual({
-      projectId: "repo",
-      projectTitle: "Repo",
-      workspaceMode: "local",
-      branch: null,
-      worktreePath: null,
-    });
-  });
-
-  it("returns null for a follow-up message or another placeholder", () => {
-    const { creation: _creation, ...followUp } = queuedOnPlaceholder();
-    expect(retargetQueuedCreation(followUp, placeholder, real)).toBeNull();
-    expect(
-      retargetQueuedCreation(
-        queuedOnPlaceholder({ environmentId: EnvironmentId.make("other-env") }),
-        placeholder,
-        real,
-      ),
-    ).toBeNull();
   });
 });

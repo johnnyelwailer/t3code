@@ -9,7 +9,11 @@ export type { FirstTurnContext };
  * catalog. The app turns it into the placeholder project the draft screen renders with.
  */
 export interface PendingDraftProject {
-  /** The environment the draft will be sent to (also stamped on the draft). */
+  /**
+   * The environment the draft will be sent to (also stamped on the draft). While it is a placeholder
+   * it must be unique to this draft and never a connectable environment: tasks queued on it wait
+   * there, undelivered, until `retargetPendingDraft` moves them.
+   */
   readonly environmentId: string;
   /** The project's id on that environment (also stamped on the draft). */
   readonly id: string;

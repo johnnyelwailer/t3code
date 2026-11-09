@@ -75,6 +75,22 @@ describe("withFirstTurnContext", () => {
     expect(twice.context?.records.map((record) => record.kind)).toEqual(["mention", "setup-note"]);
   });
 
+  it("references the context again when a restored message lost the chip text", () => {
+    const sent = withFirstTurnContext(message, notice);
+    const withoutChip = { ...sent, text: "Fix the build" };
+    const resent = withFirstTurnContext(withoutChip, notice);
+    expect(collectComposerContextReferences(resent.text)).toHaveLength(1);
+    expect(resent.context?.records).toHaveLength(1);
+  });
+
+  it("restores the record when the text still references it but the record was dropped", () => {
+    const sent = withFirstTurnContext(message, notice);
+    const { context: _dropped, ...withoutRecord } = sent;
+    const resent = withFirstTurnContext(withoutRecord, notice);
+    expect(resent.text).toBe(sent.text);
+    expect(resent.context?.records).toEqual(sent.context?.records);
+  });
+
   it("leaves the message alone without context or when the facts do not fit a record", () => {
     expect(withFirstTurnContext(message, undefined)).toBe(message);
     expect(withFirstTurnContext(message, { label: "x", text: "y".repeat(70_000) })).toBe(message);
