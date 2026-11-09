@@ -37,15 +37,11 @@ import { machineRepositoryFromRemote } from "./t3team-cloudSessionMachineNames.t
 import { makeMachineStateOperations } from "./t3team-CloudSessionMachineState.ts";
 import {
   findSessionForDelete,
-  removeMachineCheckout,
+  sameRepository,
   type DeleteFlow,
   type LocalProjectRef,
 } from "./t3team-CloudSessionDeleteFlow.ts";
-import {
-  cancelSessionRun,
-  removeSnapshotCaches,
-  waitForRunEnd,
-} from "./t3team-CloudSessionDeleteSteps.ts";
+import { deleteCloudSession } from "./t3team-CloudSessionDeleteRun.ts";
 import * as VcsProcessModule from "../vcs/VcsProcess.ts";
 import * as ProjectServiceModule from "../project/ProjectService.ts";
 import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
@@ -503,29 +499,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       if (!(yield* readFeatureFlagFromConfig("CLOUD_SESSION_STOP_DELETE")))
         return yield* stopDeleteOff;
       const context = yield* findSessionForDelete(deleteFlow, input);
-      // Stop the run first; its teardown runs on cancel and preserves the checkout the delete
-      // then checks. A claimed standby's run is read directly: it is not in the caller's list.
-      const status =
-        context.kind === "run"
-          ? context.run!.status
-          : (yield* deleteFlow.gh.getRun(context.runId, { allowReserve: true })).status;
-      if (status !== "completed") {
-        yield* cancelSessionRun(deleteFlow, context.runId);
-        yield* waitForRunEnd(deleteFlow, context.runId);
-      }
-      const wipBranch = yield* removeMachineCheckout(deleteFlow, context);
-      yield* removeSnapshotCaches(deleteFlow, context.runId);
-      return { wipBranch, warnings: [] };
+      return yield* deleteCloudSession(deleteFlow, context);
     });
 
   return { list, create, cancel, deleteInfo, delete: deleteSession } as const;
 });
-
-const sameRepository = (
-  a: { readonly owner: string; readonly name: string },
-  b: { readonly owner: string; readonly name: string },
-) =>
-  a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase();
 
 /** No git on this server: the cache side of a delete still works, the checkout side cannot. */
 const unavailableMachineState = {

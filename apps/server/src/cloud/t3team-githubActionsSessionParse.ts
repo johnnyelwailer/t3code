@@ -10,7 +10,7 @@
  * read this" must never be mistaken for it.
  */
 
-import { actorLogin } from "./t3team-cloudSessionRunOwnership.ts";
+import { actorIdOf, actorLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
 function asString(value: unknown): string {
@@ -20,6 +20,8 @@ function asString(value: unknown): string {
 function asNullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
+
+const withActorId = (actorId: number | null) => (actorId === null ? {} : { actorId });
 
 function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
   return {
@@ -31,6 +33,7 @@ function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
     htmlUrl: asString(raw["html_url"]),
     name: asString(raw["name"]) || asString(raw["display_title"]),
     actor: actorLogin(raw["actor"]),
+    ...withActorId(actorIdOf(raw["actor"])),
     ...(typeof raw["run_attempt"] === "number" ? { runAttempt: raw["run_attempt"] } : {}),
   };
 }

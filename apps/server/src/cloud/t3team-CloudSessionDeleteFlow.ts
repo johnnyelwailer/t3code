@@ -15,21 +15,18 @@ import {
   machineRepositoryFromRemote,
   type MachineRepository,
 } from "./t3team-cloudSessionMachineNames.ts";
-import { parseSessionRunIdentity } from "./t3team-CloudSessionDelete.ts";
+import { parseSessionRunIdentity, type SessionRepository } from "./t3team-CloudSessionDelete.ts";
 import type { MachineStateOperations } from "./t3team-CloudSessionMachineState.ts";
 import type { makeSessionGh } from "./t3team-CloudSessionGh.ts";
 import type { ClaimLedger } from "./t3team-CloudSessionClaim.ts";
 import { claimedIdentity, isClaimed } from "./t3team-CloudSessionClaim.ts";
 import type { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 
-/** The session's gh operations (makeSessionGh's result). */
-export type SessionGh = Effect.Success<ReturnType<typeof makeSessionGh>>;
-
-/** The repository a machine's run carries: owner/name; the host comes from the local checkout. */
-export interface RepositoryIdentity {
-  readonly owner: string;
-  readonly name: string;
-}
+/** The session gh operations a delete uses (makeSessionGh's result provides them). */
+export type DeleteGh = Pick<
+  Effect.Success<ReturnType<typeof makeSessionGh>>,
+  "resolveLogin" | "listRunsFor" | "getRun" | "runInteractive"
+>;
 
 /** The delete's view of this session and its machine. */
 export interface DeleteSessionContext {
@@ -38,7 +35,7 @@ export interface DeleteSessionContext {
   readonly kind: "run" | "claimed";
   readonly run: WorkflowRunSummary | null;
   readonly workspace: string | null;
-  readonly repository: RepositoryIdentity | null;
+  readonly repository: SessionRepository | null;
 }
 
 export interface LocalProjectRef {
@@ -50,7 +47,7 @@ export interface LocalProjectRef {
 
 export interface DeleteFlow {
   readonly repoRef: CloudSessionRepoRef;
-  readonly gh: SessionGh;
+  readonly gh: DeleteGh;
   readonly claims: ClaimLedger;
   readonly broker: NexiBrokerService["Service"];
   readonly machineState: MachineStateOperations;
@@ -142,6 +139,7 @@ export const findSessionForDelete = Effect.fn("cloud.session.delete.find")(funct
 export const removeMachineCheckout = Effect.fn("cloud.session.delete.checkout")(function* (
   flow: DeleteFlow,
   context: DeleteSessionContext,
+  snapshotOwner: string | null,
 ) {
   const { repository } = context;
   if (repository === null) return null;
@@ -155,33 +153,32 @@ export const removeMachineCheckout = Effect.fn("cloud.session.delete.checkout")(
   }
   const local = (yield* flow.listLocalProjects()).find((project) => {
     const projectRepository = machineRepositoryFromRemote(project.remoteUrl ?? "");
-    return projectRepository !== null && matchesRepository(projectRepository, repository);
+    return projectRepository !== null && sameRepository(projectRepository, repository);
   });
   if (local === undefined) {
     return yield* new CloudSessionFailedError({
       reason: "delete_blocked",
-      message: `No open project points at ${repository.owner}/${repository.name} on this server, so its machine's work cannot be checked. Open the project and try again.`,
+      message: `No open project points at ${repository.host}/${repository.owner}/${repository.name} on this server, so its machine's work cannot be checked. Open the project and try again.`,
     });
   }
   const pinnedSha = yield* flow.pinnedCommitFor(local.workspaceRoot);
-  const localRemote = machineRepositoryFromRemote(local.remoteUrl!);
   const result = yield* flow.machineState.deleteMachineCheckout({
-    host: localRemote === null ? flow.repoRef.host : localRemote.host,
+    host: repository.host,
     owner: repository.owner,
     name: repository.name,
     localRoot: local.workspaceRoot,
     pinnedSha,
-    login: yield* flow.gh.resolveLogin({ allowReserve: true }),
+    snapshotOwner,
     workspace: context.workspace,
+    runId: context.runId,
   });
   return result.wipBranch;
 });
 
-function matchesRepository(
-  a: MachineRepository,
-  b: { readonly owner: string; readonly name: string },
-): boolean {
+/** Host, owner and name: one forge's `acme/api` is not another's. */
+export function sameRepository(a: MachineRepository, b: SessionRepository): boolean {
   return (
-    a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
+    [a.host, a.owner, a.name].join("/").toLowerCase() ===
+    [b.host, b.owner, b.name].join("/").toLowerCase()
   );
 }

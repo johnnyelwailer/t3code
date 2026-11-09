@@ -81,7 +81,7 @@ const GhWorkflowRunsJson = Schema.Struct({
       updated_at: Schema.String,
       html_url: Schema.String,
       name: Schema.String,
-      actor: Schema.Struct({ login: Schema.String }),
+      actor: Schema.Struct({ login: Schema.String, id: Schema.Number }),
     }),
   ),
 });
@@ -185,7 +185,7 @@ const makeGithubMock = (
             updated_at: "2026-09-14T12:00:01Z",
             html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
             name: options.runName ?? `hive/nx-nexi [main] [${tag}]`,
-            actor: { login },
+            actor: { login, id: 1283972 },
           },
         }),
       );
@@ -198,7 +198,7 @@ const makeGithubMock = (
           actions_caches: ids.map((id) => ({
             id,
             ref: "refs/heads/main",
-            key: `nexi-session-userdata-u-${login}_/${999}`,
+            key: `nexi-session-userdata-g1283972.u-${login}_/${999}`,
             size_in_bytes: 1,
           })),
         }),
@@ -224,7 +224,7 @@ const makeGithubMock = (
                   updated_at: "2026-09-14T12:00:01Z",
                   html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
                   name: options.runName ?? `hive/nx-nexi [main] [${tag}]`,
-                  actor: { login },
+                  actor: { login, id: 1283972 },
                 },
               ],
         }),
@@ -685,7 +685,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin;
       for (const input of [
         '"machine_repository":"https://nexplore.ghe.com/acme/api.git"',
-        '"session_repository":"acme/api"',
+        '"session_repository":"nexplore.ghe.com/acme/api"',
         `"machine_commit":"${"a".repeat(40)}"`,
         '"machine_devcontainer":".devcontainer/devcontainer.json"',
         // The creator's own workspace, so no other user's session restores this one's snapshot.
@@ -1242,7 +1242,8 @@ describe("CloudSessionService.delete", () => {
     Effect.gen(function* () {
       const { providers } = yield* providersForWithProject({
         runStatus: "completed",
-        runName: "hive/nx-nexi [main] [s1] · machine · ws u-pj_ · repo hive/nx-nexi · setup",
+        runName:
+          "hive/nx-nexi [main] [s1] · machine · ws u-pj_ · repo nexplore.ghe.com/hive/nx-nexi · setup",
       });
       const exit = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
         Effect.flatMap((svc) => Effect.exit(svc.delete({ sessionId: "999" }))),
@@ -1342,7 +1343,8 @@ describe("CloudSessionService.delete", () => {
   it.effect("deleteInfo names the machine's repository from the run name", () =>
     Effect.gen(function* () {
       const { info, calls } = yield* deleteInfoFor({
-        runName: "hive/nx-nexi [main] [s1] · machine · ws u-pj_ · repo hive/nx-nexi · setup",
+        runName:
+          "hive/nx-nexi [main] [s1] · machine · ws u-pj_ · repo nexplore.ghe.com/hive/nx-nexi · setup",
       });
       assert.equal(info.repository, "hive/nx-nexi");
       // The info read asks nothing of the remote: no cancel, no cache work.

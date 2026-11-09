@@ -1,11 +1,12 @@
 /**
- * The delete's provider-side steps: stop the run, wait for its teardown to finish, and
- * remove the run's snapshot caches from the fleet repository.
+ * The delete's provider-side steps: stop the run, wait for its teardown to finish, refuse while
+ * another run of the workspace is live, and read and remove the workspace's snapshot caches.
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Ref from "effect/Ref";
 
 import {
   cancelRunRequest,
@@ -13,7 +14,11 @@ import {
   listCachesRequest,
 } from "./t3team-githubActionsSessionClient.ts";
 import { parseCachesResponse } from "./t3team-githubActionsSessionParse.ts";
-import { isSessionSnapshotKeyForRun } from "./t3team-CloudSessionDelete.ts";
+import {
+  parseSessionRunIdentity,
+  parseSnapshotCacheKey,
+  type SnapshotCacheKey,
+} from "./t3team-CloudSessionDelete.ts";
 import type { DeleteFlow } from "./t3team-CloudSessionDeleteFlow.ts";
 
 /** How long a delete may wait for a stopped run's teardown before giving up (retryable). */
@@ -69,15 +74,18 @@ export const cancelSessionRun = Effect.fn("cloud.session.delete.stop")(function*
   );
 });
 
-/**
- * Remove this run's snapshot cache entries from the fleet repository. A cache the fleet has
- * not stored for the run is not a failure: the session simply never saved one.
- */
-export const removeSnapshotCaches = Effect.fn("cloud.session.delete.caches")(function* (
+export interface SnapshotScan {
+  /** Every session snapshot entry the scan read, with its parsed key. */
+  readonly entries: ReadonlyArray<{ readonly id: number } & SnapshotCacheKey>;
+  /** False when the fleet holds more caches than one delete reads. */
+  readonly complete: boolean;
+}
+
+/** Read the fleet's session snapshot caches, bounded at `CACHE_PAGE_LIMIT` pages. */
+export const scanSnapshotCaches = Effect.fn("cloud.session.delete.caches.scan")(function* (
   flow: DeleteFlow,
-  runId: number,
 ) {
-  const ids: number[] = [];
+  const entries: Array<{ readonly id: number } & SnapshotCacheKey> = [];
   for (let page = 1; page <= CACHE_PAGE_LIMIT; page++) {
     const result = yield* flow.gh.runInteractive(listCachesRequest(flow.repoRef, page));
     const parsed = parseCachesResponse(result.body);
@@ -88,12 +96,50 @@ export const removeSnapshotCaches = Effect.fn("cloud.session.delete.caches")(fun
       });
     }
     for (const entry of parsed.entries) {
-      if (isSessionSnapshotKeyForRun(entry.key, runId)) ids.push(entry.id);
+      const key = parseSnapshotCacheKey(entry.key);
+      if (key !== null) entries.push({ id: entry.id, ...key });
     }
-    if (!parsed.hasMore) break;
+    if (!parsed.hasMore) return { entries, complete: true } satisfies SnapshotScan;
   }
+  return { entries, complete: false } satisfies SnapshotScan;
+});
+
+/** Remove cache entries by id; one the fleet already dropped is not a failure. */
+export const removeCaches = Effect.fn("cloud.session.delete.caches.remove")(function* (
+  flow: DeleteFlow,
+  ids: ReadonlyArray<number>,
+) {
   for (const id of ids) {
     yield* flow.gh.runInteractive(deleteCacheRequest(flow.repoRef, id));
   }
-  return ids.length;
+});
+
+/**
+ * Refuse while another run of this workspace is live: it could restore what the delete is
+ * removing, or push its resume branch again right after.
+ */
+export const assertNoOtherLiveRun = Effect.fn("cloud.session.delete.live")(function* (
+  flow: DeleteFlow,
+  runId: number,
+  workspace: string,
+) {
+  const login = yield* flow.gh.resolveLogin({ allowReserve: true });
+  const listed = (yield* flow.gh.listRunsFor(login, { allowReserve: true }))
+    .filter((run) => parseSessionRunIdentity(run.name).workspace === workspace)
+    .map((run) => ({ id: run.id, status: run.status }));
+  const claimed = [...(yield* Ref.get(flow.claims)).entries()]
+    .filter(([, entry]) => entry.login === login && entry.workspace === workspace)
+    .map(([id]) => Number(id));
+  for (const id of claimed) {
+    if (id !== runId && !listed.some((run) => run.id === id)) {
+      listed.push({ id, status: (yield* flow.gh.getRun(id, { allowReserve: true })).status });
+    }
+  }
+  const live = listed.find((run) => run.id !== runId && run.status !== "completed");
+  if (live !== undefined) {
+    return yield* new CloudSessionFailedError({
+      reason: "delete_blocked",
+      message: `Another session of this machine is still running (run ${live.id}). Stop it first, then delete.`,
+    });
+  }
 });

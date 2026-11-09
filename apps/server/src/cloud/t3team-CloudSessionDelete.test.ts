@@ -1,8 +1,8 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 
 import {
-  isSessionSnapshotKeyForRun,
   parseSessionRunIdentity,
+  parseSnapshotCacheKey,
   resumeBranchName,
   resumeTipHasUnpushedWork,
   sessionRepositoryInput,
@@ -11,41 +11,46 @@ import {
 import { plainProjectDispatchInputs } from "./t3team-cloudSessionPlainProject.ts";
 import { parseCachesResponse, parseRunResponse } from "./t3team-githubActionsSessionParse.ts";
 
+const HIVE = { host: "nexplore.ghe.com", owner: "hive", name: "nx-nexi" };
+
 describe("parseSessionRunIdentity", () => {
   it("reads the workspace and repository markers from a machine session's name", () => {
     const identity = parseSessionRunIdentity(
-      "hive/nx-nexi [main] [s1] · machine · ws m-pj.hive.nx-nexi_ · repo hive/nx-nexi · setup",
+      "nexi-session [s1] · machine · setup · ws m-pj.hive.nx-nexi_ · repo nexplore.ghe.com/hive/nx-nexi",
     );
     assert.equal(identity.workspace, "m-pj.hive.nx-nexi_");
-    assert.deepEqual(identity.repository, { owner: "hive", name: "nx-nexi" });
+    assert.deepEqual(identity.repository, HIVE);
   });
 
   it("reads a plain session's repository without a workspace", () => {
-    const identity = parseSessionRunIdentity("hive/nx-nexi [main] [s1] · repo other/acme");
+    const identity = parseSessionRunIdentity("nexi-session [s1] · repo github.com/other/acme");
     assert.equal(identity.workspace, null);
-    assert.deepEqual(identity.repository, { owner: "other", name: "acme" });
+    assert.deepEqual(identity.repository, { host: "github.com", owner: "other", name: "acme" });
   });
 
-  it("reads nothing from an old-format name", () => {
-    const identity = parseSessionRunIdentity("hive/nx-nexi [main] [s1]");
-    assert.equal(identity.workspace, null);
-    assert.equal(identity.repository, null);
+  it("reads nothing from an old-format name, nor a repository without its host", () => {
+    assert.deepEqual(parseSessionRunIdentity("nexi-session [s1]"), {
+      workspace: null,
+      repository: null,
+    });
+    assert.equal(parseSessionRunIdentity("nexi-session [s1] · repo hive/nx-nexi").repository, null);
   });
 
   it("never mistakes the standby marker for a workspace", () => {
     const identity = parseSessionRunIdentity(
-      "hive/nx-nexi [main] [s1] · machine · repo hive/nx-nexi · standby ab12",
+      "nexi-session [s1] · machine · repo nexplore.ghe.com/hive/nx-nexi · standby ab12",
     );
     assert.equal(identity.workspace, null);
-    assert.deepEqual(identity.repository, { owner: "hive", name: "nx-nexi" });
+    assert.deepEqual(identity.repository, HIVE);
   });
 });
 
 describe("sessionRepositoryInput", () => {
   it("is what the run name's repository marker reads back", () => {
-    const input = sessionRepositoryInput({ owner: "hive", name: "nx-nexi" });
+    const input = sessionRepositoryInput(HIVE);
+    assert.equal(input, "nexplore.ghe.com/hive/nx-nexi");
     const identity = parseSessionRunIdentity(`nexi-session [s1] · machine · ws w_ · repo ${input}`);
-    assert.deepEqual(identity.repository, { owner: "hive", name: "nx-nexi" });
+    assert.deepEqual(identity.repository, HIVE);
   });
 
   it("rides with a plain checkout's dispatch inputs", () => {
@@ -58,32 +63,44 @@ describe("sessionRepositoryInput", () => {
         author: { name: "N", email: "e@example.test" },
       },
     });
-    assert.equal(inputs["session_repository"], "acme/api");
+    assert.equal(inputs["session_repository"], "h/acme/api");
   });
 });
 
-describe("isSessionSnapshotKeyForRun", () => {
-  it("matches the run's snapshot key and its -final variant, under any workspace", () => {
-    assert.isTrue(isSessionSnapshotKeyForRun("nexi-session-userdata-u-pj_/999", 999));
-    assert.isTrue(isSessionSnapshotKeyForRun("nexi-session-userdata-u-pj_/999-final", 999));
+describe("parseSnapshotCacheKey", () => {
+  // session.yml "Save session snapshot": nexi-session-userdata-<owner>.<workspace>/<run id>[-final]
+  it("reads owner, workspace and run from both save keys", () => {
+    assert.deepEqual(parseSnapshotCacheKey("nexi-session-userdata-g1283972.m-pj.acme.api_/999"), {
+      owner: "g1283972",
+      workspace: "m-pj.acme.api_",
+      runId: 999,
+    });
+    const owner = `o${"a1".repeat(16)}`;
+    assert.deepEqual(parseSnapshotCacheKey(`nexi-session-userdata-${owner}.u-pj_/999-final`), {
+      owner,
+      workspace: "u-pj_",
+      runId: 999,
+    });
   });
 
-  it("does not match another run, a prefix, or an unrelated key", () => {
-    assert.isFalse(isSessionSnapshotKeyForRun("nexi-session-userdata-u-pj_/99", 999));
-    assert.isFalse(isSessionSnapshotKeyForRun("nexi-session-userdata-u-pj_/9999", 999));
-    assert.isFalse(isSessionSnapshotKeyForRun("other-cache/999", 999));
+  it("rejects keys of another shape", () => {
+    assert.isNull(parseSnapshotCacheKey("nexi-session-userdata-u-pj_/999"));
+    assert.isNull(parseSnapshotCacheKey("nexi-session-userdata-pj.u-pj_/999"));
+    assert.isNull(parseSnapshotCacheKey("other-cache/999"));
   });
 });
 
 describe("delete branch names", () => {
-  it("names the resume branch from the login and workspace", () => {
-    assert.equal(resumeBranchName("pj", "u-pj_"), "nexi-resume/pj/u-pj_");
-    assert.equal(resumeBranchName("pj", "m-pj.hive.nx-nexi_"), "nexi-resume/pj/m-pj.hive.nx-nexi_");
+  it("names the resume branch as session.yml pushes it: nexi-resume/<snapshot owner>/<workspace>", () => {
+    assert.equal(
+      resumeBranchName("g1283972", "m-pj.acme.api_"),
+      "nexi-resume/g1283972/m-pj.acme.api_",
+    );
   });
 
-  it("names the wip branch from the workspace, stable per machine", () => {
-    assert.equal(wipBranchName("u-pj_"), "wip/nexi-u-pj");
-    assert.equal(wipBranchName("m-pj.hive.nx-nexi_"), "wip/nexi-m-pj.hive.nx-nexi");
+  it("names the wip branch per run, so a later delete never lands on an earlier save", () => {
+    assert.equal(wipBranchName("u-pj_", 999), "wip/nexi-u-pj-999");
+    assert.equal(wipBranchName("m-pj.hive.nx-nexi_", 1000), "wip/nexi-m-pj.hive.nx-nexi-1000");
   });
 });
 
@@ -144,12 +161,14 @@ describe("parseRunResponse", () => {
           updated_at: "2026-09-14T12:00:01Z",
           html_url: "https://example/runs/999",
           name: "the run",
-          actor: { login: "pj" },
+          actor: { login: "pj", id: 1283972 },
         },
       }),
     );
     assert.equal(parsed?.id, 999);
     assert.equal(parsed?.status, "in_progress");
+    // session.yml names a non-broker run's snapshot owner after it: g<actor id>.
+    assert.equal(parsed?.actorId, 1283972);
   });
 
   it("fails on a body without the run", () => {

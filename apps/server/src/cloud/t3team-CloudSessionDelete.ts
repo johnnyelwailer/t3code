@@ -2,73 +2,78 @@
  * What a cloud session persists on its machine: the workspace's snapshots in the fleet
  * repository's Actions cache and, for a session with a repository, its resume branch.
  * Pure naming and matching rules only, no I/O, so they stay readable and testable apart.
+ * Every name mirrors session.yml; hive's session-delete-names test pins the workflow side.
  */
-
-/** The Actions-cache key prefix every session snapshot save uses (session.yml "Save session snapshot"). */
-const SNAPSHOT_CACHE_KEY_PREFIX = "nexi-session-userdata-";
 
 /**
  * session.yml's run-name markers: ` · ws <workspace>` (the snapshot workspace) and
- * ` · repo <owner>/<name>` (the `session_repository` input: the repository whose resume branch
- * the machine preserves). Runs started by hand or by older clients lack them.
+ * ` · repo <host>/<owner>/<name>` (the `session_repository` input: the repository whose resume
+ * branch the machine preserves). Runs started by hand or by older clients lack them.
  */
 const WORKSPACE_MARKER = / · ws ([A-Za-z0-9._-]+)/;
-const REPOSITORY_MARKER = / · repo ([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)/;
+const REPOSITORY_MARKER =
+  / · repo ([A-Za-z0-9.-]+(?::[0-9]+)?)\/([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)/;
+
+/** A repository as the run name and the delete name it: the host keeps two forges apart. */
+export interface SessionRepository {
+  readonly host: string;
+  readonly owner: string;
+  readonly name: string;
+}
 
 /**
  * What a delete can read back from a run's name. `null` fields are "unknown", not "none":
- * a delete that cannot identify the machine's repository still removes what it can (the
- * snapshots) and says so, instead of guessing a repository.
+ * a delete that cannot identify the machine's repository refuses instead of guessing one.
  */
 export interface SessionRunIdentity {
   readonly workspace: string | null;
-  readonly repository: {
-    readonly owner: string;
-    readonly name: string;
-  } | null;
+  readonly repository: SessionRepository | null;
 }
 
 /** The `session_repository` dispatch input that session.yml echoes as the ` · repo` marker. */
-export function sessionRepositoryInput(repository: {
-  readonly owner: string;
-  readonly name: string;
-}): string {
-  return `${repository.owner}/${repository.name}`;
+export function sessionRepositoryInput(repository: SessionRepository): string {
+  return `${repository.host}/${repository.owner}/${repository.name}`;
 }
 
 export function parseSessionRunIdentity(runName: string): SessionRunIdentity {
   const workspace = WORKSPACE_MARKER.exec(runName)?.[1] ?? null;
-  const repository = REPOSITORY_MARKER.exec(runName);
-  const owner = repository?.[1];
-  const name = repository?.[2];
+  const [, host, owner, name] = REPOSITORY_MARKER.exec(runName) ?? [];
   return {
     workspace,
-    repository: owner === undefined || name === undefined ? null : { owner, name },
+    repository:
+      host === undefined || owner === undefined || name === undefined
+        ? null
+        : { host, owner, name },
   };
 }
 
 /**
- * Whether a fleet-repository Actions cache key is this run's session snapshot: the plain save
- * and the handoff's final save both key on the run id (`…/<runId>` and `…/<runId>-final`).
- * The prefix keeps a cache entry of any other workflow from ever matching.
+ * session.yml "Save session snapshot": `nexi-session-userdata-<owner>.<workspace>/<run id>`, the
+ * handoff's final save with `-final`. The restore matches the `<owner>.<workspace>/` prefix.
  */
-export function isSessionSnapshotKeyForRun(key: string, runId: number): boolean {
-  if (!key.startsWith(SNAPSHOT_CACHE_KEY_PREFIX)) return false;
-  return key.endsWith(`/${runId}`) || key.endsWith(`/${runId}-final`);
+const SNAPSHOT_CACHE_KEY =
+  /^nexi-session-userdata-(g[0-9]+|o[0-9a-f]{32})\.([A-Za-z0-9._-]+)\/([0-9]+)(?:-final)?$/;
+
+export interface SnapshotCacheKey {
+  readonly owner: string;
+  readonly workspace: string;
+  readonly runId: number;
+}
+
+export function parseSnapshotCacheKey(key: string): SnapshotCacheKey | null {
+  const [, owner, workspace, runId] = SNAPSHOT_CACHE_KEY.exec(key) ?? [];
+  if (owner === undefined || workspace === undefined || runId === undefined) return null;
+  return { owner, workspace, runId: Number(runId) };
 }
 
 /** The machine's resume branch, where machine-preserve.sh pushes its checkout. */
-export function resumeBranchName(owner: string, workspace: string): string {
-  return `nexi-resume/${owner}/${workspace}`;
+export function resumeBranchName(snapshotOwner: string, workspace: string): string {
+  return `nexi-resume/${snapshotOwner}/${workspace}`;
 }
 
-/**
- * The branch a delete saves the machine's unpushed work to, one per machine: the machine is
- * identified by its workspace, so re-deleting it (or deleting after a stop that preserved
- * again) lands on the same branch, over the older save.
- */
-export function wipBranchName(workspace: string): string {
-  return `wip/nexi-${workspace.replace(/_+$/, "")}`;
+/** The branch a delete saves one run's unpushed work to; per run, so no save overwrites another. */
+export function wipBranchName(workspace: string, runId: number): string {
+  return `wip/nexi-${workspace.replace(/_+$/, "")}-${runId}`;
 }
 
 /**

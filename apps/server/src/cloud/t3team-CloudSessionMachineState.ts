@@ -16,6 +16,7 @@ import {
   unreachable,
   type CheckoutGit,
   type MachineCheckoutInput,
+  type ResumeBranch,
 } from "./t3team-CloudSessionMachineCheckout.ts";
 
 /** Fetch and push against a remote: slower than a local read, but still far from a job. */
@@ -79,19 +80,29 @@ export const makeMachineStateOperations = Effect.fn("cloud.session_machine_state
         Effect.mapError(() => unreachable()),
       );
 
-  /**
-   * Fetch the resume branch into `CHECK_REF`. Answers the tip sha, or null when the branch
-   * does not exist on the remote (the machine's checkout was never preserved: nothing to
-   * save, nothing to remove).
-   */
-  const fetchResumeBranch = (
-    cwd: string,
-    remote: string,
-    branch: string,
-    token: string | null,
-    host: string,
-    scratch: boolean,
-  ): Effect.Effect<string | null, CloudSessionFailedError> =>
+  /** `git ls-remote` of every owner's resume branch of `workspace`; a failed listing fails. */
+  const listResumeBranches: CheckoutGit["listResumeBranches"] = (
+    cwd,
+    remote,
+    workspace,
+    token,
+    host,
+  ) =>
+    git(
+      cwd,
+      ["ls-remote", "--heads", remote, `refs/heads/nexi-resume/*/${workspace}`],
+      token,
+      host,
+    ).pipe(
+      Effect.flatMap((out) =>
+        out.ok
+          ? Effect.succeed(parseResumeBranches(out.stdout, workspace))
+          : Effect.fail(unreachable()),
+      ),
+    );
+
+  /** Fetch `branch` into `CHECK_REF` and answer its tip. */
+  const fetchBranch: CheckoutGit["fetchBranch"] = (cwd, remote, branch, token, host, scratch) =>
     git(
       cwd,
       [
@@ -104,21 +115,16 @@ export const makeMachineStateOperations = Effect.fn("cloud.session_machine_state
       token,
       host,
     ).pipe(
-      Effect.flatMap((out) => {
-        const absent = /couldn't find remote ref|remote ref does not exist/i.test(out.stderr);
-        if (absent) return Effect.succeed(null);
-        if (!out.ok) return Effect.fail(unreachable());
-        return git(cwd, ["rev-parse", CHECK_REF], token, host).pipe(
-          Effect.flatMap((tip) =>
-            tip.ok ? Effect.succeed(tip.stdout) : Effect.fail(unreachable()),
-          ),
-        );
-      }),
+      Effect.flatMap((out) =>
+        out.ok ? git(cwd, ["rev-parse", CHECK_REF], token, host) : Effect.fail(unreachable()),
+      ),
+      Effect.flatMap((tip) => (tip.ok ? Effect.succeed(tip.stdout) : Effect.fail(unreachable()))),
     );
 
   const plumbing: CheckoutGit = {
     run: git,
-    fetchResumeBranch,
+    listResumeBranches,
+    fetchBranch,
     credentialFor,
   };
 
@@ -127,3 +133,16 @@ export const makeMachineStateOperations = Effect.fn("cloud.session_machine_state
   };
   return operations;
 });
+
+/** `<sha> refs/heads/nexi-resume/<owner>/<workspace>` lines, exactly this workspace's. */
+export function parseResumeBranches(
+  stdout: string,
+  workspace: string,
+): ReadonlyArray<ResumeBranch> {
+  return stdout.split("\n").flatMap((line) => {
+    const [sha, ref] = line.trim().split(/\s+/);
+    const match = /^refs\/heads\/(nexi-resume\/([^/]+)\/(.+))$/.exec(ref ?? "");
+    if (sha === undefined || match === null || match[3] !== workspace) return [];
+    return [{ owner: match[2]!, branch: match[1]!, sha }];
+  });
+}

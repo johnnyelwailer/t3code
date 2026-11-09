@@ -33,6 +33,8 @@ export interface WorkflowRunSummary {
   readonly name: string;
   /** Who started the run. This GHE ignores `actor=` on the list query, so filter on this. */
   readonly actor: string;
+  /** The actor's numeric id; session.yml names a non-broker run's snapshot owner after it. */
+  readonly actorId?: number;
   /** Which attempt of the run this is; a re-run keeps `id` and bumps this. Absent reads as 1. */
   readonly runAttempt?: number;
 }
