@@ -270,6 +270,18 @@ it.effect(
       const remote = yield* makeTmpDir();
       yield* run(remote, ["init", "--bare"]);
       yield* run(cwd, ["remote", "add", "origin", remote]);
+      // `branch --set-upstream-to` needs a commit and an origin/main ref; push without -u.
+      yield* run(cwd, [
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "init",
+      ]);
+      yield* run(cwd, ["push", "origin", "main"]);
       // Warm the cache: the branch has no upstream yet.
       assert.equal(yield* driver.readConfigValue(cwd, "branch.main.remote"), null);
       const warmedProbes = yield* Ref.get(configGetProbes);
