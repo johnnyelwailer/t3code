@@ -59,9 +59,10 @@ const stubs = Layer.mergeAll(
     }),
   }),
   Layer.succeed(ResourceTelemetry.ResourceTelemetry, {
-    refresh: Effect.sync(() => {
+    // A successful scan is fresh, like the real one: readAt is now, not the fixture's epoch.
+    refresh: Effect.gen(function* () {
       calls.telemetry += 1;
-      return telemetrySnapshot;
+      return { ...telemetrySnapshot, readAt: yield* DateTime.now };
     }),
     latest: Effect.succeed(telemetrySnapshot),
   } as unknown as ResourceTelemetry.ResourceTelemetry["Service"]),
