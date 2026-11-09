@@ -57,7 +57,7 @@ async function moveThreadComposerDraft(fromKey: string, toKey: string): Promise<
 
 /**
  * New threads moved from a placeholder environment to the real one: their unsent composer text
- * moves with them, and every open route showing one follows to the real environment.
+ * moves with them, and every open route showing one follows to the real environment. Never throws.
  */
 export async function followRetargetedThreads(
   from: EnvironmentId,
@@ -66,7 +66,12 @@ export async function followRetargetedThreads(
 ): Promise<void> {
   if (threadIds.length === 0) return;
   for (const threadId of threadIds) {
-    await moveThreadComposerDraft(scopedThreadKey(from, threadId), scopedThreadKey(to, threadId));
+    try {
+      await moveThreadComposerDraft(scopedThreadKey(from, threadId), scopedThreadKey(to, threadId));
+    } catch (error) {
+      // The text stays under the old key; the thread itself must still follow.
+      console.warn("[thread-outbox] could not move a moved thread's composer draft", error);
+    }
   }
   whenRootNavigationReady(() => {
     const routes = (rootNavigationRef.getRootState()?.routes ?? []) as ReadonlyArray<RouteNode>;

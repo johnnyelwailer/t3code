@@ -53,6 +53,23 @@ describe("retargetPendingDraft", () => {
     expect(mocks.calls).toEqual(["queue", "follow", "draft"]);
   });
 
+  it("without pending, restamps synchronously and throws an invalid id to the caller", () => {
+    void retargetPendingDraft("draft-1", real);
+    expect(retargetNewTaskDraft).toHaveBeenCalledOnce();
+    expect(() => retargetPendingDraft("draft-1", { environmentId: "", projectId: "p" })).toThrow();
+  });
+
+  it("with pending, reports a failure as incomplete instead of rejecting", async () => {
+    retargetQueuedCreations.mockRejectedValueOnce(new Error("disk full"));
+    await expect(retargetPendingDraft("draft-1", real, pending)).resolves.toEqual({
+      complete: false,
+    });
+    await expect(
+      retargetPendingDraft("draft-1", { environmentId: "", projectId: "p" }, pending),
+    ).resolves.toEqual({ complete: false });
+    expect(retargetNewTaskDraft).not.toHaveBeenCalled();
+  });
+
   it("leaves the draft on its placeholder when the queue did not fully move, so a retry can", async () => {
     mocks.result = { complete: false, movedThreadIds: [] };
     expect(await retargetPendingDraft("draft-1", real, pending)).toEqual({ complete: false });

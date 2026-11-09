@@ -92,6 +92,16 @@ describe("followRetargetedThreads", () => {
     });
   });
 
+  it("still follows the routes when moving the composer draft fails", async () => {
+    mocks.rootState = { routes: [threadRoute("open", "pending-env")] };
+    mocks.drafts["pending-env:new-thread"] = { text: "and the docs", attachments: [] };
+    mocks.merge.mockRejectedValueOnce(new Error("disk full"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await followRetargetedThreads(from, to, [ThreadId.make("new-thread")]);
+    expect(mocks.dispatch).toHaveBeenCalledOnce();
+    expect(mocks.clear).not.toHaveBeenCalled();
+  });
+
   it("leaves an empty thread composer alone", async () => {
     mocks.rootState = { routes: [] };
     await followRetargetedThreads(from, to, [ThreadId.make("new-thread")]);

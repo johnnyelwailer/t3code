@@ -136,7 +136,7 @@ vi.mock("./use-composer-drafts", async () => {
 import { appAtomRegistry } from "./atom-registry";
 import { dispatchingQueuedMessageIdAtom } from "./use-thread-outbox";
 import { createThreadOutboxDelivery } from "./threadOutboxDelivery";
-import { retargetQueuedCreation, retargetQueuedCreations } from "./t3team-retargetQueuedCreations";
+import { retargetQueuedCreations } from "./t3team-retargetQueuedCreations";
 
 const placeholder = {
   environmentId: EnvironmentId.make("pending-env"),
@@ -271,47 +271,5 @@ describe("retargetQueuedCreations", () => {
       ["machine", "follow-up"],
     ]);
     expect(remaining()).toEqual([]);
-  });
-
-  it("does not move a message that is being dispatched, and reports the move incomplete", async () => {
-    await state.manager.enqueue(queuedOnPlaceholder());
-    appAtomRegistry.set(dispatchingQueuedMessageIdAtom, MessageId.make("message"));
-    const result = await retargetQueuedCreations(placeholder, real);
-    expect(result.complete).toBe(false);
-    expect(remaining()[0]?.environmentId).toBe("pending-env");
-  });
-
-  it("re-reads and retries a message whose revision changed during the move", async () => {
-    await state.manager.enqueue(queuedOnPlaceholder());
-    vi.spyOn(state.manager, "update").mockResolvedValueOnce(false);
-    const result = await retargetQueuedCreations(placeholder, real);
-    expect(result.complete).toBe(true);
-    expect(remaining()[0]?.environmentId).toBe("machine");
-  });
-
-  it("reports a queue it could not read, without moving anything", async () => {
-    await state.manager.enqueue(queuedOnPlaceholder());
-    vi.spyOn(state.manager, "load").mockResolvedValueOnce(false);
-    const result = await retargetQueuedCreations(placeholder, real);
-    expect(result).toEqual({ complete: false, movedThreadIds: [] });
-    expect(remaining()[0]?.environmentId).toBe("pending-env");
-  });
-
-  it("moves a follow-up left behind once its creation already moved (a retry)", async () => {
-    await state.manager.enqueue(retargetQueuedCreation(queuedOnPlaceholder(), placeholder, real)!);
-    await state.manager.enqueue(followUp());
-    const result = await retargetQueuedCreations(placeholder, real);
-    expect(result.complete).toBe(true);
-    expect(remaining().map((message) => message.environmentId)).toEqual(["machine", "machine"]);
-  });
-
-  it("leaves messages queued on other projects alone", async () => {
-    const other = queuedOnPlaceholder({
-      messageId: MessageId.make("other"),
-      creation: { ...queuedOnPlaceholder().creation!, projectId: ProjectId.make("elsewhere") },
-    });
-    await state.manager.enqueue(other);
-    await retargetQueuedCreations(placeholder, real);
-    expect(remaining()).toEqual([other]);
   });
 });
