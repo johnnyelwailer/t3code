@@ -8,6 +8,7 @@ const DETAILS_URL = "https://github.com/hive/nx-nexi/actions/runs/248523362";
 
 function readySession(): CloudSession {
   return {
+    sessionId: "248523362",
     providerKind: "github_actions",
     phase: "ready",
     detailsUrl: DETAILS_URL,

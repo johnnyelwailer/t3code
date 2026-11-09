@@ -8,10 +8,9 @@
 const SNAPSHOT_CACHE_KEY_PREFIX = "nexi-session-userdata-";
 
 /**
- * The markers session.yml's run-name carries: ` · ws <workspace>` (the snapshot workspace,
- * present on every session the app dispatches) and ` · repo <owner>/<name>` (the repository
- * whose resume branch the machine preserves). Both are absent on runs started by hand from
- * the Actions tab and on runs dispatched before the markers existed.
+ * session.yml's run-name markers: ` · ws <workspace>` (the snapshot workspace) and
+ * ` · repo <owner>/<name>` (the `session_repository` input: the repository whose resume branch
+ * the machine preserves). Runs started by hand or by older clients lack them.
  */
 const WORKSPACE_MARKER = / · ws ([A-Za-z0-9._-]+)/;
 const REPOSITORY_MARKER = / · repo ([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)/;
@@ -27,6 +26,14 @@ export interface SessionRunIdentity {
     readonly owner: string;
     readonly name: string;
   } | null;
+}
+
+/** The `session_repository` dispatch input that session.yml echoes as the ` · repo` marker. */
+export function sessionRepositoryInput(repository: {
+  readonly owner: string;
+  readonly name: string;
+}): string {
+  return `${repository.owner}/${repository.name}`;
 }
 
 export function parseSessionRunIdentity(runName: string): SessionRunIdentity {

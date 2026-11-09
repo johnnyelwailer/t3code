@@ -5,8 +5,10 @@ import {
   parseSessionRunIdentity,
   resumeBranchName,
   resumeTipHasUnpushedWork,
+  sessionRepositoryInput,
   wipBranchName,
 } from "./t3team-CloudSessionDelete.ts";
+import { plainProjectDispatchInputs } from "./t3team-cloudSessionPlainProject.ts";
 import { parseCachesResponse, parseRunResponse } from "./t3team-githubActionsSessionParse.ts";
 
 describe("parseSessionRunIdentity", () => {
@@ -36,6 +38,27 @@ describe("parseSessionRunIdentity", () => {
     );
     assert.equal(identity.workspace, null);
     assert.deepEqual(identity.repository, { owner: "hive", name: "nx-nexi" });
+  });
+});
+
+describe("sessionRepositoryInput", () => {
+  it("is what the run name's repository marker reads back", () => {
+    const input = sessionRepositoryInput({ owner: "hive", name: "nx-nexi" });
+    const identity = parseSessionRunIdentity(`nexi-session [s1] · machine · ws w_ · repo ${input}`);
+    assert.deepEqual(identity.repository, { owner: "hive", name: "nx-nexi" });
+  });
+
+  it("rides with a plain checkout's dispatch inputs", () => {
+    const inputs = plainProjectDispatchInputs({
+      kind: "checkout",
+      checkout: {
+        repository: { url: "https://h/acme/api.git", host: "h", owner: "acme", name: "api" },
+        commit: "a".repeat(40),
+        token: "t",
+        author: { name: "N", email: "e@example.test" },
+      },
+    });
+    assert.equal(inputs["session_repository"], "acme/api");
   });
 });
 

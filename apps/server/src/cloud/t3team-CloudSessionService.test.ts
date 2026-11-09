@@ -685,6 +685,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin;
       for (const input of [
         '"machine_repository":"https://nexplore.ghe.com/acme/api.git"',
+        '"session_repository":"acme/api"',
         `"machine_commit":"${"a".repeat(40)}"`,
         '"machine_devcontainer":".devcontainer/devcontainer.json"',
         // The creator's own workspace, so no other user's session restores this one's snapshot.
