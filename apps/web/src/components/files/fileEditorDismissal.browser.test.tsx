@@ -1,3 +1,4 @@
+import { getFiletypeFromFileName, getThemes, preloadHighlighter } from "@pierre/diffs";
 import { Editor, type EditorFactory } from "@pierre/diffs/edit";
 import { EditProvider, File } from "@pierre/diffs/react";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -12,12 +13,19 @@ describe("installFileEditorDismissal", () => {
     let editor: Editor<"file" | "file-diff", undefined, undefined> | undefined;
     const createEditor: EditorFactory<undefined, undefined> = (...args) =>
       (editor = new Editor(...args));
+    const file = { name: "server.ts", contents: "const server = 1;\n" };
+    // The editor mounts its content only once the shared highlighter holds the theme and grammar.
+    // Loading them cold takes over a second on a busy CI runner, past vi.waitFor's default.
+    await preloadHighlighter({
+      themes: getThemes(),
+      langs: ["text", getFiletypeFromFileName(file.name)],
+    });
     await using screen = await render(
       <>
         <p>Assistant reply</p>
         <div data-testid="file-surface">
           <EditProvider createEditor={createEditor}>
-            <File file={{ name: "server.ts", contents: "const server = 1;\n" }} edit />
+            <File file={file} edit />
           </EditProvider>
         </div>
       </>,
