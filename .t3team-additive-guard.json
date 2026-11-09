@@ -137,6 +137,7 @@
     "apps/server/src/cli/config.test.ts",
     "apps/server/src/cli/config.ts",
     "apps/server/src/cli/pair.ts",
+    "apps/server/src/cli/pair.test.ts",
     "apps/server/src/cli/server.ts",
     "apps/server/src/diagnostics/ProcessDiagnostics.ts",
     "apps/server/src/environment/ServerEnvironment.test.ts",
