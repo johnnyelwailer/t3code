@@ -384,10 +384,7 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
   const selected = props.selected ?? false;
   const rowAppearance = getThreadListV2RowAppearance(theme, sidebarPane, selected);
   const isDraft = pendingTask.kind === "draft";
-  const pendingDraft = pendingDraftHolding(usePendingDraft(isDraft ? pendingTask.draftKey : null), {
-    environmentId: pendingTask.environmentId,
-    projectId: pendingTask.projectId,
-  });
+  const pendingDraft = pendingDraftHolding(usePendingDraft(isDraft ? pendingTask.draftKey : null));
   const deleteLabel = isDraft ? "Discard" : "Delete";
   const handleDelete = useCallback(
     () => onDeletePendingTask(pendingTask),
