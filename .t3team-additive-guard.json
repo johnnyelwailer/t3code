@@ -451,6 +451,7 @@
     "apps/web/src/components/composerFooterLayout.ts",
     "apps/web/src/components/contextPresentationRegistry.ts",
     "apps/web/src/components/files/FileBrowserPanel.tsx",
+    "apps/web/src/components/files/fileEditorDismissal.browser.test.tsx",
     "apps/web/src/components/onboarding/WelcomeWizard.import.test.tsx",
     "apps/web/src/components/onboarding/WelcomeWizard.terminal.test.tsx",
     "apps/web/src/components/onboarding/WelcomeWizard.test.tsx",
