@@ -1,6 +1,5 @@
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
-import { followRetargetedThreads } from "../state/t3team-followRetargetedThreads";
 import {
   retargetQueuedCreations,
   type QueuedCreationTarget,
@@ -38,8 +37,8 @@ export function retargetPendingDraft(
 }
 
 /**
- * Tasks queued on the placeholder move first (with `firstTurnContext`), the threads that moved
- * follow, and the draft is restamped only when nothing is left behind. Never rejects.
+ * Tasks queued on the placeholder move first (with `firstTurnContext`) and their threads follow;
+ * the draft is restamped only when nothing is left behind. Never rejects.
  */
 async function moveQueuedThenRestamp(
   draftKey: string,
@@ -53,7 +52,6 @@ async function moveQueuedThenRestamp(
       projectId: pending.project.id,
     });
     const moved = await retargetQueuedCreations(from, to, pending.firstTurnContext);
-    await followRetargetedThreads(from.environmentId, to.environmentId, moved.movedThreadIds);
     if (!moved.complete) return { complete: false };
     retargetNewTaskDraft(draftKey, to);
     return { complete: true };

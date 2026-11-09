@@ -6,10 +6,8 @@ const mocks = vi.hoisted(() => ({
 }));
 const retargetNewTaskDraft = vi.hoisted(() => vi.fn());
 const retargetQueuedCreations = vi.hoisted(() => vi.fn());
-const followRetargetedThreads = vi.hoisted(() => vi.fn());
 vi.mock("../state/use-composer-drafts", () => ({ retargetNewTaskDraft }));
 vi.mock("../state/t3team-retargetQueuedCreations", () => ({ retargetQueuedCreations }));
-vi.mock("../state/t3team-followRetargetedThreads", () => ({ followRetargetedThreads }));
 
 import { retargetPendingDraft } from "./t3team-retargetPendingDraft";
 
@@ -28,9 +26,6 @@ beforeEach(() => {
     mocks.calls.push("queue");
     return mocks.result;
   });
-  followRetargetedThreads.mockReset().mockImplementation(async () => {
-    mocks.calls.push("follow");
-  });
 });
 
 describe("retargetPendingDraft", () => {
@@ -40,17 +35,14 @@ describe("retargetPendingDraft", () => {
     expect(retargetQueuedCreations).not.toHaveBeenCalled();
   });
 
-  it("moves the queued tasks first, then the open threads and the draft", async () => {
+  it("moves the queued tasks (and their threads) first, then the draft", async () => {
     expect(await retargetPendingDraft("draft-1", real, pending)).toEqual({ complete: true });
     expect(retargetQueuedCreations).toHaveBeenCalledExactlyOnceWith(
       { environmentId: "pending-env", projectId: "pending-project" },
       real,
       firstTurnContext,
     );
-    expect(followRetargetedThreads).toHaveBeenCalledExactlyOnceWith("pending-env", "cloud-env", [
-      "new-thread",
-    ]);
-    expect(mocks.calls).toEqual(["queue", "follow", "draft"]);
+    expect(mocks.calls).toEqual(["queue", "draft"]);
   });
 
   it("without pending, restamps synchronously and throws an invalid id to the caller", () => {

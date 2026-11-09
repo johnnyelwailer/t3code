@@ -1,5 +1,7 @@
 import { CommandId, EnvironmentId, MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+vi.mock("./t3team-followRetargetedThreads", () => ({ followRetargetedThreads: vi.fn() }));
 
 import { retargetQueuedCreation } from "./t3team-retargetQueuedCreations";
 import type { QueuedThreadMessage } from "./thread-outbox-model";
