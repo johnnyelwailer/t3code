@@ -1765,6 +1765,8 @@ describe("storage cleanup reports and local file policies", () => {
           }),
         ]);
         yield* fixture.activate(Stream.empty);
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
         const [report] = yield* fixture.service.reports.pipe(
           Stream.filter((report) => report !== null),
           Stream.take(1),
