@@ -30,7 +30,7 @@ export function T3TeamSidebarEnvironmentFilter({
           className={cn(
             "inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center rounded-full border px-2.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60",
             pill.selected
-              ? "border-transparent bg-primary text-primary-foreground"
+              ? "border-primary/40 bg-primary/10 text-foreground"
               : "border-border bg-card text-muted-foreground hover:text-foreground dark:bg-sidebar-control-surface",
           )}
         >
