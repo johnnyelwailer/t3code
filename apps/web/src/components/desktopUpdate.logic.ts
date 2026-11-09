@@ -48,9 +48,9 @@ export function getDesktopUpdateDownloadedVersion(state: DesktopUpdateState): st
 
 export function getDesktopUpdateReleaseUrl(
   version: string | null,
-  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY,
-  host: string | undefined = import.meta.env.T3CODE_DESKTOP_UPDATE_RELEASE_HOST,
-  tagPrefix: string | undefined = import.meta.env.T3CODE_DESKTOP_UPDATE_TAG_PREFIX,
+  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY,
+  host: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_HOST,
+  tagPrefix: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_TAG_PREFIX,
 ): string | null {
   const normalizedVersion = version?.trim();
   if (!normalizedVersion) return null;
@@ -61,8 +61,8 @@ export function getDesktopUpdateReleaseUrl(
 }
 
 export function getDesktopUpdateReleaseHistoryUrl(
-  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY,
-  host: string | undefined = import.meta.env.T3CODE_DESKTOP_UPDATE_RELEASE_HOST,
+  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY,
+  host: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_HOST,
 ): string {
   return desktopReleaseRepositoryUrl(repository, host);
 }
