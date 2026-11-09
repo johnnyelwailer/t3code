@@ -307,7 +307,7 @@ const ThreadInterruptTool = Tool.make("t3_thread_interrupt", {
 
 const EnvironmentLinksTool = Tool.make("t3_environment_links", {
   description:
-    "List linked environments and whether each answers now, plus Nexi cloud sessions (`delegate_task` `extensions.cloudSession`: `sessionId`). Pass `environmentId` to act there (`delegate_task`: `target.environmentId`). Expired: link again with `t3_environment_link`.",
+    "Linked environments, whether each answers, and cloud sessions (`sessionId` for `extensions.cloudSession`). Pass `environmentId` to act there; `delegate_task` uses `target.environmentId`. Expired: relink via `t3_environment_link`.",
   success: OrchestratorMcpEnvironmentLinksResult,
   failure: OrchestratorMcpFailure,
   failureMode: "return",
