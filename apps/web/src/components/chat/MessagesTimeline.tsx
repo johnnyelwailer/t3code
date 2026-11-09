@@ -28,6 +28,8 @@ import { createThreadJobsController } from "~/t3team/backend/t3team-thread-jobsB
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
+import { T3TeamRunCompanion } from "~/t3team/chat/t3team-RunCompanion";
+import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 import type { T3TeamTimelineRowProps } from "~/t3team/chat/t3team-timelineRowProps";
@@ -1445,6 +1447,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
           </div>
         </TimelineRowCtx>
       ) : null}
+      <T3TeamRunCompanion
+        key={listIdentityKey}
+        working={isWorking}
+        latestRunStatus={latestRun?.status}
+      />
     </TimelineListFooter>
   );
 
@@ -1470,7 +1477,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
           style={{ paddingBottom: emptyPlaceholderInset }}
         >
           <div className="flex flex-col items-center gap-3">
-            <T3TeamCompanionSlot placement="thread.new" mood="newThread" size="md" />
+            <T3TeamCompanionSlot
+              placement="thread.new"
+              mood={threadCompanionMood({ working: isWorking, latestRunStatus: latestRun?.status })}
+              size="md"
+            />
             <p className="text-sm text-muted-foreground">
               Send a message to start the conversation.
             </p>

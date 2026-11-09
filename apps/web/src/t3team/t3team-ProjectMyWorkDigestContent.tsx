@@ -26,15 +26,22 @@ import { resolveMyWorkDigestRenderState } from "~/t3team/t3team-myWorkDigestRend
 import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
+import {
+  digestSelectedTicket,
+  type DigestSelectedTicket,
+} from "~/t3team/t3team-digestSelectedTicket";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 export function ProjectMyWorkDigestContent({
   project,
   onOpenTicket,
+  onSelectTicket,
   digestFilters,
 }: {
   project: ProjectShellProject;
   onOpenTicket: (projectId: string, ticketId: string) => void;
+  /** Replaces the dashboard aside as where a row's ticket opens (a thread's view tab). */
+  onSelectTicket?: ((ticket: DigestSelectedTicket) => void) | undefined;
   digestFilters?: DigestFilterState | undefined;
 }) {
   const flags = useDigestVariantFlags();
@@ -146,7 +153,11 @@ export function ProjectMyWorkDigestContent({
         graph={effectiveGraph}
         nowMs={nowMs}
         burndownVariant={flags.digestBurndownVariant}
-        onOpenTicket={openTicketInApp}
+        onOpenTicket={
+          onSelectTicket
+            ? (ticketId) => onSelectTicket(digestSelectedTicket(effectiveGraph, ticketId))
+            : openTicketInApp
+        }
         onResetArrangement={resetArrangement}
         refreshing={refreshing}
         emptyStateAllowed={freshness === "fresh"}

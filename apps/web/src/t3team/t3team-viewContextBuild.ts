@@ -8,6 +8,7 @@ import {
 
 import type { DigestAsideTicket } from "~/t3team/t3team-digestPrAsideStore";
 import type { ReportedViewState, ReportedVisibleItems } from "~/t3team/t3team-viewContextStore";
+import type { T3TeamViewTarget } from "~/t3team/t3team-viewTarget";
 
 export function selectionFromAside(
   ticket: Pick<DigestAsideTicket, "ticketId"> | null,
@@ -38,6 +39,31 @@ export function buildViewContext(input: {
     filters: view.filters,
     visibleItemIds: ids.slice(0, T3TEAM_VIEW_CONTEXT_MAX_ITEM_IDS),
     visibleItemCount: ids.length,
+  };
+}
+
+/**
+ * The context for a view open as a tab beside a thread. A My Work tab has no filter bar of its own,
+ * so it reports the digest's visible items under empty filters; a work-item tab is that one item.
+ */
+export function buildViewTabContext(input: {
+  readonly target: T3TeamViewTarget;
+  readonly items: ReportedVisibleItems | null;
+}): T3TeamViewContext | null {
+  const { target, items } = input;
+  const { projectId } = target;
+  if (target.kind === "my-work") {
+    const view: ReportedViewState = { surface: "my-work", projectId, filters: {} };
+    return buildViewContext({ projectId, view, items, selection: null });
+  }
+  return {
+    version: T3TEAM_VIEW_CONTEXT_VERSION,
+    surface: "work-item",
+    projectId,
+    selection: { kind: "work-item", id: target.ticketId },
+    filters: {},
+    visibleItemIds: [target.ticketId],
+    visibleItemCount: 1,
   };
 }
 

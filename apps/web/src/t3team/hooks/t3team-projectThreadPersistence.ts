@@ -97,7 +97,7 @@ export function mergeStoredThreads(
 export function readStoredThreadsFromClientSettings(
   settings: ClientSettings | null | undefined,
 ): ProjectThread[] {
-  return parseStoredThreads(settings?.t3teamStoredThreadsJson);
+  return parseStoredThreads(settings?.t3team.storedThreadsJson);
 }
 
 function readLegacyStoredThreads(): ProjectThread[] {
@@ -133,13 +133,16 @@ export async function hydrateStoredThreads(): Promise<ProjectThread[]> {
     const persistedThreads = readStoredThreadsFromClientSettings(settings);
     const mergedThreads = mergeStoredThreads(persistedThreads, legacyThreads);
     const mergedJson = encodeStoredThreads(mergedThreads);
-    const persistedJson = settings?.t3teamStoredThreadsJson ?? "";
+    const persistedJson = settings?.t3team.storedThreadsJson ?? "";
 
     if (persistedJson !== mergedJson && (persistedJson.length > 0 || mergedThreads.length > 0)) {
       await localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...currentSettings,
-        t3teamStoredThreadsJson: mergedJson,
+        t3team: {
+          ...currentSettings.t3team,
+          storedThreadsJson: mergedJson,
+        },
       });
     }
     lastPersistedJson = mergedJson;
@@ -179,11 +182,14 @@ async function writeStoredThreadsJson(json: string): Promise<void> {
   try {
     const settings = await localApi.persistence.getClientSettings();
     const currentSettings = settings ?? DEFAULT_CLIENT_SETTINGS;
-    if (currentSettings.t3teamStoredThreadsJson !== json) {
+    if (currentSettings.t3team.storedThreadsJson !== json) {
       await localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...currentSettings,
-        t3teamStoredThreadsJson: json,
+        t3team: {
+          ...currentSettings.t3team,
+          storedThreadsJson: json,
+        },
       });
     }
     lastPersistedJson = json;

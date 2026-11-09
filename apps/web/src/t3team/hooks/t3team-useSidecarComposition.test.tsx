@@ -14,9 +14,9 @@ vi.mock("~/rpc/serverState", () => ({
 vi.mock("~/t3team/hooks/t3team-sidecarCompositionPersistence", () => ({
   persistStoredSidecarPersonalization: mockPersistStoredSidecarPersonalization,
   readStoredSidecarPersonalizationFromServerSettings: (settings: {
-    t3teamStoredSidecarCompositionJson?: string;
+    t3team?: { storedSidecarCompositionJson?: string };
   }) => {
-    const raw = settings?.t3teamStoredSidecarCompositionJson;
+    const raw = settings?.t3team?.storedSidecarCompositionJson;
     return raw ? JSON.parse(raw) : {};
   },
 }));
@@ -53,14 +53,16 @@ describe("useT3TeamSidecarComposition", () => {
     vi.clearAllMocks();
     mockUseServerConfig.mockReturnValue({
       settings: {
-        t3teamStoredSidecarCompositionJson: JSON.stringify({
-          composition: {
-            sections: [
-              { sectionId: "quick-starts", visible: true, collapsed: false },
-              { sectionId: "notes", visible: true, collapsed: false },
-            ],
-          },
-        }),
+        t3team: {
+          storedSidecarCompositionJson: JSON.stringify({
+            composition: {
+              sections: [
+                { sectionId: "quick-starts", visible: true, collapsed: false },
+                { sectionId: "notes", visible: true, collapsed: false },
+              ],
+            },
+          }),
+        },
       },
     });
   });
@@ -122,17 +124,19 @@ describe("useT3TeamSidecarComposition", () => {
 
     mockUseServerConfig.mockReturnValue({
       settings: {
-        t3teamStoredSidecarCompositionJson: JSON.stringify({
-          composition: {
-            sections: [
-              { sectionId: "quick-starts", visible: true, collapsed: false },
-              { sectionId: "notes", visible: true, collapsed: false },
-            ],
-          },
-          itemHides: {
-            "quick-starts": ["recipe-2"],
-          },
-        }),
+        t3team: {
+          storedSidecarCompositionJson: JSON.stringify({
+            composition: {
+              sections: [
+                { sectionId: "quick-starts", visible: true, collapsed: false },
+                { sectionId: "notes", visible: true, collapsed: false },
+              ],
+            },
+            itemHides: {
+              "quick-starts": ["recipe-2"],
+            },
+          }),
+        },
       },
     });
 
@@ -147,17 +151,19 @@ describe("useT3TeamSidecarComposition", () => {
 
     mockUseServerConfig.mockReturnValue({
       settings: {
-        t3teamStoredSidecarCompositionJson: JSON.stringify({
-          composition: {
-            sections: [
-              { sectionId: "quick-starts", visible: true, collapsed: false },
-              { sectionId: "notes", visible: true, collapsed: false },
-            ],
-          },
-          itemPins: {
-            "quick-starts": ["recipe-3"],
-          },
-        }),
+        t3team: {
+          storedSidecarCompositionJson: JSON.stringify({
+            composition: {
+              sections: [
+                { sectionId: "quick-starts", visible: true, collapsed: false },
+                { sectionId: "notes", visible: true, collapsed: false },
+              ],
+            },
+            itemPins: {
+              "quick-starts": ["recipe-3"],
+            },
+          }),
+        },
       },
     });
 

@@ -63,15 +63,6 @@ export const CORE_FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: false,
     addedOn: "2026-10-09",
   },
-  CONTEXT_CHAT_TAB: {
-    group: "My Work",
-    label: "Context chat tab",
-    description:
-      "A pinned Chat tab in the right panel of My Work, dashboards, work items and change requests, bound to what you are looking at. Off: no Chat tab and the binding is not recorded.",
-    defaultEnabled: false,
-    requiresRestart: false,
-    addedOn: "2026-11-01",
-  },
   TRANSIENT_AUTO_RESUME: {
     group: "Agent",
     subgroup: "Reliability",

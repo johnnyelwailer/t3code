@@ -1,11 +1,12 @@
 /**
- * One voice utterance from transcript to the voice thread: route it to a tier, make sure the
- * thread exists (created on first use with the role prompt as its first message, always under
- * "No project", never in whichever project happens to be open or listed first), then send it
- * with the tier's model and the fresh live state. While a
- * voice turn is running, utterances queue behind it (existing queue semantics, no interrupt).
+ * One voice utterance from transcript to the voice thread: make sure the thread exists (created
+ * on first use with the role prompt as its first message, always under "No project", never in
+ * whichever project happens to be open or listed first), then send it with the thread's composer
+ * model and the fresh live state. The model follows the composer's selection (Auto is optional,
+ * not forced). While a voice turn is running, utterances queue behind it (no interrupt).
  */
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
+import { ProviderInstanceId } from "@t3tools/contracts";
 import type {
   ChatAttachment,
   MessageId,
@@ -21,12 +22,17 @@ import {
   withVoiceLiveState,
   type VoiceThreadShell,
 } from "./t3team-voiceLiveState";
-import { VOICE_TIER_MODEL, type VoiceTier } from "./t3team-voiceRouting";
 import { voiceTranscriptMetaFile } from "./t3team-voiceTranscriptMeta";
 import type { VoiceThreadHome } from "./t3team-voiceThreadStore";
 
+/** The voice thread's starting model; the composer can change it to any tier, including Auto. */
+const VOICE_DEFAULT_MODEL: ModelSelection = {
+  instanceId: ProviderInstanceId.make("nexplore"),
+  model: "low",
+};
+
 export type VoiceSubmitResult =
-  | { readonly status: "sent"; readonly tier: VoiceTier }
+  | { readonly status: "sent" }
   | {
       readonly status: "error";
       readonly code: "no-project" | "send-failed";
@@ -43,7 +49,6 @@ export interface VoiceSessionDeps {
    * machine offers none. Voice threads only ever live here.
    */
   readonly projectlessProject: () => Promise<ProjectId | null>;
-  readonly route: (text: string) => Promise<ModelSelection>;
   readonly startTurn: (input: StartThreadTurnInput) => Promise<void>;
   /** Uploads a generated file for the next message; null when it could not be uploaded. */
   readonly uploadFile?: (file: File) => Promise<ChatAttachment | null>;
@@ -71,13 +76,13 @@ export async function createVoiceThread(deps: VoiceSessionDeps, projectId: Proje
       text: VOICE_ROLE_PROMPT,
       attachments: [],
     },
-    modelSelection: VOICE_TIER_MODEL.synthesis,
+    modelSelection: VOICE_DEFAULT_MODEL,
     ...RUNTIME,
     bootstrap: {
       createThread: {
         projectId,
         title: VOICE_THREAD_TITLE,
-        modelSelection: VOICE_TIER_MODEL.synthesis,
+        modelSelection: VOICE_DEFAULT_MODEL,
         ...RUNTIME,
         branch: null,
         worktreePath: null,
@@ -111,9 +116,6 @@ async function ensureVoiceThread(deps: VoiceSessionDeps): Promise<ThreadId | nul
   return projectId === null ? null : createVoiceThread(deps, projectId);
 }
 
-const tierOf = (selection: ModelSelection): VoiceTier =>
-  selection.model === VOICE_TIER_MODEL.control.model ? "control" : "synthesis";
-
 /** The transcript's whisper metadata as a file attachment; a failed upload never blocks the message. */
 async function transcriptAttachments(
   deps: VoiceSessionDeps,
@@ -124,16 +126,17 @@ async function transcriptAttachments(
   return attachment === null ? [] : [attachment];
 }
 
+/**
+ * Send the utterance to the voice thread with the thread's own composer model (no per-utterance
+ * tier routing: a manual composer choice always wins, and Auto is just one pickable model).
+ */
 async function sendVoiceUtterance(
   deps: VoiceSessionDeps,
   threadId: ThreadId,
   text: string,
   metadata?: VoiceTranscriptMetadata,
-): Promise<VoiceTier> {
-  const [modelSelection, attachments] = await Promise.all([
-    deps.route(text),
-    transcriptAttachments(deps, metadata),
-  ]);
+): Promise<void> {
+  const attachments = await transcriptAttachments(deps, metadata);
   const live = withVoiceLiveState(text, voiceLiveThreads(deps.threads(), threadId));
   await deps.startTurn({
     threadId,
@@ -144,11 +147,9 @@ async function sendVoiceUtterance(
       attachments,
       context: { version: 1, records: live.records },
     },
-    modelSelection,
     ...RUNTIME,
     dispatchMode: "queue",
   });
-  return tierOf(modelSelection);
 }
 
 async function submit(
@@ -165,8 +166,8 @@ async function submit(
         detail: 'This machine has no "No project" folder for the voice thread.',
       };
     }
-    const tier = await sendVoiceUtterance(deps, threadId, text, metadata);
-    return { status: "sent", tier };
+    await sendVoiceUtterance(deps, threadId, text, metadata);
+    return { status: "sent" };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     return { status: "error", code: "send-failed", detail };

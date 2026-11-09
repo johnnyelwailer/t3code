@@ -20,7 +20,7 @@ const settingsState = vi.hoisted(() => ({
 
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
-    selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
+    selector ? selector({ t3team: { activityLabels: settingsState.activityLabelsEnabled } }) : {},
 }));
 vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
   useFeatureFlag: (key: string) => key !== "UI_ACTIVITY_LABELS" || settingsState.activityLabelsFlag,
