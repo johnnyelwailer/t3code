@@ -19,6 +19,7 @@ export type {
   WorkspaceExtraTab,
 } from "./t3team-extensionTypes";
 export type {
+  FirstTurnContext,
   PendingDraft,
   PendingDraftProject,
   PendingDraftSlot,
