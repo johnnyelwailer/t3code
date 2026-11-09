@@ -107,7 +107,10 @@ describe("prepareCloudChild", () => {
       const isolated = yield* Effect.flip(prepare({ sessions, worktree: true }));
       assert.match(isolated.message, /omit workspace isolation/);
       const plain = yield* Effect.flip(prepare({ sessions, withRepository: false }));
-      assert.match(plain.message, /needs a project with a repository/);
+      assert.match(
+        plain.message,
+        /needs a project with a repository: project ".+" \(.+\) has no git remote/,
+      );
     }),
   );
 
