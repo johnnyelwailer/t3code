@@ -111,6 +111,8 @@ const withDescriptorServer = <A, E, R>(
         response.writeHead(404);
         response.end();
       });
+      // Without this, a failed listen (e.g. EAFNOSUPPORT on ::1) never resumes and hangs the test.
+      server.once("error", (error) => resume(Effect.die(error)));
       server.listen(0, host, () => resume(Effect.succeed(server)));
     }),
     (server) => {
@@ -123,8 +125,15 @@ const withDescriptorServer = <A, E, R>(
     (server) => Effect.sync(() => server.close()),
   );
 
+const ipv6Loopback = Object.values(NodeOS.networkInterfaces()).some((addresses) =>
+  (addresses ?? []).some((address) => address.family === "IPv6" && address.address === "::1"),
+);
+const ipv6Case = `publishes an IPv6-only server through Tailscale Serve when pairing${
+  ipv6Loopback ? "" : " (skipped: this host has no IPv6 loopback ::1)"
+}`;
+
 describe("t3 pair", () => {
-  it.effect("publishes an IPv6-only server through Tailscale Serve when pairing", () =>
+  it.effect.skipIf(!ipv6Loopback)(ipv6Case, () =>
     withDescriptorServer(
       (origin) =>
         Effect.gen(function* () {
