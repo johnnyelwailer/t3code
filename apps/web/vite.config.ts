@@ -94,6 +94,10 @@ const configuredDesktopUpdateRepository =
   process.env.T3CODE_DESKTOP_UPDATE_REPOSITORY?.trim() ||
   process.env.GITHUB_REPOSITORY?.trim() ||
   "";
+const configuredDesktopUpdateReleaseHost =
+  process.env.T3CODE_DESKTOP_UPDATE_RELEASE_HOST?.trim() || "github.com";
+const configuredDesktopUpdateTagPrefix =
+  process.env.T3CODE_DESKTOP_UPDATE_TAG_PREFIX?.trim() || "v";
 const configuredFeatureSecrets = process.env.T3CODE_FEATURE_SECRETS?.trim() || "";
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
@@ -369,6 +373,12 @@ export default defineConfig(() => {
       "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
       "import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY": JSON.stringify(
         configuredDesktopUpdateRepository,
+      ),
+      "import.meta.env.T3CODE_DESKTOP_UPDATE_RELEASE_HOST": JSON.stringify(
+        configuredDesktopUpdateReleaseHost,
+      ),
+      "import.meta.env.T3CODE_DESKTOP_UPDATE_TAG_PREFIX": JSON.stringify(
+        configuredDesktopUpdateTagPrefix,
       ),
       "import.meta.env.T3CODE_FEATURE_SECRETS": JSON.stringify(configuredFeatureSecrets),
       "import.meta.env.VITE_RELEASE_CHANNEL": JSON.stringify(configuredReleaseChannel),
