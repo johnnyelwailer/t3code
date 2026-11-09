@@ -38,41 +38,49 @@ function threadRouteKeys(
   });
 }
 
-async function moveThreadComposerDraft(fromKey: string, toKey: string): Promise<void> {
+/**
+ * Moves the old key's draft to the new key. The old key is cleared in the same step that copies
+ * it, so text typed during the write stays there; true only if nothing is left on the old key.
+ */
+async function moveThreadComposerDraft(fromKey: string, toKey: string): Promise<boolean> {
   const draft = getComposerDraftSnapshot(fromKey);
-  if (isComposerDraftEmpty(draft)) return;
-  await mergeComposerDraftContent(toKey, {
+  if (isComposerDraftEmpty(draft)) return true;
+  const content = {
     text: draft.text,
     ...(draft.context ? { context: draft.context } : {}),
     attachments: draft.attachments,
-  });
-  updateComposerDraftSettings(toKey, {
+  };
+  const settings = {
     ...(draft.modelSelection ? { modelSelection: draft.modelSelection } : {}),
     ...(draft.runtimeMode ? { runtimeMode: draft.runtimeMode } : {}),
     ...(draft.interactionMode ? { interactionMode: draft.interactionMode } : {}),
-  });
-  // The real thread's draft owns the files now.
+  };
+  // The files stay: the new key's draft owns them once the merge lands.
   clearComposerDraft(fromKey, { deferAttachmentCleanup: true });
+  try {
+    await mergeComposerDraftContent(toKey, content);
+    updateComposerDraftSettings(toKey, settings);
+  } catch (error) {
+    // Put the text back where it was rather than lose it.
+    await mergeComposerDraftContent(fromKey, content);
+    updateComposerDraftSettings(fromKey, settings);
+    throw error;
+  }
+  return isComposerDraftEmpty(getComposerDraftSnapshot(fromKey));
 }
 
 /**
- * New threads moved from a placeholder environment to the real one: their unsent composer text
- * moves with them, and every open route showing one follows to the real environment. Never throws.
+ * New threads moved from a placeholder environment to the real one: every open route showing one
+ * follows to the real environment first, then their unsent composer text moves. Never throws;
+ * true only if every composer draft moved.
  */
 export async function followRetargetedThreads(
   from: EnvironmentId,
   to: EnvironmentId,
   threadIds: ReadonlyArray<ThreadId>,
-): Promise<void> {
-  if (threadIds.length === 0) return;
-  for (const threadId of threadIds) {
-    try {
-      await moveThreadComposerDraft(scopedThreadKey(from, threadId), scopedThreadKey(to, threadId));
-    } catch (error) {
-      // The text stays under the old key; the thread itself must still follow.
-      console.warn("[thread-outbox] could not move a moved thread's composer draft", error);
-    }
-  }
+): Promise<boolean> {
+  if (threadIds.length === 0) return true;
+  // Before any await: a composer still on the old route would queue onto the placeholder.
   whenRootNavigationReady(() => {
     const routes = (rootNavigationRef.getRootState()?.routes ?? []) as ReadonlyArray<RouteNode>;
     for (const key of threadRouteKeys(routes, from, new Set<string>(threadIds))) {
@@ -82,4 +90,15 @@ export async function followRetargetedThreads(
       });
     }
   });
+  let moved = true;
+  for (const threadId of threadIds) {
+    try {
+      const fromKey = scopedThreadKey(from, threadId);
+      moved = (await moveThreadComposerDraft(fromKey, scopedThreadKey(to, threadId))) && moved;
+    } catch (error) {
+      console.warn("[thread-outbox] could not move a moved thread's composer draft", error);
+      moved = false;
+    }
+  }
+  return moved;
 }

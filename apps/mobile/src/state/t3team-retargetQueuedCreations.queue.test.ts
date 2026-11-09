@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
   manager: null as unknown as ReturnType<
     typeof import("./thread-outbox-manager").createThreadOutboxManager
   >,
-  follow: vi.fn(async (..._args: unknown[]) => {}),
+  follow: vi.fn(async (..._args: unknown[]) => true),
 }));
 vi.mock("./t3team-followRetargetedThreads", () => ({ followRetargetedThreads: state.follow }));
 vi.mock("./thread-outbox", async () => {
@@ -32,11 +32,12 @@ vi.mock("./use-thread-outbox", async () => {
   const { Atom } = await import("effect/reactivity");
   return {
     dispatchingQueuedMessageIdAtom: Atom.make<MessageId | null>(null).pipe(Atom.keepAlive),
+    editingQueuedMessageIdsAtom: Atom.make<Readonly<Record<string, true>>>({}).pipe(Atom.keepAlive),
   };
 });
 
 import { appAtomRegistry } from "./atom-registry";
-import { dispatchingQueuedMessageIdAtom } from "./use-thread-outbox";
+import { dispatchingQueuedMessageIdAtom, editingQueuedMessageIdsAtom } from "./use-thread-outbox";
 import { retargetQueuedCreation, retargetQueuedCreations } from "./t3team-retargetQueuedCreations";
 
 const placeholder = {
@@ -73,6 +74,7 @@ beforeEach(() => {
   state.follow.mockClear();
   appAtomRegistry.set(state.manager.queuedMessagesByThreadKeyAtom, {});
   appAtomRegistry.set(dispatchingQueuedMessageIdAtom, null);
+  appAtomRegistry.set(editingQueuedMessageIdsAtom, {});
 });
 
 afterEach(() => {
@@ -238,5 +240,34 @@ describe("retargetQueuedCreations on the queue", () => {
 
     await retargetQueuedCreations(placeholder, real);
     expect(state.follow).toHaveBeenLastCalledWith("pending-env", "machine", []);
+  });
+
+  it("does not move a message held by its editor, and reports the move incomplete", async () => {
+    await state.manager.enqueue(creation());
+    await state.manager.enqueue(followUp());
+    appAtomRegistry.set(editingQueuedMessageIdsAtom, { "follow-up": true });
+    const result = await retargetQueuedCreations(placeholder, real);
+    expect(result.complete).toBe(false);
+    expect(environmentsOf()).toEqual({ message: "machine", "follow-up": "pending-env" });
+  });
+
+  it("reports a follow-up sent on the old route while the threads followed as left behind", async () => {
+    await state.manager.enqueue(creation());
+    state.follow.mockImplementationOnce(async () => {
+      await state.manager.enqueue(followUp("sent-late", 2));
+      return true;
+    });
+    expect((await retargetQueuedCreations(placeholder, real)).complete).toBe(false);
+    const result = await retargetQueuedCreations(placeholder, real);
+    expect(result.complete).toBe(true);
+    expect(environmentsOf()).toEqual({ message: "machine", "sent-late": "machine" });
+    expect(state.follow).toHaveBeenLastCalledWith("pending-env", "machine", ["new-thread"]);
+  });
+
+  it("reports a composer draft that did not move as incomplete", async () => {
+    await state.manager.enqueue(creation());
+    state.follow.mockResolvedValueOnce(false);
+    expect((await retargetQueuedCreations(placeholder, real)).complete).toBe(false);
+    expect((await retargetQueuedCreations(placeholder, real)).complete).toBe(true);
   });
 });

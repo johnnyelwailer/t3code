@@ -6,9 +6,12 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   rootState: null as unknown,
   drafts: {} as Record<string, unknown>,
-  merge: vi.fn(async () => ({ skippedAttachmentCount: 0 })),
+  merge: vi.fn(async (..._args: unknown[]) => ({ skippedAttachmentCount: 0 })),
   settings: vi.fn(),
-  clear: vi.fn(),
+  clear: vi.fn((key: string, _options?: unknown) => {
+    delete mocks.drafts[key];
+  }),
+  order: [] as string[],
 }));
 // The real action creators; the React Native entry does not load under Node.
 vi.mock("@react-navigation/native", () => {
@@ -18,14 +21,23 @@ vi.mock("@react-navigation/native", () => {
   return { CommonActions: requireNavigation("@react-navigation/routers").CommonActions };
 });
 vi.mock("../lib/rootNavigation", () => ({
-  rootNavigationRef: { getRootState: () => mocks.rootState, dispatch: mocks.dispatch },
+  rootNavigationRef: {
+    getRootState: () => mocks.rootState,
+    dispatch: (action: unknown) => {
+      mocks.order.push("route");
+      mocks.dispatch(action);
+    },
+  },
   whenRootNavigationReady: (navigate: () => void) => navigate(),
 }));
 vi.mock("./use-composer-drafts", () => ({
   getComposerDraftSnapshot: (key: string) => mocks.drafts[key] ?? { text: "", attachments: [] },
   isComposerDraftEmpty: (draft: { text: string; attachments: unknown[] }) =>
     draft.text === "" && draft.attachments.length === 0,
-  mergeComposerDraftContent: mocks.merge,
+  mergeComposerDraftContent: (...args: unknown[]) => {
+    mocks.order.push("draft");
+    return mocks.merge(...args);
+  },
   updateComposerDraftSettings: mocks.settings,
   clearComposerDraft: mocks.clear,
 }));
@@ -42,7 +54,8 @@ const threadRoute = (key: string, environmentId: string, threadId = "new-thread"
 
 beforeEach(() => {
   mocks.dispatch.mockClear();
-  mocks.merge.mockClear();
+  mocks.merge.mockReset().mockResolvedValue({ skippedAttachmentCount: 0 });
+  mocks.order = [];
   mocks.settings.mockClear();
   mocks.clear.mockClear();
   mocks.drafts = {};
@@ -92,14 +105,39 @@ describe("followRetargetedThreads", () => {
     });
   });
 
-  it("still follows the routes when moving the composer draft fails", async () => {
+  it("still follows the routes when moving the composer draft fails, keeping the text", async () => {
     mocks.rootState = { routes: [threadRoute("open", "pending-env")] };
     mocks.drafts["pending-env:new-thread"] = { text: "and the docs", attachments: [] };
     mocks.merge.mockRejectedValueOnce(new Error("disk full"));
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    await followRetargetedThreads(from, to, [ThreadId.make("new-thread")]);
+    expect(await followRetargetedThreads(from, to, [ThreadId.make("new-thread")])).toBe(false);
     expect(mocks.dispatch).toHaveBeenCalledOnce();
-    expect(mocks.clear).not.toHaveBeenCalled();
+    expect(mocks.merge).toHaveBeenLastCalledWith("pending-env:new-thread", {
+      text: "and the docs",
+      attachments: [],
+    });
+  });
+
+  it("switches the open routes before it awaits a composer draft write", async () => {
+    mocks.rootState = { routes: [threadRoute("open", "pending-env")] };
+    mocks.drafts["pending-env:new-thread"] = { text: "and the docs", attachments: [] };
+    expect(await followRetargetedThreads(from, to, [ThreadId.make("new-thread")])).toBe(true);
+    expect(mocks.order).toEqual(["route", "draft"]);
+  });
+
+  it("keeps text typed on the old key during the write and reports the move unfinished", async () => {
+    mocks.rootState = { routes: [] };
+    mocks.drafts["pending-env:new-thread"] = { text: "and the docs", attachments: [] };
+    mocks.merge.mockImplementationOnce(async () => {
+      mocks.drafts["pending-env:new-thread"] = { text: "typed late", attachments: [] };
+      return { skippedAttachmentCount: 0 };
+    });
+    expect(await followRetargetedThreads(from, to, [ThreadId.make("new-thread")])).toBe(false);
+    expect(mocks.drafts["pending-env:new-thread"]).toEqual({ text: "typed late", attachments: [] });
+    expect(mocks.merge).toHaveBeenCalledExactlyOnceWith("machine:new-thread", {
+      text: "and the docs",
+      attachments: [],
+    });
   });
 
   it("leaves an empty thread composer alone", async () => {

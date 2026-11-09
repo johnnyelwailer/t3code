@@ -87,7 +87,9 @@ vi.mock("./git", () => ({ gitEnvironment: { preparePullRequestThread: vi.fn() } 
 vi.mock("../lib/modelOptions", () => ({ isModelSelectionUnavailable: () => false }));
 vi.mock("../lib/uuid", () => ({ uuidv4: () => "uuid", randomHex: () => "abcd" }));
 vi.mock("../lib/attachmentUpload", () => ({ prepareTurnAttachments: state.prepare }));
-vi.mock("./t3team-followRetargetedThreads", () => ({ followRetargetedThreads: vi.fn() }));
+vi.mock("./t3team-followRetargetedThreads", () => ({
+  followRetargetedThreads: vi.fn(async () => true),
+}));
 vi.mock("./thread-outbox", async () => {
   const { createThreadOutboxManager } = await import("./thread-outbox-manager");
   const { appAtomRegistry } = await import("./atom-registry");

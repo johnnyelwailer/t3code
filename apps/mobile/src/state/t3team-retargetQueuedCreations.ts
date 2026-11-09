@@ -98,15 +98,16 @@ async function moveAndFollow(
   } catch (error) {
     console.warn("[thread-outbox] could not move the tasks queued on a pending draft", error);
   }
-  const left = queuedOn(from);
-  const leftThreads = new Set(left.map((message) => message.threadId));
+  const leftThreads = new Set(queuedOn(from).map((message) => message.threadId));
   const movedThreadIds = [...touched].filter((threadId) => !leftThreads.has(threadId));
+  let followed = false;
   try {
-    await followRetargetedThreads(from.environmentId, to.environmentId, movedThreadIds);
+    followed = await followRetargetedThreads(from.environmentId, to.environmentId, movedThreadIds);
   } catch (error) {
     console.warn("[thread-outbox] could not follow the moved threads", error);
   }
-  const complete = loaded && left.length === 0;
+  // Read again: a message sent on an old route while the drafts were written is left behind.
+  const complete = loaded && followed && queuedOn(from).length === 0;
   if (complete) touchedThreads.delete(from.environmentId);
   return { complete, movedThreadIds };
 }
@@ -117,7 +118,8 @@ async function moveQueued(
   firstTurnContext: FirstTurnContext | undefined,
   touched: Set<ThreadId>,
 ): Promise<void> {
-  const { dispatchingQueuedMessageIdAtom } = await (outboxHooks ??= import("./use-thread-outbox"));
+  const { dispatchingQueuedMessageIdAtom, editingQueuedMessageIdsAtom } = await (outboxHooks ??=
+    import("./use-thread-outbox"));
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
     // Revisions belong to the snapshot: a message changed since is not overwritten.
     const queued = queuedOn(from).map((message) => ({
@@ -134,8 +136,10 @@ async function moveQueued(
         message.creation === undefined
           ? { ...message, environmentId: to.environmentId }
           : withFirstTurnContext(retargetQueuedCreation(message, from, to)!, firstTurnContext);
+      // Delivery or an editor owns the message now; its thread waits for the next pass or call.
       if (
         message.messageId === appAtomRegistry.get(dispatchingQueuedMessageIdAtom) ||
+        appAtomRegistry.get(editingQueuedMessageIdsAtom)[message.messageId] ||
         !(await updateThreadOutboxMessage(moved, revision))
       ) {
         blocked.add(message.threadId);
