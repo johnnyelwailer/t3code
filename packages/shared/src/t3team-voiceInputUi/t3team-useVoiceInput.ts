@@ -67,6 +67,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       silenceTimerRef.current = 0;
       releaseClaimRef.current?.();
       transition("idle");
+      onPartialTranscript?.("");
 
       barsStopRef.current?.();
       barsStopRef.current = null;

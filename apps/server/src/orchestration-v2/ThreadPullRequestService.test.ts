@@ -26,8 +26,17 @@ import * as ProjectStore from "./ProjectStore.ts";
 import * as RepositoryIdentityResolver from "../project/RepositoryIdentityResolver.ts";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ServerActivation from "../serverActivation.ts";
+import { HOUSEKEEPING_STARTUP_GRACE } from "../t3team-housekeepingGrace.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ThreadPullRequestService from "./ThreadPullRequestService.ts";
+
+/** Startup sweeps wait out the housekeeping grace after activation. */
+const activateAndSkipStartupGrace = (activation: Deferred.Deferred<void>) =>
+  Effect.gen(function* () {
+    yield* Deferred.succeed(activation, undefined);
+    yield* Effect.yieldNow;
+    yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
+  });
 
 describe("ThreadPullRequestServiceV2 project guard", () => {
   it("rejects a pull-request result when the project root changes before dispatch", () => {
@@ -159,7 +168,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
         yield* Effect.gen(function* () {
           const service = yield* ThreadPullRequestService.make;
           yield* service.start();
-          yield* Deferred.succeed(activation, undefined);
+          yield* activateAndSkipStartupGrace(activation);
 
           // A finished turn still discovers the pull request for its branch.
           yield* Queue.offer(domainEvents, {
@@ -274,7 +283,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
         yield* Effect.gen(function* () {
           const service = yield* ThreadPullRequestService.make;
           yield* service.start();
-          yield* Deferred.succeed(activation, undefined);
+          yield* activateAndSkipStartupGrace(activation);
 
           // Startup backfill sweep, then one periodic sweep.
           yield* Queue.take(sweeps);
@@ -400,7 +409,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
           yield* Effect.gen(function* () {
             const service = yield* ThreadPullRequestService.make;
             yield* service.start();
-            yield* Deferred.succeed(activation, undefined);
+            yield* activateAndSkipStartupGrace(activation);
             yield* Deferred.await(sweepStarted);
             yield* service.drain;
           }).pipe(Effect.provide(dependencies));

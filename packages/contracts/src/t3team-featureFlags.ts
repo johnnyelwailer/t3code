@@ -26,6 +26,8 @@ export const FeatureFlagView = Schema.Struct({
   restartPending: Schema.Boolean,
   /** False: only env and the release preset decide (the switch is shown read-only). */
   userToggleable: Schema.Boolean,
+  /** `YYYY-MM-DD` the switch first shipped; absent for flags that never recorded it. */
+  addedOn: Schema.optionalKey(Schema.String),
 });
 export type FeatureFlagView = typeof FeatureFlagView.Type;
 

@@ -112,21 +112,20 @@ describe("the pending drafts list", () => {
 });
 
 describe("pendingDraftHolding", () => {
-  const stamp = { environmentId: "cloud-env", projectId: "cloud-project" };
-
-  it("holds while the draft is on the placeholder's project", () => {
-    expect(pendingDraftHolding(pending, stamp)).toBe(pending);
+  it("holds while the distribution keeps the draft in the map", () => {
+    expect(pendingDraftHolding(pending)).toBe(pending);
   });
 
-  it("lets go once the draft is retargeted to another project or environment", () => {
-    expect(pendingDraftHolding(pending, { ...stamp, projectId: "real-project" })).toBeNull();
-    expect(pendingDraftHolding(pending, { ...stamp, environmentId: "real-env" })).toBeNull();
+  it("keeps holding after the draft is retargeted to another project or environment", () => {
+    // Choosing a project on the draft moves its stamp, not its hold: the pending session's
+    // status stays shown until the distribution drops the entry.
+    const retargeted = { ...pending, project: { ...pending.project, id: "real-project" } };
+    expect(pendingDraftHolding(retargeted)).toBe(retargeted);
   });
 
-  it("holds nothing without a pending draft or a project", () => {
-    expect(pendingDraftHolding(undefined, stamp)).toBeNull();
-    expect(pendingDraftHolding(null, stamp)).toBeNull();
-    expect(pendingDraftHolding(pending, null)).toBeNull();
+  it("holds nothing without a pending draft", () => {
+    expect(pendingDraftHolding(undefined)).toBeNull();
+    expect(pendingDraftHolding(null)).toBeNull();
   });
 });
 

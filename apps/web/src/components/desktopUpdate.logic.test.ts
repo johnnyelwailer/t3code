@@ -77,6 +77,42 @@ describe("desktop update UI helpers", () => {
       );
     },
   );
+
+  it("keeps the upstream defaults when nothing is configured", () => {
+    expect(getDesktopUpdateReleaseHistoryUrl()).toBe(
+      "https://github.com/pingdotgg/t3code/releases",
+    );
+    expect(getDesktopUpdateReleaseUrl("1.2.3")).toBe(
+      "https://github.com/pingdotgg/t3code/releases/tag/v1.2.3",
+    );
+  });
+
+  it("builds the release link for a self-hosted host with a custom tag prefix", () => {
+    expect(
+      getDesktopUpdateReleaseUrl("0.1.2-rc.11", "hive/nx-nexi", "nexplore.ghe.com", "desktop-v"),
+    ).toBe("https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.11");
+    expect(getDesktopUpdateReleaseHistoryUrl("hive/nx-nexi", "nexplore.ghe.com")).toBe(
+      "https://nexplore.ghe.com/hive/nx-nexi/releases",
+    );
+  });
+
+  it.each(["https://github.com", "github.com:80/", " "])(
+    "falls back to the default host for an invalid one: %s",
+    (host) => {
+      expect(getDesktopUpdateReleaseHistoryUrl("hive/nx-nexi", host)).toBe(
+        "https://github.com/hive/nx-nexi/releases",
+      );
+    },
+  );
+
+  it("falls back to the default tag prefix when it is empty or holds URL characters", () => {
+    expect(getDesktopUpdateReleaseUrl("1.2.3", "hive/nx-nexi", "nexplore.ghe.com", "")).toBe(
+      "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/v1.2.3",
+    );
+    expect(getDesktopUpdateReleaseUrl("1.2.3", "hive/nx-nexi", "nexplore.ghe.com", "tag/v")).toBe(
+      "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/v1.2.3",
+    );
+  });
 });
 
 describe("canCheckForUpdate", () => {

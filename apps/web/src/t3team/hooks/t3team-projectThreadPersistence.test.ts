@@ -96,7 +96,10 @@ describe("t3team project thread persistence", () => {
     expect(
       readStoredThreadsFromClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredThreadsJson: JSON.stringify([persistedThread]),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedThreadsJson: JSON.stringify([persistedThread]),
+        },
       }),
     ).toEqual([persistedThread]);
   });
@@ -119,7 +122,10 @@ describe("t3team project thread persistence", () => {
       CLIENT_SETTINGS_STORAGE_KEY,
       JSON.stringify({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredThreadsJson: JSON.stringify([persistedThread]),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedThreadsJson: JSON.stringify([persistedThread]),
+        },
       }),
     );
 
@@ -135,7 +141,7 @@ describe("t3team project thread persistence", () => {
     await vi.waitFor(() => {
       expect(JSON.parse(localStorage.getItem(CLIENT_SETTINGS_STORAGE_KEY) ?? "null")).toMatchObject(
         {
-          t3teamStoredThreadsJson: JSON.stringify([persistedThread]),
+          t3team: { storedThreadsJson: JSON.stringify([persistedThread]) },
         },
       );
     });
@@ -147,7 +153,7 @@ describe("t3team project thread persistence", () => {
       vi
         .mocked(localStorage.setItem)
         .mock.calls.filter(([key]) => key === CLIENT_SETTINGS_STORAGE_KEY)
-        .map(([, value]) => JSON.parse(value).t3teamStoredThreadsJson as string);
+        .map(([, value]) => JSON.parse(value).t3team.storedThreadsJson as string);
 
     beforeEach(() => {
       vi.useFakeTimers();
@@ -203,7 +209,9 @@ describe("t3team project thread persistence", () => {
     ]);
     expect(localStorage.getItem("t3team:threads")).toBeNull();
     expect(JSON.parse(localStorage.getItem(CLIENT_SETTINGS_STORAGE_KEY) ?? "null")).toMatchObject({
-      t3teamStoredThreadsJson: JSON.stringify([{ ...legacyThread, dashboardMode: "backlog" }]),
+      t3team: {
+        storedThreadsJson: JSON.stringify([{ ...legacyThread, dashboardMode: "backlog" }]),
+      },
     });
   });
 });

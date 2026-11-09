@@ -90,10 +90,16 @@ if (pinnedDesktopBackendPort !== undefined && configuredAtlassianOAuthRedirectUr
     );
   }
 }
+// The release link's repo comes from link-only variables: T3CODE_DESKTOP_UPDATE_REPOSITORY
+// is read by electron-builder as the update feed and would bake Resources/app-update.yml in.
 const configuredDesktopUpdateRepository =
-  process.env.T3CODE_DESKTOP_UPDATE_REPOSITORY?.trim() ||
+  process.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY?.trim() ||
   process.env.GITHUB_REPOSITORY?.trim() ||
   "";
+const configuredDesktopUpdateReleaseHost =
+  process.env.T3CODE_DESKTOP_RELEASE_LINK_HOST?.trim() || "github.com";
+const configuredDesktopUpdateTagPrefix =
+  process.env.T3CODE_DESKTOP_RELEASE_LINK_TAG_PREFIX?.trim() || "v";
 const configuredFeatureSecrets = process.env.T3CODE_FEATURE_SECRETS?.trim() || "";
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
@@ -367,8 +373,14 @@ export default defineConfig(() => {
       "import.meta.env.VITE_RELAY_OTLP_TRACES_TOKEN": JSON.stringify(configuredRelayTracingToken),
       "import.meta.env.VITE_HOSTED_APP_URL": JSON.stringify(configuredHostedAppUrl ?? ""),
       "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
-      "import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY": JSON.stringify(
+      "import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY": JSON.stringify(
         configuredDesktopUpdateRepository,
+      ),
+      "import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_HOST": JSON.stringify(
+        configuredDesktopUpdateReleaseHost,
+      ),
+      "import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_TAG_PREFIX": JSON.stringify(
+        configuredDesktopUpdateTagPrefix,
       ),
       "import.meta.env.T3CODE_FEATURE_SECRETS": JSON.stringify(configuredFeatureSecrets),
       "import.meta.env.VITE_RELEASE_CHANNEL": JSON.stringify(configuredReleaseChannel),
@@ -383,10 +395,9 @@ export default defineConfig(() => {
     resolve: {
       tsconfigPaths: true,
       alias: {
-        "@betteroffice/fonts-cjk": new URL(
-          "./src/components/files/office/fonts-cjk.ts",
-          import.meta.url,
-        ).pathname,
+        "@betteroffice/fonts-cjk": NodeURL.fileURLToPath(
+          new URL("./src/components/files/office/fonts-cjk.ts", import.meta.url),
+        ),
       },
       dedupe: ["react", "react-dom"],
     },

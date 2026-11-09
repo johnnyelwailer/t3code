@@ -4,7 +4,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { VoiceThreadShell } from "./t3team-voiceLiveState";
 import { VOICE_ROLE_PROMPT } from "./t3team-voiceRolePrompt";
-import { VOICE_TIER_MODEL } from "./t3team-voiceRouting";
 import { submitVoiceUtterance, type VoiceSessionDeps } from "./t3team-voiceSession";
 import { startFreshVoiceThread } from "./t3team-voiceSessionReset";
 import type { VoiceThreadHome } from "./t3team-voiceThreadStore";
@@ -43,7 +42,6 @@ function harness(initial: { home?: VoiceThreadHome; project?: ProjectId | null }
       calls.push("forget");
     },
     projectlessProject: async () => (initial.project === undefined ? NO_PROJECT : initial.project),
-    route: async () => VOICE_TIER_MODEL.synthesis,
     startTurn: async (input) => {
       turns.push(input);
       calls.push(`turn:${input.bootstrap === undefined ? "send" : "create"}`);

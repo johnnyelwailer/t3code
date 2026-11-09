@@ -14,6 +14,8 @@ import { TYPOGRAPHY_ADVANCED_STORAGE_KEY } from "../../appearanceFonts";
 import { writeLocalStorageValue } from "../../hooks/useLocalStorage";
 import { commandLabel } from "./KeybindingsSettings.logic";
 import type { ResolvedSettingsScope } from "./settingsScope";
+// The fork's settings items live in its own registry; only the id index joins them in here.
+import { T3TEAM_SETTINGS_SEARCH_ITEMS } from "~/t3team/settings/t3team-settingsRegistry";
 
 export type SettingsPath =
   | "/settings/projects"
@@ -51,6 +53,8 @@ export interface SettingsSearchItem {
   readonly id: string;
   readonly title: string;
   readonly to: SettingsPath;
+  /** Fork section names upstream's `SETTINGS_SECTION_LABELS` does not know. */
+  readonly sectionLabel?: string;
   readonly targetId?: string;
   readonly searchTerms?: ReadonlyArray<string>;
   readonly scope?: SettingsSearchScope;
@@ -105,7 +109,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/access": "Sharing & access",
   "/settings/secrets": "Secrets",
   "/settings/maintenance": "Maintenance",
-  "/settings/labs": "Labs",
+  "/settings/labs": "Features",
   "/settings/about": "About",
   "/settings/archived": "Archive",
 };
@@ -411,11 +415,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["long lines code blocks diffs file previews"],
   },
   {
-    id: "agent-personality",
-    title: "Agent personality / instructions",
-    to: "/settings/general",
-  },
-  {
     id: "composer-context",
     title: "Composer context",
     to: "/settings/appearance",
@@ -543,17 +542,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "In-app notifications",
     to: "/settings/general",
     searchTerms: ["notification toast popup completion input approval failure"],
-  },
-  {
-    id: "live-activity-labels",
-    title: "Live activity labels",
-    to: "/settings/general",
-  },
-  {
-    id: "project-scope-pills",
-    title: "Project scope pills",
-    to: "/settings/general",
-    searchTerms: ["sidebar recent projects filter pull requests scope experimental"],
   },
   {
     id: "time-format",
@@ -755,11 +743,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["logs traces processes resource history failures spans cpu memory"],
   },
   {
-    id: "open-source-licenses",
-    title: "Open source licenses",
-    to: "/settings/about",
-  },
-  {
     id: "legacy-plan-mode",
     title: "Plan mode (legacy)",
     to: "/settings/labs",
@@ -778,48 +761,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["keyboard shortcuts hotkeys commands bindings json"],
   },
   ...KEYBINDING_SEARCH_ITEMS,
-  {
-    id: "voice-hotkey",
-    title: "Voice shortcut",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["talk dictate microphone hotkey chord global keys whisper"],
-  },
-  {
-    id: "voice-model",
-    title: "Voice model",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper transcription dictation speech download large-v3-turbo"],
-  },
-  {
-    id: "voice-model-path",
-    title: "Voice model file",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper ggml bin path transcription dictation"],
-  },
-  {
-    id: "voice-language",
-    title: "Voice language",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper transcription dictation speech locale auto detect"],
-  },
-  {
-    id: "voice-languages",
-    title: "Voice language list",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["whisper dictation speech language picker options german english"],
-  },
-  {
-    id: "voice-silence",
-    title: "Voice silence",
-    to: "/settings/general",
-    desktopOnly: true,
-    searchTerms: ["dictation auto commit stop pause silence seconds end recording"],
-  },
   {
     id: "snap-shot-enabled",
     title: "SnapShots",
@@ -1252,9 +1193,15 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
-export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
+export type SettingsSearchItemId =
+  | (typeof SETTINGS_SEARCH_ITEMS)[number]["id"]
+  | (typeof T3TEAM_SETTINGS_SEARCH_ITEMS)[number]["id"];
 
-const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item] as const));
+const SEARCH_ITEMS_BY_ID = new Map(
+  [...SETTINGS_SEARCH_ITEMS, ...T3TEAM_SETTINGS_SEARCH_ITEMS].map(
+    (item) => [item.id, item] as const,
+  ),
+);
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/diagnostics": "environment",
@@ -1435,7 +1382,7 @@ export function searchSettings(
       const title = normalizeSearchText(item.title);
       const fields = [
         title,
-        normalizeSearchText(SETTINGS_SECTION_LABELS[item.to]),
+        normalizeSearchText(item.sectionLabel ?? SETTINGS_SECTION_LABELS[item.to]),
         ...(item.searchTerms ?? []).map(normalizeSearchText),
       ];
       if (!queryTokens.every((token) => fields.some((field) => field.includes(token)))) return [];

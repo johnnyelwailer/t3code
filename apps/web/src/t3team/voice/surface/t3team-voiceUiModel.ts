@@ -1,7 +1,5 @@
 import type { VoiceInputPhase } from "@t3tools/client-runtime/voice-input";
 
-import type { VoiceTier } from "../t3team-voiceRouting";
-
 export type VoiceUiState =
   | "idle"
   | "preparing"
@@ -20,7 +18,6 @@ export interface VoiceUiSnapshot {
   /** Epoch ms the recording stopped; freezes the timer. */
   readonly endedAtMs: number | null;
   readonly heardText: string | null;
-  readonly tier: VoiceTier | null;
   readonly downloadPercent: number | null;
   readonly failureDetail: string | null;
 }
@@ -31,7 +28,6 @@ export const IDLE_VOICE_UI: VoiceUiSnapshot = {
   startedAtMs: null,
   endedAtMs: null,
   heardText: null,
-  tier: null,
   downloadPercent: null,
   failureDetail: null,
 };
@@ -50,7 +46,6 @@ export type VoiceUiAction =
     }
   | { readonly type: "download"; readonly percent: number | null }
   | { readonly type: "commit"; readonly text: string; readonly now: number }
-  | { readonly type: "tier"; readonly tier: VoiceTier }
   | { readonly type: "fail"; readonly detail: string | null }
   | { readonly type: "settle" }
   | { readonly type: "dismiss" };
@@ -104,10 +99,6 @@ export function reduceVoiceUi(snapshot: VoiceUiSnapshot, action: VoiceUiAction):
             heardText: action.text,
             endedAtMs: snapshot.endedAtMs ?? action.now,
           };
-    case "tier":
-      return snapshot.state === "committed" || snapshot.state === "recording"
-        ? { ...snapshot, tier: action.tier }
-        : snapshot;
     case "fail":
       return { ...snapshot, state: "failed", failureDetail: action.detail };
     case "settle":

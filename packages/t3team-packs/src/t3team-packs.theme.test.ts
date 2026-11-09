@@ -13,7 +13,15 @@ const theme = {
   id: "nexplore",
   name: "Nexplore",
   labels: { appName: "Nexi" },
-  colors: { light: { primary: "#f05a00" }, dark: { primary: "#ff6a0a" } },
+  colors: {
+    light: { primary: "#f05a00" },
+    dark: {
+      primary: "#ff6a0a",
+      primaryText: "#e5e0ff",
+      primaryActionBackground: "linear-gradient(135deg, #4c3cf6 0%, #f05a0a 140%)",
+      primaryActionShadow: "0 4px 14px rgba(76,60,246,.4), inset 0 1px 0 rgba(255,255,255,.3)",
+    },
+  },
   density: 0.96,
 };
 
@@ -29,6 +37,27 @@ describe("theme definition", () => {
         colors: { ...theme.colors, light: { primary: "red;display:none" } },
       }),
     ).toThrow();
+    expect(() =>
+      decodeThemeDefinition({
+        ...theme,
+        colors: { ...theme.colors, light: { primaryActionBackground: "red}body{display:none" } },
+      }),
+    ).toThrow();
+    for (const unsafe of [
+      "linear-gradient(red",
+      "red /* x",
+      "url('x')",
+      'url("x")',
+      "red)",
+      "a[b",
+    ]) {
+      expect(() =>
+        decodeThemeDefinition({
+          ...theme,
+          colors: { ...theme.colors, light: { primaryActionBackground: unsafe } },
+        }),
+      ).toThrow();
+    }
     expect(() => decodeThemeDefinition({ ...theme, density: 2 })).toThrow();
   });
 

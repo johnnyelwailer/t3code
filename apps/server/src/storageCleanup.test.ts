@@ -32,6 +32,7 @@ import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import { CodexProviderCapabilitiesV2 } from "./orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { ServerActivation } from "./serverActivation.ts";
+import { HOUSEKEEPING_STARTUP_GRACE } from "./t3team-housekeepingGrace.ts";
 import { describe, expect, it } from "@effect/vitest";
 import {
   EventId,
@@ -58,6 +59,13 @@ const DAY_MS = 24 * 60 * 60 * 1_000;
 function at(offsetMs: number): DateTime.Utc {
   return DateTime.makeUnsafe(NOW_MS + offsetMs);
 }
+
+/** Worktree cases assert exact report entries, so diagnostics retention stays off unless a case enables it. */
+const WORKTREE_ONLY_CLEANUP = {
+  ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+  browserArtifactsAfterDays: null,
+  logsAfterDays: null,
+};
 
 function shell(overrides: Partial<OrchestrationV2ThreadShell> = {}): OrchestrationV2ThreadShell {
   return {
@@ -311,7 +319,7 @@ const allocatedBytes = (fs: FileSystem.FileSystem, file: string) =>
 
 const cleanupFixture = (
   storageCleanup: StorageCleanupSettings = {
-    ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+    ...WORKTREE_ONLY_CLEANUP,
     worktreeAfterDays: 8,
     worktreeOnDelete: true,
   },
@@ -1081,6 +1089,8 @@ describe("deleted thread worktrees", () => {
           ),
         ),
       );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
       yield* fixture.service.reports.pipe(
         Stream.filter((report) => report !== null),
         Stream.take(1),
@@ -1337,6 +1347,8 @@ describe("deleted thread worktrees", () => {
             ),
           ),
         );
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
         yield* fixture.service.reports.pipe(
           Stream.filter((report) => report !== null),
           Stream.take(1),
@@ -1753,6 +1765,8 @@ describe("storage cleanup reports and local file policies", () => {
           }),
         ]);
         yield* fixture.activate(Stream.empty);
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
         const [report] = yield* fixture.service.reports.pipe(
           Stream.filter((report) => report !== null),
           Stream.take(1),

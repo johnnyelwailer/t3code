@@ -1,12 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
-import { AgentInstructionsSettingRow } from "./t3team-AgentInstructionsSetting";
-import { T3TeamVoiceSettings } from "./t3team-VoiceSettings";
-import { T3TeamAboutLicensesDescription } from "../../t3team/t3team-AboutLicensesDescription";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { t3teamSettingsRows } from "~/t3team/settings/t3team-settingsRegistry";
 import {
   type DesktopUpdateChannel,
   IDLE_COMPACTION_MODES,
@@ -795,10 +793,7 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection id="agent-instructions" title="Agent">
-        <AgentInstructionsSettingRow
-          value={settings.agentInstructions}
-          onChange={(agentInstructions) => updateSettings({ agentInstructions })}
-        />
+        {t3teamSettingsRows("agent", { settings, updateSettings })}
       </SettingsSection>
 
       <SettingsSection id="notifications" title="Notifications">
@@ -894,7 +889,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("working-shelf")}
-          description="Fold working and monitoring threads into a Working section. They return to the top of the inbox when they need you. The boring sidebar in Labs has no Working section."
+          description="Fold working and monitoring threads into a Working section. They return to the top of the inbox when they need you. The boring sidebar in Features has no Working section."
           resetAction={
             settings.sidebarWorkingShelfEnabled !==
             DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled ? (
@@ -1039,67 +1034,10 @@ export function GeneralSettingsPanel() {
         ) : null}
       </SettingsSection>
 
-      <T3TeamVoiceSettings
-        transcriber={settings.voice.transcriber}
-        onTranscriberChange={(transcriber) => updateSettings({ voice: { transcriber } })}
-      />
+      {t3teamSettingsRows("voice", { settings, updateSettings })}
 
       <SettingsSection id="display" title="Display">
-        <SettingsRow
-          {...searchableSetting("live-activity-labels")}
-          description="Show a short AI-generated label for what active threads are working on instead of the static “Working” text. Generation is tiny, debounced, and non-thinking; labels clear when a thread goes idle."
-          resetAction={
-            settings.t3teamActivityLabelsEnabled !==
-            DEFAULT_UNIFIED_SETTINGS.t3teamActivityLabelsEnabled ? (
-              <SettingResetButton
-                label="live activity labels"
-                onClick={() =>
-                  updateSettings({
-                    t3teamActivityLabelsEnabled:
-                      DEFAULT_UNIFIED_SETTINGS.t3teamActivityLabelsEnabled,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.t3teamActivityLabelsEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ t3teamActivityLabelsEnabled: Boolean(checked) })
-              }
-              aria-label="Live activity labels"
-            />
-          }
-        />
-
-        <SettingsRow
-          {...searchableSetting("project-scope-pills")}
-          description="Replace the sidebar's project dropdown with one-click pills for your recent projects. The pull request list follows the selected project, including a work-source project's linked repositories."
-          resetAction={
-            settings.t3teamProjectScopePillsEnabled !==
-            DEFAULT_UNIFIED_SETTINGS.t3teamProjectScopePillsEnabled ? (
-              <SettingResetButton
-                label="project scope pills"
-                onClick={() =>
-                  updateSettings({
-                    t3teamProjectScopePillsEnabled:
-                      DEFAULT_UNIFIED_SETTINGS.t3teamProjectScopePillsEnabled,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <Switch
-              checked={settings.t3teamProjectScopePillsEnabled}
-              onCheckedChange={(checked) =>
-                updateSettings({ t3teamProjectScopePillsEnabled: Boolean(checked) })
-              }
-              aria-label="Project scope pills"
-            />
-          }
-        />
+        {t3teamSettingsRows("display", { settings, updateSettings })}
         <SettingsRow
           {...searchableSetting("time-format")}
           description="System default follows your browser or OS clock preference."
@@ -2134,19 +2072,7 @@ export function AboutSettingsPanel() {
             </Button>
           }
         />
-        <SettingsRow
-          {...searchableSetting("open-source-licenses")}
-          description={<T3TeamAboutLicensesDescription />}
-          control={
-            <Button
-              render={<Link to="/settings/open-source-licenses" />}
-              size="sm"
-              variant="outline"
-            >
-              View licenses
-            </Button>
-          }
-        />
+        {t3teamSettingsRows("legal")}
       </SettingsSection>
     </SettingsPageContainer>
   );

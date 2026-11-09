@@ -37,6 +37,7 @@ import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopUpdatePolicy from "./DesktopUpdatePolicy.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
+import { withOfferedReleaseUrl } from "./t3team-nexiReleaseUrl.ts";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
 import { NexiUpdateFeed } from "./t3team-nexiUpdateFeed.ts";
@@ -74,6 +75,7 @@ const UpdateInfo = Schema.Struct({
   // Malformed notes must not block update-state decoding; normalizeDesktopUpdateReleaseNotes validates separately.
   releaseNotes: Schema.optional(Schema.Unknown),
   releaseDate: Schema.optional(Schema.String),
+  releaseUrl: Schema.optional(Schema.String),
 });
 
 const DownloadProgressInfo = Schema.Struct({
@@ -997,12 +999,16 @@ export const make = Effect.gen(function* () {
             info.releaseDate,
           );
           yield* setState(
-            reduceDesktopUpdateStateOnUpdateAvailable(
+            withOfferedReleaseUrl(
+              reduceDesktopUpdateStateOnUpdateAvailable(
+                state,
+                info.version,
+                checkedAt,
+                releaseNotes,
+                omittedReleaseCount,
+              ),
               state,
-              info.version,
-              checkedAt,
-              releaseNotes,
-              omittedReleaseCount,
+              info.releaseUrl,
             ),
           );
           yield* Ref.set(lastLoggedDownloadMilestoneRef, -1);

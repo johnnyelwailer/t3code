@@ -84,9 +84,12 @@ describe("cloud checkout joins the user's project (#777)", () => {
     ]);
   });
 
-  it("merges the checkout into a work-source-bound project under its name", () => {
+  it.each([
+    ["the primary environment", adoptFromPrimary],
+    ["every non-session environment", adoptFromOwnEnvironments],
+  ])("merges the checkout into a work-source-bound project under its name (%s)", (_rule, adopt) => {
     const local = project(LOCAL, "pti", "PTI: POLAssist", REMOTE, { source: jira });
-    expect(groupsOf(adoptFromPrimary([local, checkout]))).toEqual([
+    expect(groupsOf(adopt([local, checkout]))).toEqual([
       { label: "PTI: POLAssist", members: ["pti", "checkout"] },
     ]);
   });
@@ -176,12 +179,6 @@ describe("cloud checkout keeps the Jira project's identity (#999)", () => {
       source: jira,
       repositoryIdentity: machine.repositoryIdentity,
     });
-  });
-
-  it("the selector shows the project once, under its Jira name", () => {
-    expect(groupsOf(adoptFromOwnEnvironments([selected, machine]))).toEqual([
-      { label: "Nexi AI", members: ["nexi", "machine"] },
-    ]);
   });
 
   it("the machine's scratch project is never adopted", () => {

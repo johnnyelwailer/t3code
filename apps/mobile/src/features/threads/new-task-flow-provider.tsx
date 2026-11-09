@@ -898,13 +898,7 @@ export function NewTaskFlowProvider(
     expandedProvider,
     environments,
     selectedProject,
-    pendingDraft: pendingDraftHolding(
-      heldDraft,
-      selectedProject && {
-        environmentId: selectedProject.environmentId,
-        projectId: selectedProject.id,
-      },
-    ),
+    pendingDraft: pendingDraftHolding(heldDraft),
     linkedEnvironments,
     isScratchDraft,
     modelOptions,

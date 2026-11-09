@@ -48,6 +48,14 @@ describe("check:changed", () => {
     assert.deepStrictEqual(decide(["docs/user/install.md"], packages, false).affected, []);
   });
 
+  it("runs only the scripts tests for the additive guard's config", () => {
+    const { affected, outputs } = decide([".t3team-additive-guard.json"], readWorkspace(), false);
+    assert.deepStrictEqual(affected, ["@t3tools/scripts"]);
+    assert.isFalse(outputs.test_server);
+    assert.isFalse(outputs.test_web);
+    assert.strictEqual(outputs.test_packages, "@t3tools/scripts");
+  });
+
   it.effect(
     "keeps weighted steps within the budget, in order, and serial steps one at a time",
     () =>

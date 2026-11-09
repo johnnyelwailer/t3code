@@ -92,6 +92,44 @@ export function withPendingValue(
   return typeof pending === "boolean" ? { ...flag, enabled: pending } : flag;
 }
 
-export function featureFlagGroupSummary(section: FeatureFlagGroupSection): string {
-  return `${section.enabledCount} of ${section.totalCount} on`;
+const NEW_FOR_DAYS = 30;
+const DAY_MS = 86_400_000;
+
+export interface FeatureFlagFreshness {
+  readonly isNew: boolean;
+  /** "Since Oct 2026", or "Established" for a switch older than the registry. */
+  readonly label: string;
+}
+
+const ESTABLISHED: FeatureFlagFreshness = { isNew: false, label: "Established" };
+
+/** No `addedOn` means the switch predates the registry (2026-10-23), which wrapped what shipped. */
+export function featureFlagFreshness(
+  flag: Pick<FeatureFlagView, "addedOn">,
+  now: Date,
+): FeatureFlagFreshness {
+  if (flag.addedOn === undefined) return ESTABLISHED;
+  const added = new Date(`${flag.addedOn}T00:00:00Z`);
+  if (Number.isNaN(added.getTime())) return ESTABLISHED;
+  const month = added.toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return {
+    isNew: now.getTime() - added.getTime() <= NEW_FOR_DAYS * DAY_MS,
+    label: `Since ${month}`,
+  };
+}
+
+function sectionFlags(section: FeatureFlagGroupSection): ReadonlyArray<FeatureFlagView> {
+  return [...section.flags, ...section.subgroups.flatMap((subgroup) => subgroup.flags)];
+}
+
+export function featureFlagGroupSummary(section: FeatureFlagGroupSection, now: Date): string {
+  const newCount = sectionFlags(section).filter(
+    (flag) => featureFlagFreshness(flag, now).isNew,
+  ).length;
+  const onCount = `${section.enabledCount} of ${section.totalCount} on`;
+  return newCount === 0 ? onCount : `${onCount} · ${newCount} new`;
 }

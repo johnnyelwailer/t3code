@@ -19,6 +19,7 @@ import {
   rejectUnsupportedDelegationInput,
 } from "./mcp/t3team-delegatedTaskPreparation.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
+import { ProjectEnrichmentService } from "./project/ProjectEnrichmentService.ts";
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
@@ -65,6 +66,7 @@ const make = Effect.gen(function* () {
   const setupScripts = yield* ProjectSetupScriptRunner;
   const providers = yield* ProviderRegistry;
   const projects = yield* ProjectStoreV2;
+  const enrichment = yield* ProjectEnrichmentService;
   const pressureNotes = delegationPressureNotes(
     Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor)),
   );
@@ -96,9 +98,18 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  // The store's shell never carries the repository identity; resolve it from the workspace
+  // root the way t3_project_list does.
   const projectShellOf = (projectId: Parameters<typeof projects.getShell>[0]) =>
     projects.getShell(projectId).pipe(
       Effect.map(Option.getOrUndefined),
+      Effect.flatMap((shell) =>
+        shell === undefined || shell.repositoryIdentity !== null
+          ? Effect.succeed(shell)
+          : enrichment
+              .readRepositoryIdentity(shell.workspaceRoot)
+              .pipe(Effect.map((repositoryIdentity) => ({ ...shell, repositoryIdentity }))),
+      ),
       Effect.catchCause(() =>
         Effect.fail(
           failure(

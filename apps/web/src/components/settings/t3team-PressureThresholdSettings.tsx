@@ -18,6 +18,13 @@ const FIELDS = [
   ["criticalRamPercent", "Critical headroom (% of RAM)"],
   ["recoveryGiB", "Recovery margin cap (GiB)"],
   ["recoveryRamPercent", "Recovery margin (% of RAM)"],
+  ["noticeUsageWarnPercent", "Agent note: usage warning (% of limit)"],
+  ["noticeUsageCriticalPercent", "Agent note: usage critical (% of limit)"],
+  ["noticeProcessCpuPercent", "Agent note: job CPU (% of one core, for 10 s)"],
+  ["noticeProcessRssWarnGiB", "Agent note: job memory warning (GiB)"],
+  ["noticeProcessRssCriticalGiB", "Agent note: job memory critical (GiB)"],
+  ["noticeHostCpuPercent", "Agent note: machine CPU (%)"],
+  ["noticeQuietMinutes", "Agent note: quiet time between repeats (minutes)"],
 ] as const;
 
 const isThresholds = Schema.is(ResourcePressureThresholds);
@@ -54,7 +61,7 @@ export function PressureThresholdForm({
       .finally(() => setPending(false));
   };
   return (
-    <SettingsSection title="Experimental pressure thresholds">
+    <SettingsSection title="Experimental pressure and agent-note thresholds">
       <p className="text-xs text-muted-foreground">
         Each threshold uses the smaller of its GiB cap and RAM percentage. Recovery requires two
         samples above the threshold plus its margin. Changes apply on the next sample.

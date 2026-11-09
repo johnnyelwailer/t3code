@@ -18,6 +18,7 @@ export type DesktopUpdateStatusIconState =
   | "available"
   | "downloading"
   | "downloaded"
+  | "ready"
   | "everything";
 
 function normalizeDesktopUpdateDownloadPercent(percent: number | null): number {
@@ -107,6 +108,18 @@ function DesktopUpdateDownloadedIcon() {
   );
 }
 
+function DesktopUpdateReadyIcon() {
+  return (
+    <span className="relative grid size-4 place-items-center">
+      <RotateCwIcon className="size-4" />
+      <span
+        aria-hidden="true"
+        className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary ring-2 ring-sidebar-control-surface"
+      />
+    </span>
+  );
+}
+
 export function DesktopUpdateStatusIcon({
   downloadPercent,
   isCheckAnimating,
@@ -124,6 +137,7 @@ export function DesktopUpdateStatusIcon({
     return <DesktopUpdateDownloadingIcon percent={downloadPercent ?? null} />;
   }
   if (status === "downloaded") return <DesktopUpdateDownloadedIcon />;
+  if (status === "ready") return <DesktopUpdateReadyIcon />;
   if (status === "everything") return <CircleArrowUpIcon className="size-4" />;
 
   return (

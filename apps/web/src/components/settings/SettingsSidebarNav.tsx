@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   ArchiveIcon,
-  FlaskConicalIcon,
   BotIcon,
   createLucideIcon,
   CalendarClockIcon,
@@ -24,7 +23,6 @@ import {
   PanelsTopLeftIcon,
   KeyboardIcon,
   KeyRoundIcon,
-  Link2Icon,
   PaletteIcon,
   SearchIcon,
   ServerIcon,
@@ -52,18 +50,25 @@ import { scrollToSettingsTarget } from "./settingsLayout";
 import {
   searchSettings,
   revealSettingsSearchTarget,
-  SETTINGS_NAV_GROUPS,
   SETTINGS_SECTION_LABELS,
   type SettingsPath,
   type SettingsSearchItem,
 } from "./settingsSearch";
+import {
+  T3TEAM_SETTINGS_SECTION_ICONS,
+  t3teamSettingsSectionLabel,
+  useT3TeamSettingsNavGroups,
+  type SettingsSectionPath,
+} from "~/t3team/settings/t3team-settingsRegistry";
+export type {
+  SettingsSectionPath,
+  T3TeamSettingsSectionPath,
+} from "~/t3team/settings/t3team-settingsRegistry";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { validateSettingsScopeSearch } from "./settingsScope";
 import { useSettingsSectionNavigation } from "./useSettingsSectionNavigation";
 import { workspaceAreaProps } from "../../lib/workspaceFocus";
 import { AccountSidebarEntry } from "../account/t3team-AccountSidebarEntry";
-import { useConnectedToolsSettingsVisible } from "./t3team-connectedToolsSettingsVisible";
-import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
   [
@@ -78,24 +83,10 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
 ]);
 
 /**
- * Sections this fork adds on top of upstream's. `settingsSearch.ts` is upstream's single source of
- * truth for sections, and it is NOT modified here — the fork's extra sections are declared alongside
- * it and spliced into the derived nav list after the upstream section they follow. Upstream's
- * `/settings/beta` is gone (folded into Legacy features, #5664), so the fork drops it too.
+ * Sections this fork adds on top of upstream's are registered in
+ * `~/t3team/settings/t3team-settingsRegistry.tsx` and re-exported from here for the nav's
+ * widened path type.
  */
-export type T3TeamSettingsSectionPath = "/settings/connected-tools" | "/settings/features";
-export type SettingsSectionPath = SettingsPath | T3TeamSettingsSectionPath;
-
-const T3TEAM_SECTION_LABELS: Readonly<Record<T3TeamSettingsSectionPath, string>> = {
-  "/settings/connected-tools": "Connected Tools",
-  "/settings/features": "Features",
-};
-
-/** Keyed by the upstream section each fork section follows, so upstream's order stays intact. */
-const T3TEAM_SECTIONS_AFTER: Readonly<Partial<Record<SettingsPath, T3TeamSettingsSectionPath>>> = {
-  "/settings/appearance": "/settings/features",
-  "/settings/providers": "/settings/connected-tools",
-};
 
 const T3ConnectSidebarSignIn = lazy(() =>
   import("../clerk/T3ConnectSidebarSignIn").then((module) => ({
@@ -109,7 +100,7 @@ const T3ConnectSidebarAvatar = lazy(() =>
 );
 
 const SETTINGS_SECTION_ICONS: Readonly<
-  Record<SettingsSectionPath, ComponentType<{ className?: string }>>
+  Record<SettingsPath, ComponentType<{ className?: string }>>
 > = {
   "/settings/general": Settings2Icon,
   "/settings/diagnostics": WrenchIcon,
@@ -120,8 +111,6 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/keybindings": KeyboardIcon,
   "/settings/snap-shot": SnapShotIcon,
   "/settings/providers": BotIcon,
-  "/settings/connected-tools": Link2Icon,
-  "/settings/features": FlagIcon,
   "/settings/threads": MessagesSquareIcon,
   "/settings/browser": GlobeIcon,
   "/settings/devices": SmartphoneIcon,
@@ -132,7 +121,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/access": ShieldCheckIcon,
   "/settings/secrets": KeyRoundIcon,
   "/settings/maintenance": WrenchIcon,
-  "/settings/labs": FlaskConicalIcon,
+  "/settings/labs": FlagIcon,
   "/settings/about": InfoIcon,
   "/settings/archived": ArchiveIcon,
 };
@@ -148,25 +137,13 @@ function scrollResultIntoView(row: HTMLElement | null) {
   row?.scrollIntoView({ block: "nearest" });
 }
 
-const T3TEAM_NAV_GROUPS: ReadonlyArray<{
-  readonly heading: string | null;
-  readonly paths: ReadonlyArray<SettingsSectionPath>;
-}> = SETTINGS_NAV_GROUPS.map((group) => ({
-  heading: group.heading,
-  paths: group.paths.flatMap((to): ReadonlyArray<SettingsSectionPath> => {
-    const forkTo = T3TEAM_SECTIONS_AFTER[to];
-    return forkTo === undefined ? [to] : [to, forkTo];
-  }),
-}));
-
 function settingsSectionLabel(to: SettingsSectionPath): string {
-  return to === "/settings/connected-tools" || to === "/settings/features"
-    ? T3TEAM_SECTION_LABELS[to]
-    : SETTINGS_SECTION_LABELS[to];
+  return t3teamSettingsSectionLabel(to) ?? SETTINGS_SECTION_LABELS[to as SettingsPath];
 }
 
 function SettingsSectionIcon({ to }: { to: SettingsPath }) {
-  const Icon = SETTINGS_SECTION_ICONS[to];
+  const Icon =
+    SETTINGS_SECTION_ICONS[to] ?? T3TEAM_SETTINGS_SECTION_ICONS[to as SettingsSectionPath];
   return <Icon className="size-4 shrink-0 text-(--sidebar-icon-color)" />;
 }
 
@@ -176,16 +153,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
   const currentHash = useLocation({ select: (location) => location.hash });
   const currentSearch = useLocation({ select: (location) => location.search });
   const scopeSearch = validateSettingsScopeSearch(currentSearch);
-  const featuresPageEnabled = useFeatureFlag("SETTINGS_FEATURES_PAGE");
-  const connectedToolsVisible = useConnectedToolsSettingsVisible();
-  const navGroups = T3TEAM_NAV_GROUPS.map((group) => ({
-    heading: group.heading,
-    paths: group.paths.filter(
-      (to) =>
-        (to !== "/settings/features" || featuresPageEnabled) &&
-        (to !== "/settings/connected-tools" || connectedToolsVisible),
-    ),
-  })).filter((group) => group.paths.length > 0);
+  const navGroups = useT3TeamSettingsNavGroups();
   const activePath = SETTINGS_DETAIL_PAGE_PARENTS[pathname] ?? pathname;
   const navPaths = navGroups.flatMap((group) => group.paths);
   const sectionNavigation = useSettingsSectionNavigation(
@@ -410,7 +378,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                           {item.title}
                         </span>
                         <span className="block truncate text-2xs text-sidebar-muted-foreground/75">
-                          {SETTINGS_SECTION_LABELS[item.to]}
+                          {settingsSectionLabel(item.to)}
                         </span>
                       </span>
                     </SidebarMenuButton>
@@ -458,7 +426,9 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                       ) : null}
                       <SidebarMenu role="presentation">
                         {group.paths.map((to) => {
-                          const Icon = SETTINGS_SECTION_ICONS[to];
+                          const Icon =
+                            SETTINGS_SECTION_ICONS[to as SettingsPath] ??
+                            T3TEAM_SETTINGS_SECTION_ICONS[to];
                           const isActive = activePath === to || activePath.startsWith(`${to}/`);
                           return (
                             <SidebarMenuItem key={to} role="presentation">

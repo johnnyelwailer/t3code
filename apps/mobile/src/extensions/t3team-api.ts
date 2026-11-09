@@ -25,6 +25,7 @@ export type {
   PendingDraftTone,
 } from "./t3team-pendingDraftTypes";
 export { retargetPendingDraft } from "./t3team-retargetPendingDraft";
+export { draftProjectStamp } from "./t3team-usePendingDraft";
 export {
   hasSelectableModel,
   readDraftModelSelection,

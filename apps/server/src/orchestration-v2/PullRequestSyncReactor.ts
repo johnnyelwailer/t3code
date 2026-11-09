@@ -34,6 +34,7 @@ import * as GitManager from "../git/GitManager.ts";
 import { PullRequestProviderError } from "@t3tools/source-control-core/server/PullRequestProvider";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import { forkParked } from "../serverActivation.ts";
+import { forkParkedHousekeeping } from "../t3team-housekeepingGrace.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import {
@@ -764,7 +765,7 @@ export const make = Effect.gen(function* () {
         }
       }).pipe(Effect.catchCause(logSkipped("pull request sync event stream failed", {}))),
     );
-    yield* forkParked(
+    yield* forkParkedHousekeeping(
       Effect.gen(function* () {
         yield* worker.enqueue("all");
         yield* worker.drain;

@@ -4,6 +4,7 @@ import { buildDigestPlan, type DigestGraph } from "./t3team-projectMyWorkDigestP
 import type { ProjectTicket } from "./t3team-types";
 import {
   buildViewContext,
+  buildViewTabContext,
   digestVisibleTicketIds,
   selectionFromAside,
 } from "./t3team-viewContextBuild";
@@ -38,6 +39,37 @@ describe("buildViewContext", () => {
         selection: null,
       }),
     ).toMatchObject({ visibleItemIds: [], visibleItemCount: 0 });
+  });
+
+  it("publishes a view tab: My Work with its own project's digest items, a work item as itself", () => {
+    expect(
+      buildViewTabContext({
+        target: { kind: "my-work", projectId: "p1" },
+        items: { projectId: "p1", ids: ["a", "b"] },
+      }),
+    ).toMatchObject({
+      surface: "my-work",
+      filters: {},
+      selection: null,
+      visibleItemIds: ["a", "b"],
+    });
+    expect(
+      buildViewTabContext({
+        target: { kind: "my-work", projectId: "p1" },
+        items: { projectId: "p2", ids: ["x"] },
+      }),
+    ).toMatchObject({ visibleItemIds: [], visibleItemCount: 0 });
+    expect(
+      buildViewTabContext({
+        target: { kind: "work-item", projectId: "p1", ticketId: "t-7", displayId: "NX-7" },
+        items: { projectId: "p1", ids: ["a"] },
+      }),
+    ).toMatchObject({
+      surface: "work-item",
+      selection: { kind: "work-item", id: "t-7" },
+      visibleItemIds: ["t-7"],
+      visibleItemCount: 1,
+    });
   });
 
   it("names a pull request selection with the neutral change-request kind", () => {

@@ -167,7 +167,7 @@ it.layer(TestLayer)("machine source on the cloud provider", (it) => {
           "the accepted answer should land as the user's next message",
         );
       } finally {
-        setPackProviderOverlay(savedOverlay);
+        setPackProviderOverlay({ configMap: savedOverlay, driverDefinitions: new Map() });
       }
     }),
   );

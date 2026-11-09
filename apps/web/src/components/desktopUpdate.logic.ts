@@ -2,8 +2,12 @@ import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/con
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
+const DEFAULT_DESKTOP_RELEASE_HOST = "github.com";
 const DEFAULT_DESKTOP_RELEASE_REPOSITORY = "pingdotgg/t3code";
+const DEFAULT_DESKTOP_RELEASE_TAG_PREFIX = "v";
 const GITHUB_REPOSITORY_SEGMENT = /^[A-Za-z0-9._-]+$/u;
+const RELEASE_HOST_SEGMENT = /^[a-z0-9.-]+$/i;
+const RELEASE_TAG_PREFIX = /^[A-Za-z0-9.-]*$/u;
 
 function isValidRepositorySegment(value: string | undefined): value is string {
   return (
@@ -11,14 +15,30 @@ function isValidRepositorySegment(value: string | undefined): value is string {
   );
 }
 
-function desktopReleaseRepositoryUrl(repository: string | undefined): string {
+function desktopReleaseRepositoryUrl(
+  repository: string | undefined,
+  host: string | undefined,
+): string {
   const configuredRepository = repository?.trim() ?? "";
   const [owner, name, ...extra] = configuredRepository.split("/");
   const releaseRepository =
     isValidRepositorySegment(owner) && isValidRepositorySegment(name) && extra.length === 0
       ? configuredRepository
       : DEFAULT_DESKTOP_RELEASE_REPOSITORY;
-  return `https://github.com/${releaseRepository}/releases`;
+  const configuredHost = host?.trim() ?? "";
+  const releaseHost = RELEASE_HOST_SEGMENT.test(configuredHost)
+    ? configuredHost
+    : DEFAULT_DESKTOP_RELEASE_HOST;
+  return `https://${releaseHost}/${releaseRepository}/releases`;
+}
+
+function desktopReleaseTagUrl(version: string, tagPrefix: string | undefined): string {
+  const configuredPrefix = tagPrefix?.trim() ?? "";
+  const prefix =
+    configuredPrefix !== "" && RELEASE_TAG_PREFIX.test(configuredPrefix)
+      ? configuredPrefix
+      : DEFAULT_DESKTOP_RELEASE_TAG_PREFIX;
+  return `${prefix}${encodeURIComponent(version)}`;
 }
 
 /** The download RPC can beat the updater's downloadedVersion event; fall back to the requested version. */
@@ -28,17 +48,23 @@ export function getDesktopUpdateDownloadedVersion(state: DesktopUpdateState): st
 
 export function getDesktopUpdateReleaseUrl(
   version: string | null,
-  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY,
+  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY,
+  host: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_HOST,
+  tagPrefix: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_TAG_PREFIX,
 ): string | null {
   const normalizedVersion = version?.trim();
   if (!normalizedVersion) return null;
-  return `${desktopReleaseRepositoryUrl(repository)}/tag/v${encodeURIComponent(normalizedVersion)}`;
+  return `${desktopReleaseRepositoryUrl(repository, host)}/tag/${desktopReleaseTagUrl(
+    normalizedVersion,
+    tagPrefix,
+  )}`;
 }
 
 export function getDesktopUpdateReleaseHistoryUrl(
-  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_UPDATE_REPOSITORY,
+  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY,
+  host: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_HOST,
 ): string {
-  return desktopReleaseRepositoryUrl(repository);
+  return desktopReleaseRepositoryUrl(repository, host);
 }
 
 export function resolveDesktopUpdateButtonAction(

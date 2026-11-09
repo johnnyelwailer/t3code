@@ -30,6 +30,16 @@ const MANY: ReadonlyArray<Env> = [
   { id: "env-staging", label: "Staging VM (eu-west)" },
 ];
 
+const GERMAN: ReadonlyArray<Env> = [
+  { id: "env-local", label: "Dieser Computer", isPrimary: true },
+  { id: "env-gm17", label: "NX-GM17GBWE" },
+  { id: "env-mn94", label: "NX-MN94KQCLWQ" },
+  { id: "env-cloud-2c41", label: "Cloud-Sitzung" },
+  { id: "env-cloud-a9e0", label: "Cloud-Sitzung" },
+  { id: "env-zrh", label: "Build-Server Zürich (Staging, Nachtbuild mit sehr langem Namen)" },
+  { id: "env-vm", label: "Entwicklungs-VM Hamburg" },
+];
+
 function Row(props: {
   width: number;
   environments: ReadonlyArray<Env>;
@@ -101,6 +111,19 @@ export const ManyEnvironments: Story = {
   render: () => (
     <Frame>
       <Row width={300} environments={MANY} initialSelectedId="env-nas" />
+    </Frame>
+  ),
+};
+
+export const RealisticVariety: Story = {
+  name: "German labels, long names, many pills: All and one machine selected",
+  render: () => (
+    <Frame>
+      <div className="flex flex-wrap items-start gap-6">
+        <Row width={300} environments={GERMAN} />
+        <Row width={300} environments={GERMAN} initialSelectedId="env-mn94" />
+        <Row width={220} environments={GERMAN} initialSelectedId="env-zrh" />
+      </div>
     </Frame>
   ),
 };

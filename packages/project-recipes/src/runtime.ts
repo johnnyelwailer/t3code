@@ -263,6 +263,9 @@ export const LaunchProjectRecipeWorkflowRequest = Schema.Struct({
   interactionMode: Schema.optional(Schema.String),
   launch: ProjectRecipeWorkflowLaunch,
   toolContext: Schema.optional(ProjectRecipeWorkflowLaunchToolContext),
+  /** A recipe attached in the chat composer: `kickoffMessage` is recorded as the person's message
+   * under `messageId` and becomes the run's `instructions`; the reply comes once the run is admitted. */
+  composerKickoff: Schema.optional(Schema.Struct({ messageId: Schema.String })),
 });
 export type LaunchProjectRecipeWorkflowRequest = typeof LaunchProjectRecipeWorkflowRequest.Type;
 
