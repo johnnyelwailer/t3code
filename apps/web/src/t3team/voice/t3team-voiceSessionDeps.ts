@@ -15,8 +15,8 @@ import {
 import { threadEnvironment } from "~/state/threads";
 
 import type { VoiceSessionDeps } from "./t3team-voiceSession";
-import { routeVoiceUtterance } from "./t3team-voiceRouting";
 import { useVoiceThreadStore } from "./t3team-voiceThreadStore";
+import { topOfPinnedOrderKey } from "./t3team-voicePinOrder";
 
 const projectlessProjectIds = new Map<EnvironmentId, ProjectId>();
 
@@ -49,11 +49,19 @@ export function makeVoiceSessionDeps(): VoiceSessionDeps | null {
     remember: (home) => store.remember(environmentId, home),
     forget: () => store.forget(environmentId),
     projectlessProject: () => resolveProjectlessProject(environmentId),
-    route: routeVoiceUtterance,
     startTurn: orchestration.startThreadTurn,
     uploadFile: (file) => uploadVoiceFileAttachment({ environmentId, file }),
     pinAndKeep: async (threadId: ThreadId) => {
-      await runOnPrimaryEnvironment(threadEnvironment.pin, { threadId }, "voice-thread-pin");
+      // Pin to the front so the voice row stays first; a bare pin lands in the keyless group,
+      // which the sidebar renders after every keyed pinned thread.
+      const orderKey = topOfPinnedOrderKey(
+        readThreadShells().filter((thread) => thread.environmentId === environmentId),
+      );
+      await runOnPrimaryEnvironment(
+        threadEnvironment.pin,
+        orderKey != null ? { threadId, orderKey } : { threadId },
+        "voice-thread-pin",
+      );
       await runOnPrimaryEnvironment(
         threadEnvironment.setAutoSettle,
         { threadId, enabled: false },

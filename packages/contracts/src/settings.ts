@@ -22,6 +22,12 @@ import {
 import { UsageLimitSourceId } from "./usageLimitSourceId.ts";
 import { DEFAULT_VOICE_HOTKEY_CHORD, VoiceHotkeyChord } from "./t3team-voiceHotkey.ts";
 import { VoiceSettings, VoiceSettingsPatch } from "./t3team-voiceSettings.ts";
+import {
+  T3TeamClientSettings,
+  T3TeamClientSettingsPatch,
+  T3TeamServerSettings,
+  T3TeamServerSettingsPatch,
+} from "./t3team-settings.ts";
 import { UsageModelFilter } from "./usage.ts";
 import { SecretProviderId, SecretProviderSlug } from "./secretReference.ts";
 import { EnvironmentMachineKind, ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
@@ -518,11 +524,8 @@ export const ClientSettingsSchema = Schema.Struct({
   // `sidebarV2Enabled` / `sidebarV2ConfiguredByUser` are gone upstream — the v2 sidebar is now the
   // default and `legacySidebarEnabled` (above) is the inverted switch that replaced them. The fork's
   // sidebar lens follows whichever switch upstream owns; see `t3team-sidebarLens.ts`.
-  t3teamStoredSidebarNavPreferencesJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredProjectsJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredThreadsJson: Schema.optionalKey(TrimmedString),
+  // t3team fork fields; legacy flat keys decode into these, see `t3team-settings.ts`.
+  t3team: T3TeamClientSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   timestampFormat: TimestampFormat.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
   ),
@@ -1244,6 +1247,10 @@ export const ServerSettings = Schema.Struct({
    * window and a phone attached to the same server.
    */
   agentInstructions: AgentInstructions.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  // t3team fork fields (activity labels, scope pills, icon ingest); legacy flat keys decode
+  // into these, see `t3team-settings.ts`. In the unified merge the server object wins; fork
+  // client fields are read through the persistence API, never the unified settings.
+  t3team: T3TeamServerSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   providerModelPreferences: Schema.NullOr(ProviderModelPreferences).pipe(
@@ -1268,45 +1275,6 @@ export const ServerSettings = Schema.Struct({
   ),
 
   enableAgentBrowserAccess: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  /**
-   * Whether active threads get a short LLM-generated "working on" label (GHE #40)
-   * instead of the static "Working" pill. Server-authoritative like
-   * `enableAgentBrowserAccess`: the activity-label summarizer (inference side)
-   * and the sidebar pills (display side) must agree, and the answer must not
-   * differ between clients attached to the same server.
-   *
-   * ON by default for this distribution: generation is light by construction
-   * (tiny hard-capped payload, non-thinking model selection, ~20s debounce,
-   * skip-when-unchanged) and fail-open — when off or on any error the thread
-   * simply shows the static "Working" exactly as before.
-   */
-  t3teamActivityLabelsEnabled: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
-  /**
-   * Sidebar project scope as a one-click pill row (recent projects + a "more" menu) instead of
-   * the "All projects" dropdown alone. While on, the scope also narrows other surfaces (the pull
-   * request list) to the selected project and, for a work-source project, its linked repositories.
-   * ON by default for this distribution; the setting is the way back to the dropdown alone.
-   */
-  t3teamProjectScopePillsEnabled: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
-  /**
-   * Whether the server ingests a bound work source's project avatar (Jira)
-   * as the project's `faviconPath` at bind/creation time — see
-   * `apps/server/src/t3team-projectSourceIconIngest.ts`. Server-authoritative
-   * like `t3teamActivityLabelsEnabled`: the ingest happens at command
-   * dispatch time, so every client attached to the server sees the same
-   * result.
-   *
-   * ON by default for this distribution: it is fail-open — when off, or on
-   * any fetch/store failure, the command passes through untouched and the
-   * project simply keeps the auto-selected fallback icon, exactly as before.
-   */
-  t3teamProjectSourceIconIngestEnabled: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
   projectAgentBrowserAccessOverrides: Schema.Record(ProjectId, Schema.Boolean).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1463,8 +1431,6 @@ export const ServerSettings = Schema.Struct({
   providerInstances: Schema.Record(ProviderInstanceId, ProviderInstanceConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  t3teamStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   voice: VoiceSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   sourceControlHosts: Schema.Record(Schema.String, SourceControlHostSettings).pipe(
@@ -1660,6 +1626,8 @@ export type UnifiedSettings = Omit<ServerSettings, keyof ModelPreferences> & Cli
 export const DEFAULT_UNIFIED_SETTINGS: UnifiedSettings = {
   ...DEFAULT_SERVER_SETTINGS,
   ...DEFAULT_CLIENT_SETTINGS,
+  // Both schemas carry a `t3team` object; the shallow merge above would shadow the server fields.
+  t3team: { ...DEFAULT_SERVER_SETTINGS.t3team, ...DEFAULT_CLIENT_SETTINGS.t3team },
 };
 
 const ModelSelectionPatch = Schema.Struct({
@@ -1724,8 +1692,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
-  t3teamActivityLabelsEnabled: Schema.optionalKey(Schema.Boolean),
-  t3teamProjectScopePillsEnabled: Schema.optionalKey(Schema.Boolean),
+  t3team: Schema.optionalKey(T3TeamServerSettingsPatch),
   projectAgentBrowserAccessOverrides: Schema.optionalKey(
     Schema.Record(ProjectId, Schema.NullOr(Schema.Boolean)),
   ),
@@ -1789,8 +1756,6 @@ export const ServerSettingsPatch = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
-  t3teamStoredSidebarPinsJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   threadTitleInstructions: Schema.optionalKey(TrimmedString),
   branchNamingMode: Schema.optionalKey(BranchNamingMode),
@@ -1945,9 +1910,7 @@ export const ClientSettingsPatch = Schema.Struct({
   ),
   sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
   sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
-  t3teamStoredProjectsJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredSidecarCompositionJson: Schema.optionalKey(TrimmedString),
-  t3teamStoredThreadsJson: Schema.optionalKey(TrimmedString),
+  t3team: Schema.optionalKey(T3TeamClientSettingsPatch),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   snapShotEnabled: Schema.optionalKey(Schema.Boolean),
   snapShotIncludeAccessibility: Schema.optionalKey(Schema.Boolean),

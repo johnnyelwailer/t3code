@@ -35,7 +35,7 @@ export function useT3TeamSidecarComposition(input: {
   });
   const personalization = useMemo(
     () => readStoredSidecarPersonalizationFromServerSettings(serverConfig?.settings),
-    [serverConfig?.settings.t3teamStoredSidecarCompositionJson],
+    [serverConfig?.settings.t3team.storedSidecarCompositionJson],
   );
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export function useT3TeamSidecarComposition(input: {
     return configureStoredSidecarPersonalizationPersister(async (nextJson) => {
       await updateServerSettings({
         environmentId,
-        input: { patch: { t3teamStoredSidecarCompositionJson: nextJson } },
+        input: { patch: { t3team: { storedSidecarCompositionJson: nextJson } } },
       });
     });
   }, [environmentId, updateServerSettings]);

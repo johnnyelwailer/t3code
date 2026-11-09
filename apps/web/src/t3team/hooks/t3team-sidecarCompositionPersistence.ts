@@ -121,13 +121,13 @@ function parseSidecarPersonalization(raw: string | undefined): SidecarPersonaliz
 export function readStoredSidecarPersonalizationFromClientSettings(
   settings: ClientSettings | null | undefined,
 ): SidecarPersonalization {
-  return parseSidecarPersonalization(settings?.t3teamStoredSidecarCompositionJson);
+  return parseSidecarPersonalization(settings?.t3team.storedSidecarCompositionJson);
 }
 
 export function readStoredSidecarPersonalizationFromServerSettings(
-  settings: Pick<ServerSettings, "t3teamStoredSidecarCompositionJson"> | null | undefined,
+  settings: Pick<ServerSettings, "t3team"> | null | undefined,
 ): SidecarPersonalization {
-  return parseSidecarPersonalization(settings?.t3teamStoredSidecarCompositionJson);
+  return parseSidecarPersonalization(settings?.t3team.storedSidecarCompositionJson);
 }
 
 export async function hydrateStoredSidecarComposition(): Promise<SidecarPersonalization> {
@@ -139,11 +139,11 @@ export async function hydrateStoredSidecarComposition(): Promise<SidecarPersonal
   try {
     const personalization = readStoredSidecarPersonalizationFromServerSettings(serverSettings);
     const nextJson = encodeSidecarPersonalization(personalization);
-    const currentJson = serverSettings.t3teamStoredSidecarCompositionJson ?? "";
+    const currentJson = serverSettings.t3team.storedSidecarCompositionJson ?? "";
 
     if (currentJson !== nextJson && (currentJson.length > 0 || nextJson !== "{}")) {
       await updatePrimaryServerSettings({
-        t3teamStoredSidecarCompositionJson: nextJson,
+        t3team: { storedSidecarCompositionJson: nextJson },
       });
     }
 
@@ -193,7 +193,7 @@ export function readStoredSidecarCompositionFromClientSettings(
 }
 
 export function readStoredSidecarCompositionFromServerSettings(
-  settings: Pick<ServerSettings, "t3teamStoredSidecarCompositionJson"> | null | undefined,
+  settings: Pick<ServerSettings, "t3team"> | null | undefined,
 ): SidecarComposition {
   return (
     readStoredSidecarPersonalizationFromServerSettings(settings).composition ??
@@ -213,6 +213,9 @@ export async function clearLegacyStoredSidecarComposition(): Promise<void> {
   await localApi.persistence.setClientSettings({
     ...DEFAULT_CLIENT_SETTINGS,
     ...currentClientSettings,
-    t3teamStoredSidecarCompositionJson: "",
+    t3team: {
+      ...currentClientSettings.t3team,
+      storedSidecarCompositionJson: "",
+    },
   });
 }

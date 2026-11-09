@@ -62,6 +62,7 @@ import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
 import { useCloudSessionRestartProjectId } from "~/cloud/t3team-useCloudSessionOwnProject";
 import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionComposerGate";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
+import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
 import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
 import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
@@ -394,6 +395,10 @@ import { useLocalDispatchState } from "./chat/useLocalDispatchState";
 import { draftFanoutSelectionsAtom, draftSendState } from "./chat/chatViewSend";
 import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import { useT3TeamThreadContextQueue } from "~/t3team/chat/t3team-useThreadContextQueue";
+import { useViewTabAddActions } from "~/t3team/t3team-useViewTabAddActions";
+import { T3TeamComposerAttachedRecipe } from "~/t3team/composer/t3team-ComposerAttachedRecipe";
+import { T3TeamComposerRecipeCatalogLoader } from "~/t3team/composer/t3team-ComposerRecipeCatalogLoader";
+import { withT3TeamAttachedRecipeTurnStart } from "~/t3team/composer/t3team-startAttachedRecipe";
 import {
   isCompactCommandMessage,
   type LocalThreadErrorEntry,
@@ -1037,6 +1042,7 @@ export default function ChatView(props: ChatViewProps) {
   })();
   const activeThreadRef = useActiveThreadRef(activeThread);
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const t3teamViewTabActions = useViewTabAddActions(activeThreadRef, t3teamExtension.viewTabSource);
   const activeEnvironmentServerBrowser = useEnvironmentSupportsServerBrowser(
     activeThreadRef?.environmentId ?? null,
   );
@@ -3183,7 +3189,12 @@ export default function ChatView(props: ChatViewProps) {
       composerContextAttachments,
       prepareComposerContextAttachments,
       beforeDispatchTurnStart,
-      dispatchTurnStartOverride,
+      dispatchTurnStartOverride: withT3TeamAttachedRecipeTurnStart({
+        target: composerDraftTarget,
+        hostOverride: dispatchTurnStartOverride,
+        setOptimisticUserMessages,
+        setThreadError,
+      }),
       onComposerContextAttachmentsConsumed,
     },
   });
@@ -3786,7 +3797,10 @@ export default function ChatView(props: ChatViewProps) {
                   >
                     <T3TeamCompanionSlot
                       placement="thread.new"
-                      mood="newThread"
+                      mood={threadCompanionMood({
+                        working: isWorking,
+                        latestRunStatus: activeLatestRun?.status,
+                      })}
                       size="md"
                       className="mb-2 flex justify-center"
                     />
@@ -3809,6 +3823,10 @@ export default function ChatView(props: ChatViewProps) {
                 >
                   {contextQueue.strip}
                   {composerContextAttachmentSlot}
+                  <T3TeamComposerAttachedRecipe target={composerDraftTarget} />
+                  {embedded ? null : (
+                    <T3TeamComposerRecipeCatalogLoader projectId={activeProject?.id ?? null} />
+                  )}
                   <div
                     ref={draftHeroComposerAnchorRef}
                     className="relative z-10"
@@ -4291,6 +4309,7 @@ export default function ChatView(props: ChatViewProps) {
           deviceAvailable={activeThreadRef !== null}
           sideChatAvailable={sideChat.available}
           sideChatDisabledReason={sideChatDisabledReason}
+          t3teamAddSurfaceActions={t3teamViewTabActions}
         >
           {rightPanelContent}
         </ChatRightPanel>

@@ -383,10 +383,9 @@ export default defineConfig(() => {
     resolve: {
       tsconfigPaths: true,
       alias: {
-        "@betteroffice/fonts-cjk": new URL(
-          "./src/components/files/office/fonts-cjk.ts",
-          import.meta.url,
-        ).pathname,
+        "@betteroffice/fonts-cjk": NodeURL.fileURLToPath(
+          new URL("./src/components/files/office/fonts-cjk.ts", import.meta.url),
+        ),
       },
       dedupe: ["react", "react-dom"],
     },

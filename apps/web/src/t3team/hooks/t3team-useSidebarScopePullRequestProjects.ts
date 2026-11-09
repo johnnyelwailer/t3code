@@ -14,7 +14,7 @@ import {
  * is unscoped: the pills flag is off, or the sidebar is on "All projects".
  */
 export function useT3TeamSidebarScopePullRequestProjects(): SidebarScopePullRequestSelection | null {
-  const enabled = usePrimarySettings((settings) => settings.t3teamProjectScopePillsEnabled);
+  const enabled = usePrimarySettings((settings) => settings.t3team.projectScopePills);
   const scopedProjectRefs = useT3TeamSidebarProjectScope((state) => state.scopedProjectRefs);
   const linkedRepositoryKeysByProjectId = useT3TeamSidebarProjectScope(
     (state) => state.linkedRepositoryKeysByProjectId,

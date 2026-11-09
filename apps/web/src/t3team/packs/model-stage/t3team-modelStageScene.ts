@@ -6,9 +6,11 @@
 import * as THREE from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
-import type { ModelStageFlight } from "@t3team/pack-ui/contract";
+import type { ModelStageClips, ModelStageFlight } from "@t3team/pack-ui/contract";
 
 import { lightStage, toLambert } from "./t3team-modelStageAssets";
+import { ModelStageClipPlayer } from "./t3team-modelStageClipPlayer";
+import { ModelStageFrameLoop } from "./t3team-modelStageFrameLoop";
 import { ModelStageMotion } from "./t3team-modelStageMotion";
 import { modelStageProbed, recordModelStageProbe } from "./t3team-modelStageSignals";
 import { frameIntervalMs, probeMeanMs } from "./t3team-modelStageTier";
@@ -22,15 +24,8 @@ export class ModelStageScene {
   private readonly camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
   private readonly environment: THREE.Texture | null;
   private readonly motion: ModelStageMotion;
-  private mixer: THREE.AnimationMixer | null = null;
-  private clips: ReadonlyArray<THREE.AnimationClip> = [];
-  private sequence: ReadonlyArray<string> = [];
-  private step = 0;
-  private current: THREE.AnimationAction | null = null;
-  private oneShot: THREE.AnimationAction | null = null;
-  private running = false;
-  private frame = 0;
-  private last = 0;
+  private readonly player = new ModelStageClipPlayer(() => this.loop.wake());
+  private readonly loop: ModelStageFrameLoop;
   private probe: number[] | null;
   private disposed = false;
   private bounds: THREE.Sphere | null = null;
@@ -56,6 +51,11 @@ export class ModelStageScene {
     this.environment = lightStage(this.scene, this.renderer, tier);
     this.motion = new ModelStageMotion(this.scene);
     this.probe = modelStageProbed(tier) ? null : [];
+    this.loop = new ModelStageFrameLoop(
+      (delta) => this.renderFrame(delta),
+      () => this.animating(),
+      frameIntervalMs(tier),
+    );
   }
 
   get webgl(): THREE.WebGLRenderer {
@@ -76,11 +76,7 @@ export class ModelStageScene {
     model.rotation.y = THREE.MathUtils.degToRad(yawDegrees);
     this.bounds = this.motion.attach(model);
     this.frameCamera();
-    this.clips = gltf.animations;
-    if (this.clips.length > 0) {
-      this.mixer = new THREE.AnimationMixer(model);
-      this.mixer.addEventListener("finished", (event) => this.finished(event.action));
-    }
+    this.player.bind(model, gltf.animations);
     this.renderFrame(0);
   }
 
@@ -92,7 +88,7 @@ export class ModelStageScene {
   setFlight(flight: ModelStageFlight | null | undefined) {
     this.motion.setFlight(flight);
     this.frameCamera();
-    if (this.motion.active()) this.wake();
+    if (this.motion.active()) this.loop.wake();
     else this.renderFrame(0);
   }
 
@@ -101,35 +97,26 @@ export class ModelStageScene {
     this.renderFrame(0);
   }
 
-  /** A list plays in order, each once, and loops the last. Absent: the first clip, looped. */
-  setClips(clips: string | ReadonlyArray<string> | undefined) {
-    const names =
-      clips === undefined ? this.clips.slice(0, 1).map((clip) => clip.name) : [clips].flat();
-    this.sequence = names.filter((name) => this.clips.some((clip) => clip.name === name));
-    this.step = 0;
-    this.oneShot = null;
-    this.playStep();
+  /**
+   * A list plays in order, each once, and loops the last; a pool takes turns between its clips.
+   * Absent: the first clip, looped.
+   */
+  setClips(clips: ModelStageClips | undefined) {
+    this.player.setClips(clips);
   }
 
   playOnce(name: string) {
-    const action = this.play(name, true);
-    if (action) this.oneShot = action;
+    this.player.playOnce(name);
   }
 
   setRunning(running: boolean) {
-    this.running = running;
-    if (running) this.wake();
-    else {
-      cancelAnimationFrame(this.frame);
-      this.frame = 0;
-      this.last = 0;
-    }
+    this.loop.setRunning(running);
   }
 
   dispose() {
     this.disposed = true;
-    this.setRunning(false);
-    this.mixer?.stopAllAction();
+    this.loop.setRunning(false);
+    this.player.dispose();
     this.motion.dispose();
     this.environment?.dispose();
     this.renderer.dispose();
@@ -148,64 +135,14 @@ export class ModelStageScene {
     this.camera.lookAt(center.x, y, center.z);
   }
 
-  private playStep() {
-    const name = this.sequence[this.step];
-    if (name !== undefined) this.play(name, this.step < this.sequence.length - 1);
-  }
-
-  private play(name: string, once: boolean): THREE.AnimationAction | null {
-    const clip = this.clips.find((candidate) => candidate.name === name);
-    if (!this.mixer || !clip) return null;
-    const action = this.mixer.clipAction(clip);
-    action.reset();
-    action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
-    action.clampWhenFinished = once;
-    if (this.current && this.current !== action) {
-      this.current.fadeOut(0.3);
-      action.fadeIn(0.3);
-    }
-    action.play();
-    this.current = action;
-    this.wake();
-    return action;
-  }
-
-  private finished(action: THREE.AnimationAction) {
-    if (action === this.oneShot) {
-      this.oneShot = null;
-      this.playStep();
-    } else if (action === this.current && this.step < this.sequence.length - 1) {
-      this.step += 1;
-      this.playStep();
-    }
-  }
-
   private animating(): boolean {
-    return (this.current?.isRunning() ?? false) || this.motion.active();
+    return this.player.running || this.motion.active();
   }
-
-  private wake() {
-    if (this.running && this.frame === 0 && !this.disposed) {
-      this.frame = requestAnimationFrame(this.tick);
-    }
-  }
-
-  private readonly tick = (now: number) => {
-    this.frame = 0;
-    if (!this.running || this.disposed) return;
-    if (this.last === 0 || now - this.last >= frameIntervalMs(this.tier) - 1) {
-      const delta = this.last === 0 ? 0 : Math.min((now - this.last) / 1000, 0.1);
-      this.last = now;
-      this.renderFrame(delta);
-    }
-    if (this.animating()) this.frame = requestAnimationFrame(this.tick);
-    else this.last = 0;
-  };
 
   private renderFrame(delta: number) {
     if (this.disposed) return;
     const start = performance.now();
-    this.mixer?.update(delta);
+    this.player.update(delta);
     this.motion.apply(delta);
     this.renderer.render(this.scene, this.camera);
     if (this.probe === null) return;

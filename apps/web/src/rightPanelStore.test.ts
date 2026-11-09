@@ -18,6 +18,7 @@ import {
   useRightPanelStore,
 } from "./rightPanelStore";
 import { parsePullRequestSurfaceView } from "./t3team/layout/t3team-surfaceRegistry";
+import type { T3TeamViewTarget } from "./t3team/t3team-viewTarget";
 
 const refA = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-A"));
 const refB = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-B"));
@@ -1308,6 +1309,91 @@ describe("rightPanelStore", () => {
           isOpen: true,
           activeSurfaceId: "side-chat:thread-D",
           surfaces: [{ id: "side-chat:thread-D", kind: "side-chat", threadId: "thread-D" }],
+        },
+      },
+      threadPanelVisibilityByThreadKey: {},
+    });
+  });
+
+  it("opens a view tab once per target and activates it again on a repeat open", () => {
+    const store = useRightPanelStore.getState();
+    const revision = store.getUserActionRevision(refA);
+    store.openView(refA, { kind: "my-work", projectId: "p1" });
+    store.openView(refA, {
+      kind: "work-item",
+      projectId: "p1",
+      ticketId: "t-1",
+      displayId: "NX-1",
+    });
+    store.openView(refA, { kind: "my-work", projectId: "p1" });
+
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(state.surfaces.map((surface) => surface.id)).toEqual([
+      "view:my-work:p1",
+      "view:work-item:p1:t-1",
+    ]);
+    expect(state).toMatchObject({ isOpen: true, activeSurfaceId: "view:my-work:p1" });
+    expect(store.getUserActionRevision(refA)).toBe(revision + 3);
+  });
+
+  it("reopens a closed view tab on its own target, with no workspace needed", async () => {
+    const store = useRightPanelStore.getState();
+    const target: T3TeamViewTarget = {
+      kind: "work-item",
+      projectId: "p1",
+      ticketId: "t-1",
+      displayId: "NX-1",
+    };
+    store.openView(refA, target);
+    store.closeSurface(refA, "view:work-item:p1:t-1");
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
+    ).toEqual([]);
+    await reopenClosedView(useClosedViewStore.getState().entries[0]!, {
+      workspaceAvailable: false,
+      openPreview: () => {
+        throw new Error("A view tab must not create a browser session");
+      },
+    });
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      id: "view:work-item:p1:t-1",
+      kind: "view",
+      target,
+    });
+  });
+
+  it("migration keeps valid view tabs and drops ones whose target no longer validates", () => {
+    expect(
+      migratePersistedRightPanelState({
+        byThreadKey: {
+          "env-1:thread-A": {
+            isOpen: true,
+            activeSurfaceId: "view:work-item:p1:t-1",
+            surfaces: [
+              {
+                id: "view:work-item:p1:t-1",
+                kind: "view",
+                target: { kind: "work-item", projectId: "p1", ticketId: "t-1", stale: true },
+              },
+              { id: "view:my-work:", kind: "view", target: { kind: "my-work", projectId: "" } },
+              { id: "view:board:p1", kind: "view", target: { kind: "board", projectId: "p1" } },
+              { id: "view:x", kind: "view" },
+            ],
+          },
+        },
+      }),
+    ).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: "view:work-item:p1:t-1",
+          surfaces: [
+            {
+              id: "view:work-item:p1:t-1",
+              kind: "view",
+              target: { kind: "work-item", projectId: "p1", ticketId: "t-1" },
+            },
+          ],
         },
       },
       threadPanelVisibilityByThreadKey: {},

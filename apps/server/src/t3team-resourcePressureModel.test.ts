@@ -21,6 +21,11 @@ const host = (availableGib: number, totalGib = 16) => ({
   totalMemoryBytes: totalGib * GIB,
   availableMemoryBytes: availableGib * GIB,
 });
+/** A pressure candidate for `applyHysteresis`; default is not under the available line. */
+const cand = (level: "ok" | "warn" | "critical", belowCriticalLine = false) => ({
+  level,
+  belowCriticalLine,
+});
 
 describe("classifyPressure", () => {
   it("is ok with plenty of memory and a small app tree", () => {
@@ -57,9 +62,13 @@ describe("classifyPressure", () => {
     expect(at(2.9, "ok")).toBe("critical");
     expect(at(3.9, "critical")).toBe("critical");
     expect(at(6.9, "warn")).toBe("warn");
-    const state = applyHysteresis({ level: "warn", lowerStreak: 0 }, at(7, "warn"));
+    const state = applyHysteresis(
+      { level: "warn", lowerStreak: 0, criticalSinceMs: null },
+      cand(at(7, "warn")),
+      0,
+    );
     expect(state.level).toBe("warn");
-    expect(applyHysteresis(state, at(7, "warn")).level).toBe("ok");
+    expect(applyHysteresis(state, cand(at(7, "warn")), 0).level).toBe("ok");
   });
 
   it("does not treat process memory consumption as non-darwin host pressure", () => {
@@ -107,11 +116,38 @@ describe("classifyPressure", () => {
       darwin: false,
     });
     expect(candidate.level).toBe("ok");
-    let state = applyHysteresis(INITIAL_HYSTERESIS, "warn");
-    state = applyHysteresis(state, candidate.level);
+    let state = applyHysteresis(INITIAL_HYSTERESIS, cand("warn"), 0);
+    state = applyHysteresis(state, cand(candidate.level), 0);
     expect(state.level).toBe("warn");
-    state = applyHysteresis(state, candidate.level);
+    state = applyHysteresis(state, cand(candidate.level), 0);
     expect(state.level).toBe("ok");
+  });
+
+  it("pins PJ's exact Windows sample: nominal 5.3 GiB is warn; the 2.2 GiB dip is the honest critical", () => {
+    // 63.35 GiB host (his real machine, total 68,016,312,320 B), commit 72/126 GiB -> 54 GiB headroom.
+    const total = 68016312320;
+    const commit = { commitHeadroomBytes: 54 * GIB, commitLimitBytes: 126 * GIB };
+    const of = (availableGib: number) =>
+      classifyPressure({
+        host: {
+          totalMemoryBytes: total,
+          availableMemoryBytes: Math.round(availableGib * GIB),
+          ...commit,
+        },
+        osLevel: null,
+        appTreeRssBytes: 9 * GIB, // ignored on non-darwin; the physical/commit headroom rule decides.
+        darwin: false,
+      });
+    // The reading PJ quoted. critical=min(3 GiB, 10%*63.35)=3; warn=min(6 GiB, 15%*63.35)=6.
+    // 5.3 is above critical and below warn -> warn, never critical.
+    expect(of(5.3).level).toBe("warn");
+    expect(of(5.3).reasons).toEqual(["host memory 5.3 GiB (8%) available"]);
+    // The machine oscillates: his journaled events dip under the 3 GiB line (2.2, 2.8, 2.72 GiB).
+    // Those samples ARE honest criticals, which is why the banner keeps saying critical.
+    expect(of(2.19).level).toBe("critical");
+    expect(of(2.19).reasons).toEqual(["host memory 2.2 GiB (3%) available"]);
+    // and it recovers to ok once available clears the warn line (6 GiB).
+    expect(of(7.21).level).toBe("ok");
   });
 
   it("flags the reported 7 GB app on a 16 GB Mac as critical even with a normal kernel verdict", () => {
@@ -146,20 +182,41 @@ describe("parseDarwinPressureLevel", () => {
 
 describe("applyHysteresis", () => {
   it("escalates immediately and de-escalates only after two lower samples", () => {
-    let state = applyHysteresis(INITIAL_HYSTERESIS, "critical");
+    let state = applyHysteresis(INITIAL_HYSTERESIS, cand("critical"), 0);
     expect(state.level).toBe("critical");
-    state = applyHysteresis(state, "ok");
+    state = applyHysteresis(state, cand("ok"), 1000);
     expect(state.level).toBe("critical");
-    state = applyHysteresis(state, "ok");
+    state = applyHysteresis(state, cand("ok"), 2000);
     expect(state.level).toBe("ok");
   });
 
   it("resets the lower streak when the level bounces back", () => {
-    let state = applyHysteresis(INITIAL_HYSTERESIS, "warn");
-    state = applyHysteresis(state, "ok");
-    state = applyHysteresis(state, "warn");
-    state = applyHysteresis(state, "ok");
+    let state = applyHysteresis(INITIAL_HYSTERESIS, cand("warn"), 0);
+    state = applyHysteresis(state, cand("ok"), 1000);
+    state = applyHysteresis(state, cand("warn"), 2000);
+    state = applyHysteresis(state, cand("ok"), 3000);
     expect(state.level).toBe("warn");
+  });
+
+  it("holds a critical that is only under the available line at warn until it sustains", () => {
+    let state = applyHysteresis(INITIAL_HYSTERESIS, cand("critical", true), 0);
+    expect(state.level).toBe("warn");
+    expect(state.criticalSinceMs).toBe(0);
+    state = applyHysteresis(state, cand("critical", true), 59_000);
+    expect(state.level).toBe("warn");
+    state = applyHysteresis(state, cand("critical", true), 60_000);
+    expect(state.level).toBe("critical");
+  });
+
+  it("re-arms the sustain timer once available clears the line, then re-dips", () => {
+    let state = applyHysteresis(INITIAL_HYSTERESIS, cand("critical", true), 0);
+    state = applyHysteresis(state, cand("warn", false), 30_000);
+    expect(state.criticalSinceMs).toBeNull();
+    state = applyHysteresis(state, cand("critical", true), 90_000);
+    expect(state.level).toBe("warn");
+    expect(state.criticalSinceMs).toBe(90_000);
+    state = applyHysteresis(state, cand("critical", true), 150_000);
+    expect(state.level).toBe("critical");
   });
 });
 

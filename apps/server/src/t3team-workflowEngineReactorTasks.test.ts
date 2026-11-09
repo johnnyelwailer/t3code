@@ -243,62 +243,75 @@ it.effect("an askUser settles on the next message a person posts", () =>
   }),
 );
 
-it.effect("a widget action, server text, or a reply pinned to another ask never answers", () =>
-  Effect.gen(function* () {
-    const { handle, calls, registry } = userInput();
-    const person = {
-      role: "user" as const,
-      createdBy: "user" as const,
-      creationSource: "web" as const,
-    };
-    yield* handle({
-      kind: "user-message",
-      threadId: THREAD,
-      message: message({
-        ...person,
-        text: "Approve",
-        context: withT3TeamMessageExtContext({
-          widgetReply: { widgetId: "w", widgetTitle: "Release" },
-        })!,
-      }),
-    });
-    yield* handle({
-      kind: "user-message",
-      threadId: THREAD,
-      message: message({
-        role: "user",
-        text: "framing",
-        createdBy: "system",
-        creationSource: "server",
-      }),
-    });
-    yield* handle({
-      kind: "user-message",
-      threadId: THREAD,
-      message: message({
-        ...person,
-        text: "old",
-        context: withT3TeamMessageExtContext({
-          workflowReply: { value: true, correlationId: `${RUN}:1` },
-        })!,
-      }),
-    });
-    assert.deepStrictEqual(calls, []);
-    assert.strictEqual(registry.peekPending(THREAD)?.kind, "user.input");
+it.effect(
+  "a widget action, a recipe kickoff, server text, or a reply pinned to another ask never answers",
+  () =>
+    Effect.gen(function* () {
+      const { handle, calls, registry } = userInput();
+      const person = {
+        role: "user" as const,
+        createdBy: "user" as const,
+        creationSource: "web" as const,
+      };
+      yield* handle({
+        kind: "user-message",
+        threadId: THREAD,
+        message: message({
+          ...person,
+          text: "Approve",
+          context: withT3TeamMessageExtContext({
+            widgetReply: { widgetId: "w", widgetTitle: "Release" },
+          })!,
+        }),
+      });
+      yield* handle({
+        kind: "user-message",
+        threadId: THREAD,
+        message: message({
+          ...person,
+          text: "Bitte nur Verträge ab 2025",
+          context: withT3TeamMessageExtContext({
+            recipeKickoff: { recipeId: "rechnung-pruefen", title: "Rechnung prüfen" },
+          })!,
+        }),
+      });
+      yield* handle({
+        kind: "user-message",
+        threadId: THREAD,
+        message: message({
+          role: "user",
+          text: "framing",
+          createdBy: "system",
+          creationSource: "server",
+        }),
+      });
+      yield* handle({
+        kind: "user-message",
+        threadId: THREAD,
+        message: message({
+          ...person,
+          text: "old",
+          context: withT3TeamMessageExtContext({
+            workflowReply: { value: true, correlationId: `${RUN}:1` },
+          })!,
+        }),
+      });
+      assert.deepStrictEqual(calls, []);
+      assert.strictEqual(registry.peekPending(THREAD)?.kind, "user.input");
 
-    yield* handle({
-      kind: "user-message",
-      threadId: THREAD,
-      message: message({
-        ...person,
-        text: "Approve",
-        context: withT3TeamMessageExtContext({
-          workflowReply: { value: "approve", correlationId: STEP },
-        })!,
-      }),
-    });
-    assert.deepStrictEqual(calls, ['resume:"approve"']);
-  }),
+      yield* handle({
+        kind: "user-message",
+        threadId: THREAD,
+        message: message({
+          ...person,
+          text: "Approve",
+          context: withT3TeamMessageExtContext({
+            workflowReply: { value: "approve", correlationId: STEP },
+          })!,
+        }),
+      });
+      assert.deepStrictEqual(calls, ['resume:"approve"']);
+    }),
 );
 
 it.effect.each(["completed", "failed"] as const)(

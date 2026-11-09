@@ -34,7 +34,7 @@ export function useHydratePinnedSidebarItems() {
     return configurePinnedSidebarPersister((items) => {
       void updateServerSettings({
         environmentId,
-        input: { patch: { t3teamStoredSidebarPinsJson: JSON.stringify(items) } },
+        input: { patch: { t3team: { storedSidebarPinsJson: JSON.stringify(items) } } },
       });
     });
   }, [environmentId, updateServerSettings]);
@@ -45,7 +45,7 @@ export function useHydratePinnedSidebarItems() {
     }
 
     hydratePins(readStoredSidebarPinsFromServerSettings(serverConfig.settings));
-  }, [hydratePins, serverConfig?.settings.t3teamStoredSidebarPinsJson]);
+  }, [hydratePins, serverConfig?.settings.t3team.storedSidebarPinsJson]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +65,7 @@ export function useHydratePinnedSidebarItems() {
     if (!serverConfig) {
       return;
     }
-    if ((serverConfig.settings.t3teamStoredSidebarPinsJson ?? "").length > 0) {
+    if ((serverConfig.settings.t3team.storedSidebarPinsJson ?? "").length > 0) {
       return;
     }
 
@@ -86,12 +86,15 @@ export function useHydratePinnedSidebarItems() {
       }
       await updateServerSettings({
         environmentId,
-        input: { patch: { t3teamStoredSidebarPinsJson: JSON.stringify(items) } },
+        input: { patch: { t3team: { storedSidebarPinsJson: JSON.stringify(items) } } },
       });
       await localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...(clientSettings ?? DEFAULT_CLIENT_SETTINGS),
-        t3teamStoredSidebarPinsJson: "",
+        t3team: {
+          ...(clientSettings ?? DEFAULT_CLIENT_SETTINGS).t3team,
+          storedSidebarPinsJson: "",
+        },
       });
       hydratePins(items);
     });
@@ -102,7 +105,7 @@ export function useHydratePinnedSidebarItems() {
   }, [
     environmentId,
     hydratePins,
-    serverConfig?.settings.t3teamStoredSidebarPinsJson,
+    serverConfig?.settings.t3team.storedSidebarPinsJson,
     updateServerSettings,
   ]);
 }

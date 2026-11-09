@@ -23,6 +23,10 @@ import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
 import { launchRecipeWorkflow } from "./t3team-recipeWorkflowLaunch.ts";
 import {
+  composerKickoffArgs,
+  recordComposerKickoffMessage,
+} from "./t3team-recipeComposerKickoff.ts";
+import {
   isProviderInteractionMode,
   isRuntimeMode,
 } from "./t3team-thread-recipe-workflow-routes-shared.ts";
@@ -91,11 +95,34 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         ProviderInstanceId.make(modelInstanceId),
         modelName,
       );
+      const composerKickoff = input.composerKickoff;
+      const kickoffText = input.kickoffMessage ?? "";
+      if (composerKickoff !== undefined) {
+        const messageId = composerKickoff.messageId.trim();
+        if (messageId.length === 0) {
+          return yield* new T3TeamAtlassianError({
+            message: "composerKickoff.messageId is required.",
+          });
+        }
+        yield* recordComposerKickoffMessage({
+          threadId,
+          messageId,
+          text: kickoffText,
+          recipeKickoff: {
+            recipeId: input.launch.recipeId,
+            title: input.launch.title,
+            workflowPath,
+          },
+        });
+      }
+      const parameters = input.launch.parameters ?? {};
       const result = yield* launchRecipeWorkflow({
         threadId,
         recipePath,
         workflowPath,
-        args: input.launch.parameters ?? {},
+        args:
+          composerKickoff === undefined ? parameters : composerKickoffArgs(parameters, kickoffText),
+        detach: composerKickoff !== undefined,
         modelSelection,
         runtimeMode,
         interactionMode,
