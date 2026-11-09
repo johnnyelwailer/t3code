@@ -709,6 +709,7 @@
     "packages/shared/src/git.ts",
     "packages/shared/src/model.test.ts",
     "packages/shared/src/model.ts",
+    "packages/shared/src/serverSettings.test.ts",
     "packages/shared/src/shell.test.ts",
     "packages/shared/src/shell.ts",
     "packages/shared/src/sourceControl.ts",
