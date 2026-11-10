@@ -17,7 +17,19 @@ const phasesAt = (minutes: number, broker: Array<{ runId: string; environmentId?
     const ledger = yield* makeClaimLedger();
     yield* Ref.set(
       ledger,
-      new Map([["9", { login: "pj", name: "api", startedAtMs: T0, seen: false }]]),
+      new Map([
+        [
+          "9",
+          {
+            login: "pj",
+            name: "api",
+            startedAtMs: T0,
+            seen: false,
+            workspace: "api",
+            repository: "https://nexplore.ghe.com/acme/api.git",
+          },
+        ],
+      ]),
     );
     return yield* claimedSessions({
       ledger,
@@ -57,7 +69,19 @@ describe("standby claims", () => {
       const ledger = yield* makeClaimLedger();
       yield* Ref.set(
         ledger,
-        new Map([["9", { login: "pj", name: "api", startedAtMs: T0, seen: false }]]),
+        new Map([
+          [
+            "9",
+            {
+              login: "pj",
+              name: "api",
+              startedAtMs: T0,
+              seen: false,
+              workspace: "api",
+              repository: "https://nexplore.ghe.com/acme/api.git",
+            },
+          ],
+        ]),
       );
       const at = (min: number, broker: Array<{ runId: string }>) =>
         claimedSessions({
@@ -79,7 +103,19 @@ describe("standby claims", () => {
       const ledger = yield* makeClaimLedger();
       yield* Ref.set(
         ledger,
-        new Map([["9", { login: "pj", name: "api", startedAtMs: T0, seen: false }]]),
+        new Map([
+          [
+            "9",
+            {
+              login: "pj",
+              name: "api",
+              startedAtMs: T0,
+              seen: false,
+              workspace: "api",
+              repository: "https://nexplore.ghe.com/acme/api.git",
+            },
+          ],
+        ]),
       );
       const other = yield* claimedSessions({
         ledger,

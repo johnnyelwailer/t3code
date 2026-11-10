@@ -21,7 +21,7 @@ import {
 } from "~/cloud/t3team-cloudSessionTargetStore";
 import { CLOUD_SESSION_CREATING_ID } from "~/cloud/t3team-cloudSessionTargetLogic";
 import { useCloudSessionProjectKey } from "~/cloud/t3team-useCloudSessionProjectFollow";
-import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
+import { isTerminalCloudSessionPhase, runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
 const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
 const DISMISSED_FAILURES_LIMIT = 20;
@@ -38,6 +38,9 @@ type CloudSelectorProps = Pick<
   | "selectedCloudSession"
   | "onSelectCloudSession"
   | "onDismissCloudSession"
+  | "onStopCloudSession"
+  | "onDeleteCloudSession"
+  | "cloudSessionActionPending"
   | "onCloudMenuOpenChange"
   | "onCloudMenuHint"
   | "onSetupCloudSessions"
@@ -67,6 +70,11 @@ export function useT3TeamRunOnCloudSessionProps(
     onCloudMenuOpenChange,
     onCloudMenuHint,
     onSessionAction,
+    onSessionSecondaryAction,
+    onSessionDeleteAction,
+    stopDeleteEnabled,
+    pendingSessionId,
+    pendingKind,
     connectFailure: _connectFailure,
   } = cloudSessions;
   // "Move to" connects a ready session first; the connected machine then lists as a choice.
@@ -76,6 +84,25 @@ export function useT3TeamRunOnCloudSessionProps(
     },
     [onSessionAction],
   );
+  // The row's Stop verb: a ready machine is stopped (reversible), one still coming up is
+  // cancelled. Delete is offered only when the server has the stop/delete feature on.
+  const stopCloudSession = useCallback(
+    (session: CloudSession) => {
+      if (session.phase === "ready") onSessionSecondaryAction(session);
+      else if (!isTerminalCloudSessionPhase(session.phase)) onSessionAction(session);
+    },
+    [onSessionAction, onSessionSecondaryAction],
+  );
+  const onStopCloudSession = stopDeleteEnabled ? stopCloudSession : undefined;
+  const onDeleteCloudSession = stopDeleteEnabled ? onSessionDeleteAction : undefined;
+  const cloudSessionActionPending =
+    pendingSessionId !== null &&
+    (pendingKind === "stop" || pendingKind === "delete" || pendingKind === "cancel")
+      ? {
+          sessionId: pendingSessionId,
+          kind: pendingKind === "delete" ? ("delete" as const) : ("stop" as const),
+        }
+      : null;
   const target = useCloudSessionTarget(scopeKey);
   const projectKey = useCloudSessionProjectKey(projectRef);
   const [dismissed, setDismissed] = useLocalStorage(
@@ -196,6 +223,9 @@ export function useT3TeamRunOnCloudSessionProps(
               selectedCloudSession,
               onSelectCloudSession,
               onDismissCloudSession,
+              ...(onStopCloudSession ? { onStopCloudSession } : {}),
+              ...(onDeleteCloudSession ? { onDeleteCloudSession } : {}),
+              cloudSessionActionPending,
               onCloudMenuOpenChange,
               onCloudMenuHint,
               onConnectCloudSession,
@@ -203,6 +233,7 @@ export function useT3TeamRunOnCloudSessionProps(
           : { onSetupCloudSessions },
     [
       available,
+      cloudSessionActionPending,
       cloudSessionProject,
       configured,
       connectedEnvironmentIds,
@@ -212,6 +243,8 @@ export function useT3TeamRunOnCloudSessionProps(
       onCloudMenuOpenChange,
       onCloudMenuHint,
       onConnectCloudSession,
+      onStopCloudSession,
+      onDeleteCloudSession,
       machineSetupEnabled,
       onCreateCloudSession,
       onSetupProjectMachine,
