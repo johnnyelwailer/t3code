@@ -16,5 +16,6 @@ export {
   cloudSetupLongWaitNote,
   cloudSetupMeanwhileNote,
   cloudSetupReadyNote,
+  cloudSetupSubtitle,
   formatCloudSetupRemaining,
 } from "./t3team-cloudSessionSetupCopy";
