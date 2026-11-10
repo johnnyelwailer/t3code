@@ -50,6 +50,31 @@ export function sidebarEnvironmentFilter(
   return resolveEnvironmentFilter({ environments: candidates, selectedId: storedEnvironmentId });
 }
 
+/** The gap between the environment row's pills, in px (Tailwind `gap-1`). */
+export const ENVIRONMENT_FILTER_PILL_GAP = 4;
+
+/**
+ * How many of the row's pills get to stay. All of them when they fit; otherwise the largest
+ * prefix that still leaves room for the +N pill, which always takes the last slot. "All"
+ * (the first pill) never hides behind it.
+ */
+export function environmentFilterPillCapacity(
+  pillWidths: ReadonlyArray<number>,
+  availableWidth: number,
+  gap: number,
+  overflowPillWidth: number,
+): number {
+  const sumOf = (count: number, reserve: number): number =>
+    pillWidths.slice(0, count).reduce((total, width) => total + width, 0) +
+    (count - 1) * gap +
+    reserve;
+  if (sumOf(pillWidths.length, 0) <= availableWidth) return pillWidths.length;
+  for (let count = pillWidths.length - 1; count >= 1; count -= 1) {
+    if (sumOf(count, gap + overflowPillWidth) <= availableWidth) return count;
+  }
+  return 1;
+}
+
 /**
  * The scope's `environmentId:projectId` keys limited to one environment. With no project scope
  * (`null`) the scope becomes every project of that environment, so the settled shelf, drafts and
