@@ -286,7 +286,7 @@ export function usePendingThreadRequests(input: {
     decision: ProviderApprovalDecision,
     feedback?: string,
   ) => {
-    // t3team: never drop the click silently (nx-nexi P0, regression of #1003).
+    // t3team: never drop the click silently; every block says why.
     const approval = pendingApprovals.find((entry) => entry.requestId === requestId);
     const gate = pendingResponseGate({
       kind: "approval",
@@ -329,7 +329,7 @@ export function usePendingThreadRequests(input: {
     requestId: RuntimeRequestId,
     answers: Record<string, unknown>,
   ) => {
-    // t3team: never drop the click silently (nx-nexi P0, regression of #1003).
+    // t3team: never drop the click silently; every block says why.
     const pendingInput = pendingUserInputs.find((input) => input.requestId === requestId);
     const gate = pendingResponseGate({
       kind: "answer",

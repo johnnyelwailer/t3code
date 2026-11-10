@@ -1,17 +1,7 @@
 /**
- * Whether an Approve / Submit answer click may go to the server, and what to tell the user when
- * it may not (nx-nexi P0: in-thread cards did nothing on a cloud session).
- *
- * The old gate read the environment's session state synchronously and returned SILENTLY when
- * it did not (yet) grant `orchestration:operate`. A cloud-session environment's session state is
- * often still loading or failed to revalidate through the broker, so every click was dropped
- * without a word. Two rules now:
- * - Only a KNOWN session that lacks the scope blocks the click. Loading or failed state lets the
- *   click through; the server enforces the scope and its error is shown. So the respond commands
- *   skip `useOrchestrationCommand`'s own client gate, which has the same blind spot.
- * - Every block carries a message. Nothing is ever dropped silently.
- *
- * @module t3team-pendingRequestResponseGate
+ * Approve / Submit answer: only a KNOWN session lacking `orchestration:operate` blocks, always with
+ * a message. Loading or failed session state (common on cloud sessions) lets the server decide,
+ * so the respond commands skip `useOrchestrationCommand`'s client gate.
  */
 import {
   AuthOrchestrationOperateScope,
@@ -21,11 +11,11 @@ import {
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
 
-export type PendingResponseGate =
+type PendingResponseGate =
   | { readonly ok: true }
   | { readonly ok: false; readonly message: string };
 
-export type PendingResponseKind = "approval" | "answer";
+type PendingResponseKind = "approval" | "answer";
 
 const ALLOW: PendingResponseGate = { ok: true };
 

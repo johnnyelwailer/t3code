@@ -11,11 +11,11 @@ import {
 import { Atom, AsyncResult } from "effect/reactivity";
 import * as Cause from "effect/Cause";
 import { useRef } from "react";
-import { beforeEach, expect, it, vi } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
-// nx-nexi#1222 (P0, regression of #1003): on a cloud session, Approve and Submit answer were
-// dropped silently while the environment's session state was loading or failed to revalidate.
+// On a cloud session, Approve and Submit answer were dropped silently while the environment's
+// session state was loading or failed to revalidate.
 const sent = vi.hoisted(() => [] as Array<{ label: string; value: unknown }>);
 const interrupt = vi.hoisted(() => ({ next: false }));
 vi.mock(import("../../state/use-atom-command"), () => ({
@@ -41,7 +41,6 @@ vi.mock(import("../../state/session"), async (importOriginal) => {
 });
 
 import { act, render } from "../../../test/render";
-import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { makeThreadProjectionFixture } from "../../test-fixtures";
 import { toastManager } from "../ui/toast";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
@@ -50,7 +49,7 @@ import { usePendingThreadRequests } from "./usePendingThreadRequests";
 const cloud = EnvironmentId.make("cloud-session-env");
 const threadId = ThreadId.make("cloud-thread");
 const approvalId = RuntimeRequestId.make("route-approval");
-const questionId = RuntimeRequestId.make("setup-question");
+let questionId = RuntimeRequestId.make("setup-question");
 
 function cloudProjection(): OrchestrationV2ThreadProjection {
   const base = makeThreadProjectionFixture();
@@ -128,7 +127,9 @@ function CloudThreadCards({ projection }: { projection: OrchestrationV2ThreadPro
       />
       <button
         type="button"
-        onClick={() => requests.onSelectActivePendingUserInputOption("registry", "github.com nexplore")}
+        onClick={() =>
+          requests.onSelectActivePendingUserInputOption("registry", "github.com nexplore")
+        }
       >
         github.com nexplore
       </button>
@@ -144,15 +145,12 @@ const KNOWN_READ_ONLY = {
   permissions: ["orchestration:read"],
 } as unknown as AuthSessionState;
 
+/** Each test starts from no sent commands and the given cloud session state. */
 function setSessionState(result: AsyncResult.AsyncResult<AuthSessionState, unknown>) {
-  const atom = Atom.make(result);
-  sessionAtoms.set(cloud, atom);
-}
-
-beforeEach(() => {
   sent.length = 0;
   interrupt.next = false;
-});
+  sessionAtoms.set(cloud, Atom.make(result));
+}
 
 it.each([
   ["still loading", AsyncResult.initial<AuthSessionState>(true)],
@@ -184,18 +182,21 @@ it("says why when a known read-only connection cannot answer, instead of doing n
   await using screen = await render(<CloudThreadCards projection={cloudProjection()} />);
   await userEvent.click(screen.getByRole("button", { name: "Approve", exact: true }));
   expect(sent).toHaveLength(0);
-  expect(toast).toHaveBeenCalledWith(
-    expect.objectContaining({ type: "error", title: "Not sent" }),
-  );
+  expect(toast).toHaveBeenCalledWith(expect.objectContaining({ type: "error", title: "Not sent" }));
 });
 
 it("says so when Submit answer has no answer yet or the call is interrupted", async () => {
+  // A fresh question: answers picked in the tests above are kept per request.
+  questionId = RuntimeRequestId.make("unanswered-question");
   setSessionState(AsyncResult.initial<AuthSessionState>(true));
   using toast = vi.spyOn(toastManager, "add");
   await using screen = await render(<CloudThreadCards projection={cloudProjection()} />);
   await userEvent.click(screen.getByRole("button", { name: "Submit answer" }));
   expect(toast).toHaveBeenLastCalledWith(
-    expect.objectContaining({ type: "error", description: expect.stringContaining("Answer every") }),
+    expect.objectContaining({
+      type: "error",
+      description: expect.stringContaining("Answer every"),
+    }),
   );
   interrupt.next = true;
   await userEvent.click(screen.getByRole("button", { name: "Approve", exact: true }));
@@ -203,5 +204,4 @@ it("says so when Submit answer has no answer yet or the call is interrupted", as
   expect(toast).toHaveBeenLastCalledWith(
     expect.objectContaining({ description: expect.stringContaining("may not have reached") }),
   );
-  void appAtomRegistry;
 });
