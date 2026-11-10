@@ -30,13 +30,13 @@ describe("ToolAuthCard", () => {
       <ToolAuthCard
         meta={CLAUDE_META}
         state={undefined}
-        signInDescription="We need to sign you in again for this machine."
+        signInDescription="We need you to sign in on this machine."
         onConnect={noop}
         onSubmitCode={noop}
         onCancel={noop}
       />,
     );
-    expect(markup).toContain("We need to sign you in again for this machine.");
+    expect(markup).toContain("We need you to sign in on this machine.");
     expect(markup).not.toContain(CLAUDE_META.description);
     expect(markup).toContain("Connect");
   });
