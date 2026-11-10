@@ -1,13 +1,7 @@
 /**
- * Failures that are a configuration fact, not a passing condition: re-running the same turn
- * gives the same answer, so they must fail fast instead of entering the transient retry ladder
- * and the "Gateway keeps failing" auto-resume (nx-nexi#1216).
- *
- * The texts are the host's own model-selection errors (`WorkflowModelSelectionError`,
- * `t3team-toolBrokerStartChildProvider*.ts`, `t3team-workflowModelSelection.ts`), which reach
- * the parent run as provider failure text once a child or workflow step could not start.
- *
- * @module t3team-deterministicConfigFailure
+ * Model/provider configuration errors answer the same on every try, so they fail fast: no
+ * transient retry ladder, no auto-resume (nx-nexi#1216). The texts are the host's own
+ * `WorkflowModelSelectionError` messages as they reach the parent run.
  */
 const DETERMINISTIC_CONFIG_TEXT = [
   /\bhas no declared default model\b/i,
