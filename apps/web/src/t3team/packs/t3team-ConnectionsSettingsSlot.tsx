@@ -22,8 +22,9 @@ const request = (service: string, path: string, body?: object): Promise<unknown>
 
 export function ConnectionsSettingsSlot() {
   const pair = useAtomCommand(connectPairing, { reportFailure: false });
-  const connect = async (pairingUrl: string) => {
-    const result = await pair({ pairingUrl });
+  const connect = async (pairingUrl: string, options?: { readonly label?: string }) => {
+    const label = options?.label?.trim();
+    const result = await pair({ pairingUrl, ...(label ? { label } : {}) });
     if (result._tag === "Failure") throw squashAtomCommandFailure(result);
   };
   return appViewRegistry()

@@ -235,6 +235,24 @@ const registerSwitchedOffEnvironment = Effect.gen(function* () {
 });
 
 describe("connection onboarding", () => {
+  it.effect("saves a pairing under the caller's label, never the server's host name", () =>
+    Effect.gen(function* () {
+      const registration = yield* preparePairingRegistration({
+        host: "remote.example.test",
+        pairingCode: "pairing-token",
+        label: "  Cloud session \u00b7 21:03 ",
+      }).pipe(Effect.provide(layerPairingOnboarding(undefined, [])));
+      expect(registration.target.label).toBe("Cloud session \u00b7 21:03");
+      expect(registration.profile.label).toBe("Cloud session \u00b7 21:03");
+      const blank = yield* preparePairingRegistration({
+        host: "remote.example.test",
+        pairingCode: "pairing-token",
+        label: "  ",
+      }).pipe(Effect.provide(layerPairingOnboarding(undefined, [])));
+      expect(blank.target.label).toBe("Paired environment");
+    }),
+  );
+
   it.effect("prepares a persisted bearer registration from pairing details", () =>
     Effect.gen(function* () {
       const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
