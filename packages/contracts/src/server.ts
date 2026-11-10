@@ -30,6 +30,7 @@ import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { ServerProviderUsageLimits, UsageLimitSourceSnapshots } from "./providerUsageLimits.ts";
 import { ServerSettings } from "./settings.ts";
 import { FeatureFlagValues } from "./t3team-featureFlags.ts";
+import { ServerProviderUsageStat } from "./t3team-providerUsageStats.ts";
 import { DesktopUpdateChannelSchema } from "./ipc.ts";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
@@ -222,6 +223,8 @@ export const ServerProvider = Schema.Struct({
   showInteractionModeToggle: Schema.optional(Schema.Boolean),
   reportsContextWindow: Schema.optional(Schema.Boolean),
   supportedRuntimeModes: Schema.optional(ForwardCompatibleArray(RuntimeMode)),
+  // t3team: live stats from a provider with no quota, shown in place of usage-limit windows.
+  usageStats: Schema.optional(ForwardCompatibleArray(ServerProviderUsageStat)),
   supportsConversationRollback: Schema.optional(Schema.Boolean),
   supportsTextGeneration: Schema.optional(Schema.Boolean),
   setup: Schema.optional(

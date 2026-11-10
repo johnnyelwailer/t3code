@@ -20,20 +20,6 @@ export const ServerProviderUsageWindow = Schema.Struct({
 });
 export type ServerProviderUsageWindow = typeof ServerProviderUsageWindow.Type;
 
-/**
- * A live statistic a provider reports instead of a quota (for example a self-hosted gateway's
- * running requests). `value` is display text from the provider's own data; `usedPercent`, when
- * set, draws a bar. A provider that publishes stats gets them in place of limit windows.
- */
-export const ServerProviderUsageStat = Schema.Struct({
-  id: TrimmedNonEmptyString,
-  label: TrimmedNonEmptyString,
-  value: TrimmedNonEmptyString,
-  usedPercent: Schema.optional(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 100 }))),
-  detail: Schema.optional(TrimmedNonEmptyString),
-});
-export type ServerProviderUsageStat = typeof ServerProviderUsageStat.Type;
-
 export const ServerProviderResetCredits = Schema.Struct({
   availableCount: NonNegativeInt,
   nextExpiresAt: Schema.optional(IsoDateTime),
@@ -46,8 +32,6 @@ export type ServerProviderResetCredits = typeof ServerProviderResetCredits.Type;
 export const ServerProviderUsageLimits = Schema.Struct({
   checkedAt: IsoDateTime,
   windows: ForwardCompatibleArray(ServerProviderUsageWindow),
-  /** Live statistics shown in place of `windows` when present and non-empty. */
-  stats: Schema.optional(ForwardCompatibleArray(ServerProviderUsageStat)),
   credentialFingerprint: Schema.optional(TrimmedNonEmptyString),
   resetCredits: Schema.optional(ServerProviderResetCredits),
   externalUsage: Schema.optional(
