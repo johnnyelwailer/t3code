@@ -270,13 +270,11 @@ describe("notes", () => {
     expect(cloudSetupReadyNote(queuedReady)).toBe("Your message will send now.");
     expect(cloudSetupReadyNote(queuedReady)).not.toContain("first message");
     expect(cloudSetupMeanwhileNote(queuedReady)).toBeNull();
-    expect(
-      cloudSetupReadyNote(
-        model({ session: session("starting"), delivery: "queued" }),
-      ),
-    ).toBe("Your message will send when the session is ready.");
-    expect(
-      cloudSetupReadyNote(model({ session: session("ready"), delivery: "sending" })),
-    ).toBe("Your message is sending.");
+    expect(cloudSetupReadyNote(model({ session: session("starting"), delivery: "queued" }))).toBe(
+      "Your message will send when the session is ready.",
+    );
+    expect(cloudSetupReadyNote(model({ session: session("ready"), delivery: "sending" }))).toBe(
+      "Your message is sending.",
+    );
   });
 });
