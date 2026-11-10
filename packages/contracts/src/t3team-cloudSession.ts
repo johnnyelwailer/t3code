@@ -176,6 +176,8 @@ export type CloudSessionCancelInput = typeof CloudSessionCancelInputSchema.Type;
  */
 export const CloudSessionDeleteInputSchema = Schema.Struct({
   sessionId: Schema.String,
+  /** The snapshot-only projects (no git remote) the user confirmed losing. */
+  acknowledgedProjects: Schema.optional(Schema.Array(Schema.String)),
 });
 export type CloudSessionDeleteInput = typeof CloudSessionDeleteInputSchema.Type;
 
@@ -203,6 +205,8 @@ export const CloudSessionDeleteInfoSchema = Schema.Struct({
   projects: Schema.Array(Schema.String),
   /** Earlier sessions of the machine whose saved state the delete removes too. */
   otherSessions: Schema.optional(Schema.Number),
+  /** Projects with no git remote, whose only copy is the snapshot; null when the session never said. */
+  snapshotOnlyProjects: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
 });
 export type CloudSessionDeleteInfo = typeof CloudSessionDeleteInfoSchema.Type;
 

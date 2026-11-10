@@ -102,6 +102,8 @@ export class CloudSessionService extends Context.Service<
      */
     readonly delete: (input: {
       readonly sessionId: string;
+      /** The snapshot-only projects the user confirmed losing. */
+      readonly acknowledgedProjects?: ReadonlyArray<string> | undefined;
     }) => Effect.Effect<CloudSessionDeleteResult, CloudSessionFailedError>;
   }
 >()("t3/cloud/t3team-CloudSessionService/CloudSessionService") {}
@@ -486,7 +488,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       if (!(yield* readFeatureFlagFromConfig("CLOUD_SESSION_STOP_DELETE")))
         return yield* stopDeleteOff;
       const context = yield* findSessionForDelete(deleteFlow, input);
-      return yield* deleteCloudSession(deleteFlow, context);
+      return yield* deleteCloudSession(deleteFlow, context, input.acknowledgedProjects ?? []);
     });
 
   return { list, create, cancel, deleteInfo, delete: deleteSession } as const;

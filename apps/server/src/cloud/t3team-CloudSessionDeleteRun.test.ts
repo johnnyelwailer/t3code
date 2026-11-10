@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 
 import { makeClaimLedger } from "./t3team-CloudSessionClaim.ts";
 import type { DeleteFlow, DeleteSessionContext } from "./t3team-CloudSessionDeleteFlow.ts";
-import { deleteCloudSession } from "./t3team-CloudSessionDeleteRun.ts";
+import { deleteCloudSession, describeCloudSessionDelete } from "./t3team-CloudSessionDeleteRun.ts";
 import { planDelete } from "./t3team-CloudSessionDeletePlan.ts";
 import type { MachineCheckoutInput, ResumeBranch } from "./t3team-CloudSessionMachineCheckout.ts";
 import type { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
@@ -48,6 +48,12 @@ interface FleetOptions {
   readonly branches?: ReadonlyArray<ResumeBranch>;
   /** Cache deletes that fail; `gone` ones were removed anyway (a 404 from a race). */
   readonly failingDeletes?: ReadonlyMap<number, "gone" | "kept">;
+  /** What the run's job annotated (stage-snapshot.sh's notice, machine-preserve.sh's warnings). */
+  readonly annotations?: ReadonlyArray<{
+    annotation_level: string;
+    title: string;
+    message: string;
+  }>;
 }
 
 const makeFlow = (options: FleetOptions = {}) =>
@@ -84,7 +90,12 @@ const makeFlow = (options: FleetOptions = {}) =>
         }
         if (path.endsWith("/jobs")) {
           const steps = (options.steps ?? SAVED).map((step) => ({ ...step, status: "completed" }));
-          return Effect.succeed({ body: JSON.stringify({ jobs: [{ steps }] }), truncated: false });
+          const jobs = [{ id: 77, steps }];
+          return Effect.succeed({ body: JSON.stringify({ jobs }), truncated: false });
+        }
+        if (path.includes("check-runs/77/annotations")) {
+          const body = JSON.stringify(options.annotations ?? []);
+          return Effect.succeed({ body, truncated: false });
         }
         return Effect.succeed({ body: "{}", truncated: false });
       });
@@ -313,5 +324,37 @@ describe("deleteCloudSession", () => {
         yield* blockedBy({ branches: [branch(ENTRA), branch(`o${"1".repeat(32)}`)] });
         yield* blockedBy({ caches: [{ id: 3, key: key(ENTRA, WS, "812") }] });
       }),
+  );
+
+  it.effect(
+    "names the projects that live only in the snapshot, and deletes once they are confirmed",
+    () =>
+      Effect.gen(function* () {
+        const onlyHere = {
+          annotation_level: "notice",
+          title: "nexi-snapshot-only-projects",
+          message: '["notes","IES NG-9c436708"]',
+        };
+        const { flow } = yield* makeFlow({ caches: OWN, annotations: [onlyHere] });
+        const info = yield* describeCloudSessionDelete(flow, context());
+        assert.deepEqual(info.snapshotOnlyProjects, ["notes", "IES NG-9c436708"]);
+        const message = yield* blockedBy({ caches: OWN, annotations: [onlyHere] });
+        assert.match(message, /notes/);
+        const confirmed = yield* makeFlow({ caches: OWN, annotations: [onlyHere] });
+        yield* deleteCloudSession(confirmed.flow, context(), ["notes", "IES NG-9c436708"]);
+        assert.deepEqual([...confirmed.deleted].sort(), [1, 2]);
+      }),
+  );
+
+  it.effect("refuses when the machine reported its checkout was not saved", () =>
+    Effect.gen(function* () {
+      const lost = {
+        annotation_level: "warning",
+        title: "",
+        message: "Could not push the session's checkout; it is lost with this VM.",
+      };
+      const message = yield* blockedBy({ caches: OWN, annotations: [lost] });
+      assert.match(message, /Could not push/);
+    }),
   );
 });

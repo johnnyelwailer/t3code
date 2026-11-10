@@ -20,10 +20,16 @@ import {
   removeCaches,
   waitForRunEnd,
 } from "./t3team-CloudSessionDeleteSteps.ts";
+import {
+  assertNothingUnsaid,
+  snapshotOnlyProjectsFor,
+} from "./t3team-cloudSessionRunAnnotations.ts";
 
 export const deleteCloudSession = Effect.fn("cloud.session.delete.run")(function* (
   flow: DeleteFlow,
   context: DeleteSessionContext,
+  /** The snapshot-only projects the user confirmed losing in the dialog. */
+  acknowledgedProjects: ReadonlyArray<string> = [],
 ) {
   // A claimed standby's run is read directly: it is not in the caller's list.
   const run = context.run ?? (yield* flow.gh.getRun(context.runId, { allowReserve: true }));
@@ -34,6 +40,12 @@ export const deleteCloudSession = Effect.fn("cloud.session.delete.run")(function
     yield* waitForRunEnd(flow, context.runId);
   }
   yield* assertTeardownSaved(flow, context.runId, context.repository !== null);
+  yield* assertNothingUnsaid(
+    flow,
+    context.runId,
+    context.repository !== null,
+    acknowledgedProjects,
+  );
 
   const plan = yield* planDelete(flow, context, run, "final");
   const wipBranch =
@@ -76,9 +88,15 @@ export const describeCloudSessionDelete = Effect.fn("cloud.session.delete.info")
             return repository !== null && sameRepository(repository, wanted);
           })
           .map((project) => project.title);
+  // This run's stages first; one that has not staged yet falls back to the latest runs before.
+  const newestFirst = [...plan.otherSessions].sort((a, b) => b - a);
   return {
     repository: wanted === null ? null : `${wanted.owner}/${wanted.name}`,
     projects,
     otherSessions: plan.otherSessions.length,
+    snapshotOnlyProjects: yield* snapshotOnlyProjectsFor(
+      flow,
+      [context.runId, ...newestFirst].slice(0, 3),
+    ),
   };
 });

@@ -215,8 +215,9 @@ const makeGithubMock = (
         status: "completed",
         conclusion: "success",
       }));
-      return ghOut(JSON.stringify({ jobs: [{ steps }] }));
+      return ghOut(JSON.stringify({ jobs: [{ id: 55, steps }] }));
     }
+    if (joined.includes("check-runs/55/annotations")) return ghOut("[]");
     if (joined.includes("/runs")) {
       return ghOut(
         encodeGhWorkflowRuns({

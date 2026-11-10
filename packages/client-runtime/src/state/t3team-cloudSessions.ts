@@ -146,4 +146,5 @@ export function createCloudSessionAtoms<R, E>(
 export {
   cloudSessionDeleteConfirmation,
   cloudSessionDeletedTitle,
+  cloudSessionSnapshotOnlyConfirmation,
 } from "./t3team-cloudSessionDeleteCopy.ts";

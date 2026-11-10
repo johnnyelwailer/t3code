@@ -2,6 +2,7 @@ import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import {
   cloudSessionDeleteConfirmation,
   cloudSessionDeletedTitle,
+  cloudSessionSnapshotOnlyConfirmation,
 } from "@t3tools/client-runtime/state/cloud-sessions";
 import { useCallback, useMemo, useState } from "react";
 
@@ -214,13 +215,19 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
           );
           return;
         }
-        const lines = cloudSessionDeleteConfirmation(infoResult.value);
-        const confirmed =
-          (await requestConfirmDialog(lines.join("\n"), { variant: "destructive" })) === true;
-        if (!confirmed) return;
+        const info = infoResult.value;
+        const confirm = async (text: string) =>
+          (await requestConfirmDialog(text, { variant: "destructive" })) === true;
+        if (!(await confirm(cloudSessionDeleteConfirmation(info).join("\n")))) return;
+        // Projects with no other copy get a second, explicit yes before anything is removed.
+        const lastWord = cloudSessionSnapshotOnlyConfirmation(info);
+        if (lastWord !== null && !(await confirm(lastWord))) return;
         const result = await deleteSession({
           environmentId,
-          input: { sessionId: session.sessionId },
+          input: {
+            sessionId: session.sessionId,
+            acknowledgedProjects: info.snapshotOnlyProjects ?? [],
+          },
         });
         if (result._tag === "Success") {
           toastManager.add({

@@ -57,6 +57,7 @@ export { cloudSessionCommands } from "../state/t3team-cloudSessionCommands";
 export {
   cloudSessionDeleteConfirmation,
   cloudSessionDeletedTitle,
+  cloudSessionSnapshotOnlyConfirmation,
 } from "@t3tools/client-runtime/state/cloud-sessions";
 export { useWorkspaceEnvironments } from "../state/workspace";
 export { useAtomCommand } from "../state/use-atom-command";
