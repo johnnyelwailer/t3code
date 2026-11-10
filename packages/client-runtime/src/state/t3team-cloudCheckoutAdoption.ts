@@ -1,5 +1,6 @@
 /**
- * A cloud checkout shows the user's project title, icon and favicon, and keeps its own environment and id.
+ * A cloud checkout shows the user's project title, icon and favicon,
+ * and keeps its own environment and id.
  */
 import { type EnvironmentId, repositoryGroupingKeyOf } from "@t3tools/contracts";
 
