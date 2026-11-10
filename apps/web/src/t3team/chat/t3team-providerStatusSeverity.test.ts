@@ -93,3 +93,36 @@ describe("shouldSuppressT3TeamProviderStatus", () => {
     );
   });
 });
+
+describe("a provider CLI missing on a cloud machine", () => {
+  // Desktop showed "Claude Agent CLI (`claude`) was not found on PATH" for a cloud-session thread.
+  const MISSING_ON_PATH = {
+    status: "error",
+    auth: { status: "unknown" },
+    instanceId: "claudeAgent",
+    installed: false,
+  } as never;
+
+  it("stays quiet on a cloud session or peer: the model picker offers the install", () => {
+    expect(
+      shouldSuppressT3TeamProviderStatus({
+        status: MISSING_ON_PATH,
+        isTurnInProgress: false,
+        onRemoteEnvironment: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("still shows on this desktop, and for an installed provider that fails remotely", () => {
+    expect(
+      shouldSuppressT3TeamProviderStatus({ status: MISSING_ON_PATH, isTurnInProgress: false }),
+    ).toBe(false);
+    expect(
+      shouldSuppressT3TeamProviderStatus({
+        status: REAL_ERROR,
+        isTurnInProgress: false,
+        onRemoteEnvironment: true,
+      }),
+    ).toBe(false);
+  });
+});

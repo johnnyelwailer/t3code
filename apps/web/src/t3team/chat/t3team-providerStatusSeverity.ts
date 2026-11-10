@@ -38,11 +38,16 @@ export function classifyT3TeamProviderStatusSeverity(
  * user can see that turn working. Real errors are never suppressed — they stay on screen regardless.
  */
 export function shouldSuppressT3TeamProviderStatus(input: {
-  readonly status: Pick<ServerProvider, "status" | "auth" | "instanceId"> | null;
+  readonly status: Pick<ServerProvider, "status" | "auth" | "instanceId" | "installed"> | null;
   readonly isTurnInProgress: boolean;
   readonly activeTurnInstanceId?: string | undefined;
+  /** The thread runs on another machine (a cloud session or peer), not this desktop. */
+  readonly onRemoteEnvironment?: boolean;
 }): boolean {
-  if (!input.status || !input.isTurnInProgress) return false;
+  if (!input.status) return false;
+  // A CLI missing on a cloud machine is not a desktop problem: the model picker installs it.
+  if (input.onRemoteEnvironment === true && input.status.installed === false) return true;
+  if (!input.isTurnInProgress) return false;
   if (classifyT3TeamProviderStatusSeverity(input.status) !== "info") return false;
   return (
     input.activeTurnInstanceId !== undefined &&
