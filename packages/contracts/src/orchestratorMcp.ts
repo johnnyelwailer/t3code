@@ -4,7 +4,7 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { AuthMcpClientAccess } from "./auth.ts";
 import {
-  CredentialHost,
+  CredentialHostInput,
   CredentialScope,
   CredentialVariableName,
 } from "./t3team-credentialSources.ts";
@@ -834,9 +834,9 @@ export const OrchestratorMcpRequestSecretInput = Schema.Struct({
     description:
       'secretRef (default) for a T3 tool. file for a shell CLI: read the path in your command, e.g. TOKEN="$(cat <file>)" wrangler whoami.',
   }),
-  host: Schema.optional(CredentialHost).annotate({
+  host: Schema.optional(CredentialHostInput).annotate({
     description:
-      "The host the credential is for (e.g. npm.pkg.github.com). Lets the card offer the user's own sign-in for it.",
+      "The host the credential is for (e.g. npm.pkg.github.com). Lets the card offer the user's own sign-in for it",
   }),
   name: Schema.optional(CredentialVariableName).annotate({
     description:
