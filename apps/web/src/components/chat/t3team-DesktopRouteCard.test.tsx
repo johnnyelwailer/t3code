@@ -59,11 +59,40 @@ describe("T3TeamDesktopRouteCard", () => {
     expect(html).toContain("Internal address");
   });
 
-  it("shows the agent's words as text, never markup", () => {
+  it("never renders the agent's raw HTML", () => {
     const html = render(
       card({ target: "registry.npmjs.org", internal: false }, "<img src=x onerror=1>"),
     );
     expect(html).not.toContain("<img");
-    expect(html).toContain("&lt;img");
+    expect(html).not.toContain("onerror");
+  });
+
+  it("renders the agent's reason as Markdown, never raw backticks", () => {
+    const html = render(
+      card(
+        { target: "npm.nexplore.ch", internal: false },
+        "`npm ci` and `dotnet restore` need **this** host.",
+      ),
+    );
+    expect(html).toContain("<code");
+    expect(html).toContain("<strong>this</strong>");
+    expect(html).not.toContain("`npm ci`");
+    expect(html).not.toContain("**this**");
+  });
+
+  it("flags a host this computer can't resolve, and only on a cloud session", () => {
+    const typo = card({ target: "npm.nexpore.ch", internal: false });
+    const flagged = (sessionLabel: string | null, hostUnresolved?: boolean) =>
+      renderToStaticMarkup(
+        <T3TeamDesktopRouteCard
+          card={typo}
+          sessionLabel={sessionLabel}
+          {...(hostUnresolved === undefined ? {} : { hostUnresolved })}
+          onAnswer={() => {}}
+        />,
+      ).includes("data-desktop-route-unresolved");
+    expect(flagged("Cloud session 1", true)).toBe(true);
+    expect(flagged("Cloud session 1")).toBe(false);
+    expect(flagged(null, true)).toBe(false);
   });
 });
