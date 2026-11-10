@@ -627,7 +627,7 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
     clearCloudSessionTarget(THREAD_SCOPE);
   });
 
-  // The create stamps the composer's project so a later project switch can rebind that stamp.
+  // Create may stamp a project; checkout still binds from the composer key at queue time.
   it("tags a draft's creating target with the composer's project", () => {
     mountCreate({ envLocked: false });
     expect(getCloudSessionTarget(THREAD_SCOPE)?.projectKey).toBe(COMPOSER_PROJECT_KEY);
