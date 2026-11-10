@@ -12,6 +12,7 @@ export function T3TeamAgentText(props: {
   return (
     <ChatMarkdown
       text={props.text}
+      cwd={undefined}
       inline
       lineBreaks
       isStreaming={false}
