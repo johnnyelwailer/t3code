@@ -90,14 +90,16 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
         // Only treat the branches map as a choice for the main repo when its URL is in
         // the saved linked list (the dialog shows it then). A map of only secondaries
         // must not clear a recorded main branch.
+        const mainUrl = baseMain?.url;
         const mainUrlListed = Boolean(
-          baseMain?.url &&
-          input.linkedRepositoryUrls?.some((url) => isSameRepository(url, baseMain.url)),
+          mainUrl && input.linkedRepositoryUrls?.some((url) => isSameRepository(url, mainUrl)),
         );
-        const applyMainBranchChoice = mainUrlListed && input.linkedRepositoryBranches !== undefined;
-        const requestedMainBranch = applyMainBranchChoice
-          ? chosenBranchForRepository(input.linkedRepositoryBranches, baseMain!.url)
-          : undefined;
+        const applyMainBranchChoice =
+          Boolean(mainUrl) && mainUrlListed && input.linkedRepositoryBranches !== undefined;
+        const requestedMainBranch =
+          mainUrl && applyMainBranchChoice
+            ? chosenBranchForRepository(input.linkedRepositoryBranches, mainUrl)
+            : undefined;
         const mainRepository: MainRepositoryBootstrapResult | undefined =
           applyMainBranchChoice && baseMain
             ? (() => {
