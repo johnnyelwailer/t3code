@@ -27,11 +27,9 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
    */
   "connect_sign_in_required",
   /**
-   * The app started an in-app T3 Connect sign-in (a browser round-trip on the
-   * creator's machine) but it had not finished when the bounded wait ended.
-   * The user's browser still has the sign-in open: confirming it there makes
-   * the retry succeed. Unlike `connect_sign_in_required`, the remediation is
-   * to finish the sign-in that is already in flight, not to start one.
+   * The in-app T3 Connect sign-in was still in flight when the bounded wait
+   * ended. The user's browser has it open: finish the sign-in there and the
+   * retry succeeds.
    */
   "connect_sign_in_pending",
   /**
@@ -57,6 +55,12 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
    * cannot clone it as the user. The remediation is `gh auth login` for that host.
    */
   "repository_sign_in_required",
+  /**
+   * A delete was refused because the machine's unpushed work could not be saved first: the
+   * session would not stop, or its push to the `wip/` branch failed. The message says which,
+   * and that nothing was deleted.
+   */
+  "delete_blocked",
 ]);
 export type CloudSessionFailureReason = typeof CloudSessionFailureReasonSchema.Type;
 

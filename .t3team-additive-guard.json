@@ -392,6 +392,7 @@
     "apps/web/src/components/ChatView.logic.test.ts",
     "apps/web/src/components/ChatView.logic.ts",
     "apps/web/src/components/ChatView.tsx",
+    "apps/web/src/components/chat/useComposerProviderModel.ts",
     "apps/web/src/components/chat/useComposerSend.ts",
     "apps/web/src/components/CommandPalette.composition.browser.test.tsx",
     "apps/web/src/components/CommandPalette.tsx",

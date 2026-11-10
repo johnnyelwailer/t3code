@@ -126,9 +126,22 @@ describe("buildCloudSessionSetup steps", () => {
       "server",
       "connect",
       "project",
+      "provider",
       "sent",
     ]);
     expect(model({ session: session("ready"), delivery: "sending" }).currentStep.id).toBe("sent");
+  });
+
+  it("holds on Provider after project checkout until the selected provider is ready", () => {
+    const m = model({
+      session: session("ready"),
+      machineConnected: true,
+      projectReady: true,
+      providerReady: false,
+      delivery: "queued",
+    });
+    expect(m.currentStep.id).toBe("provider");
+    expect(m.activity).toBe("Setting up the selected provider…");
   });
 
   it("reports a failure with its reason and where to look", () => {
