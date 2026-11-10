@@ -69,6 +69,11 @@ export function decideCloudQueuedSendFlush(input: {
   readonly projectWaitExpired?: boolean;
   /** The machine's connection is parked because its session no longer exists. */
   readonly environmentSessionEnded?: boolean;
+  /**
+   * After project checkout: composer-selected provider is ready on the machine. Omit or true to
+   * keep older callers dispatching; the flusher passes false until install/sign-in finishes.
+   */
+  readonly providerReady?: boolean;
 }): CloudQueuedSendFlushAction {
   const { queued, session } = input;
   if (isCloudQueuedSendFailed(queued)) return { kind: "wait" };
@@ -123,5 +128,6 @@ export function decideCloudQueuedSendFlush(input: {
       failure: { kind: "project_not_resolved", reason: wait.reason, environmentId },
     };
   }
+  if (input.providerReady === false) return { kind: "wait" };
   return { kind: "dispatch", environmentId, projectId: input.projectId };
 }
