@@ -28,6 +28,9 @@ const toModels = (snapshot: PackProviderSnapshot): ReadonlyArray<ServerProviderM
     // custom made the web picker drop them all after upstream #9075 started
     // rebuilding custom rows from Settings (GHE nexi-distribution#394).
     isCustom: model.isCustom ?? false,
+    // The pack's declared default is what a model-less child or workflow agent() runs
+    // (nx-nexi#1216); dropping it left Nexplore with "no declared default model".
+    ...(model.isDefault === true ? { isDefault: true } : {}),
     capabilities: null,
   }));
 
