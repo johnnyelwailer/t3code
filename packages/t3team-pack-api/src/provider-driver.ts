@@ -21,6 +21,11 @@ export type PackProviderModel = {
   readonly slug: string;
   readonly name: string;
   readonly isCustom?: boolean;
+  /**
+   * The provider's current default model. A child or workflow `agent()` started on this
+   * provider without a model runs it; without one it fails with "no declared default model".
+   */
+  readonly isDefault?: boolean;
 };
 
 /**
