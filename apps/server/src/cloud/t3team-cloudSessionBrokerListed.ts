@@ -34,6 +34,7 @@ export function brokerListedSessions(input: {
         ...(session.environmentId ? { environmentId: session.environmentId } : {}),
         ...(started === null || !session.since ? {} : { startedAt: session.since }),
         transport: "nexi_broker",
+        startedElsewhere: true,
       } satisfies CloudSession,
     ];
   });

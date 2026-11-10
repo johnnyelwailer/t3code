@@ -55,6 +55,12 @@ describe("presentCloudSession", () => {
     expect(presentation.secondaryActionLabel).toBe("Stop");
   });
 
+  it("offers no Stop on a session another device started", () => {
+    const presentation = presentCloudSession(session({ phase: "ready", startedElsewhere: true }));
+    expect(presentation.actionLabel).toBe("Connect");
+    expect(presentation.secondaryActionLabel).toBeNull();
+  });
+
   it("keeps 'Provisioning failed' with a reason sentence on a failure", () => {
     const presentation = presentCloudSession(
       session({ phase: "failed", failureReason: "The relay timed out." }),

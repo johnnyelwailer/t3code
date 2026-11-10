@@ -350,10 +350,12 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // A claimed standby runs under the pool controller: this server's own claim proves it is
       // this user's session.
       // After a restart this server's ledger is empty; the broker still lists the user's sessions.
+      // Not with every device listed: a broker-only match may be a run another device started.
       const claimedHere =
         sessionRun === undefined &&
         ((yield* isClaimed(claims, input.sessionId, login)) ||
           (broker.enabled &&
+            !everyDevice &&
             (yield* broker.sessions.pipe(Effect.orElseSucceed(() => []))).some(
               (session) => session.runId === input.sessionId,
             )));
@@ -363,7 +365,9 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
-          message: "That session does not exist.",
+          message: everyDevice
+            ? "That session is not one this device started; stop it where it was started."
+            : "That session does not exist.",
         });
       }
       // Already over (an earlier stop, or its time ran out): stopping is done, not an error.

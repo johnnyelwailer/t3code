@@ -43,6 +43,7 @@ describe("brokerListedSessions", () => {
       environmentId: "env-phone",
       startedAt: "2026-11-10T21:03:00.000Z",
       transport: "nexi_broker",
+      startedElsewhere: true,
     });
   });
 
