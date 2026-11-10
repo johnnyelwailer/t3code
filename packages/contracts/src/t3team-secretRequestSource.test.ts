@@ -31,7 +31,10 @@ it("the turn item's source carries only host, name and scopes", () => {
 
 it("request_secret accepts a registry URL or mixed-case host and keeps the host", () => {
   const base = { label: "Token", reason: "for npm" };
-  assert.strictEqual(decodeInput({ ...base, host: "https://npm.pkg.github.com" }).host, "npm.pkg.github.com");
+  assert.strictEqual(
+    decodeInput({ ...base, host: "https://npm.pkg.github.com" }).host,
+    "npm.pkg.github.com",
+  );
   assert.strictEqual(decodeInput({ ...base, host: "NPM.pkg.github.com" }).host, "npm.pkg.github.com");
 });
 
