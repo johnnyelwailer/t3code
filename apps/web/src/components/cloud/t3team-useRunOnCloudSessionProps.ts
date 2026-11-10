@@ -20,7 +20,6 @@ import {
   useCloudSessionTarget,
 } from "~/cloud/t3team-cloudSessionTargetStore";
 import { CLOUD_SESSION_CREATING_ID } from "~/cloud/t3team-cloudSessionTargetLogic";
-import { cloudSessionTargetAppliesToProject } from "~/cloud/t3team-cloudSessionProjectFollow";
 import { useCloudSessionProjectKey } from "~/cloud/t3team-useCloudSessionProjectFollow";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
@@ -170,17 +169,15 @@ export function useT3TeamRunOnCloudSessionProps(
     void navigate({ to: "/settings/connections" });
   }, [navigate]);
 
-  // Prefer live session label when the list has caught up. A target stamped for another
-  // project stays pending there; this project's Run on stays on its own machines.
+  // Prefer live session label when the list has caught up.
   const selectedCloudSession = useMemo(() => {
-    if (target === null || !cloudSessionTargetAppliesToProject(target, projectKey)) return null;
-    const selected = target;
-    const live = sessions.find((session) => session.sessionId === selected.sessionId);
+    if (target === null) return null;
+    const live = sessions.find((session) => session.sessionId === target.sessionId);
     return {
-      sessionId: selected.sessionId,
-      label: live ? cloudSessionDisplayName(live) : selected.label,
+      sessionId: target.sessionId,
+      label: live ? cloudSessionDisplayName(live) : target.label,
     };
-  }, [projectKey, sessions, target]);
+  }, [sessions, target]);
 
   const selectorProps = useMemo<CloudSelectorProps>(
     () =>

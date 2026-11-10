@@ -201,20 +201,4 @@ describe("resolveCloudQueuedSendFacts", () => {
     // Without the session's own project the grouping match still binds.
     expect(facts({ draftProject, projects: [restored] }).project?.id).toBe("app-restored");
   });
-
-  it("still binds to the queued send's project after the draft was retargeted", () => {
-    const original = project(local, "app-local", "/Users/me/app", repo);
-    const other = project(local, "other-local", "/Users/me/other", {
-      ...repo,
-      canonicalKey: "github.com/acme/other",
-    });
-    const own = project(cloud, "app-own", "/workspace/app", repo);
-    // Draft now points at another project; the queued stamp keeps the original bind.
-    const result = facts({
-      draftProject: other,
-      projects: [original, own],
-      queuedProjectKey: "github.com/acme/app",
-    });
-    expect(result.project?.id).toBe("app-own");
-  });
 });

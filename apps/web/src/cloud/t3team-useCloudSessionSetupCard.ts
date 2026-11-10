@@ -15,7 +15,6 @@ import { useEffect, useState } from "react";
 import { useEnvironments } from "~/state/environments";
 import type { CloudSessionSetupCardProps } from "./t3team-CloudSessionSetupCard";
 import { cloudSessionNotSeenYet, cloudSetupRecovery } from "./t3team-cloudSessionSetupProgress";
-import { cloudSessionTargetAppliesToProject } from "./t3team-cloudSessionProjectFollow";
 import { beginCloudSessionCreate, useCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
 import type { useCloudSessionController } from "./t3team-useCloudSessionController";
@@ -74,10 +73,8 @@ export function useCloudSessionSetupCard(input: {
   const tryAgain = () =>
     beginCloudSessionCreate({ scopeKey, projectKey }, undefined, () => onCreate(projectId));
   const queued = draftId === null ? null : gate.card;
-  // Pending setup for another project stays attached there; this composer starts clean.
-  const visibleTarget = cloudSessionTargetAppliesToProject(target, projectKey) ? target : null;
   const sessionId =
-    draftId === null ? null : (queued?.facts.queued.sessionId ?? visibleTarget?.sessionId ?? null);
+    draftId === null ? null : (queued?.facts.queued.sessionId ?? target?.sessionId ?? null);
   const session =
     sessionId === null
       ? null

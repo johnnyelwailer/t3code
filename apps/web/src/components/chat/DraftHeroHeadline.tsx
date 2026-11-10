@@ -27,7 +27,6 @@ import {
   buildSidebarProjectSnapshots,
   projectGroupsSpanEnvironments,
 } from "~/sidebarProjectGrouping";
-import { draftRetainsPendingCloudSession } from "~/cloud/t3team-cloudSessionProjectFollow";
 import { useCloudAdoptedProjects } from "~/cloud/t3team-useCloudAdoptedProjects";
 import { useProjects, useVisibleThreadShells } from "~/state/entities";
 import {
@@ -196,15 +195,13 @@ export function DraftHeroHeadline({
       : null;
   };
   // Retargeting an empty draft would overwrite the project's draft and strand browser tabs.
-  // A draft with a pending cloud session keeps that setup on its original project/thread: open
-  // a clean composer for the new project instead of retargeting (and instead of clearing it).
   const selectProject = (project: (typeof projects)[number], logicalProjectKey: string) => {
     if (!draftId) {
       return;
     }
     pendingScratchRef.current = null;
     const currentDraft = getComposerDraft(draftId);
-    if (!composerDraftHasUserContent(currentDraft) || draftRetainsPendingCloudSession(draftId)) {
+    if (!composerDraftHasUserContent(currentDraft)) {
       void openProjectDraft(scopeProjectRef(project.environmentId, project.id));
       return;
     }
