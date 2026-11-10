@@ -26,6 +26,7 @@ import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts"
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
+import { brokerListedSessions } from "./t3team-cloudSessionBrokerListed.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 import { offerPlainOnMachineFailure } from "./t3team-cloudSessionMachineOffer.ts";
 import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
@@ -83,6 +84,10 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const broker = yield* NexiBrokerService;
   const machines = yield* CloudSessionMachines;
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
+  // Off: only the sessions this login dispatched or claimed are listed.
+  const everyDevice = yield* readFeatureFlagFromConfig("CLOUD_SESSIONS_EVERY_DEVICE").pipe(
+    Effect.orElseSucceed(() => false),
+  );
 
   // The GitHub-request half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
@@ -129,7 +134,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       machineLabel,
       repoRef,
     });
-    const sessions = [...claimed, ...dispatched];
+    const listed = new Set([...claimed, ...dispatched].map((session) => session.sessionId));
+    const elsewhere = everyDevice
+      ? brokerListedSessions({ brokerSessions, knownRunIds: listed, nowMs, machineLabel, repoRef })
+      : [];
+    const sessions = [...claimed, ...dispatched, ...elsewhere];
     const historyUrl = workflowHistoryUrl(repoRef, login);
     return { sessions, configured: true, historyUrl } satisfies CloudSessionListResult;
   }).pipe(
