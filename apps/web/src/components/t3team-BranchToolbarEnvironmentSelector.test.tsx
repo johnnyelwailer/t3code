@@ -627,7 +627,7 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
     clearCloudSessionTarget(THREAD_SCOPE);
   });
 
-  // The project follow drops a target set up for another project, so the create must record it.
+  // The create stamps the composer's project so a later project switch can hide (not clear) it.
   it("tags a draft's creating target with the composer's project", () => {
     mountCreate({ envLocked: false });
     expect(getCloudSessionTarget(THREAD_SCOPE)?.projectKey).toBe(COMPOSER_PROJECT_KEY);

@@ -81,9 +81,22 @@ export function resolveCloudQueuedSendFacts(input: {
   const environmentId = (session?.environmentId ?? null) as EnvironmentId | null;
   const environmentOf = (id: EnvironmentId) =>
     environments.find((environment) => environment.environmentId === id);
-  const composerProject =
+  const draftComposerProject =
     projects.find((p) => p.environmentId === draft.environmentId && p.id === draft.projectId) ??
     null;
+  const draftProjectKey =
+    draftComposerProject === null
+      ? draft.logicalProjectKey
+      : deriveLogicalProjectKeyFromSettings(draftComposerProject, input.groupingSettings);
+  // Prefer the queued send's project stamp over the draft's current project so a retarget
+  // cannot strand delivery of the first message.
+  const projectKey = input.queued.projectKey ?? draftProjectKey;
+  const composerProject =
+    projectKey === draftProjectKey
+      ? draftComposerProject
+      : (projects.find(
+          (p) => deriveLogicalProjectKeyFromSettings(p, input.groupingSettings) === projectKey,
+        ) ?? null);
   const scratch =
     composerProject !== null &&
     isScratchProject(
@@ -103,10 +116,6 @@ export function resolveCloudQueuedSendFacts(input: {
     };
   }
   const machine = environmentOf(environmentId);
-  const projectKey =
-    composerProject === null
-      ? draft.logicalProjectKey
-      : deriveLogicalProjectKeyFromSettings(composerProject, input.groupingSettings);
   const projectOnMachine = (): {
     readonly project: EnvironmentProject | null;
     readonly by: MachineProjectBinding | null;

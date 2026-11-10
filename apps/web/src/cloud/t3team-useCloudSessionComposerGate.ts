@@ -26,10 +26,7 @@ import {
 } from "./t3team-useCloudQueuedSendEnvironmentFacts";
 import { useCloudQueuedSendProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
-import {
-  useCloudSessionProjectFollow,
-  useCloudSessionProjectKey,
-} from "./t3team-useCloudSessionProjectFollow";
+import { useCloudSessionProjectKey } from "./t3team-useCloudSessionProjectFollow";
 import {
   queueCloudSessionSendIfNeeded,
   type CloudQueuedTurn,
@@ -46,13 +43,14 @@ import {
   presentCloudQueuedSendProgress,
   type CloudQueuedSendStepFacts,
 } from "./t3team-cloudQueuedSendSteps";
+import { cloudSessionTargetBelongsToOtherProject } from "./t3team-cloudSessionProjectFollow";
 
 export function useCloudSessionComposerGate(input: {
   /** The composer's draft session; only a draft's first message can wait for a cloud session. */
   readonly draftId: string | null;
   /** Composer/draft/thread key the Run-on preference belongs to. */
   readonly scopeKey: string | null;
-  /** The composer's project: a cloud session set up for another one stops being the target. */
+  /** The composer's project: a cloud session stamped for another one is hidden here, not cleared. */
   readonly projectRef: ScopedProjectRef | null;
 }): {
   readonly tryQueueSend: (turn: CloudQueuedTurn) => CloudQueuedSend | null;
@@ -67,9 +65,17 @@ export function useCloudSessionComposerGate(input: {
   const cloud = useCloudSessionController({ scopeKey: input.scopeKey });
   const { draftId } = input;
   const projectKey = useCloudSessionProjectKey(input.projectRef);
-  useCloudSessionProjectFollow({ scopeKey: input.scopeKey, projectKey });
 
-  const queued = useDraftCloudQueuedSend(draftId);
+  const queuedRaw = useDraftCloudQueuedSend(draftId);
+  // A queued send stamped for another project stays with that project; this composer stays clean.
+  const queued =
+    queuedRaw !== null &&
+    cloudSessionTargetBelongsToOtherProject(
+      { projectKey: queuedRaw.projectKey ?? null },
+      projectKey,
+    )
+      ? null
+      : queuedRaw;
   const flushing = useCloudQueuedSendDispatching(queued?.messageId ?? null);
 
   const tryQueueSend = useCallback(
