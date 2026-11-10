@@ -10,6 +10,7 @@ import {
   WelcomePageShell,
   WelcomeSection,
 } from "./t3team-NexiWelcomeLayout.fixtures";
+import { NexploreAccountMark } from "./t3team-NexploreAccountMark";
 
 type FinishItem = {
   readonly label: string;
@@ -36,7 +37,9 @@ function FinishSummary({ items }: { readonly items: readonly FinishItem[] }) {
               key={item.label}
               mark={
                 <ServiceMark label={item.label}>
-                  {item.label === "Nexplore" || item.label === "Agents" ? (
+                  {item.label === "Nexplore" ? (
+                    <NexploreAccountMark />
+                  ) : item.label === "Agents" ? (
                     <NexploreAI aria-hidden />
                   ) : (
                     <span className="text-xs font-semibold">{item.label.slice(0, 1)}</span>

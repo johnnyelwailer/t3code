@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { CheckIcon, ChevronDownIcon, CircleDashedIcon, LockIcon } from "lucide-react";
+import { CheckIcon, CircleDashedIcon, LockIcon } from "lucide-react";
 
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { Button } from "~/t3team/components/ui/t3team-button";
 
 /** Shared mark tile — same size/placement for Nexplore, Jira, GitHub, agents. */
@@ -151,26 +150,6 @@ export function StartFooter({
         Start
       </Button>
     </div>
-  );
-}
-
-export function ShowMore({
-  open,
-  label,
-  children,
-}: {
-  readonly open?: boolean;
-  readonly label: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <Collapsible defaultOpen={open}>
-      <CollapsibleTrigger className="flex w-full items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground">
-        <ChevronDownIcon className="size-3.5" />
-        {label}
-      </CollapsibleTrigger>
-      <CollapsiblePanel className="divide-y divide-border/40 pb-1">{children}</CollapsiblePanel>
-    </Collapsible>
   );
 }
 

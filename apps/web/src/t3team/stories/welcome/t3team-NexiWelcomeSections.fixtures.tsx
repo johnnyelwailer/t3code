@@ -13,10 +13,10 @@ import {
   PrimaryAction,
   SecondaryAction,
   ServiceMark,
-  ShowMore,
   StatusLabel,
   WelcomeItem,
 } from "./t3team-NexiWelcomeLayout.fixtures";
+import { NexploreAccountMark } from "./t3team-NexploreAccountMark";
 import type {
   AccountStoryState,
   AgentsStoryState,
@@ -88,7 +88,7 @@ function AgentItem({
 export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
   const mark = (
     <ServiceMark label="Nexplore">
-      <NexploreAI aria-hidden />
+      <NexploreAccountMark />
     </ServiceMark>
   );
 
@@ -144,11 +144,35 @@ export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
 }
 
 export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
-  const extras = (
-    <ShowMore
-      open={state === "none" || state === "addMoreOpen" || state === "unreachable"}
-      label={state === "none" ? "Set up an agent" : "Add more agents"}
-    >
+  const nexplore =
+    state === "ready" ? (
+      <AgentItem
+        mark={<NexploreAI aria-hidden />}
+        markLabel="Nexplore AI"
+        title="Nexplore AI"
+        status={<StatusLabel status="ready" label="Ready" />}
+      />
+    ) : state === "unreachable" ? (
+      <AgentItem
+        mark={<NexploreAI aria-hidden />}
+        markLabel="Nexplore AI"
+        title="Nexplore AI"
+        description="Could not reach Nexplore AI."
+        action={<SecondaryAction onClick={noop}>Manual setup</SecondaryAction>}
+      />
+    ) : (
+      <AgentItem
+        mark={<NexploreAI aria-hidden />}
+        markLabel="Nexplore AI"
+        title="Nexplore AI"
+        status={<StatusLabel status="action" label="Available" />}
+        action={<SecondaryAction onClick={noop}>Sign in</SecondaryAction>}
+      />
+    );
+
+  return (
+    <>
+      {nexplore}
       <AgentItem
         mark={<ClaudeAI aria-hidden />}
         markLabel="Claude Code"
@@ -167,37 +191,8 @@ export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
         title="Cursor"
         action={<SecondaryAction onClick={noop}>Open</SecondaryAction>}
       />
-    </ShowMore>
+    </>
   );
-
-  if (state === "ready") {
-    return (
-      <>
-        <AgentItem
-          mark={<NexploreAI aria-hidden />}
-          markLabel="Nexplore AI"
-          title="Nexplore AI"
-          status={<StatusLabel status="ready" label="Ready" />}
-        />
-        {extras}
-      </>
-    );
-  }
-  if (state === "unreachable") {
-    return (
-      <>
-        <AgentItem
-          mark={<NexploreAI aria-hidden />}
-          markLabel="Nexplore AI"
-          title="Nexplore AI"
-          description="Could not reach Nexplore AI."
-          action={<SecondaryAction onClick={noop}>Manual setup</SecondaryAction>}
-        />
-        {extras}
-      </>
-    );
-  }
-  return extras;
 }
 
 export function RoleBlock() {

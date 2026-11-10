@@ -33,7 +33,7 @@ export const SkippedOptional: Story = { args: { scenario: SCENARIOS.SkippedOptio
 /** Role section only when the feature toggle is on (off by default in product). */
 export const RoleToggleOn: Story = { args: { scenario: SCENARIOS.RoleToggleOn } };
 
-/** Nexplore AI unreachable — manual path + Add more agents. */
+/** Nexplore AI unreachable — manual path; full agent list still visible. */
 export const NexploreAIUnreachable: Story = {
   args: { scenario: SCENARIOS.NexploreAIUnreachable },
 };
