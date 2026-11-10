@@ -212,9 +212,9 @@ describe("notes", () => {
     const note = cloudSetupLongWaitNote(
       model({ session: session("preparing", { projectMachine: true }) }),
     );
-    expect(note).toContain("cloning");
+    expect(note).toContain("Cloning");
     expect(note).toContain("several minutes");
-    expect(note).toContain("no time estimate");
+    expect(note).not.toContain("no time estimate");
   });
 
   it("claims no history it does not have", () => {
@@ -232,7 +232,7 @@ describe("notes", () => {
     expect(cloudSetupMeanwhileNote(model({ session: session("preparing") }))).toContain("type");
     expect(
       cloudSetupMeanwhileNote(model({ session: session("preparing"), delivery: "queued" })),
-    ).toContain("waiting");
+    ).toContain("will send");
     expect(
       cloudSetupMeanwhileNote(model({ session: session("ready"), delivery: "sending" })),
     ).toBeNull();
