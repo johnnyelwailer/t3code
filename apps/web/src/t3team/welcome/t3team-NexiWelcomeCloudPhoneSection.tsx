@@ -54,12 +54,12 @@ export function NexiWelcomeCloudPhoneSection({
         <WelcomeItem
           mark={cloudMark}
           title="Cloud sessions"
-          status={<StatusLabel status="locked" label="Needs Nexplore sign-in" />}
+          status={<StatusLabel status="locked" label="Needs sign-in" />}
         />
         <WelcomeItem
           mark={phoneMark}
           title="Phone"
-          status={<StatusLabel status="locked" label="Needs Nexplore sign-in" />}
+          status={<StatusLabel status="locked" label="Needs sign-in" />}
         />
       </>
     );

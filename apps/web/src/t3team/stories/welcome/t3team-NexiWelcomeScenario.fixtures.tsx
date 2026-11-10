@@ -112,9 +112,6 @@ export function NexiWelcomePageMockup({ scenario }: { readonly scenario: Welcome
   return (
     <WelcomePageShell narrow={scenario.narrow}>
       <div className="border-t border-border/50">
-        <WelcomeSection title="Account">
-          <AccountBlock state={scenario.account} />
-        </WelcomeSection>
         <WelcomeSection title="Agents">
           <AgentsBlock state={scenario.agents} />
         </WelcomeSection>
@@ -130,7 +127,11 @@ export function NexiWelcomePageMockup({ scenario }: { readonly scenario: Welcome
           <GitHubBlock state={scenario.github} />
         </WelcomeSection>
         <WelcomeSection title="Cloud">
-          <CloudPhoneBlock state={scenario.cloudPhone} entraSignedIn={entraSignedIn} />
+          <AccountBlock state={scenario.account} />
+          <CloudPhoneBlock
+            state={scenario.cloudPhone}
+            entraSignedIn={entraSignedIn && scenario.account !== "skipped"}
+          />
         </WelcomeSection>
       </div>
       <StartFooter agentReady={agentReady} onStart={noop} onStartWithoutAgent={noop} />

@@ -36,19 +36,6 @@ export function NexiWelcomePage({
   return (
     <WelcomePageShell>
       <div className="border-t border-border/50">
-        <WelcomeSection title="Account">
-          <NexiWelcomeAccountRow
-            account={a.account.account}
-            loaded={a.account.loaded}
-            pending={a.account.pending}
-            error={a.account.error}
-            skipped={a.skipped.account}
-            onSignIn={a.account.signIn}
-            onOpenVerification={a.account.openVerification}
-            onSkip={() => a.skip("account")}
-            onRetry={a.onRetryAccount}
-          />
-        </WelcomeSection>
         <WelcomeSection title="Agents">
           <NexiWelcomeAgentsSection
             rows={a.agentRows}
@@ -102,8 +89,19 @@ export function NexiWelcomePage({
           />
         </WelcomeSection>
         <WelcomeSection title="Cloud">
+          <NexiWelcomeAccountRow
+            account={a.account.account}
+            loaded={a.account.loaded}
+            pending={a.account.pending}
+            error={a.account.error}
+            skipped={a.skipped.account}
+            onSignIn={a.account.signIn}
+            onOpenVerification={a.account.openVerification}
+            onSkip={() => a.skip("account")}
+            onRetry={a.onRetryAccount}
+          />
           <NexiWelcomeCloudPhoneSection
-            entraSignedIn={Boolean(entraSignedIn)}
+            entraSignedIn={Boolean(entraSignedIn) && !a.skipped.account}
             skipped={a.skipped.cloud}
             cloudEnabled={a.cloudFlag}
             cloudAvailable={a.cloud.available}
