@@ -1,8 +1,10 @@
 /**
- * A cloud session's checkout adopts the title and work-source binding of the user's own project
- * of the same repository, so both group as one under the user's name and icon. Only the view
- * changes: the adopted project keeps its own environment and id, so selecting it still opens the
- * session's project.
+ * A cloud session's checkout adopts the identity of the user's own project of the same
+ * repository (title, work-source binding, icon and favicon), so both group as one under the
+ * user's name and icon. Only the view changes: the adopted project keeps its own environment
+ * and id, so selecting it still opens the session's project. Favicon files are loaded from the
+ * user's own environment (`faviconEnvironmentId` / `faviconWorkspaceRoot`); the cloud machine
+ * does not need Jira or those files.
  */
 import { type EnvironmentId, repositoryGroupingKeyOf } from "@t3tools/contracts";
 
@@ -66,8 +68,20 @@ export function adoptCloudCheckoutProjects(input: {
       ...project,
       title: match.title,
       ...(match.source !== undefined ? { source: match.source } : {}),
+      projectIcon: match.projectIcon,
+      faviconPath: match.faviconPath,
+      faviconEnvironmentId: match.environmentId,
+      faviconWorkspaceRoot: match.workspaceRoot,
     };
-    if (view.title === project.title && view.source === project.source) return project;
+    if (
+      view.title === project.title &&
+      view.source === project.source &&
+      view.projectIcon === project.projectIcon &&
+      view.faviconPath === project.faviconPath &&
+      !("faviconEnvironmentId" in project)
+    ) {
+      return project;
+    }
     changed = true;
     return view;
   });

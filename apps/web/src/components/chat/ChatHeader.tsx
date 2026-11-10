@@ -41,7 +41,7 @@ import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
-import { useCloudThreadProjectTitle } from "~/cloud/t3team-useCloudThreadProjectTitle";
+import { useCloudThreadProjectIdentity } from "~/cloud/t3team-useCloudThreadProjectTitle";
 import { GuestShareIndicator } from "./GuestShareControls";
 
 interface ChatHeaderProps {
@@ -85,8 +85,9 @@ export const ChatHeader = memo(function ChatHeader({
   onOpenProjectSettings,
   onFindInThread,
 }: ChatHeaderProps) {
-  // t3team: a cloud thread's project is named after the user's own project, not the runner folder.
-  const activeProjectTitle = useCloudThreadProjectTitle(activeProject);
+  // t3team: a cloud thread keeps the selected project's title, pill and icon, not the runner folder.
+  const { title: activeProjectTitle, iconProject: activeProjectIcon } =
+    useCloudThreadProjectIdentity(activeProject);
   const activeProjectName = activeProject?.isScratch ? "No project" : activeProjectTitle;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);
@@ -309,7 +310,10 @@ export const ChatHeader = memo(function ChatHeader({
                     />
                   }
                 >
-                  <ProjectFavicon project={activeProject} className="size-3.5" />
+                  <ProjectFavicon
+                    project={activeProjectIcon ?? activeProject}
+                    className="size-3.5"
+                  />
                   <WorkspaceBreadcrumbText className="max-w-40">
                     {activeProjectName}
                   </WorkspaceBreadcrumbText>
