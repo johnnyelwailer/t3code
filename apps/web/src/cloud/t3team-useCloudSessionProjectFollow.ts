@@ -1,5 +1,5 @@
 import type { ScopedProjectRef } from "@t3tools/contracts";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 
 import { useClientSettings } from "~/hooks/useSettings";
 import {
@@ -7,7 +7,6 @@ import {
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
 import { useProject } from "~/state/entities";
-import { followCloudSessionProject } from "./t3team-cloudSessionProjectFollow";
 
 /**
  * The composer project's logical key, the same one the machine list groups by, so a project
@@ -26,17 +25,10 @@ export function useCloudSessionProjectKey(projectRef: ScopedProjectRef | null): 
 }
 
 /**
- * Keeps this composer's cloud Run-on stamp on the current project. A switch rebinds the same
- * session (and any queued first message) instead of clearing them.
+ * Retain point for a pending cloud session when the composer project changes. Clearing with a
+ * toast was wrong (hive#1215): the VM stays; checkout binds at queue time from the confirmed project.
  */
-export function useCloudSessionProjectFollow(input: {
+export function useCloudSessionProjectFollow(_input: {
   readonly scopeKey: string | null;
   readonly projectKey: string | null;
-}): void {
-  const { scopeKey, projectKey } = input;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- rebinds the module-level Run-on stamp when the composer project changes
-  useEffect(() => {
-    if (scopeKey === null) return;
-    followCloudSessionProject(scopeKey, projectKey);
-  }, [scopeKey, projectKey]);
-}
+}): void {}

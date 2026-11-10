@@ -1,14 +1,8 @@
 /**
- * A cloud session's Run-on stamp follows the composer project. Switching projects rebinds this
- * draft's target (and any queued first message) to the new project on the same session; it never
- * clears the session or the message. Other drafts keep their own stamps.
+ * Pending cloud setup stays attached across composer project switches. Project checkout binds
+ * when the first message is queued (confirmed selection); until then a switch is a no-op.
  */
-import { getDraftCloudQueuedSend, writeDraftCloudQueuedSend } from "./t3team-cloudQueuedSendStore";
-import {
-  getCloudSessionTarget,
-  selectCloudSessionTarget,
-  type CloudSessionTarget,
-} from "./t3team-cloudSessionTargetStore";
+import { getCloudSessionTarget, type CloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 
 /** True when the target was stamped for a project and the composer is on a different one. */
 export function cloudSessionTargetBelongsToOtherProject(
@@ -22,32 +16,21 @@ export function cloudSessionTargetBelongsToOtherProject(
   );
 }
 
-export type CloudSessionProjectFollowResult =
-  | { readonly kind: "kept" }
-  /** Same session; project stamp (and queued send, if any) now follow the composer. */
-  | { readonly kind: "retargeted" };
+export type CloudSessionProjectFollowResult = {
+  readonly kind: "kept";
+  /** Composer project differs from any early stamp; the session still stays. */
+  readonly otherProject: boolean;
+};
 
-/**
- * Rebinds this scope's cloud preference to `currentProjectKey` when it was stamped for another
- * project. Leaves other scopes alone; never cancels the session or drops a queued message.
- */
+/** Keeps the stored target of `scopeKey`; never clears or cancels on project switch. */
 export function followCloudSessionProject(
   scopeKey: string,
   currentProjectKey: string | null,
 ): CloudSessionProjectFollowResult {
   const target = getCloudSessionTarget(scopeKey);
-  if (target === null || !cloudSessionTargetBelongsToOtherProject(target, currentProjectKey)) {
-    return { kind: "kept" };
-  }
-  selectCloudSessionTarget({
-    scopeKey,
-    sessionId: target.sessionId,
-    label: target.label,
-    projectKey: currentProjectKey,
-  });
-  const queued = getDraftCloudQueuedSend(scopeKey);
-  if (queued !== null) {
-    writeDraftCloudQueuedSend(scopeKey, { ...queued, projectKey: currentProjectKey });
-  }
-  return { kind: "retargeted" };
+  if (target === null) return { kind: "kept", otherProject: false };
+  return {
+    kind: "kept",
+    otherProject: cloudSessionTargetBelongsToOtherProject(target, currentProjectKey),
+  };
 }
