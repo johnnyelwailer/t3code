@@ -8,8 +8,9 @@ import { chromium } from "playwright";
 
 const distDir = NodeURL.fileURLToPath(new URL("../dist/", import.meta.url));
 const origin = "http://t3-boot.test";
-// With no server, the client retries its session for about 15s before it renders.
-const timeoutMs = 60_000;
+// With no server, the client retries its session read for up to 90s (SESSION_READ_RETRY_TIMEOUT_MS
+// in src/environments/primary/auth.ts) before it renders, so wait past that.
+const timeoutMs = 150_000;
 
 if (!NodeFS.existsSync(NodePath.join(distDir, "index.html"))) {
   console.error(`No web build at ${distDir}. Run the web build first.`);
