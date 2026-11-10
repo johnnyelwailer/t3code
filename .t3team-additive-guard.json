@@ -848,6 +848,7 @@
     "apps/web/src/components/settings/LabsSettingsPanel.tsx"
   ],
   "allowedUnprefixedNewFiles": [
+    ".storybook-evidence/**",
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
     ".agents/skills/merge-upstream/SKILL.md",
     ".claude/**",
