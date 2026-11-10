@@ -261,7 +261,7 @@ describe("notes", () => {
     ).toContain("Everything is in place");
   });
 
-  it("a queued or sending message gets a Ready note that says it will send, not to send a first message", () => {
+  it("a queued or sending message gets a Ready note that says it will send", () => {
     const queuedReady = model({
       session: session("ready"),
       machineConnected: true,
@@ -271,7 +271,9 @@ describe("notes", () => {
     expect(cloudSetupReadyNote(queuedReady)).not.toContain("first message");
     expect(cloudSetupMeanwhileNote(queuedReady)).toBeNull();
     expect(
-      cloudSetupReadyNote(model({ session: session("starting"), delivery: "queued" })),
+      cloudSetupReadyNote(
+        model({ session: session("starting"), delivery: "queued" }),
+      ),
     ).toBe("Your message will send when the session is ready.");
     expect(
       cloudSetupReadyNote(model({ session: session("ready"), delivery: "sending" })),
