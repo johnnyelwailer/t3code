@@ -1,4 +1,4 @@
-import { repositoryLookupCandidates } from "@t3tools/project-context/t3teamRepositoryIdentity";
+import { isSameRepository, repositoryLookupCandidates } from "@t3tools/project-context/t3teamRepositoryIdentity";
 import { sanitizeFeatureBranchName } from "@t3tools/shared/git";
 import { t3teamRandomHex } from "./t3team-random.ts";
 import type * as Path from "effect/Path";
@@ -67,4 +67,23 @@ export function readLinkedRepositories(
     (entry): entry is LinkedRepositoryBootstrapResult =>
       typeof entry === "object" && entry !== null && !Array.isArray(entry),
   );
+}
+
+/** True when `url` names the project's main repository (the workspace checkout, not a reference). */
+export function isMainRepositoryUrl(
+  mainRepository: { readonly url?: string } | undefined,
+  url: string,
+): boolean {
+  return Boolean(mainRepository?.url && isSameRepository(mainRepository.url, url));
+}
+
+/** The branch recorded for `url` in a save payload, matching any spelling of the same repository. */
+export function chosenBranchForRepository(
+  branches: Readonly<Record<string, string>> | undefined,
+  url: string,
+): string | undefined {
+  if (!branches) return undefined;
+  if (url in branches) return branches[url];
+  const match = Object.keys(branches).find((key) => isSameRepository(key, url));
+  return match !== undefined ? branches[match] : undefined;
 }

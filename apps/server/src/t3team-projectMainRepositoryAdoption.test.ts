@@ -32,6 +32,25 @@ describe("t3team main repository (monorepo-as-metarepo, GHE #42)", () => {
     });
   });
 
+  it("decodes an optional branch and error on the mainRepository entry", () => {
+    const manifest = JSON.stringify({
+      mainRepository: {
+        url: "https://github.com/owner/mono",
+        localPath: "/tmp/mono",
+        status: "adopted",
+        branch: "feature/pj",
+        error: "could not fast-forward",
+      },
+    });
+    expect(mainRepositoryFromManifestJson(manifest)).toEqual({
+      url: "https://github.com/owner/mono",
+      localPath: "/tmp/mono",
+      status: "adopted",
+      branch: "feature/pj",
+      error: "could not fast-forward",
+    });
+  });
+
   it("decodes a mainRepository entry without a remote url", () => {
     const manifest = JSON.stringify({
       mainRepository: { localPath: "/tmp/mono", status: "adopted" },

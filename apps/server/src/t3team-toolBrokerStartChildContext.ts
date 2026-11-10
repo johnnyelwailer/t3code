@@ -40,7 +40,13 @@ export const mainRepositoryFromManifestJson = (
     };
     const candidate = parsed.mainRepository;
     if (typeof candidate !== "object" || candidate === null) return undefined;
-    const entry = candidate as { localPath?: unknown; url?: unknown; status?: unknown };
+    const entry = candidate as {
+      localPath?: unknown;
+      url?: unknown;
+      status?: unknown;
+      branch?: unknown;
+      error?: unknown;
+    };
     if (typeof entry.localPath !== "string" || entry.localPath.trim().length === 0) {
       return undefined;
     }
@@ -50,6 +56,12 @@ export const mainRepositoryFromManifestJson = (
         : {}),
       localPath: entry.localPath,
       status: MAIN_REPOSITORY_STATUSES.find((status) => status === entry.status) ?? "adopted",
+      ...(typeof entry.branch === "string" && entry.branch.trim().length > 0
+        ? { branch: entry.branch.trim() }
+        : {}),
+      ...(typeof entry.error === "string" && entry.error.trim().length > 0
+        ? { error: entry.error.trim() }
+        : {}),
     };
   } catch {
     return undefined;

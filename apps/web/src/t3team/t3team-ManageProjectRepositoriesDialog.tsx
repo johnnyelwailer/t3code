@@ -60,9 +60,18 @@ export function ManageProjectRepositoriesDialog({
     linkedRepositoryUrls,
   });
 
+  const recordedBranches = useMemo(() => {
+    const recorded = new Map(
+      linkedRepositoryUrls.flatMap((url) => {
+        const entry = syncStatus.entryFor(url);
+        return entry ? [[url, entry] as const] : [];
+      }),
+    );
+    return recorded;
+  }, [linkedRepositoryUrls, syncStatus.byUrl, syncStatus.entryFor]);
   const branches = useLinkedRepositoryBranches({
     urls: linkedRepositoryUrls,
-    recorded: syncStatus.byUrl,
+    recorded: recordedBranches,
   });
 
   const dirty =
@@ -145,7 +154,7 @@ export function ManageProjectRepositoriesDialog({
               renderLinkedStatus={(url) =>
                 syncEnabled ? (
                   <LinkedRepositorySyncStatusLine
-                    entry={syncStatus.byUrl.get(url)}
+                    entry={syncStatus.entryFor(url)}
                     onSync={syncStatus.syncNow}
                   />
                 ) : null
@@ -153,7 +162,7 @@ export function ManageProjectRepositoriesDialog({
               renderLinkedControls={(url) => (
                 <LinkedRepositoryBranchControl
                   workspaceRoot={project.workspace?.rootPath}
-                  entry={syncStatus.byUrl.get(url)}
+                  entry={syncStatus.entryFor(url)}
                   value={branches.branchFor(url)}
                   onChange={(branch) => branches.setBranch(url, branch)}
                 />
