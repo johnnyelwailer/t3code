@@ -117,7 +117,7 @@ export function ToolAuthCard({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground/80">
               {onInstall
-                ? `${meta.label} isn't installed in this sandbox yet. Installing it also signs you in.`
+                ? `${meta.label} isn't installed on this machine. Installing it also signs you in.`
                 : (signInDescription ?? meta.description)}
             </p>
             <Button size="sm" variant="outline" className="shrink-0" onClick={primaryAction}>

@@ -82,6 +82,8 @@ export function CloudSessionSetupCard({
     activity: model.activity,
     readyNote: cloudSetupReadyNote(model),
     slow,
+    delivery: model.delivery,
+    sessionReady: model.session?.phase === "ready",
   });
   return (
     <section

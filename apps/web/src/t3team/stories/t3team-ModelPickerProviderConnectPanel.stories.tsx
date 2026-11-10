@@ -98,12 +98,12 @@ export const NeedsAuth: Story = {
   args: { entry: CLAUDE_ENTRY, tool: "claude", readiness: "needsAuth" },
 };
 
-/** Codex selected, not installed in this sandbox — informational only, no install command fabricated. */
+/** Codex selected, not installed on this machine — informational only, no install command fabricated. */
 export const NeedsInstallCodex: Story = {
   args: { entry: CODEX_NOT_INSTALLED_ENTRY, tool: "codex", readiness: "needsInstall" },
 };
 
-/** Claude selected, not installed in this sandbox. */
+/** Claude selected, not installed on this machine. */
 export const NeedsInstallClaude: Story = {
   args: { entry: CLAUDE_NOT_INSTALLED_ENTRY, tool: "claude", readiness: "needsInstall" },
 };
