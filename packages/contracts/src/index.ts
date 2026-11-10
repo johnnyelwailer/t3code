@@ -104,6 +104,7 @@ export * from "./t3team-toolauth.ts";
 export * from "./usage.ts";
 export * from "./t3team-providerUsage.ts";
 export * from "./t3team-providerUsageCompact.ts";
+export * from "./t3team-providerUsageStats.ts";
 export * from "./t3team-myworkArrangement.ts";
 export * from "./t3team-viewContext.ts";
 export * from "./scheduledTask.ts";

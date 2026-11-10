@@ -33,6 +33,8 @@ import {
   type ThreadDetailsUsageInput,
 } from "./ThreadDetailsUsage";
 import { ThreadDetailsItemsMenuItems } from "./ThreadDetailsItemsMenu";
+import { T3TeamThreadDetailsLiveStats } from "./t3team-ThreadDetailsLiveStats";
+import { providerUsageStats } from "./t3team-threadDetailsLiveStats.logic";
 import { resolveThreadDetailsVisibility, THREAD_DETAILS_ITEMS } from "./threadDetailsItems";
 import { useClientSettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
@@ -107,6 +109,8 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
     props.activeProjectScripts && visible.scripts ? props.gitCwd : null,
   );
   const activeThreadRef = { environmentId: props.environmentId, threadId: props.threadId };
+  // t3team: a provider with no quota publishes live stats; they replace its limit rows.
+  const usageStats = providerUsageStats(props.usage.providerInstanceId, props.usage.providers);
   const branchToolbarProps = {
     showGitControls: props.isGitRepo,
     environmentId: props.environmentId,
@@ -286,7 +290,13 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {visible.usage ? <ThreadDetailsUsage {...props.usage} /> : null}
+              {visible.usage ? (
+                usageStats !== null ? (
+                  <T3TeamThreadDetailsLiveStats stats={usageStats} />
+                ) : (
+                  <ThreadDetailsUsage {...props.usage} />
+                )
+              ) : null}
 
               {visible.context && props.usage.contextWindow ? (
                 <ThreadDetailsContext usage={props.usage.contextWindow} />
