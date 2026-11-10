@@ -164,6 +164,7 @@ export function CloudBlock({
 }
 
 export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
+  // Nexplore AI needs no sign-in/key/setup — status only, never an action button.
   const nexplore =
     state === "ready" ? (
       <AgentItem
@@ -177,16 +178,14 @@ export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
         mark={<NexploreAI aria-hidden />}
         markLabel="Nexplore AI"
         title="Nexplore AI"
-        description="Could not reach Nexplore AI."
-        action={<SecondaryAction onClick={noop}>Manual setup</SecondaryAction>}
+        status={<StatusLabel status="pending" label="Not reachable on this network" />}
       />
     ) : (
       <AgentItem
         mark={<NexploreAI aria-hidden />}
         markLabel="Nexplore AI"
         title="Nexplore AI"
-        status={<StatusLabel status="action" label="Available" />}
-        action={<SecondaryAction onClick={noop}>Sign in</SecondaryAction>}
+        status={<StatusLabel status="ready" label="Available" />}
       />
     );
 

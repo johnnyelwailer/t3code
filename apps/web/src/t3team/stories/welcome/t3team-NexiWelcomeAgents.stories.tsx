@@ -22,7 +22,8 @@ export const NexploreReady: Story = {
   ),
 };
 
-export const NoneFound: Story = {
+/** Available with no action — Nexplore AI needs no sign-in or setup. */
+export const Available: Story = {
   render: () => (
     <SectionFrame title="Agents">
       <AgentsBlock state="none" />

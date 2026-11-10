@@ -37,7 +37,8 @@ export type WelcomeScenario = {
 export const SCENARIOS = {
   FreshInstall: {
     account: "signedOut",
-    agents: "none",
+    // Built-in Nexplore AI needs no setup — ready without sign-in.
+    agents: "ready",
     roleToggleOn: false,
     jira: "notConnected",
     github: "signedOut",
@@ -85,7 +86,7 @@ export const SCENARIOS = {
   },
   ServerUnreachable: {
     account: "serverUnreachable",
-    agents: "none",
+    agents: "ready",
     roleToggleOn: false,
     jira: "notConnected",
     github: "signedOut",
@@ -93,7 +94,7 @@ export const SCENARIOS = {
   },
   Narrow390: {
     account: "signedOut",
-    agents: "none",
+    agents: "ready",
     roleToggleOn: false,
     jira: "notConnected",
     github: "signedOut",
