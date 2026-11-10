@@ -66,17 +66,14 @@ describe("CloudSessionSetupCard project wait", () => {
         .querySelector("[data-cloud-project-wait]")
         ?.getAttribute("data-cloud-project-wait") ?? "none";
     expect(level()).toBe("none");
-    const fill = () =>
-      screen.container
-        .querySelector("[data-cloud-setup-fill]")
-        ?.getAttribute("data-cloud-setup-fill");
-    expect(fill()).toBe("determinate");
+    expect(screen.container.querySelector("[role='progressbar']")).toBeNull();
+    expect(screen.container.querySelectorAll("[data-cloud-setup-progress]")).toHaveLength(1);
     await act(() => vi.advanceTimersByTime(10_000));
     expect(level()).toBe("expected");
     await act(() => vi.advanceTimersByTime(74_000));
     expect(level()).toBe("expected");
     await act(() => vi.advanceTimersByTime(1_000));
     expect(level()).toBe("slow");
-    expect(fill()).toBe("indeterminate");
+    expect(screen.container.querySelector("[role='progressbar']")).toBeNull();
   });
 });
