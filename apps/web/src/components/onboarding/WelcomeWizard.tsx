@@ -108,6 +108,8 @@ import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
+import { NexiWelcomePage } from "~/t3team/welcome/t3team-NexiWelcomePage";
+import { useNexiWelcomeEnabled } from "~/t3team/welcome/t3team-useNexiWelcomeEnabled";
 import { WelcomeCloudSignInOption } from "./t3team-WelcomeCloudSignInOption";
 import { OnboardingReadyAgents } from "./t3team-OnboardingReadyAgents";
 
@@ -118,7 +120,17 @@ const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
 const ONBOARDING_STAGES = ["Connect", "Agents", "Projects"] as const;
 const SCAN_LIMIT_MESSAGE = "Scan limit reached. Some projects or conversations may be missing.";
 
-export function WelcomeWizard({
+export function WelcomeWizard(props: {
+  readonly localAvailable: boolean;
+  readonly resumeEnvironmentId?: EnvironmentId | undefined;
+  readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
+}) {
+  const nexiWelcome = useNexiWelcomeEnabled();
+  if (nexiWelcome) return <NexiWelcomePage onDone={props.onDone} />;
+  return <LegacyWelcomeWizard {...props} />;
+}
+
+function LegacyWelcomeWizard({
   localAvailable,
   onDone,
   resumeEnvironmentId,
