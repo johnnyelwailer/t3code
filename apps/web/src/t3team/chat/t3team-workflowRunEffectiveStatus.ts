@@ -1,12 +1,6 @@
 /**
- * One status per run card. The run-level terminal event (`run:<runId>`, the "Run failed: …"
- * banner) and the server's run row can disagree for a moment: the event lands, the row still
- * says "running". The card used to trust the row and drew "Running" next to "Run failed".
- *
- * Rule: a terminal run event wins over a non-terminal server status UNLESS the server row is
- * newer (a Retry re-drive already moved it on). An optimistic local status still wins first.
- *
- * @module t3team-workflowRunEffectiveStatus
+ * A terminal run event ("Run failed: …") beats a stale non-terminal server row, so a failed card
+ * never also says "Running". A newer server row (a Retry re-drive) still wins.
  */
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 
