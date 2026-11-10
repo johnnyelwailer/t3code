@@ -10,7 +10,7 @@ import { createElement, Fragment, useCallback, useMemo } from "react";
 
 import type { ComposerBannerStackItem } from "~/components/chat/ComposerBannerStack";
 import { Button } from "~/components/ui/button";
-import { useEnvironments } from "~/state/environments";
+import { useComposerDraftStore } from "~/composerDraftStore";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   cancelDraftCloudQueuedSend,
@@ -25,6 +25,7 @@ import {
   useCloudQueuedSendEnvironmentFacts,
 } from "./t3team-useCloudQueuedSendEnvironmentFacts";
 import { useCloudQueuedSendProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
+import { useCloudQueuedSendStepFacts } from "./t3team-useCloudQueuedSendStepFacts";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 import {
   useCloudSessionProjectFollow,
@@ -34,17 +35,11 @@ import {
   queueCloudSessionSendIfNeeded,
   type CloudQueuedTurn,
 } from "./t3team-cloudSessionQueueSend";
-import { useComposerDraftStore } from "~/composerDraftStore";
-import { useClientSettings } from "~/hooks/useSettings";
-import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
-import { useProjects } from "~/state/entities";
-import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
 import type { CloudSetupSessionSource } from "./t3team-useCloudSessionSetupCard";
 import {
   currentCloudProjectWait,
   presentCloudQueuedSendProgress,
-  type CloudQueuedSendStepFacts,
 } from "./t3team-cloudQueuedSendSteps";
 
 export function useCloudSessionComposerGate(input: {
@@ -84,27 +79,16 @@ export function useCloudSessionComposerGate(input: {
   const draft = useComposerDraftStore((state) =>
     draftId === null ? undefined : state.draftThreadsByThreadKey[draftId],
   );
-  const { environments } = useEnvironments();
-  const projects = useProjects();
-  const settings = useClientSettings();
   const machineFacts = useCloudQueuedSendEnvironmentFacts(
     queuedSendEnvironmentIds(queued === null ? [] : [queued], cloud.sessions),
   );
-  // The same facts the app-level flusher acts on; the card and the banner both render them.
-  const stepFacts = useMemo<CloudQueuedSendStepFacts | null>(() => {
-    if (queued === null || draft === undefined) return null;
-    const facts = resolveCloudQueuedSendFacts({
-      queued,
-      draft,
-      sessions: cloud.sessions,
-      environments,
-      projects,
-      threadShells: [],
-      groupingSettings: selectProjectGroupingSettings(settings),
-      bootstrapProjectIdOf: machineFacts.bootstrapProjectIdOf,
-    });
-    return { ...facts, queued, projectReady: facts.project !== null, flushing };
-  }, [cloud.sessions, draft, environments, flushing, machineFacts, projects, queued, settings]);
+  const stepFacts = useCloudQueuedSendStepFacts({
+    queued,
+    draft,
+    sessions: cloud.sessions,
+    machineFacts,
+    flushing,
+  });
   const cancelQueuedSend = useCallback(() => {
     if (draftId === null) return;
     const waitingOnProject = stepFacts !== null && currentCloudProjectWait(stepFacts) !== null;
