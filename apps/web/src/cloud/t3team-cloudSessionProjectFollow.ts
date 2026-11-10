@@ -1,15 +1,8 @@
 /**
- * A cloud session is provisioned for the project the composer had when it was created or picked,
- * so changing the project before the first message means that machine is no longer the target.
- * The decision rests on the project keys alone (stamped on the target, read from the composer),
- * never on how long the machine has been connecting.
+ * Pending cloud setup stays attached across composer project switches. Project checkout binds
+ * when the first message is queued (confirmed selection); until then a switch is a no-op.
  */
-import { cancelDraftCloudQueuedSend } from "./t3team-cloudQueuedSendStore";
-import {
-  clearCloudSessionTarget,
-  getCloudSessionTarget,
-  type CloudSessionTarget,
-} from "./t3team-cloudSessionTargetStore";
+import { getCloudSessionTarget, type CloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 
 /** True when the target was stamped for a project and the composer is on a different one. */
 export function cloudSessionTargetBelongsToOtherProject(
@@ -23,24 +16,21 @@ export function cloudSessionTargetBelongsToOtherProject(
   );
 }
 
-export type CloudSessionProjectFollowResult =
-  | { readonly kind: "kept" }
-  /** Not sent yet: the preference is dropped, the composer falls back to its own machine. */
-  | { readonly kind: "cleared"; readonly label: string }
-  /** The first message was already queued for the wrong project: it is back in the composer. */
-  | { readonly kind: "restored" };
+export type CloudSessionProjectFollowResult = {
+  readonly kind: "kept";
+  /** Composer project differs from any early stamp; the session still stays. */
+  readonly otherProject: boolean;
+};
 
-/** Applies the rule above to the stored target of `scopeKey`. */
+/** Keeps the stored target of `scopeKey`; never clears or cancels on project switch. */
 export function followCloudSessionProject(
   scopeKey: string,
   currentProjectKey: string | null,
 ): CloudSessionProjectFollowResult {
   const target = getCloudSessionTarget(scopeKey);
-  if (target === null || !cloudSessionTargetBelongsToOtherProject(target, currentProjectKey)) {
-    return { kind: "kept" };
-  }
-  clearCloudSessionTarget(scopeKey);
-  return cancelDraftCloudQueuedSend(scopeKey) === null
-    ? { kind: "cleared", label: target.label }
-    : { kind: "restored" };
+  if (target === null) return { kind: "kept", otherProject: false };
+  return {
+    kind: "kept",
+    otherProject: cloudSessionTargetBelongsToOtherProject(target, currentProjectKey),
+  };
 }
