@@ -40,6 +40,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import { SourceControlRepositoryService } from "../sourceControl/SourceControlRepositoryService.ts";
 import { T3TeamAskUserWriter } from "../mcp/toolkits/t3team/t3team-askUserWriter.ts";
 import { T3TeamToolkit } from "../mcp/toolkits/t3team/tools.ts";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import {
   FIELD_DESCRIPTION_CAP_BYTES,
   MINIMAL_TOOL_DOCS,
@@ -62,6 +63,7 @@ import budget from "./agentContextBudget.json" with { type: "json" };
 const toolHandlerServices = Layer.mergeAll(
   Layer.mock(DeviceService)({}),
   Layer.mock(DocumentText)({}),
+  Layer.mock(GitHubApi.GitHubApi)({}),
   Layer.mock(GitVcsDriver)({}),
   Layer.mock(GitWorkflowService)({}),
   Layer.mock(ManagedProjectFolders)({ namedProjectsRoot: "" }),

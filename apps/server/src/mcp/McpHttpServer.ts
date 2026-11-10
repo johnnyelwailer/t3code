@@ -85,6 +85,12 @@ import { withFeatureGatedToolList } from "./toolkits/t3team/t3team-mcpToolFeatur
 import { advertiseToolDocs } from "./toolkits/t3team/t3team-toolDocs.ts";
 import { withThreadScopedToolList } from "./toolkits/t3team/t3team-mcpToolThreadList.ts";
 import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
+import * as HandbookHandlers from "./toolkits/t3team/t3team-handbookHandlers.ts";
+import { layer as HandbookDocsLayer } from "./toolkits/t3team/t3team-handbookDocs.ts";
+import {
+  HANDBOOK_MCP_INSTRUCTIONS,
+  HandbookToolkit,
+} from "./toolkits/t3team/t3team-handbookTools.ts";
 
 const mcpResourceMetadataUrl = (request: HttpServerRequest.HttpServerRequest) =>
   HttpServerRequest.toURL(request).pipe(
@@ -1158,6 +1164,10 @@ export const T3TeamToolkitRegistrationLive = toolkitRegistration(
   T3TeamToolkitHandlersLive,
 );
 
+const layerHandbookToolkit = toolkitRegistration(HandbookToolkit, HandbookHandlers.layer).pipe(
+  Layer.provide(HandbookDocsLayer),
+);
+
 export const layerPullRequestsToolkit = toolkitRegistration(
   PullRequestsToolkit,
   PullRequestsHandlers.layer,
@@ -1189,6 +1199,7 @@ export const T3_MCP_PROTOCOL = withThreadScopedToolList(
 export const layerMcpTransport = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
+  instructions: HANDBOOK_MCP_INSTRUCTIONS,
   path: "/mcp",
   protocols: [T3_MCP_PROTOCOL],
   allowSessionTermination: true,
@@ -1205,6 +1216,7 @@ export const layerTools = Layer.mergeAll(
   layerPreviewControlsRegistration,
   layerWorktreeToolkitRegistration,
   T3TeamToolkitRegistrationLive,
+  layerHandbookToolkit,
   layerPullRequestsToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,

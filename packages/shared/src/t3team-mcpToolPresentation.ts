@@ -16,4 +16,10 @@ export const T3TEAM_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     icon: "t3-code",
     summaryAction: "html-render",
   },
+  nexplore_handbook: {
+    displayName: "Nexplore Handbook",
+    labels: ["Look up", "Looking up", "Looked up", "the Nexplore Handbook"],
+    icon: "t3-code",
+    summaryAction: "handbook",
+  },
 };
