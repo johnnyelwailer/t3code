@@ -1,6 +1,6 @@
 import { resolveEnvironmentFilter } from "@t3tools/client-runtime/t3team-environmentFilter";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../../test/render";
 import { T3TeamSidebarEnvironmentFilter } from "./t3team-SidebarEnvironmentFilter";
@@ -66,7 +66,7 @@ describe("T3TeamSidebarEnvironmentFilter", () => {
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 
-  it("wraps at a narrow width without cutting 'This computer'", async () => {
+  it("collapses onto one row with a +N pill at a narrow width", async () => {
     const container = document.createElement("div");
     container.style.width = "150px";
     await using screen = await render(
@@ -76,14 +76,44 @@ describe("T3TeamSidebarEnvironmentFilter", () => {
       />,
       { container, router: false },
     );
-    const label = [...screen.container.querySelectorAll("span")].find(
-      (node) => node.textContent === "This computer",
-    )!;
-    expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
-    const rows = new Set(
-      [...screen.container.querySelectorAll("button")].map((button) => button.offsetTop),
+    const visible = [...screen.container.querySelectorAll<HTMLButtonElement>('[role="group"] button')].filter(
+      (button) => !button.closest('[aria-hidden="true"]'),
     );
-    expect(rows.size).toBeGreaterThan(1);
+    const rows = new Set(visible.map((button) => button.offsetTop));
+    expect(rows.size).toBe(1);
     expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
+    const overflow = visible.find((button) =>
+      /^\d+ more environments?$/.test(button.getAttribute("aria-label") ?? ""),
+    );
+    expect(overflow).toBeDefined();
+    const total = 4; // All + three environments
+    const shownButtons = visible.filter((button) => button !== overflow);
+    expect(shownButtons.length).toBeGreaterThanOrEqual(1);
+    expect(shownButtons.length).toBeLessThan(total);
+    expect(overflow!.textContent).toBe(`+${total - shownButtons.length}`);
+    expect(shownButtons[0]!.textContent).toBe("All");
+    expect(shownButtons.every((button) => !/Build server/.test(button.textContent ?? ""))).toBe(true);
+  });
+
+  it("opens the +N pill and selects a hidden environment from the list", async () => {
+    const onSelect = vi.fn();
+    const container = document.createElement("div");
+    container.style.width = "150px";
+    await using screen = await render(
+      <T3TeamSidebarEnvironmentFilter
+        pills={pills([THIS_COMPUTER, CLOUD, { id: "srv", label: "Build server" }])}
+        onSelect={onSelect}
+      />,
+      { container, router: false },
+    );
+    const overflow = screen.container.querySelector<HTMLButtonElement>(
+      '[role="group"] button[aria-label*="more environment"]',
+    );
+    expect(overflow).toBeDefined();
+    await userEvent.click(overflow!);
+    const option = page.getByRole("option", { name: "Build server" });
+    await expect.element(option).toBeVisible();
+    await userEvent.click(option);
+    expect(onSelect).toHaveBeenLastCalledWith("srv");
   });
 });

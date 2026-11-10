@@ -1,12 +1,8 @@
-/* oxlint-disable t3code/no-raw-resize-observer -- Existing merged lint debt; keep green while preserving behavior. */
 import {
-  useLayoutEffect,
   useMemo,
   useRef,
-  useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type RefObject,
 } from "react";
 
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
@@ -20,6 +16,7 @@ import {
 import { useJiraProjectCatalog } from "~/t3team/hooks/t3team-useJiraProjectCatalog";
 
 import { TooltipProvider } from "../ui/tooltip";
+import { useSidebarPillRowWidth } from "./t3team-SidebarPillRowMeasure";
 import { T3TeamSidebarProjectScopePillStack } from "./t3team-SidebarProjectScopePillStack";
 import { T3TeamSidebarProjectScopeSiteFailure } from "./t3team-SidebarProjectScopeSiteFailure";
 import {
@@ -60,22 +57,6 @@ export function T3TeamSidebarProjectScopePills(props: PillsProps) {
   );
 }
 
-/** `null` until the row has been measured, so a 0-width first paint does not flash every site into +N. */
-function useMeasuredWidth(): [RefObject<HTMLDivElement | null>, number | null] {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(entry.contentRect.width);
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width];
-}
-
 /**
  * One-click project scope: an "All" disc plus a stack of discs, as many as the row's width
  * fits; the rest sit behind a "+N" disc that searches every project (a search disc when
@@ -96,7 +77,7 @@ export function T3TeamSidebarProjectScopePillsView({
   siteFailures?: ReadonlyArray<JiraCatalogSiteFailure>;
   onRetrySite?: (accountId: string) => void;
 }) {
-  const [ref, width] = useMeasuredWidth();
+  const [ref, width] = useSidebarPillRowWidth();
   const rowRef = useRef<HTMLDivElement | null>(null);
   const empty: ReadonlyArray<SidebarProjectSnapshot> = [];
   const { shown, overflow } =
@@ -114,7 +95,7 @@ export function T3TeamSidebarProjectScopePillsView({
         // clipping box so the error mark is not cut off by the disc stack.
         className="flex min-w-0 flex-1 items-center gap-1 py-0.5 pl-2"
       >
-        <div ref={ref} className="flex min-w-0 flex-1 items-center overflow-hidden">
+        <div ref={ref} className="flex min-w-0 flex-1 items-center overflow-hidden pt-px">
           <T3TeamSidebarProjectScopePillStack
             shown={shown}
             overflow={overflow}
