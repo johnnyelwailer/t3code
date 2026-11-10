@@ -1,8 +1,4 @@
-/**
- * Live statistics from a provider with no quota (for example a self-hosted gateway's running
- * requests), shown in the thread details "Usage limits" section in place of limit windows.
- * Rows mirror the section's limit rows: label, optional hairline bar, value, and a tooltip.
- */
+/** Live stats from a quota-free provider, shown in "Usage limits" in place of its windows. */
 import type { ServerProviderUsageStat } from "@t3tools/contracts";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";

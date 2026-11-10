@@ -1,10 +1,6 @@
 /**
- * Live statistics a provider reports instead of a quota (for example a self-hosted gateway's
- * running requests). Published on `ServerProvider.usageStats`; the thread details "Usage limits"
- * section shows them in place of limit windows. `value` is display text from the provider's own
- * data; `usedPercent`, when set, draws a bar.
- *
- * @module t3team-providerUsageStats
+ * Live stats from a provider with no quota, shown in place of usage-limit windows. `value` is the
+ * provider's own display text; `usedPercent`, when set, draws a bar.
  */
 import * as Schema from "effect/Schema";
 
