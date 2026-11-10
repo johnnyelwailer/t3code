@@ -6,11 +6,6 @@ import { usePrimaryEnvironmentId } from "~/state/environments";
 import { resolveCloudThreadProjectIdentity } from "./t3team-cloudThreadProjectTitle";
 import { useIsCloudSessionEnvironment } from "./t3team-useIsCloudSessionEnvironment";
 
-/** The project's title for display: a cloud thread's project shows the user's own project title. */
-export function useCloudThreadProjectTitle(project: EnvironmentProject | null): string | undefined {
-  return useCloudThreadProjectIdentity(project).title;
-}
-
 /**
  * The selected project's identity for a cloud-session thread: the user's title and the project
  * record whose icon and favicon should be drawn (the own project, so the image loads from this

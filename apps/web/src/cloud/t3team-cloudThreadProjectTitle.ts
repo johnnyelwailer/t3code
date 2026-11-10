@@ -18,12 +18,12 @@ interface TitledProject {
 const repositoryOf = (project: TitledProject) =>
   project.repositoryIdentity ? repositoryGroupingKeyOf(project.repositoryIdentity) : null;
 
-const ownMatchesOf = (input: {
-  readonly project: TitledProject;
+const ownMatchesOf = <T extends TitledProject>(input: {
+  readonly project: T;
   readonly isCloudSession: boolean;
   readonly primaryEnvironmentId: EnvironmentId | null;
-  readonly projects: ReadonlyArray<TitledProject>;
-}): TitledProject[] => {
+  readonly projects: ReadonlyArray<T>;
+}): T[] => {
   const { project, primaryEnvironmentId } = input;
   if (!input.isCloudSession || primaryEnvironmentId === null) return [];
   if (project.environmentId === primaryEnvironmentId) return [];
@@ -47,7 +47,7 @@ const ownMatchesOf = (input: {
  * Null when the project's own identity should stand: not a cloud session, already the primary
  * environment's, or no unambiguous local match (none, or several with different titles).
  */
-export function resolveCloudThreadProjectMatch<T extends TitledProject>(input: {
+function resolveCloudThreadProjectMatch<T extends TitledProject>(input: {
   readonly project: T;
   readonly isCloudSession: boolean;
   readonly primaryEnvironmentId: EnvironmentId | null;
