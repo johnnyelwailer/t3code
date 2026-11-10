@@ -46,8 +46,13 @@ export function sidebarEnvironmentFilterCandidates(input: {
 export function sidebarEnvironmentFilter(
   candidates: ReadonlyArray<EnvironmentFilterEnvironment>,
   storedEnvironmentId: string | null,
+  hiddenEnvironmentIds: ReadonlySet<string> = new Set(),
 ): EnvironmentFilter {
-  return resolveEnvironmentFilter({ environments: candidates, selectedId: storedEnvironmentId });
+  return resolveEnvironmentFilter({
+    environments: candidates,
+    selectedId: storedEnvironmentId,
+    hiddenIds: hiddenEnvironmentIds,
+  });
 }
 
 /** The gap between the environment row's pills, in px (Tailwind `gap-1`). */

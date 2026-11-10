@@ -1,4 +1,5 @@
 import { resolveEnvironmentFilter } from "@t3tools/client-runtime/t3team-environmentFilter";
+import type { EnvironmentFilterPill } from "@t3tools/client-runtime/t3team-environmentFilter";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
@@ -7,6 +8,19 @@ import { T3TeamSidebarEnvironmentFilter } from "./t3team-SidebarEnvironmentFilte
 
 const THIS_COMPUTER = { id: "local", label: "This computer", isPrimary: true };
 const CLOUD = { id: "cloud", label: "Cloud session" };
+
+/** The device-menu props the app wires; inert here so the row's split and selection stay under test. */
+const menuProps: {
+  hiddenPills: ReadonlyArray<EnvironmentFilterPill>;
+  onUnhide: () => void;
+  onEnvironmentContextMenu: () => void;
+  isPrimaryEnvironment: (environmentId: string) => boolean;
+} = {
+  hiddenPills: [],
+  onUnhide: () => {},
+  onEnvironmentContextMenu: () => {},
+  isPrimaryEnvironment: (environmentId) => environmentId === "local",
+};
 
 function pills(
   environments: Array<{ id: string; label: string; isPrimary?: boolean }>,
@@ -18,7 +32,11 @@ function pills(
 describe("T3TeamSidebarEnvironmentFilter", () => {
   it("draws nothing while there is nothing to choose", async () => {
     await using screen = await render(
-      <T3TeamSidebarEnvironmentFilter pills={pills([THIS_COMPUTER])} onSelect={vi.fn()} />,
+      <T3TeamSidebarEnvironmentFilter
+        pills={pills([THIS_COMPUTER])}
+        onSelect={vi.fn()}
+        {...menuProps}
+      />,
       { router: false },
     );
     expect(screen.container.querySelector('[role="group"]')).toBeNull();
@@ -30,6 +48,7 @@ describe("T3TeamSidebarEnvironmentFilter", () => {
       <T3TeamSidebarEnvironmentFilter
         pills={pills([THIS_COMPUTER, CLOUD], "cloud")}
         onSelect={vi.fn()}
+        {...menuProps}
       />,
       { router: false },
     );
@@ -51,6 +70,7 @@ describe("T3TeamSidebarEnvironmentFilter", () => {
       <T3TeamSidebarEnvironmentFilter
         pills={pills([THIS_COMPUTER, CLOUD], "cloud")}
         onSelect={onSelect}
+        {...menuProps}
       />,
       { router: false },
     );
@@ -73,6 +93,7 @@ describe("T3TeamSidebarEnvironmentFilter", () => {
       <T3TeamSidebarEnvironmentFilter
         pills={pills([THIS_COMPUTER, CLOUD, { id: "srv", label: "Build server" }])}
         onSelect={vi.fn()}
+        {...menuProps}
       />,
       { container, router: false },
     );
@@ -105,6 +126,7 @@ describe("T3TeamSidebarEnvironmentFilter", () => {
       <T3TeamSidebarEnvironmentFilter
         pills={pills([THIS_COMPUTER, CLOUD, { id: "srv", label: "Build server" }])}
         onSelect={onSelect}
+        {...menuProps}
       />,
       { container, router: false },
     );
@@ -113,7 +135,7 @@ describe("T3TeamSidebarEnvironmentFilter", () => {
     );
     expect(overflow).toBeDefined();
     await userEvent.click(overflow!);
-    const option = page.getByRole("option", { name: "Build server" });
+    const option = page.getByRole("menuitem", { name: "Build server" });
     await expect.element(option).toBeVisible();
     await userEvent.click(option);
     expect(onSelect).toHaveBeenLastCalledWith("srv");

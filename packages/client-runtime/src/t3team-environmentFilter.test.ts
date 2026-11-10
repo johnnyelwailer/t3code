@@ -50,8 +50,48 @@ describe("resolveEnvironmentFilter", () => {
       resolveEnvironmentFilter({ environments: [primary], selectedId: "env-cloud-1234" }),
     ).toEqual({
       pills: null,
+      hiddenPills: [],
       selectedId: null,
     });
+  });
+
+  it("moves hidden environments out of the pills and into hiddenPills", () => {
+    const filter = resolveEnvironmentFilter({
+      environments: [primary, cloud, server],
+      selectedId: null,
+      hiddenIds: ["env-server"],
+    });
+    expect(filter.pills?.map((pill) => pill.id)).toEqual([null, "env-local", "env-cloud-1234"]);
+    expect(filter.hiddenPills).toEqual([
+      { id: "env-server", label: "Build server", selected: false },
+    ]);
+  });
+
+  it("reads a hidden selection as All, and keeps the control while anything is hidden", () => {
+    const hidden = resolveEnvironmentFilter({
+      environments: [primary, cloud, server],
+      selectedId: "env-cloud-1234",
+      hiddenIds: ["env-cloud-1234"],
+    });
+    expect(hidden.selectedId).toBeNull();
+    expect(hidden.pills?.map((pill) => pill.selected)).toEqual([true, false, false]);
+    const allButPrimaryHidden = resolveEnvironmentFilter({
+      environments: [primary, cloud],
+      selectedId: null,
+      hiddenIds: ["env-cloud-1234"],
+    });
+    expect(allButPrimaryHidden.pills?.map((pill) => pill.id)).toEqual([null, "env-local"]);
+    expect(allButPrimaryHidden.hiddenPills.map((pill) => pill.id)).toEqual(["env-cloud-1234"]);
+  });
+
+  it("keeps the All pill so every hidden environment can be brought back", () => {
+    const filter = resolveEnvironmentFilter({
+      environments: [cloud, server],
+      selectedId: null,
+      hiddenIds: new Set(["env-cloud-1234", "env-server"]),
+    });
+    expect(filter.pills?.map((pill) => pill.id)).toEqual([null]);
+    expect(filter.hiddenPills.map((pill) => pill.id)).toEqual(["env-server", "env-cloud-1234"]);
   });
 
   it("tells pills with the same label apart and fills in a blank label", () => {

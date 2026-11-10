@@ -2,6 +2,7 @@ import { liveShellEnvironmentIdsAtom } from "../state/shell";
 import { attachSidebarTree, SIDEBAR_TREE_PROPS } from "../lib/sidebarTree";
 import { type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
+import type { EnvironmentFilterPill } from "@t3tools/client-runtime/t3team-environmentFilter";
 import { ThreadContextDragGhost } from "./chat/ThreadContextDragGhost";
 import {
   dropThreadContext,
@@ -277,6 +278,7 @@ import { useT3TeamScopeRouteSync } from "~/t3team/hooks/t3team-useScopeRouteSync
 import { T3TeamSidebarProjectScopePills } from "./sidebar/t3team-SidebarProjectScopePills";
 import { T3TeamSidebarEnvironmentFilter } from "./sidebar/t3team-SidebarEnvironmentFilter";
 import { useT3TeamSidebarEnvironmentFilter } from "~/t3team/hooks/t3team-useSidebarEnvironmentFilter";
+import { useT3TeamSidebarProjectFilterStore } from "~/t3team/t3team-sidebarProjectFilterStore";
 import { VoiceSidebarRow } from "~/t3team/voice/t3team-VoiceSidebarRow";
 import { VOICE_THREAD_TITLE } from "~/t3team/voice/t3team-voiceRolePrompt";
 import { useVoiceThreadStore } from "~/t3team/voice/t3team-voiceThreadStore";
@@ -1192,6 +1194,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     pickableGroups: scopeGroups,
   });
   const selectEnvironment = environmentFilter.select;
+  const hiddenProjectKeys = useT3TeamSidebarProjectFilterStore((state) => state.hiddenProjectKeys);
+  const hideProject = useT3TeamSidebarProjectFilterStore((state) => state.hideProject);
+  const showProject = useT3TeamSidebarProjectFilterStore((state) => state.showProject);
   const archivedProjectKeys = new Set(
     projectGroups.filter((project) => project.archived).map((project) => project.projectKey),
   );
@@ -1434,6 +1439,63 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             openProjectSettings(group);
             return;
         }
+      })();
+    },
+  );
+
+  const handleEnvironmentPillContextMenu = useStableCallback(
+    (event: ReactMouseEvent<HTMLElement>, pill: EnvironmentFilterPill) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const api = readLocalApi();
+      if (!api) return;
+      const environmentId = pill.id;
+      if (environmentId === null) return;
+      const isHidden = environmentFilter.hiddenPills.some((hidden) => hidden.id === environmentId);
+      void (async () => {
+        const clicked = await settlePromise(() =>
+          api.contextMenu.show(
+            isHidden
+              ? [{ id: "show", label: "Show device" }]
+              : [{ id: "exclude", label: "Exclude device" }],
+            { x: event.clientX, y: event.clientY },
+          ),
+        );
+        if (clicked._tag !== "Success") return;
+        if (clicked.value === "exclude") environmentFilter.hideEnvironment(environmentId);
+        else if (clicked.value === "show") environmentFilter.showEnvironment(environmentId);
+      })();
+    },
+  );
+
+  const handleProjectPillContextMenu = useStableCallback(
+    (
+      event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
+      projectGroup: SidebarProjectSnapshot,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const api = readLocalApi();
+      if (!api) return;
+      const projectKey = projectGroup.projectKey;
+      const isHidden = hiddenProjectKeys.has(projectKey);
+      const position = "clientX" in event ? { x: event.clientX, y: event.clientY } : { x: 0, y: 0 };
+      void (async () => {
+        const clicked = await settlePromise(() =>
+          api.contextMenu.show(
+            isHidden
+              ? [{ id: "show", label: "Show project" }]
+              : [
+                  { id: "remove", label: "Remove from view" },
+                  { id: "open", label: "Open project", icon: "settings" },
+                ],
+            position,
+          ),
+        );
+        if (clicked._tag !== "Success") return;
+        if (clicked.value === "remove") hideProject(projectKey);
+        else if (clicked.value === "show") showProject(projectKey);
+        else if (clicked.value === "open") openProjectSettings(projectGroup);
       })();
     },
   );
@@ -3419,15 +3481,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               <T3TeamSidebarProjectScopePills
                 groups={environmentFilter.narrowGroups(projectGroups)}
                 activeScopeKey={t3teamScope.group?.projectKey ?? null}
-                onSelectScope={(scopeKey) =>
-                  setProjectScopeKeys(scopeKey === null ? [] : [scopeKey])
-                }
-                onProjectContextMenu={handleProjectSettings}
+                hiddenProjectKeys={hiddenProjectKeys}
+                onSelectScope={(scopeKey) => {
+                  if (scopeKey !== null && hiddenProjectKeys.has(scopeKey)) showProject(scopeKey);
+                  setProjectScopeKeys(scopeKey === null ? [] : [scopeKey]);
+                }}
+                onProjectContextMenu={handleProjectPillContextMenu}
               />
             ) : null}
             {/* t3team: one-click environment pills; nothing while only one environment lists. */}
             <T3TeamSidebarEnvironmentFilter
               pills={environmentFilter.pills}
+              hiddenPills={environmentFilter.hiddenPills}
               onSelect={(environmentId) => {
                 selectEnvironment(environmentId);
                 setProjectScopeKeys(
@@ -3438,6 +3503,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   ),
                 );
               }}
+              onUnhide={environmentFilter.showEnvironment}
+              onEnvironmentContextMenu={handleEnvironmentPillContextMenu}
+              isPrimaryEnvironment={environmentFilter.isPrimaryEnvironment}
             />
           </SidebarGroup>
         }

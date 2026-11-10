@@ -45,19 +45,45 @@ function Row(props: {
   width: number;
   environments: ReadonlyArray<Env>;
   initialSelectedId?: string | null;
+  initialHiddenIds?: ReadonlySet<string>;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(props.initialSelectedId ?? null);
-  const filter = resolveEnvironmentFilter({ environments: props.environments, selectedId });
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(
+    () => props.initialHiddenIds ?? new Set<string>(),
+  );
+  const filter = resolveEnvironmentFilter({
+    environments: props.environments,
+    selectedId,
+    hiddenIds,
+  });
+  const unhide = (id: string) =>
+    setHiddenIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
   return (
     <div className="space-y-1" style={{ width: props.width }}>
       <div className="rounded-lg bg-sidebar p-1.5" style={INSET_VARS}>
-        <T3TeamSidebarEnvironmentFilter pills={filter.pills} onSelect={setSelectedId} />
+        <T3TeamSidebarEnvironmentFilter
+          pills={filter.pills}
+          hiddenPills={filter.hiddenPills}
+          onSelect={setSelectedId}
+          onUnhide={unhide}
+          onEnvironmentContextMenu={() => {}}
+          isPrimaryEnvironment={(id) =>
+            props.environments.find((env) => env.id === id)?.isPrimary === true
+          }
+        />
       </div>
       <div className="px-1 text-3xs text-muted-foreground">
         {props.width}px ·{" "}
         {filter.pills === null
           ? "hidden: only one environment"
           : (filter.pills.find((pill) => pill.selected)?.label ?? "All")}
+        {filter.hiddenPills.length > 0
+          ? ` · hidden: ${filter.hiddenPills.map((pill) => pill.label).join(", ")}`
+          : ""}
       </div>
     </div>
   );
@@ -112,6 +138,19 @@ export const ManyEnvironments: Story = {
   render: () => (
     <Frame>
       <Row width={300} environments={MANY} initialSelectedId="env-nas" />
+    </Frame>
+  ),
+};
+
+export const HiddenEnvironment: Story = {
+  name: "a device excluded from the pills sits in +N under Hidden",
+  render: () => (
+    <Frame>
+      <Row
+        width={300}
+        environments={MANY}
+        initialHiddenIds={new Set(["env-cloud-7f3a", "env-nas"])}
+      />
     </Frame>
   ),
 };

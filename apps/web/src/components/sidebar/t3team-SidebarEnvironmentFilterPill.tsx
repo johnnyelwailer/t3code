@@ -1,4 +1,5 @@
 import type { EnvironmentFilterPill } from "@t3tools/client-runtime/t3team-environmentFilter";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -11,15 +12,18 @@ export const ENVIRONMENT_FILTER_PILL_SELECTED = "border-primary/40 bg-primary/10
 export function T3TeamSidebarEnvironmentFilterPill({
   pill,
   onSelect,
+  onContextMenu,
 }: {
   pill: EnvironmentFilterPill;
   onSelect: (environmentId: string | null) => void;
+  onContextMenu?: ((event: ReactMouseEvent<HTMLElement>) => void) | undefined;
 }) {
   return (
     <button
       type="button"
       aria-pressed={pill.selected}
       onClick={() => onSelect(pill.id)}
+      onContextMenu={onContextMenu}
       className={cn(
         ENVIRONMENT_FILTER_PILL_BASE,
         pill.selected ? ENVIRONMENT_FILTER_PILL_SELECTED : ENVIRONMENT_FILTER_PILL_UNSELECTED,

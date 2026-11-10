@@ -65,7 +65,11 @@ async function renderRow(
   capacity: number,
   onSelectScope = vi.fn(),
   addable = [jira],
-  extra: { activeScopeKey?: string; onProjectContextMenu?: () => void } = {},
+  extra: {
+    activeScopeKey?: string;
+    onProjectContextMenu?: () => void;
+    hiddenProjectKeys?: ReadonlySet<string>;
+  } = {},
 ) {
   rowWidth = widthFor(capacity);
   await act(async () => {
@@ -75,6 +79,7 @@ async function renderRow(
         groups={groups}
         addable={addable}
         activeScopeKey={extra.activeScopeKey ?? null}
+        hiddenProjectKeys={extra.hiddenProjectKeys ?? new Set()}
         onSelectScope={onSelectScope}
         onProjectContextMenu={extra.onProjectContextMenu}
       />,
@@ -190,5 +195,14 @@ describe("project scope picker disc", () => {
     expect(onProjectContextMenu).toHaveBeenCalledOnce();
     expect(onProjectContextMenu.mock.calls[0]?.[1]).toMatchObject({ projectKey: "charlie" });
     expect(picker()?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("drops a removed project's disc but keeps it listed so it can be brought back", async () => {
+    await renderRow(5, vi.fn(), [], { hiddenProjectKeys: new Set(["charlie"]) });
+    const discs = [...container.querySelectorAll('[aria-label="charlie"]')];
+    expect(discs.length).toBe(0);
+    await openAndType("");
+    expect(optionLabels()).toContain("charlie");
+    expect(option("charlie")?.textContent).toContain("Hidden");
   });
 });

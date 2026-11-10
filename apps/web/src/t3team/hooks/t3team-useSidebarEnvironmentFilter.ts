@@ -24,6 +24,11 @@ export function useT3TeamSidebarEnvironmentFilter(input: {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const stored = useT3TeamSidebarEnvironmentFilterStore((state) => state.selectedEnvironmentId);
   const select = useT3TeamSidebarEnvironmentFilterStore((state) => state.select);
+  const hiddenEnvironmentIds = useT3TeamSidebarEnvironmentFilterStore(
+    (state) => state.hiddenEnvironmentIds,
+  );
+  const hideEnvironment = useT3TeamSidebarEnvironmentFilterStore((state) => state.hideEnvironment);
+  const showEnvironment = useT3TeamSidebarEnvironmentFilterStore((state) => state.showEnvironment);
   const filter = sidebarEnvironmentFilter(
     sidebarEnvironmentFilterCandidates({
       identities,
@@ -32,12 +37,18 @@ export function useT3TeamSidebarEnvironmentFilter(input: {
       pickableGroups: input.pickableGroups,
     }),
     stored,
+    hiddenEnvironmentIds,
   );
   const selectedId = filter.selectedId;
   return {
     pills: filter.pills,
+    hiddenPills: filter.hiddenPills,
     selectedEnvironmentId: selectedId,
     select,
+    hideEnvironment,
+    showEnvironment,
+    /** "This computer" is never hidden or stopped, so its pills carry no device menu. */
+    isPrimaryEnvironment: (environmentId: string) => environmentId === primaryEnvironmentId,
     narrowScopeKeys: (
       keys: ReadonlySet<string> | null,
       projects: Parameters<typeof narrowScopeKeysToEnvironment>[2],

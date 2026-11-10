@@ -17,6 +17,7 @@ import { projectScopeDiscDepth } from "./t3team-sidebarProjectScopePills.logic";
 export function T3TeamSidebarProjectScopePillStack({
   shown,
   overflow,
+  hidden,
   addable,
   activeScopeKey,
   onSelectScope,
@@ -25,6 +26,7 @@ export function T3TeamSidebarProjectScopePillStack({
 }: {
   shown: ReadonlyArray<SidebarProjectSnapshot>;
   overflow: ReadonlyArray<SidebarProjectSnapshot>;
+  hidden: ReadonlyArray<SidebarProjectSnapshot>;
   addable: ReadonlyArray<JiraCatalogProject>;
   activeScopeKey: string | null;
   onSelectScope: (scopeKey: string | null) => void;
@@ -77,6 +79,7 @@ export function T3TeamSidebarProjectScopePillStack({
       <T3TeamSidebarProjectScopePicker
         shown={shown}
         overflow={overflow}
+        hidden={hidden}
         addable={addable}
         activeScopeKey={activeScopeKey}
         onSelectScope={onSelectScope}
