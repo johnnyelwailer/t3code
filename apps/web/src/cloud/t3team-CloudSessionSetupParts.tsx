@@ -1,17 +1,10 @@
 /**
- * The pieces of the setup card: the step list and the live readout (bar and estimate). Split from
- * the card so the part that follows the clock is a small leaf and the rest never re-renders on a tick.
+ * The step list of the setup card. Split from the card so the list stays a small leaf.
  */
 import { CheckIcon } from "lucide-react";
-import { type CSSProperties } from "react";
 
 import { cn } from "~/lib/utils";
-import type { CloudProjectWaitNotice } from "./t3team-cloudProjectWaitPresentation";
-import {
-  readCloudSetup,
-  type CloudSetupModel,
-  type CloudSetupStepView,
-} from "./t3team-cloudSessionSetupProgress";
+import { type CloudSetupModel, type CloudSetupStepView } from "./t3team-cloudSessionSetupProgress";
 
 function StepMarker({ status }: { readonly status: CloudSetupStepView["status"] }) {
   if (status === "done") {
@@ -33,7 +26,7 @@ function StepMarker({ status }: { readonly status: CloudSetupStepView["status"] 
 
 export function StepList({ steps }: { readonly steps: CloudSetupModel["steps"] }) {
   return (
-    <ol className="space-y-1.5" aria-label="Setup steps">
+    <ol className="space-y-1.5" aria-label="Setup steps" data-cloud-setup-progress="steps">
       {steps.map((step) => (
         <li
           key={step.id}
@@ -56,70 +49,5 @@ export function StepList({ steps }: { readonly steps: CloudSetupModel["steps"] }
         </li>
       ))}
     </ol>
-  );
-}
-
-function SetupFill({ progress }: { readonly progress: number }) {
-  const style: CSSProperties & { "--t3team-setup-from": string } = {
-    "--t3team-setup-from": `${(progress * 100).toFixed(2)}%`,
-    width: `${(progress * 100).toFixed(2)}%`,
-  };
-  return (
-    <div
-      data-cloud-setup-fill="determinate"
-      className="t3team-setup-fill h-full rounded-full bg-primary"
-      style={style}
-    />
-  );
-}
-
-/** The only part that follows the clock: the bar and the estimate. */
-export function SetupLiveReadout({
-  model,
-  elapsedSeconds,
-  projectWait,
-}: {
-  readonly model: CloudSetupModel;
-  readonly elapsedSeconds: number;
-  readonly projectWait: CloudProjectWaitNotice | null;
-}) {
-  const readout = readCloudSetup(model, elapsedSeconds, projectWait);
-  const working = model.stage === "working";
-  return (
-    <div className="space-y-1.5">
-      <div
-        role="progressbar"
-        aria-label="Cloud session setup"
-        aria-valuetext={readout.valueText}
-        className="h-1 w-full overflow-hidden rounded-full bg-muted"
-      >
-        {readout.progress === null ? (
-          working ? (
-            <div
-              data-cloud-setup-fill="indeterminate"
-              className="t3team-setup-indeterminate h-full"
-            />
-          ) : null
-        ) : working || model.stage === "ready" ? (
-          <SetupFill progress={readout.progress} />
-        ) : null}
-      </div>
-      {working ? (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
-          <span
-            data-cloud-setup-estimate={readout.slow ? "slow" : "estimate"}
-            className={cn(
-              "font-medium",
-              readout.slow ? "text-warning-foreground" : "text-foreground/80",
-            )}
-          >
-            {readout.estimateText}
-          </span>
-          {readout.basisText === null ? null : (
-            <span className="text-muted-foreground">{readout.basisText}</span>
-          )}
-        </div>
-      ) : null}
-    </div>
   );
 }
