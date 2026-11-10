@@ -1,4 +1,7 @@
-import { isSameRepository, repositoryLookupCandidates } from "@t3tools/project-context/t3teamRepositoryIdentity";
+import {
+  isSameRepository,
+  repositoryLookupCandidates,
+} from "@t3tools/project-context/t3teamRepositoryIdentity";
 import { sanitizeFeatureBranchName } from "@t3tools/shared/git";
 import { t3teamRandomHex } from "./t3team-random.ts";
 import type * as Path from "effect/Path";

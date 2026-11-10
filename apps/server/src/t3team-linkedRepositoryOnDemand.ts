@@ -18,7 +18,6 @@ import {
 import { LINKED_REPOSITORY_CLONE_TIMEOUT_MS } from "./t3team-linkedCheckoutGit.ts";
 import { recordMainRepository } from "./t3team-linkedRepositoryManifestEntry.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
-import { updateMainRepositoryCheckout } from "./t3team-mainRepositoryBranch.ts";
 import { readPreservedReferenceManifest } from "./t3team-project-repository-routesBootstrap.ts";
 import {
   HIDDEN_T3TEAM_DIR,
@@ -85,8 +84,15 @@ export const syncLinkedRepositoryOnDemand = Effect.fn("syncLinkedRepositoryOnDem
     );
     const { manifest, entry } = yield* readEntry;
     const main = manifest.mainRepository;
-    if ((!entry || entry.localPath.trim() === "") && main && isMainRepositoryUrl(main, input.repository)) {
-      const error = yield* updateMainRepositoryCheckout(main.localPath, main.branch);
+    if (
+      (!entry || entry.localPath.trim() === "") &&
+      main &&
+      isMainRepositoryUrl(main, input.repository)
+    ) {
+      const error = yield* sync.alignMainCheckout({
+        localPath: main.localPath,
+        ...(main.branch ? { branch: main.branch } : {}),
+      });
       const { error: _previous, ...rest } = main;
       const recorded = { ...rest, ...(error ? { error } : {}) };
       if (error !== main.error) {

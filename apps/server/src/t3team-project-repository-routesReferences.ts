@@ -14,7 +14,6 @@ import * as Path from "effect/Path";
 
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
-import { updateMainRepositoryCheckout } from "./t3team-mainRepositoryBranch.ts";
 import { writeReferenceManifest } from "./t3team-project-repository-services.ts";
 import { recordMainRepository } from "./t3team-linkedRepositoryManifestEntry.ts";
 import {
@@ -93,10 +92,9 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
         // must not clear a recorded main branch.
         const mainUrlListed = Boolean(
           baseMain?.url &&
-            input.linkedRepositoryUrls?.some((url) => isSameRepository(url, baseMain.url)),
+          input.linkedRepositoryUrls?.some((url) => isSameRepository(url, baseMain.url)),
         );
-        const applyMainBranchChoice =
-          mainUrlListed && input.linkedRepositoryBranches !== undefined;
+        const applyMainBranchChoice = mainUrlListed && input.linkedRepositoryBranches !== undefined;
         const requestedMainBranch = applyMainBranchChoice
           ? chosenBranchForRepository(input.linkedRepositoryBranches, baseMain!.url)
           : undefined;
@@ -221,10 +219,10 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
     );
     let mainRepository = locked.response.mainRepository;
     if (locked.mainBranchToApply && mainRepository) {
-      const error = yield* updateMainRepositoryCheckout(
-        locked.mainCheckoutPath,
-        locked.mainBranchToApply,
-      );
+      const error = yield* sync.alignMainCheckout({
+        localPath: locked.mainCheckoutPath,
+        branch: locked.mainBranchToApply,
+      });
       if (error !== mainRepository.error) {
         const { error: _previous, ...rest } = mainRepository;
         mainRepository = { ...rest, ...(error ? { error } : {}) };

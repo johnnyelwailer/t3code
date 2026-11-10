@@ -54,8 +54,9 @@ export const listLinkedRepositoryBranches = Effect.fn("listLinkedRepositoryBranc
   const entry = findLinkedRepository(manifest.linkedRepositories, url);
   // The main repository is the workspace checkout, not a reference clone, so it is absent from
   // the linked-repository manifest. List its branches from the workspace itself.
-  const cwd = entry?.localPath
-    ?? (isMainRepositoryUrl(manifest.mainRepository, url)
+  const cwd =
+    entry?.localPath ??
+    (isMainRepositoryUrl(manifest.mainRepository, url)
       ? (manifest.mainRepository?.localPath ?? workspaceRoot)
       : undefined);
   if (!cwd) return EMPTY;

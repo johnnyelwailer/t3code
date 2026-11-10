@@ -7,10 +7,7 @@
 import * as Effect from "effect/Effect";
 
 import { alignLinkedCheckoutBranch } from "./t3team-linkedCheckoutBranch.ts";
-import {
-  describeSyncError,
-  fetchLinkedCheckout,
-} from "./t3team-linkedRepositoryCheckout.ts";
+import { describeSyncError, fetchLinkedCheckout } from "./t3team-linkedRepositoryCheckout.ts";
 
 /** Fetches remotes, then (when `branch` is set) checks the workspace out on it. */
 export const updateMainRepositoryCheckout = Effect.fn("updateMainRepositoryCheckout")(function* (

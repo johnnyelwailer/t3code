@@ -49,10 +49,7 @@ export const readLinkedRepositoryStatus = Effect.fn("readLinkedRepositoryStatus"
   // the manifest list. Include it here so the Linked repositories dialog can offer a branch
   // picker for it the same way it does for secondary checkouts.
   const main = manifest.mainRepository;
-  if (
-    main?.url &&
-    !linkedRepositories.some((entry) => isSameRepository(entry.url, main.url!))
-  ) {
+  if (main?.url && !linkedRepositories.some((entry) => isSameRepository(entry.url, main.url!))) {
     const mainEntry: LinkedRepositoryBootstrapResult = {
       url: main.url,
       localPath: main.localPath,

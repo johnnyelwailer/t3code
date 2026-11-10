@@ -76,4 +76,3 @@ export const recordMainRepository = Effect.fn("recordMainRepository")(function* 
     } as unknown as ReferenceManifestFile),
   });
 });
-
