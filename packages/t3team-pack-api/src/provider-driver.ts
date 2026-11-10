@@ -24,6 +24,18 @@ export type PackProviderModel = {
 };
 
 /**
+ * One live statistic from the provider's own service (for example a gateway's running requests).
+ * `value` is display text; `usedPercent` (0-100), when set, draws a bar.
+ */
+export type PackProviderUsageStat = {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+  readonly usedPercent?: number;
+  readonly detail?: string;
+};
+
+/**
  * Provider snapshot as plain data. The host decodes this into its wire
  * `ServerProvider`, re-stamping the driver id and instance id, and falls
  * back to an "unavailable" shadow snapshot if it cannot be decoded.
@@ -50,6 +62,12 @@ export type PackProviderSnapshot = {
    * that switches a mode off behind a flag omits it here.
    */
   readonly supportedRuntimeModes?: readonly string[];
+  /**
+   * Live statistics shown in the thread details "Usage limits" section in place of limit
+   * windows, for a provider with no quota to report. Push changes with `subscribeSnapshot`.
+   * Absent or empty keeps the host's usual limits display.
+   */
+  readonly usageStats?: readonly PackProviderUsageStat[];
 };
 
 export type PackTextGeneration = {

@@ -1,6 +1,7 @@
 import type {
   ProviderInstanceId,
   ServerProvider,
+  ServerProviderUsageStat,
   ServerProviderUsageWindow,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
@@ -46,6 +47,13 @@ export function ThreadDetailsUsage({
 }: Omit<ThreadDetailsUsageInput, "contextWindow">) {
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
+  // A provider with no quota (a self-hosted gateway) reports live statistics instead; they come
+  // from the instance's own snapshot and replace the limit rows.
+  const stats = providers.find((provider) => provider.instanceId === providerInstanceId)
+    ?.usageLimits?.stats;
+  if (providerInstanceId !== null && stats !== undefined && stats.length > 0) {
+    return <ThreadDetailsLiveStats stats={stats} />;
+  }
   const report =
     providerInstanceId !== null
       ? collectProviderUsageLimits(providerInstanceId, providers, sources, now)
@@ -76,6 +84,47 @@ export function ThreadDetailsUsage({
         ) : (
           limits.windows.map((window) => <LimitRow key={window.id} window={window} now={now} />)
         )}
+      </div>
+    </ThreadDetailsSection>
+  );
+}
+
+/** Live statistics from the provider's service, shown in place of limit windows. */
+export function ThreadDetailsLiveStats({
+  stats,
+}: {
+  readonly stats: ReadonlyArray<ServerProviderUsageStat>;
+}) {
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-usage-heading"
+      title="Usage limits"
+      showHeading={false}
+    >
+      <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
+        {stats.map((stat) => {
+          const fill = stat.usedPercent === undefined ? null : Math.round(stat.usedPercent);
+          return (
+            <UsageRow
+              key={stat.id}
+              label={stat.label}
+              fill={fill}
+              tone={null}
+              muted
+              value={stat.value}
+              tooltip={
+                <>
+                  <span className="text-foreground">
+                    {stat.label}: {stat.value}
+                  </span>
+                  {stat.detail ? (
+                    <span className="text-muted-foreground">{stat.detail}</span>
+                  ) : null}
+                </>
+              }
+            />
+          );
+        })}
       </div>
     </ThreadDetailsSection>
   );

@@ -34,8 +34,12 @@ export const makePackProviderSnapshot = Effect.fn("makePackProviderSnapshot")(fu
   let usageLimits: ServerProviderUsageLimits | undefined;
   const changes = yield* Effect.acquireRelease(PubSub.unbounded<ServerProvider>(), PubSub.shutdown);
 
-  const withUsage = (provider: ServerProvider): ServerProvider =>
-    usageLimits === undefined ? provider : { ...provider, usageLimits };
+  // Merged limit windows win; the pack's live stats (read fresh from each snapshot) ride along.
+  const withUsage = (provider: ServerProvider): ServerProvider => {
+    if (usageLimits === undefined) return provider;
+    const stats = provider.usageLimits?.stats;
+    return { ...provider, usageLimits: stats === undefined ? usageLimits : { ...usageLimits, stats } };
+  };
 
   const getSnapshot = Effect.gen(function* () {
     const checkedAt = DateTime.formatIso(yield* DateTime.now);

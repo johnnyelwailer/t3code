@@ -52,4 +52,41 @@ describe("packSnapshotToServerProvider (GHE nexi-distribution#394)", () => {
     const unrestricted = packSnapshotToServerProvider({ ...baseInput, snapshot });
     expect(unrestricted.supportedRuntimeModes).toBeUndefined();
   });
+
+  it("maps a pack's live usage stats into usage limits and drops malformed entries", () => {
+    const snapshot = {
+      displayName: "Nexplore AI",
+      enabled: true,
+      installed: true,
+      status: "ready" as const,
+      models: [],
+    };
+    const provider = packSnapshotToServerProvider({
+      ...baseInput,
+      snapshot: {
+        ...snapshot,
+        usageStats: [
+          { id: "running", label: "Running", value: "15 / 32", usedPercent: 46.9, detail: "x" },
+          { id: "queued", label: "Queued", value: "1" },
+          { id: "over", label: "Over", value: "9", usedPercent: 140 },
+          { id: "", label: "No id", value: "1" },
+          { id: "blank", label: "Blank", value: "  " },
+        ],
+      },
+    });
+    expect(provider.usageLimits).toEqual({
+      checkedAt: baseInput.checkedAt,
+      windows: [],
+      stats: [
+        { id: "running", label: "Running", value: "15 / 32", usedPercent: 46.9, detail: "x" },
+        { id: "queued", label: "Queued", value: "1" },
+        { id: "over", label: "Over", value: "9", usedPercent: 100 },
+      ],
+    });
+    expect(packSnapshotToServerProvider({ ...baseInput, snapshot }).usageLimits).toBeUndefined();
+    expect(
+      packSnapshotToServerProvider({ ...baseInput, snapshot: { ...snapshot, usageStats: [] } })
+        .usageLimits,
+    ).toBeUndefined();
+  });
 });
