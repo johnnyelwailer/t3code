@@ -104,7 +104,10 @@ import {
   resolveSelectableProviderInstanceEntry,
   type ProviderInstanceEntry,
 } from "../providerInstances";
-import { resolveReadyProviderOverride } from "../t3team-readyProviderPreference";
+import {
+  isClaudeAuthSlotInstance,
+  resolveReadyProviderOverride,
+} from "../t3team-readyProviderPreference";
 
 type ThreadProjection = EnvironmentThread["projection"];
 type ThreadStructureRow = ThreadStructure["visibleTurnItems"][number];
@@ -494,9 +497,13 @@ export function resolveComposerProviderSelection(input: {
   const requestedInstanceId = input.candidateInstanceIds.find(
     (candidate) => candidate != null && candidate !== NO_PROVIDER_MODEL_SELECTION.instanceId,
   );
+  const requestedEntry = input.entries.find((entry) => entry.instanceId === requestedInstanceId);
   const requestedDriverKind =
     input.lockedProvider ??
-    input.entries.find((entry) => entry.instanceId === requestedInstanceId)?.driverKind ??
+    requestedEntry?.driverKind ??
+    (isClaudeAuthSlotInstance(requestedInstanceId)
+      ? ProviderDriverKind.make("claudeAgent")
+      : undefined) ??
     input.entries[0]?.driverKind ??
     ProviderDriverKind.make("unconfigured");
   const lockedContinuationGroupKey = input.lockedProvider
@@ -514,7 +521,7 @@ export function resolveComposerProviderSelection(input: {
       (!lockedContinuationGroupKey || entry.continuationGroupKey === lockedContinuationGroupKey) &&
       (!requiresExactInstance || entry.instanceId === input.lockedInstanceId),
   );
-  const selectedProviderEntry =
+  const resolvedProviderEntry =
     (input.preferReadyProvider
       ? resolveReadyProviderOverride({
           entries: compatibleEntries,
@@ -533,6 +540,21 @@ export function resolveComposerProviderSelection(input: {
       undefined,
     ) ??
     resolveSelectableProviderInstanceEntry(compatibleEntries, undefined);
+  // A Claude pick uses this machine's one Claude instance (one store slot). Another
+  // ready provider must not take the thread.
+  const claudeRequested =
+    input.lockedProvider === "claudeAgent" ||
+    requestedEntry?.driverKind === "claudeAgent" ||
+    isClaudeAuthSlotInstance(requestedInstanceId);
+  const claudeOnMachine = compatibleEntries.find(
+    (entry) => entry.driverKind === "claudeAgent" && entry.enabled,
+  );
+  const selectedProviderEntry =
+    claudeRequested &&
+    claudeOnMachine !== undefined &&
+    resolvedProviderEntry?.driverKind !== "claudeAgent"
+      ? claudeOnMachine
+      : resolvedProviderEntry;
   const unavailableProviderInstanceId = selectedProviderEntry
     ? undefined
     : input.lockedProvider

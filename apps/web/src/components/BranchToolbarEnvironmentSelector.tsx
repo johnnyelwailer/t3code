@@ -116,6 +116,18 @@ export interface BranchToolbarEnvironmentSelectorBaseProps {
   /** t3team: hides a surfaced failure from the menu once the user has seen it. */
   onDismissCloudSession?: (cloudSession: CloudSession) => void;
   /**
+   * t3team: stop a cloud machine from its row (reversible: the workspace is kept). Absent
+   * (stop/delete off, or "Move to" mode) hides the action.
+   */
+  onStopCloudSession?: (session: CloudSession) => void;
+  /** t3team: delete a machine's persistent state; the confirm happens in the handler. */
+  onDeleteCloudSession?: (session: CloudSession) => void;
+  /** t3team: the session whose stop/delete is in flight, so that row shows it. */
+  cloudSessionActionPending?: {
+    readonly sessionId: string;
+    readonly kind: "stop" | "delete";
+  } | null;
+  /**
    * Drives background polling of the session list for as long as the menu is
    * open (a provisioning session changes phase every few seconds). Absent or
    * the menu closed: no polling.
@@ -172,6 +184,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onCloudMenuHint,
   onHandoffToEnvironment,
   onConnectCloudSession,
+  onStopCloudSession,
+  onDeleteCloudSession,
+  cloudSessionActionPending = null,
   projectHasRemote,
   onAddToMachine,
 }: BranchToolbarEnvironmentSelectorProps) {
@@ -462,6 +477,16 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   blockedReason={cloudMoveBlockedReason}
                   onSelect={selectCloudSession}
                   onDismiss={onDismissCloudSession}
+                  onStop={moveMode ? undefined : onStopCloudSession}
+                  onDelete={moveMode ? undefined : onDeleteCloudSession}
+                  stopPending={
+                    cloudSessionActionPending?.sessionId === row.session.sessionId &&
+                    cloudSessionActionPending.kind === "stop"
+                  }
+                  deletePending={
+                    cloudSessionActionPending?.sessionId === row.session.sessionId &&
+                    cloudSessionActionPending.kind === "delete"
+                  }
                 />
               ))}
               {/* A paid machine this thread could not move to anyway: not offered. */}

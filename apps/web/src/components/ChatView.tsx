@@ -1816,6 +1816,9 @@ export default function ChatView(props: ChatViewProps) {
     !shouldSuppressT3TeamProviderStatus({
       status: activeProviderStatus,
       isTurnInProgress: isWorking,
+      onRemoteEnvironment:
+        providerEnvironmentId !== undefined &&
+        providerEnvironmentId !== primaryEnvironment?.environmentId,
       ...(activeRuntime?.providerInstanceId
         ? { activeTurnInstanceId: activeRuntime.providerInstanceId }
         : {}),

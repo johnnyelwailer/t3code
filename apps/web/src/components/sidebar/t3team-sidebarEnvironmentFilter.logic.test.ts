@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  ENVIRONMENT_FILTER_PILL_GAP,
+  environmentFilterPillCapacity,
   narrowEnvironmentIds,
   narrowGroupsToEnvironment,
   narrowScopeKeysToEnvironment,
@@ -94,6 +96,31 @@ describe("sidebarEnvironmentFilter hide rule", () => {
 
   it("reads a stored selection of a vanished environment as All", () => {
     expect(sidebarEnvironmentFilter([candidate("local", true)], "cloud").selectedId).toBeNull();
+  });
+});
+
+describe("environmentFilterPillCapacity", () => {
+  const gap = ENVIRONMENT_FILTER_PILL_GAP;
+  const widths = [40, 100, 86];
+  const overflow = 36;
+
+  it("keeps every pill that fits", () => {
+    expect(environmentFilterPillCapacity(widths, 260, gap, overflow)).toBe(3);
+    expect(environmentFilterPillCapacity(widths, 240, gap, overflow)).toBe(3);
+  });
+
+  it("folds the tail behind +N once the row cannot fit all", () => {
+    expect(environmentFilterPillCapacity(widths, 220, gap, overflow)).toBe(2);
+    expect(environmentFilterPillCapacity(widths, 160, gap, overflow)).toBe(1);
+  });
+
+  it("never hides the first pill behind +N", () => {
+    expect(environmentFilterPillCapacity([60, 60, 60], 40, gap, 36)).toBe(1);
+  });
+
+  it("reopens +N when the row is measured again after a resize", () => {
+    expect(environmentFilterPillCapacity(widths, 120, gap, overflow)).toBe(1);
+    expect(environmentFilterPillCapacity(widths, 300, gap, overflow)).toBe(3);
   });
 });
 

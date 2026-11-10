@@ -1,3 +1,4 @@
+import type { EnvironmentId } from "@t3tools/contracts";
 import { CheckIcon, CircleAlertIcon } from "lucide-react";
 
 import { SetupActions } from "./t3team-CloudSessionSetupActions";
@@ -15,6 +16,7 @@ import {
 import { CloudProjectWaitNote } from "./t3team-CloudProjectWaitNote";
 import { presentCloudProjectWaitAt } from "./t3team-cloudProjectWaitClock";
 import { StepList } from "./t3team-CloudSessionSetupParts";
+import { CloudSessionSetupProviderAuth } from "./t3team-CloudSessionSetupProviderAuth";
 import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotResolvedActions";
 import { useCloudProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSetupElapsedSeconds } from "./t3team-useCloudSetupElapsedSeconds";
@@ -130,6 +132,15 @@ export function CloudSessionSetupCard({
       {projectWait === null ? null : (
         <CloudProjectWaitNote notice={projectWait} className="mt-3.5" />
       )}
+      {model.currentStep.id === "provider" &&
+      session?.environmentId !== undefined &&
+      facts.queued !== undefined ? (
+        <CloudSessionSetupProviderAuth
+          messageId={facts.queued.messageId}
+          environmentId={session.environmentId as EnvironmentId}
+          instanceId={facts.queued.modelSelection.instanceId}
+        />
+      ) : null}
       {longWait === null ? null : (
         <p
           data-cloud-setup-note="long-wait"
