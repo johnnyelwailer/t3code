@@ -62,7 +62,13 @@ export function useCloudSessionComposerGate(input: {
   const cloud = useCloudSessionController({ scopeKey: input.scopeKey });
   const { draftId } = input;
   const projectKey = useCloudSessionProjectKey(input.projectRef);
-  useCloudSessionProjectFollow({ scopeKey: input.scopeKey, projectKey });
+  useCloudSessionProjectFollow({
+    scopeKey: input.scopeKey,
+    draftId,
+    projectKey,
+    projectRef: input.projectRef,
+    sessions: cloud.sessions,
+  });
 
   const queued = useDraftCloudQueuedSend(draftId);
   const flushing = useCloudQueuedSendDispatching(queued?.messageId ?? null);
