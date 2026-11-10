@@ -11,9 +11,7 @@ import {
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
 
-type PendingResponseGate =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly message: string };
+type PendingResponseGate = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 type PendingResponseKind = "approval" | "answer";
 
