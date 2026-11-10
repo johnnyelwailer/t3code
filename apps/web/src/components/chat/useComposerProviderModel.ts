@@ -61,7 +61,8 @@ export function useComposerProviderModel(
     candidateInstanceIds,
     lockedProvider,
     lockedInstanceId,
-    preferReadyProvider,
+    // exactOptionalPropertyTypes rejects an explicit undefined on this optional flag.
+    ...(preferReadyProvider === undefined ? {} : { preferReadyProvider }),
   });
   const selectedInstanceId =
     selection.selectedProviderEntry?.instanceId ?? NO_PROVIDER_MODEL_SELECTION.instanceId;
