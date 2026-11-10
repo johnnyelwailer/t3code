@@ -2,6 +2,7 @@ import { ProviderDriverKind } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  gitHubToolAuthDescription,
   TOOL_AUTH_TOOLS,
   toolAuthMetaForTool,
   toolAuthToolForDriverKind,
@@ -18,13 +19,19 @@ describe("TOOL_AUTH_TOOLS", () => {
     }
   });
 
-  it("includes the GHE gh login as a connected tool", () => {
+  it("includes the GitHub login as a connected tool, without a baked-in host", () => {
     const gh = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "gh");
     expect(gh).toBeDefined();
     expect(gh?.label).toBe("GitHub");
-    // The card's idle body renders this verbatim — it must say what the
-    // sign-in actually grants (the GHE host), not just "sign in".
-    expect(gh?.description).toContain("nexplore.ghe.com");
+    expect(gh?.description).toContain("GitHub account");
+    expect(gh?.description).toContain("this machine");
+    expect(gh?.description).not.toContain("nexplore.ghe.com");
+  });
+
+  it("names a known GitHub host in the description and never a baked-in one", () => {
+    expect(gitHubToolAuthDescription("github.com")).toContain("github.com");
+    expect(gitHubToolAuthDescription("github.com")).not.toContain("nexplore.ghe.com");
+    expect(gitHubToolAuthDescription()).not.toMatch(/nexplore\.ghe\.com|github\.com/);
   });
 
   it("resolves every tool id through toolAuthMetaForTool", () => {

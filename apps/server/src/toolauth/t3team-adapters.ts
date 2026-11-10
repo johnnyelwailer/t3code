@@ -33,7 +33,7 @@ import { GH } from "./t3team-ghAdapter.ts";
 export const CLAUDE: ToolAuthAdapter = {
   tool: "claude",
   label: "Claude Code",
-  description: "Sign in with your Claude account to use Claude Code in this sandbox.",
+  description: "Sign in with your Claude account to use Claude Code on this machine.",
   // VERIFIED: `claude auth` is a real subcommand group (login/logout/status).
   // Bare `claude`, or `claude /status`, both open the interactive REPL instead
   // — the latter treats "/status" as a *prompt*, not a slash command, since
@@ -108,7 +108,7 @@ export const CLAUDE: ToolAuthAdapter = {
 export const CODEX: ToolAuthAdapter = {
   tool: "codex",
   label: "Codex",
-  description: "Sign in with your ChatGPT account to use Codex in this sandbox.",
+  description: "Sign in with your ChatGPT account to use Codex on this machine.",
   // VERIFIED: device auth is real on 0.145.0. Plain `codex login` binds
   // localhost:1455, which a remote sandbox's browser cannot reach.
   command: ["codex", "login", "--device-auth"],
