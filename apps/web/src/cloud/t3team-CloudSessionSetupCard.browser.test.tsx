@@ -25,7 +25,7 @@ function session(overrides: Partial<CloudSession> = {}): CloudSession {
 }
 
 describe("CloudSessionSetupCard", () => {
-  it("names the current step, gives a labelled rough estimate and announces politely", async () => {
+  it("keeps one progress indicator: the step list, without a bar, orb, or repeated step subtitle", async () => {
     await using screen = await render(
       <CloudSessionSetupCard
         facts={{ session: session(), machineConnected: false }}
@@ -39,22 +39,25 @@ describe("CloudSessionSetupCard", () => {
       "Building workspace",
     );
     expect(card.querySelector("[role='status']")?.textContent).toBe("Building workspace…");
-    const bar = card.querySelector("[role='progressbar']")!;
-    expect(bar.getAttribute("aria-valuetext")).toMatch(/^Building workspace… About \d+ min left$/);
-    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
-    const fill = bar.querySelector<HTMLElement>("[data-cloud-setup-fill='determinate']");
-    expect(Number.parseFloat(fill?.style.width ?? "100")).toBeLessThan(95);
-    expect(card.querySelector("[role='status']")?.closest("[aria-busy='true']")).toBeNull();
-    expect(card.querySelector("[data-cloud-setup-estimate]")?.textContent).toMatch(
-      /min left|minute/,
-    );
-    expect(card.textContent).toContain("Rough estimate, not measured for this session");
+    expect(card.querySelector("[role='progressbar']")).toBeNull();
+    expect(card.querySelector("[data-cloud-setup-estimate]")).toBeNull();
+    expect(card.querySelector(".t3team-setup-orb")).toBeNull();
+    expect(card.querySelectorAll("[data-cloud-setup-progress]")).toHaveLength(1);
+    expect(card.querySelector("[data-cloud-setup-progress='steps']")).not.toBeNull();
+    // Visible body (outside the polite status) must not repeat the current step.
+    const status = card.querySelector("[role='status']");
+    const visibleWithoutStatus = [...card.querySelectorAll("h3, p, li, button, a")]
+      .filter((node) => status === null || !status.contains(node))
+      .map((node) => node.textContent ?? "")
+      .join(" ");
+    expect(visibleWithoutStatus.match(/Building workspace/g)?.length).toBe(1);
+    expect(visibleWithoutStatus).not.toContain("Rough estimate");
     expect(card.querySelector("[data-cloud-setup-note='meanwhile']")?.textContent).toContain(
       "type",
     );
   });
 
-  it("says it is taking longer than the rough estimate, without a percentage or a countdown", async () => {
+  it("says it is taking longer than the rough estimate without a second progress UI", async () => {
     await using screen = await render(
       <CloudSessionSetupCard
         facts={{ session: session({ elapsedSeconds: 400 }), machineConnected: false }}
@@ -64,17 +67,13 @@ describe("CloudSessionSetupCard", () => {
     );
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
     expect(card.getAttribute("data-slow")).toBe("true");
-    expect(card.querySelector("[data-cloud-setup-estimate]")?.textContent).toBe(
-      "Taking longer than the rough estimate",
-    );
-    const bar = card.querySelector("[role='progressbar']")!;
-    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
-    expect(bar.getAttribute("aria-valuetext")).toContain("Taking longer than the rough estimate");
-    expect(bar.querySelector("[data-cloud-setup-fill='determinate']")).toBeNull();
-    expect(bar.querySelector("[data-cloud-setup-fill='indeterminate']")).not.toBeNull();
+    expect(card.textContent).toContain("Taking longer than the rough estimate");
+    expect(card.querySelector("[role='progressbar']")).toBeNull();
+    expect(card.querySelector("[data-cloud-setup-estimate]")).toBeNull();
+    expect(card.querySelectorAll("[data-cloud-setup-progress]")).toHaveLength(1);
   });
 
-  it("explains repository setup for a project machine", async () => {
+  it("explains repository setup for a project machine without an elapsed timer strip", async () => {
     await using screen = await render(
       <CloudSessionSetupCard
         facts={{
@@ -87,16 +86,10 @@ describe("CloudSessionSetupCard", () => {
     );
     expect(
       screen.container.querySelector("[data-cloud-setup-note='long-wait']")?.textContent,
-    ).toContain("cloning");
-    expect(screen.container.querySelector("[data-cloud-setup-estimate]")?.textContent).toBe(
-      "1m 40s so far",
-    );
+    ).toContain("Cloning");
     expect(screen.container.textContent).not.toContain("Rough estimate");
-    const bar = screen.container.querySelector("[role='progressbar']")!;
-    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
-    expect(bar.getAttribute("aria-valuetext")).toContain("1m 40s so far");
-    expect(bar.querySelector("[data-cloud-setup-fill='determinate']")).toBeNull();
-    expect(bar.querySelector("[data-cloud-setup-fill='indeterminate']")).not.toBeNull();
+    expect(screen.container.textContent).not.toContain("1m 40s so far");
+    expect(screen.container.querySelector("[role='progressbar']")).toBeNull();
   });
 
   it("only says everything is in place once the machine is connected", async () => {
@@ -197,6 +190,14 @@ describe("CloudSessionSetupCard", () => {
         b.textContent?.includes("Sending"),
       )?.disabled,
     ).toBe(true);
+    // Visible copy keeps the cancel label only; no second "Sending to cloud session…" strip.
+    expect(screen.container.querySelector("h3")?.textContent).not.toContain(
+      "Sending to cloud session",
+    );
+    expect(screen.container.querySelector("[data-cloud-setup-note='meanwhile']")).toBeNull();
+    expect(screen.container.querySelector("[role='status']")?.textContent).toBe(
+      "Sending your message.",
+    );
   });
 });
 
