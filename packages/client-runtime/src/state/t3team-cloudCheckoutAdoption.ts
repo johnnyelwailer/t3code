@@ -1,10 +1,5 @@
 /**
- * A cloud session's checkout adopts the identity of the user's own project of the same
- * repository (title, work-source binding, icon and favicon), so both group as one under the
- * user's name and icon. Only the view changes: the adopted project keeps its own environment
- * and id, so selecting it still opens the session's project. Favicon files are loaded from the
- * user's own environment (`faviconEnvironmentId` / `faviconWorkspaceRoot`); the cloud machine
- * does not need Jira or those files.
+ * A cloud checkout shows the user's project title, icon and favicon, and keeps its own environment and id.
  */
 import { type EnvironmentId, repositoryGroupingKeyOf } from "@t3tools/contracts";
 
