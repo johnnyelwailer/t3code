@@ -32,6 +32,8 @@ export interface CloudSetupFacts {
   readonly session: CloudSession | null;
   readonly machineConnected: boolean;
   readonly projectReady?: boolean;
+  /** After project checkout: composer-selected provider installed and signed in. */
+  readonly providerReady?: boolean;
   readonly projectWait?: CloudProjectWait | null | undefined;
   readonly queued?: CloudQueuedSend | undefined;
   readonly delivery?: CloudSetupDelivery;
@@ -69,6 +71,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
     {
       ...facts,
       projectReady: facts.projectReady ?? false,
+      ...(facts.providerReady === undefined ? {} : { providerReady: facts.providerReady }),
       flushing: delivery === "sending",
     },
     0,
