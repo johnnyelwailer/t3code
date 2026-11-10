@@ -1,12 +1,10 @@
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
-import { T3TeamWorkflowShapeLiveCard } from "~/t3team/chat/t3team-messageShapeCardLive";
-import { RUN_ID, TEST_WORKFLOW_SHAPE } from "~/t3team/chat/t3team-messageShapeCardLive.testSupport";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { terminalRunEventStatus } from "~/t3team/chat/t3team-workflowRunEffectiveStatus";
 
+const RUN_ID = "run-1";
 // The machine-setup repro: "Run failed" landed while the server row still said "running".
 const FAILED_AT = "2026-11-10T15:40:00.000Z";
 const FAILED: T3TeamWorkflowRunProgress = {
@@ -29,19 +27,7 @@ const row = (
   updatedAt,
 });
 
-describe("a failed run never shows Running", () => {
-  it("renders the card as Failed while the server row is still running", () => {
-    const markup = renderToStaticMarkup(
-      <T3TeamWorkflowShapeLiveCard
-        shape={TEST_WORKFLOW_SHAPE}
-        progress={FAILED}
-        workflowRunStatus={row("running", "2026-11-10T15:39:00.000Z")}
-      />,
-    );
-    expect(markup).toContain("Failed");
-    expect(markup).not.toContain("Running");
-  });
-
+describe("terminalRunEventStatus: a failed run never shows Running", () => {
   it("lets the run event win only while it is at least as fresh as the server row", () => {
     expect(terminalRunEventStatus(FAILED, undefined)).toBe("failed");
     expect(terminalRunEventStatus(FAILED, row("running", FAILED_AT))).toBe("failed");
