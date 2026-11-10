@@ -673,3 +673,10 @@ A draft can wait for an environment the catalog does not list yet (a cloud sessi
 
 - `apps/web/src/clientPersistenceStorage.ts` — the browser's client-settings load path runs the fork's legacy-key alias (`migrateLegacyT3TeamClientSettingsJson`, `packages/contracts/src/t3team-settings.ts`) before decoding, so values persisted under the old flat `t3team*` keys keep reading after the fork's settings moved under the `t3team` namespace. Write path unchanged; two lines.
 - `apps/web/src/components/settings/useAvailableSettingsSearchItems.ts` — joins the fork's registered search items (`useT3TeamSettingsSearchItems`, `~/t3team/settings/t3team-settingsRegistry.tsx`) after the upstream availability filter, so the command palette and the settings nav search find the fork rows (connected tools, Nexi feature switches, voice). Flag-gated fork sections join here, where a hook can decide their visibility; three lines.
+
+### Show usage limits by default (Nexi Work)
+
+- `apps/web/src/components/chat/threadDetailsItems.ts`
+  - Usage limits is visible by default in the thread details card. People who already toggled that row keep their choice. Context window stays hidden. The retired Labs flag can still show both.
+- `apps/web/src/components/chat/threadDetailsItems.test.ts`
+  - Asserts the new default and that an explicit hide is kept.
