@@ -56,11 +56,16 @@ export function T3TeamSidebarEnvironmentOverflowMenu({
     <Menu>
       <MenuTrigger
         aria-label={`${count} more environment${count === 1 ? "" : "s"}`}
-        className={cn(
-          ENVIRONMENT_FILTER_PILL_BASE,
-          ENVIRONMENT_FILTER_PILL_UNSELECTED,
-          "shrink-0 cursor-pointer text-muted-foreground",
-        )}
+        render={
+          <button
+            type="button"
+            className={cn(
+              ENVIRONMENT_FILTER_PILL_BASE,
+              ENVIRONMENT_FILTER_PILL_UNSELECTED,
+              "shrink-0 cursor-pointer text-muted-foreground",
+            )}
+          />
+        }
       >
         +{count}
       </MenuTrigger>

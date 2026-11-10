@@ -19,7 +19,7 @@ interface SidebarEnvironmentFilterState {
 
 export const useT3TeamSidebarEnvironmentFilterStore = create<SidebarEnvironmentFilterState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       selectedEnvironmentId: null,
       select: (selectedEnvironmentId) =>
         set((state) =>

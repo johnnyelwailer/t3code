@@ -71,7 +71,12 @@ describe("buildScopePickerEntries", () => {
       kind: "app",
       hidden: true,
     });
-    expect(entries.find((entry) => entry.value === "a")?.hidden).toBeUndefined();
+    expect(entries.find((entry) => entry.value === "a")).toEqual({
+      kind: "app",
+      value: "a",
+      label: "a",
+      group: group("a"),
+    });
   });
 });
 
