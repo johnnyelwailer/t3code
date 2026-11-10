@@ -23,6 +23,12 @@ import { formatSubagentDisplayTitle } from "./subagentDisplay.ts";
 export interface EnvironmentProject extends OrchestrationProjectShell {
   readonly environmentId: EnvironmentId;
   readonly isScratch?: true;
+  /**
+   * When a cloud checkout adopts the user's project, the favicon is loaded from this
+   * environment and workspace instead of the machine's checkout.
+   */
+  readonly faviconEnvironmentId?: EnvironmentId;
+  readonly faviconWorkspaceRoot?: string;
 }
 
 /**
