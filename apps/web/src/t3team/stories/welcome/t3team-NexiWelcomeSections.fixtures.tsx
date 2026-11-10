@@ -85,12 +85,14 @@ function AgentItem({
   );
 }
 
+/** Entra sign-in row — left Microsoft mark only; enables cloud features. */
 export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
   const mark = (
     <ServiceMark label="Nexplore">
       <MicrosoftEntraMark />
     </ServiceMark>
   );
+  const enableHint = "Cloud sessions, phone, and threads across devices.";
 
   if (state === "skipped") {
     return (
@@ -138,8 +140,26 @@ export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
     <WelcomeItem
       mark={mark}
       title="Nexplore"
+      description={enableHint}
       action={<PrimaryAction onClick={noop}>Sign in</PrimaryAction>}
     />
+  );
+}
+
+/** Cloud section: Entra first, then cloud sessions + phone. */
+export function CloudBlock({
+  account,
+  cloudPhone,
+}: {
+  readonly account: AccountStoryState;
+  readonly cloudPhone: CloudPhoneStoryState;
+}) {
+  const entraSignedIn = account === "signedIn";
+  return (
+    <>
+      <AccountBlock state={account} />
+      <CloudPhoneBlock state={cloudPhone} entraSignedIn={entraSignedIn} />
+    </>
   );
 }
 
@@ -353,12 +373,12 @@ export function CloudPhoneBlock({
         <WelcomeItem
           mark={cloudMark}
           title="Cloud sessions"
-          status={<StatusLabel status="locked" label="Needs Nexplore sign-in" />}
+          status={<StatusLabel status="locked" label="Needs sign-in" />}
         />
         <WelcomeItem
           mark={phoneMark}
           title="Phone"
-          status={<StatusLabel status="locked" label="Needs Nexplore sign-in" />}
+          status={<StatusLabel status="locked" label="Needs sign-in" />}
         />
       </>
     );

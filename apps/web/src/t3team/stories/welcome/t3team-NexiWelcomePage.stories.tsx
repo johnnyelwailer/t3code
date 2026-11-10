@@ -23,7 +23,7 @@ type Story = StoryObj<typeof meta>;
 
 export const FreshInstall: Story = { args: { scenario: SCENARIOS.FreshInstall } };
 
-/** Entra WaitingForCode, Jira connected, GHE AwaitingApproval. */
+/** Entra WaitingForCode (in Cloud), Jira connected, GHE AwaitingApproval. */
 export const InProgress: Story = { args: { scenario: SCENARIOS.InProgress } };
 
 export const AllDone: Story = { args: { scenario: SCENARIOS.AllDone } };

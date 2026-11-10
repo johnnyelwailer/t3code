@@ -19,7 +19,6 @@ type FinishItem = {
 };
 
 const ITEMS: readonly FinishItem[] = [
-  { label: "Nexplore", status: "done" },
   { label: "Agents", status: "ready", detail: "Nexplore AI" },
   { label: "Role", status: "skipped" },
   { label: "Jira", status: "skipped" },
@@ -37,7 +36,7 @@ function FinishSummary({ items }: { readonly items: readonly FinishItem[] }) {
               key={item.label}
               mark={
                 <ServiceMark label={item.label}>
-                  {item.label === "Nexplore" ? (
+                  {item.label === "Cloud" ? (
                     <MicrosoftEntraMark />
                   ) : item.label === "Agents" ? (
                     <NexploreAI aria-hidden />
