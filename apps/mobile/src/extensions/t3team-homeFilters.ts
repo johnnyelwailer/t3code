@@ -18,8 +18,15 @@ export interface HomeFiltersSource {
   }>;
   readonly selectedEnvironmentId: EnvironmentId | null;
   readonly selectedProjectKey: string | null;
+  readonly hiddenProjectKeys: ReadonlySet<string>;
+  readonly hiddenEnvironmentIds: ReadonlySet<EnvironmentId>;
+  readonly localEnvironmentIds: ReadonlySet<EnvironmentId>;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
+  readonly onHideProject: (key: string) => void;
+  readonly onShowProject: (key: string) => void;
+  readonly onHideEnvironment: (id: EnvironmentId) => void;
+  readonly onShowEnvironment: (id: EnvironmentId) => void;
 }
 
 /**
@@ -64,5 +71,17 @@ export function buildHomeFiltersProps(
       const environment = source.environments.find((candidate) => candidate.environmentId === id);
       if (environment) source.onEnvironmentChange(environment.environmentId);
     },
+    hiddenProjectKeys: source.hiddenProjectKeys,
+    onHideProject: (key) => {
+      if (projects.some((project) => project.key === key)) source.onHideProject(key);
+    },
+    onShowProject: source.onShowProject,
+    hiddenEnvironmentIds: source.hiddenEnvironmentIds,
+    onHideEnvironment: (id) => {
+      const environment = source.environments.find((candidate) => candidate.environmentId === id);
+      if (environment) source.onHideEnvironment(environment.environmentId);
+    },
+    onShowEnvironment: source.onShowEnvironment,
+    localEnvironmentIds: source.localEnvironmentIds,
   };
 }

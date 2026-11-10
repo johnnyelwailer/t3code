@@ -109,6 +109,13 @@ interface HomeScreenProps {
   readonly onSearchQueryChange: (query: string) => void;
   readonly onEnvironmentChange: (environmentId: EnvironmentId | null) => void;
   readonly onProjectChange: (projectKey: string | null) => void;
+  readonly hiddenProjectKeys: ReadonlySet<string>;
+  readonly hiddenEnvironmentIds: ReadonlySet<EnvironmentId>;
+  readonly localEnvironmentIds: ReadonlySet<EnvironmentId>;
+  readonly onHideProject: (key: string) => void;
+  readonly onShowProject: (key: string) => void;
+  readonly onHideEnvironment: (id: EnvironmentId) => void;
+  readonly onShowEnvironment: (id: EnvironmentId) => void;
   readonly onAddConnection: () => void;
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;

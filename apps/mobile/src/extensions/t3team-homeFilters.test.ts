@@ -64,6 +64,13 @@ function setup(overrides: Partial<HomeFiltersSource> = {}) {
     selectedProjectKey: null,
     onEnvironmentChange: vi.fn(),
     onProjectChange: vi.fn(),
+    hiddenProjectKeys: new Set<string>(),
+    hiddenEnvironmentIds: new Set<string>(),
+    localEnvironmentIds: new Set<string>([local]),
+    onHideProject: vi.fn(),
+    onShowProject: vi.fn(),
+    onHideEnvironment: vi.fn(),
+    onShowEnvironment: vi.fn(),
     ...overrides,
   };
   const scopes = buildHomeProjectScopes({
@@ -77,6 +84,35 @@ function setup(overrides: Partial<HomeFiltersSource> = {}) {
 describe("buildHomeFiltersProps", () => {
   it("lists the projects most recently active first, then by title", () => {
     expect(setup().props.projects.map((entry) => entry.label)).toEqual(["Beta", "Alpha", "Gamma"]);
+  });
+
+  it("hands the slot the hidden sets, the local environments, and the hide/show actions", () => {
+    const hiddenProjects = new Set(["alpha"]);
+    const hiddenEnvironments = new Set<string>([remote]);
+    const localIds = new Set<string>([local]);
+    const { props, source } = setup({
+      hiddenProjectKeys: hiddenProjects,
+      hiddenEnvironmentIds: hiddenEnvironments,
+      localEnvironmentIds: localIds,
+      onHideProject: vi.fn(),
+      onShowProject: vi.fn(),
+      onHideEnvironment: vi.fn(),
+      onShowEnvironment: vi.fn(),
+    });
+    expect(props.hiddenProjectKeys).toBe(hiddenProjects);
+    expect(props.hiddenEnvironmentIds).toBe(hiddenEnvironments);
+    expect(props.localEnvironmentIds).toBe(localIds);
+    // A known project key passes through; an unknown one cannot be hidden through the slot.
+    const knownKey = props.projects[0].key;
+    props.onHideProject(knownKey);
+    expect(source.onHideProject).toHaveBeenCalledWith(knownKey);
+    props.onHideProject("does-not-exist");
+    expect(source.onHideProject).toHaveBeenCalledTimes(1);
+    props.onHideEnvironment(remote);
+    expect(source.onHideEnvironment).toHaveBeenCalledWith(remote);
+    // An environment the list does not know cannot be excluded through the slot.
+    props.onHideEnvironment("does-not-exist");
+    expect(source.onHideEnvironment).toHaveBeenCalledTimes(1);
   });
 
   it("hands each project the facts its own icon is drawn from", () => {
