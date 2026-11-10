@@ -1,6 +1,7 @@
 /**
  * Sidebar environment filter: the production pills, fed by the shared `resolveEnvironmentFilter`.
- * Live: click a pill, "All" resets. Light/dark via the toolbar `theme` global.
+ * Live: click a pill, "All" resets, +N opens the full list when the row cannot fit them all.
+ * Light/dark via the toolbar `theme` global.
  * With only this computer listed the control is hidden, as in the app.
  */
 import { resolveEnvironmentFilter } from "@t3tools/client-runtime/t3team-environmentFilter";
@@ -107,7 +108,7 @@ export const Selected: Story = {
 };
 
 export const ManyEnvironments: Story = {
-  name: "many environments wrap, same-label cloud sessions told apart",
+  name: "many environments fold into +N, same-label cloud sessions told apart",
   render: () => (
     <Frame>
       <Row width={300} environments={MANY} initialSelectedId="env-nas" />
