@@ -26,7 +26,7 @@ export type FollowCloudSessionProjectOptions = {
   /** Draft that holds the queued first message; defaults to `scopeKey`. */
   readonly draftId?: string | null;
   /** False when the new project is not already on the session's machine. */
-  readonly machineHasProject?: boolean;
+  readonly machineHasProject?: boolean | undefined;
   readonly moveThread?: (input: {
     readonly scopeKey: string;
     readonly draftId: string;

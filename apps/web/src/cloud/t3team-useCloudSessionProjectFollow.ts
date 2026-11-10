@@ -113,7 +113,7 @@ export function useCloudSessionProjectFollow(input: {
         const store = useComposerDraftStore.getState();
         const key = DraftId.make(id);
         const draft = store.getDraftSession(key);
-        if (draft === undefined || draft.promotedTo) return;
+        if (draft == null || draft.promotedTo) return;
         store.setDraftThreadContext(key, {
           projectRef,
           environmentSelection: "manual",
