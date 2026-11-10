@@ -3,7 +3,7 @@
  * the broker can name it) with it. The run's own snapshot keys carry what the workflow used and
  * must agree with that rule. `null` means "cannot tell": the delete refuses what it can't attribute.
  */
-const ENTRA_OWNER = /^o[0-9a-f]{32}$/;
+export const ENTRA_OWNER = /^o[0-9a-f]{32}$/;
 
 export interface SnapshotOwnerEvidence {
   /** The run came through the broker (` · broker` marker, or a claimed standby). */

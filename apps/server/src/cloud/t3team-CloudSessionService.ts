@@ -33,15 +33,16 @@ import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 import { offerPlainOnMachineFailure } from "./t3team-cloudSessionMachineOffer.ts";
 import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
 import { machineRepositoryAccessFor } from "./t3team-cloudMachineRepository.ts";
-import { machineRepositoryFromRemote } from "./t3team-cloudSessionMachineNames.ts";
-import { makeMachineStateOperations } from "./t3team-CloudSessionMachineState.ts";
+import {
+  makeMachineStateOperations,
+  type MachineStateOperations,
+} from "./t3team-CloudSessionMachineState.ts";
 import {
   findSessionForDelete,
-  sameRepository,
   type DeleteFlow,
   type LocalProjectRef,
 } from "./t3team-CloudSessionDeleteFlow.ts";
-import { deleteCloudSession } from "./t3team-CloudSessionDeleteRun.ts";
+import { deleteCloudSession, describeCloudSessionDelete } from "./t3team-CloudSessionDeleteRun.ts";
 import * as VcsProcessModule from "../vcs/VcsProcess.ts";
 import * as ProjectServiceModule from "../project/ProjectService.ts";
 import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
@@ -477,21 +478,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       if (!(yield* readFeatureFlagFromConfig("CLOUD_SESSION_STOP_DELETE")))
         return yield* stopDeleteOff;
       const context = yield* findSessionForDelete(deleteFlow, input);
-      const repository =
-        context.repository === null
-          ? null
-          : `${context.repository.owner}/${context.repository.name}`;
-      const wanted = context.repository;
-      const projects =
-        wanted === null
-          ? []
-          : (yield* deleteFlow.listLocalProjects())
-              .filter((project) => {
-                const repository = machineRepositoryFromRemote(project.remoteUrl ?? "");
-                return repository !== null && sameRepository(repository, wanted);
-              })
-              .map((project) => project.title);
-      return { repository, projects };
+      return yield* describeCloudSessionDelete(deleteFlow, context);
     });
 
   const deleteSession: CloudSessionService["Service"]["delete"] = (input) =>
@@ -506,7 +493,15 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
 });
 
 /** No git on this server: the cache side of a delete still works, the checkout side cannot. */
-const unavailableMachineState = {
+const unavailableMachineState: MachineStateOperations = {
+  listResumeBranches: () =>
+    Effect.fail(
+      new CloudSessionFailedError({
+        reason: "delete_blocked",
+        message:
+          "Git is not available on this server, so the machine's checkout cannot be checked.",
+      }),
+    ),
   deleteMachineCheckout: () =>
     Effect.fail(
       new CloudSessionFailedError({

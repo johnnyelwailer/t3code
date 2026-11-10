@@ -5,7 +5,8 @@ import * as Effect from "effect/Effect";
 import { makeClaimLedger } from "./t3team-CloudSessionClaim.ts";
 import type { DeleteFlow, DeleteSessionContext } from "./t3team-CloudSessionDeleteFlow.ts";
 import { deleteCloudSession } from "./t3team-CloudSessionDeleteRun.ts";
-import type { MachineCheckoutInput } from "./t3team-CloudSessionMachineCheckout.ts";
+import { planDelete } from "./t3team-CloudSessionDeletePlan.ts";
+import type { MachineCheckoutInput, ResumeBranch } from "./t3team-CloudSessionMachineCheckout.ts";
 import type { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import type {
   GitHubActionsRequest,
@@ -15,6 +16,7 @@ import type {
 const WS = "m-pj.acme.api_";
 const ENTRA = `o${"0f".repeat(16)}`;
 const NAME = `nexi-session [s1] · broker · machine · ws ${WS} · repo nexplore.ghe.com/acme/api`;
+const REPO = { host: "nexplore.ghe.com", owner: "acme", name: "api" };
 
 const run = (id: number, status: string, name = NAME): WorkflowRunSummary => ({
   id,
@@ -28,37 +30,75 @@ const run = (id: number, status: string, name = NAME): WorkflowRunSummary => ({
   actorId: 1283972,
 });
 
-const broker: NexiBrokerService["Service"] = {
-  enabled: false,
-  status: { enabled: false, accountId: null },
-  requestGrant: () => Effect.die("unused"),
-  attach: () => Effect.die("unused"),
-  pair: () => Effect.die("unused"),
-  claimStandby: () => Effect.succeed(null),
-  reportInterest: () => Effect.void,
-  sessions: Effect.succeed([]),
-};
+const key = (owner: string, workspace: string, suffix: string) =>
+  `nexi-session-userdata-${owner}.${workspace}/${suffix}`;
 
-/** A fleet whose cache list is `pages` (100-entry pages read as "more may follow"). */
-const makeFlow = (options: {
-  pages: ReadonlyArray<ReadonlyArray<{ id: number; key: string }>>;
-  runs?: ReadonlyArray<WorkflowRunSummary>;
-}) =>
+/** session.yml's teardown steps as the jobs API lists them after a clean stop. */
+const SAVED = [
+  { name: "Stage the final snapshot", conclusion: "success" },
+  { name: "Save the final session snapshot (workspace continuity)", conclusion: "success" },
+  { name: "Preserve the project machine's checkout for the next session", conclusion: "success" },
+];
+
+interface FleetOptions {
+  readonly caches?: ReadonlyArray<{ id: number; key: string }>;
+  readonly runs?: ReadonlyArray<WorkflowRunSummary>;
+  readonly steps?: ReadonlyArray<{ name: string; conclusion: string }>;
+  readonly brokerSessions?: ReadonlyArray<string>;
+  readonly branches?: ReadonlyArray<ResumeBranch>;
+  /** Cache deletes that fail; `gone` ones were removed anyway (a 404 from a race). */
+  readonly failingDeletes?: ReadonlyMap<number, "gone" | "kept">;
+}
+
+const makeFlow = (options: FleetOptions = {}) =>
   Effect.gen(function* () {
+    const store = [...(options.caches ?? [])];
     const deleted: number[] = [];
     const checkouts: MachineCheckoutInput[] = [];
     const runInteractive = (request: GitHubActionsRequest) =>
-      Effect.sync(() => {
+      Effect.suspend(() => {
         const path = request.kind === "rest" ? request.path : "";
-        const page = /actions\/caches\?per_page=100&page=([0-9]+)/.exec(path);
-        if (page !== null) {
-          const entries = options.pages[Number(page[1]) - 1] ?? [];
-          return { body: JSON.stringify({ actions_caches: entries }), truncated: false };
+        const list = /actions\/caches\?per_page=100&page=([0-9]+)&key=([^&]+)$/.exec(path);
+        if (list !== null) {
+          const prefix = decodeURIComponent(list[2]!);
+          const page = Number(list[1]);
+          const matching = store.filter((entry) => entry.key.startsWith(prefix));
+          const entries = matching.slice((page - 1) * 100, page * 100);
+          return Effect.succeed({
+            body: JSON.stringify({ actions_caches: entries }),
+            truncated: false,
+          });
         }
         const removed = /actions\/caches\/([0-9]+)$/.exec(path);
-        if (removed !== null) deleted.push(Number(removed[1]));
-        return { body: "{}", truncated: false };
+        if (removed !== null) {
+          const id = Number(removed[1]);
+          const failure = options.failingDeletes?.get(id);
+          const at = store.findIndex((entry) => entry.id === id);
+          if (failure !== "kept" && at >= 0) store.splice(at, 1);
+          if (failure !== undefined) {
+            return Effect.fail(
+              new CloudSessionFailedError({ reason: "rejected", message: "Not Found" }),
+            );
+          }
+          deleted.push(id);
+        }
+        if (path.endsWith("/jobs")) {
+          const steps = (options.steps ?? SAVED).map((step) => ({ ...step, status: "completed" }));
+          return Effect.succeed({ body: JSON.stringify({ jobs: [{ steps }] }), truncated: false });
+        }
+        return Effect.succeed({ body: "{}", truncated: false });
       });
+    const brokerSessions = options.brokerSessions;
+    const broker: NexiBrokerService["Service"] = {
+      enabled: brokerSessions !== undefined,
+      status: { enabled: brokerSessions !== undefined, accountId: null },
+      requestGrant: () => Effect.die("unused"),
+      attach: () => Effect.die("unused"),
+      pair: () => Effect.die("unused"),
+      claimStandby: () => Effect.succeed(null),
+      reportInterest: () => Effect.void,
+      sessions: Effect.succeed((brokerSessions ?? []).map((runId) => ({ runId }))),
+    };
     const flow: DeleteFlow = {
       repoRef: {
         host: "nexplore.ghe.com",
@@ -75,6 +115,7 @@ const makeFlow = (options: {
       claims: yield* makeClaimLedger(),
       broker,
       machineState: {
+        listResumeBranches: () => Effect.succeed(options.branches ?? []),
         deleteMachineCheckout: (input) =>
           Effect.sync(() => {
             checkouts.push(input);
@@ -99,12 +140,34 @@ const context = (over: Partial<DeleteSessionContext> = {}): DeleteSessionContext
   kind: "run",
   run: run(999, "completed"),
   workspace: WS,
-  repository: { host: "nexplore.ghe.com", owner: "acme", name: "api" },
+  repository: REPO,
   ...over,
 });
 
-const key = (owner: string, workspace: string, suffix: string) =>
-  `nexi-session-userdata-${owner}.${workspace}/${suffix}`;
+const OWN = [
+  { id: 1, key: key(ENTRA, WS, "999") },
+  { id: 2, key: key(ENTRA, WS, "999-final") },
+];
+
+const PLAIN = "nexi-session [s1] · broker · ws u-pj_";
+const plainContext = { workspace: "u-pj_", repository: null, run: run(999, "completed", PLAIN) };
+
+const blockedBy = (options: FleetOptions, over: Partial<DeleteSessionContext> = {}) =>
+  Effect.gen(function* () {
+    const { flow, deleted, checkouts } = yield* makeFlow(options);
+    const error = yield* Effect.flip(deleteCloudSession(flow, context(over)));
+    assert.instanceOf(error, CloudSessionFailedError);
+    assert.equal(error.reason, "delete_blocked", error.message);
+    assert.deepEqual(deleted, [], "nothing removed");
+    assert.deepEqual(checkouts, [], "the checkout untouched");
+    return error.message;
+  });
+
+const branch = (owner: string): ResumeBranch => ({
+  owner,
+  branch: `nexi-resume/${owner}/${WS}`,
+  sha: "b".repeat(40),
+});
 
 describe("deleteCloudSession", () => {
   it.effect(
@@ -112,60 +175,143 @@ describe("deleteCloudSession", () => {
     () =>
       Effect.gen(function* () {
         const { flow, deleted, checkouts } = yield* makeFlow({
-          pages: [
-            [
-              { id: 1, key: key(ENTRA, WS, "999") },
-              { id: 2, key: key(ENTRA, WS, "999-final") },
-              { id: 3, key: key(ENTRA, WS, "812") },
-              { id: 4, key: key(ENTRA, "u-pj_", "812") },
-              { id: 5, key: key("g42", WS, "700") },
-              { id: 6, key: "unrelated/999" },
-            ],
+          caches: [
+            ...OWN,
+            { id: 3, key: key(ENTRA, WS, "812") },
+            { id: 4, key: key(ENTRA, "u-pj_", "812") },
+            { id: 5, key: key("g42", WS, "700") },
+            { id: 6, key: "unrelated/999" },
           ],
         });
         yield* deleteCloudSession(flow, context());
         assert.deepEqual([...deleted].sort(), [1, 2, 3]);
-        // The broker run's owner is the one its own snapshot keys carry.
         assert.equal(checkouts[0]?.snapshotOwner, ENTRA);
         assert.equal(checkouts[0]?.runId, 999);
       }),
   );
 
-  it.effect("refuses, touching nothing, while another run of the workspace is live", () =>
+  it.effect("counts a removal answered 404 as removed, and one still listed as not", () =>
     Effect.gen(function* () {
-      const { flow, deleted, checkouts } = yield* makeFlow({
-        pages: [[{ id: 1, key: key(ENTRA, WS, "999") }]],
-        runs: [run(999, "completed"), run(1000, "in_progress")],
-      });
-      const error = yield* Effect.flip(deleteCloudSession(flow, context()));
-      assert.instanceOf(error, CloudSessionFailedError);
-      assert.equal(error.reason, "delete_blocked");
-      assert.deepEqual(deleted, []);
-      assert.deepEqual(checkouts, []);
-    }),
-  );
-
-  it.effect("reports a cache list longer than one delete reads as not fully removed", () =>
-    Effect.gen(function* () {
-      const full = (page: number) =>
-        Array.from({ length: 100 }, (_, i) => ({ id: page * 1000 + i + 1, key: `other/${i}` }));
-      const pages = Array.from({ length: 21 }, (_, page) => full(page));
-      const { flow } = yield* makeFlow({
-        pages: [[{ id: 1, key: key(ENTRA, WS, "999") }, ...full(99).slice(1)], ...pages],
-      });
-      const error = yield* Effect.flip(deleteCloudSession(flow, context()));
+      const gone = yield* makeFlow({ caches: OWN, failingDeletes: new Map([[2, "gone"]]) });
+      yield* deleteCloudSession(gone.flow, context());
+      const kept = yield* makeFlow({ caches: OWN, failingDeletes: new Map([[2, "kept"]]) });
+      const error = yield* Effect.flip(deleteCloudSession(kept.flow, context()));
       assert.match(error.message, /not fully removed/);
     }),
   );
 
-  it.effect("blocks when no owner can be named but the workspace has snapshots", () =>
+  it.effect(
+    "reports a workspace with more snapshots than one delete reads as not fully removed",
+    () =>
+      Effect.gen(function* () {
+        const older = Array.from({ length: 2100 }, (_, i) => ({
+          id: 10 + i,
+          key: key(ENTRA, WS, `${100 + (i % 800)}`),
+        }));
+        const { flow } = yield* makeFlow({ caches: [...OWN, ...older] });
+        const error = yield* Effect.flip(deleteCloudSession(flow, context()));
+        assert.match(error.message, /not fully removed/);
+      }),
+  );
+
+  it.effect("refuses when the stop did not save the final snapshot or preserve the checkout", () =>
     Effect.gen(function* () {
-      const { flow, deleted } = yield* makeFlow({
-        pages: [[{ id: 3, key: key(ENTRA, WS, "812") }]],
-      });
-      const error = yield* Effect.flip(deleteCloudSession(flow, context()));
-      assert.equal(error.reason, "delete_blocked");
-      assert.deepEqual(deleted, []);
+      const failed = (name: string) =>
+        SAVED.map((step) => (step.name === name ? { name, conclusion: "failure" } : step));
+      const save = yield* blockedBy({ caches: OWN, steps: failed(SAVED[1]!.name) });
+      assert.match(save, /final session snapshot/);
+      const preserve = yield* blockedBy({ caches: OWN, steps: failed(SAVED[2]!.name) });
+      assert.match(preserve, /Preserve the project machine's checkout/);
+      yield* blockedBy({ caches: OWN, steps: SAVED.slice(0, 2) });
     }),
+  );
+
+  it.effect("accepts an idle release, whose final save is skipped after the handoff save", () =>
+    Effect.gen(function* () {
+      const steps = [
+        { name: "Save session snapshot (workspace continuity)", conclusion: "success" },
+        SAVED[0]!,
+        { name: SAVED[1]!.name, conclusion: "skipped" },
+        SAVED[2]!,
+      ];
+      const { flow, deleted } = yield* makeFlow({ caches: OWN, steps });
+      yield* deleteCloudSession(flow, context());
+      assert.deepEqual([...deleted].sort(), [1, 2]);
+    }),
+  );
+
+  it.effect("refuses, touching nothing, while another run of the workspace is live", () =>
+    Effect.gen(function* () {
+      yield* blockedBy({ caches: OWN, runs: [run(999, "completed"), run(1000, "in_progress")] });
+    }),
+  );
+
+  it.effect("refuses while the broker runs a session of this user the run list cannot place", () =>
+    Effect.gen(function* () {
+      const message = yield* blockedBy({ caches: OWN, brokerSessions: ["999", "4242"] });
+      assert.match(message, /4242/);
+      const { flow } = yield* makeFlow({ caches: OWN, brokerSessions: ["999"] });
+      yield* deleteCloudSession(flow, context());
+    }),
+  );
+
+  it.effect("refuses to wipe the shared plain workspace another session used", () =>
+    Effect.gen(function* () {
+      const keys = [
+        { id: 1, key: key(ENTRA, "u-pj_", "999") },
+        { id: 3, key: key(ENTRA, "u-pj_", "812") },
+      ];
+      const steps = SAVED.slice(0, 2);
+      const message = yield* blockedBy({ caches: keys, steps }, plainContext);
+      assert.match(message, /Stop/);
+      const alone = yield* makeFlow({ caches: keys.slice(0, 1), steps });
+      yield* deleteCloudSession(alone.flow, context(plainContext));
+      assert.deepEqual(alone.deleted, [1]);
+    }),
+  );
+
+  it.effect("refuses when a later session of the machine holds newer state", () =>
+    Effect.gen(function* () {
+      const later = { id: 7, key: key(ENTRA, WS, "1200-final") };
+      const message = yield* blockedBy({ caches: [...OWN, later] });
+      assert.match(message, /1200/);
+    }),
+  );
+
+  it.effect("names the earlier sessions whose state goes with the machine", () =>
+    Effect.gen(function* () {
+      const { flow } = yield* makeFlow({
+        caches: [...OWN, { id: 3, key: key(ENTRA, WS, "812") }],
+        runs: [run(999, "completed"), run(700, "completed")],
+      });
+      const plan = yield* planDelete(flow, context(), run(999, "completed"));
+      assert.deepEqual([...plan.otherSessions].sort(), [700, 812]);
+    }),
+  );
+
+  it.effect("refuses a repository-bound workspace whose run never named its repository", () =>
+    Effect.gen(function* () {
+      const unnamed = run(999, "completed", `nexi-session [s1] · broker · ws ${WS}`);
+      yield* blockedBy({ caches: OWN }, { repository: null, run: unnamed });
+    }),
+  );
+
+  it.effect("refuses a run whose workspace cannot be identified", () =>
+    Effect.gen(function* () {
+      const old = run(999, "completed", "nexi-session [s1]");
+      yield* blockedBy({}, { workspace: null, repository: null, run: old });
+    }),
+  );
+
+  it.effect(
+    "names a broker run's owner from its only resume branch once its snapshots are gone",
+    () =>
+      Effect.gen(function* () {
+        const { flow, checkouts } = yield* makeFlow({ branches: [branch(ENTRA)] });
+        yield* deleteCloudSession(flow, context());
+        assert.equal(checkouts[0]?.snapshotOwner, ENTRA);
+        yield* blockedBy({ branches: [branch(ENTRA), branch(`o${"1".repeat(32)}`)] });
+        yield* blockedBy({ caches: [{ id: 3, key: key(ENTRA, WS, "812") }] });
+      }),
   );
 });

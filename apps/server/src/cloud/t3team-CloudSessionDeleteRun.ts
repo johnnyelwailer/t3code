@@ -1,8 +1,8 @@
 /**
- * One cloud-session delete, in order: stop the run and wait for its teardown, name whose state it
- * left (the snapshot owner), refuse while another run of the workspace is live, save and remove
- * the machine's resume branch, then remove every snapshot the next session of the workspace
- * would restore. Anything it cannot attribute or reach fails the delete instead of reporting it.
+ * One cloud-session delete, in order: refuse early what the plan already refuses, stop the run and
+ * wait for its teardown, require that teardown saved the machine's last state, then plan again on
+ * the final state, save and remove the resume branch, and remove the workspace's snapshots. A
+ * removal it cannot confirm fails the delete instead of reporting it done.
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -10,20 +10,16 @@ import * as Effect from "effect/Effect";
 import {
   type DeleteFlow,
   type DeleteSessionContext,
-  removeMachineCheckout,
+  sameRepository,
 } from "./t3team-CloudSessionDeleteFlow.ts";
+import { machineRepositoryFromRemote } from "./t3team-cloudSessionMachineNames.ts";
+import { planDelete } from "./t3team-CloudSessionDeletePlan.ts";
 import {
-  assertNoOtherLiveRun,
+  assertTeardownSaved,
   cancelSessionRun,
   removeCaches,
-  scanSnapshotCaches,
   waitForRunEnd,
 } from "./t3team-CloudSessionDeleteSteps.ts";
-import { BROKER_RUN_NAME_MARKER } from "./t3team-CloudSessionProjection.ts";
-import { snapshotOwnerOf } from "./t3team-cloudSessionSnapshotOwner.ts";
-
-const blocked = (message: string) =>
-  new CloudSessionFailedError({ reason: "delete_blocked", message });
 
 export const deleteCloudSession = Effect.fn("cloud.session.delete.run")(function* (
   flow: DeleteFlow,
@@ -31,45 +27,58 @@ export const deleteCloudSession = Effect.fn("cloud.session.delete.run")(function
 ) {
   // A claimed standby's run is read directly: it is not in the caller's list.
   const run = context.run ?? (yield* flow.gh.getRun(context.runId, { allowReserve: true }));
+  yield* planDelete(flow, context, run, "preview");
   if (run.status !== "completed") {
     // Its teardown saves the snapshot and preserves the checkout the delete then removes.
     yield* cancelSessionRun(flow, context.runId);
     yield* waitForRunEnd(flow, context.runId);
   }
+  yield* assertTeardownSaved(flow, context.runId, context.repository !== null);
 
-  const scan = yield* scanSnapshotCaches(flow);
-  const ownKeys = scan.entries.filter((entry) => entry.runId === context.runId);
-  const workspaces = new Set(ownKeys.map((entry) => entry.workspace));
-  const workspace = context.workspace ?? (workspaces.size === 1 ? [...workspaces][0]! : null);
-  if (workspace !== null && [...workspaces].some((other) => other !== workspace)) {
-    return yield* blocked(
-      "This session's snapshots name another workspace than its run, so nothing was deleted.",
-    );
-  }
-  const snapshotOwner = snapshotOwnerOf({
-    brokerRun: context.kind === "claimed" || run.name.includes(BROKER_RUN_NAME_MARKER),
-    actorId: run.actorId ?? null,
-    runCacheOwners: ownKeys.map((entry) => entry.owner),
-  });
-  const workspaceKeys =
-    workspace === null ? ownKeys : scan.entries.filter((entry) => entry.workspace === workspace);
-  if (snapshotOwner === null && workspaceKeys.length > 0) {
-    return yield* blocked(
-      "This machine's owner cannot be identified, so its saved snapshots were left alone. Stop it instead.",
-    );
-  }
-
-  if (workspace !== null) yield* assertNoOtherLiveRun(flow, context.runId, workspace);
-  const wipBranch = yield* removeMachineCheckout(flow, context, snapshotOwner);
-  yield* removeCaches(
-    flow,
-    workspaceKeys.filter((entry) => entry.owner === snapshotOwner).map((entry) => entry.id),
-  );
-  if (!scan.complete) {
+  const plan = yield* planDelete(flow, context, run, "final");
+  const wipBranch =
+    plan.checkout === null
+      ? null
+      : (yield* flow.machineState.deleteMachineCheckout({
+          ...plan.checkout,
+          snapshotOwner: plan.snapshotOwner,
+          workspace: plan.workspace,
+          runId: context.runId,
+        })).wipBranch;
+  const left =
+    plan.keyPrefix === null ? [] : yield* removeCaches(flow, plan.cacheIds, plan.keyPrefix);
+  if (left.length > 0 || !plan.cachesComplete) {
     return yield* new CloudSessionFailedError({
       reason: "unreachable",
-      message: `The fleet holds more caches than one delete reads, so the machine's snapshots were not fully removed${wipBranch === null ? "" : ` (its work is saved on ${wipBranch})`}. Delete it again to remove the rest.`,
+      message: `The machine's snapshots were not fully removed${wipBranch === null ? "" : ` (its work is saved on ${wipBranch})`}. Delete it again to remove the rest.`,
     });
   }
   return { wipBranch, warnings: [] as ReadonlyArray<string> };
+});
+
+/**
+ * What the confirmation names before anything is removed: the machine's repository, this
+ * server's projects on it, and how many earlier sessions' saved state goes with it.
+ */
+export const describeCloudSessionDelete = Effect.fn("cloud.session.delete.info")(function* (
+  flow: DeleteFlow,
+  context: DeleteSessionContext,
+) {
+  const run = context.run ?? (yield* flow.gh.getRun(context.runId, { allowReserve: true }));
+  const plan = yield* planDelete(flow, context, run, "preview");
+  const wanted = context.repository;
+  const projects =
+    wanted === null
+      ? []
+      : (yield* flow.listLocalProjects())
+          .filter((project) => {
+            const repository = machineRepositoryFromRemote(project.remoteUrl ?? "");
+            return repository !== null && sameRepository(repository, wanted);
+          })
+          .map((project) => project.title);
+  return {
+    repository: wanted === null ? null : `${wanted.owner}/${wanted.name}`,
+    projects,
+    otherSessions: plan.otherSessions.length,
+  };
 });

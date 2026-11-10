@@ -5,6 +5,7 @@
  * branch listing and fetch, the host credential) comes from t3team-CloudSessionMachineState.
  * A save that fails blocks the whole delete; nothing is removed before the work is saved.
  */
+import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -18,8 +19,8 @@ import {
   wipBranchName,
 } from "./t3team-CloudSessionDelete.ts";
 
-/** A temporary ref in the checkout the check runs in; removed when the delete ends. */
-export const CHECK_REF = "refs/nexi/delete-check";
+/** A temporary ref of one delete in the checkout it runs in; removed when that delete ends. */
+const checkRef = (runId: number) => `refs/nexi/delete-${runId}-${NodeCrypto.randomUUID()}`;
 
 export const unreachable = () =>
   new CloudSessionFailedError({
@@ -55,11 +56,12 @@ export interface CheckoutGit {
     token: string | null,
     host: string,
   ) => Effect.Effect<ReadonlyArray<ResumeBranch>, CloudSessionFailedError>;
-  /** Fetch `branch` into `CHECK_REF` and answer its tip; fails when it cannot. */
+  /** Fetch `branch` into the temporary `ref` and answer its tip; fails when it cannot. */
   readonly fetchBranch: (
     cwd: string,
     remote: string,
     branch: string,
+    ref: string,
     token: string | null,
     host: string,
     scratch: boolean,
@@ -101,6 +103,7 @@ export const deleteMachineCheckout = Effect.fn("cloud.session.delete.checkout.re
       : yield* Effect.sync(() =>
           NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "nexi-delete-")),
         );
+  const ref = checkRef(input.runId);
   // The local checkout talks to its own `origin`; the scratch repository has none.
   const target = scratch ? remote : "origin";
 
@@ -120,7 +123,7 @@ export const deleteMachineCheckout = Effect.fn("cloud.session.delete.checkout.re
     const listed = branches.find((entry) => entry.branch === branch);
     if (listed === undefined) return { wipBranch: null as string | null };
 
-    const tip = yield* git.fetchBranch(cwd, target, branch, token, input.host, scratch);
+    const tip = yield* git.fetchBranch(cwd, target, branch, ref, token, input.host, scratch);
     if (tip.toLowerCase() !== listed.sha.toLowerCase()) {
       return yield* refuse(`${branch} changed while it was being deleted. Try again.`);
     }
@@ -131,7 +134,7 @@ export const deleteMachineCheckout = Effect.fn("cloud.session.delete.checkout.re
       // Never forced: an existing wip branch with other work blocks the delete instead.
       const saved = yield* git.run(
         cwd,
-        ["push", "--quiet", target, `${CHECK_REF}:refs/heads/${wip}`],
+        ["push", "--quiet", target, `${tip}:refs/heads/${wip}`],
         token,
         input.host,
       );
@@ -166,7 +169,7 @@ export const deleteMachineCheckout = Effect.fn("cloud.session.delete.checkout.re
     if (input.localRoot !== null) {
       // Best effort: a failed ref cleanup must not mask the delete's own result.
       yield* git
-        .run(input.localRoot, ["update-ref", "-d", CHECK_REF], null, "")
+        .run(input.localRoot, ["update-ref", "-d", ref], null, "")
         .pipe(Effect.asVoid, Effect.ignore);
     }
     if (input.localRoot === null) {

@@ -1,8 +1,7 @@
 /**
- * The cloud-session delete flow: identify the machine, stop the run, save its unpushed work
- * to a `wip/` branch, then remove the resume branch and the workspace's snapshot caches.
- * Nothing is removed before the work is saved; a step that cannot guarantee that blocks the
- * whole delete as `delete_blocked`, never deletes around it.
+ * The cloud-session delete flow's inputs: which session is deleted (its run, or a standby this
+ * server claimed) and the checkout its machine's work is checked in. The order of the delete
+ * lives in t3team-CloudSessionDeleteRun; what it may remove in t3team-CloudSessionDeletePlan.
  */
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -131,26 +130,18 @@ export const findSessionForDelete = Effect.fn("cloud.session.delete.find")(funct
   return yield* notFound("That session does not exist.");
 });
 
-/**
- * Remove the machine's persistent checkout: save its unpushed work to the `wip/` branch, then
- * delete the resume branch. `repository` null means a plain workspace session, which has no
- * machine checkout.
- */
-export const removeMachineCheckout = Effect.fn("cloud.session.delete.checkout")(function* (
+/** The checkout a machine delete works in: this server's project on the machine's repository. */
+export interface LocalCheckout extends SessionRepository {
+  readonly localRoot: string;
+  /** The commit that checkout is pinned to; null when unknown. */
+  readonly pinnedSha: string | null;
+}
+
+/** Find this server's project on `repository`; without one the machine's work cannot be checked. */
+export const resolveLocalCheckout = Effect.fn("cloud.session.delete.checkout.find")(function* (
   flow: DeleteFlow,
-  context: DeleteSessionContext,
-  snapshotOwner: string | null,
+  repository: SessionRepository,
 ) {
-  const { repository } = context;
-  if (repository === null) return null;
-  if (context.workspace === null) {
-    // A machine run without a workspace marker predates the markers the delete relies on.
-    return yield* new CloudSessionFailedError({
-      reason: "delete_blocked",
-      message:
-        "This session is too old to identify its workspace, so its checkout cannot be checked. Stop it, or check the project's nexi-resume branch.",
-    });
-  }
   const local = (yield* flow.listLocalProjects()).find((project) => {
     const projectRepository = machineRepositoryFromRemote(project.remoteUrl ?? "");
     return projectRepository !== null && sameRepository(projectRepository, repository);
@@ -161,18 +152,13 @@ export const removeMachineCheckout = Effect.fn("cloud.session.delete.checkout")(
       message: `No open project points at ${repository.host}/${repository.owner}/${repository.name} on this server, so its machine's work cannot be checked. Open the project and try again.`,
     });
   }
-  const pinnedSha = yield* flow.pinnedCommitFor(local.workspaceRoot);
-  const result = yield* flow.machineState.deleteMachineCheckout({
+  return {
     host: repository.host,
     owner: repository.owner,
     name: repository.name,
     localRoot: local.workspaceRoot,
-    pinnedSha,
-    snapshotOwner,
-    workspace: context.workspace,
-    runId: context.runId,
-  });
-  return result.wipBranch;
+    pinnedSha: yield* flow.pinnedCommitFor(local.workspaceRoot),
+  } satisfies LocalCheckout;
 });
 
 /** Host, owner and name: one forge's `acme/api` is not another's. */

@@ -25,6 +25,7 @@ import * as ProjectServiceModule from "../project/ProjectService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import { TEARDOWN_STEPS } from "./t3team-CloudSessionDeleteSteps.ts";
 import type { CloudSessionPlainProject } from "./t3team-cloudSessionPlainProject.ts";
 
 /** Sessions here are plain ones: no project, so the machine resolver is never consulted. */
@@ -127,6 +128,7 @@ const makeGithubMock = (
 ) => {
   const login = options.login ?? "pj";
   let cancelAttempted = false;
+  const removedCaches = new Set<number>();
   const calls: Array<RecordedCall> = [];
   let tag: string | null = null;
   const rest: GitHubApi.GitHubApi["Service"]["rest"] = (input) =>
@@ -191,7 +193,7 @@ const makeGithubMock = (
       );
     }
     if (joined.startsWith("GET repos/hive/nx-nexi/actions/caches?")) {
-      const ids = options.snapshotCacheIds ?? [];
+      const ids = (options.snapshotCacheIds ?? []).filter((id) => !removedCaches.has(id));
       return ghOut(
         JSON.stringify({
           total_count: ids.length,
@@ -205,7 +207,15 @@ const makeGithubMock = (
       );
     }
     if (/^DELETE repos\/hive\/nx-nexi\/actions\/caches\/[0-9]+$/.test(joined)) {
-      return ghOut("{}");
+      return (removedCaches.add(Number(joined.split("/").pop())), ghOut("{}"));
+    }
+    if (joined.endsWith("/runs/999/jobs")) {
+      const steps = Object.values(TEARDOWN_STEPS).map((name) => ({
+        name,
+        status: "completed",
+        conclusion: "success",
+      }));
+      return ghOut(JSON.stringify({ jobs: [{ steps }] }));
     }
     if (joined.includes("/runs")) {
       return ghOut(
@@ -1334,8 +1344,9 @@ describe("CloudSessionService.delete", () => {
 
   it.effect("deleteInfo reports no repository for a plain workspace session", () =>
     Effect.gen(function* () {
-      const { info } = yield* deleteInfoFor();
+      const { info } = yield* deleteInfoFor({ runName: "hive/nx-nexi [main] [s1] · ws u-pj_" });
       assert.equal(info.repository, null);
+      assert.equal(info.otherSessions, 0);
       assert.deepEqual(info.projects, []);
     }),
   );
@@ -1347,9 +1358,9 @@ describe("CloudSessionService.delete", () => {
           "hive/nx-nexi [main] [s1] · machine · ws u-pj_ · repo nexplore.ghe.com/hive/nx-nexi · setup",
       });
       assert.equal(info.repository, "hive/nx-nexi");
-      // The info read asks nothing of the remote: no cancel, no cache work.
+      // The info read changes nothing: no cancel, no cache removed.
       assert.isFalse(calls.some((call) => joinedOf(call).includes("/cancel")));
-      assert.isFalse(calls.some((call) => joinedOf(call).includes("caches")));
+      assert.isFalse(calls.some((call) => joinedOf(call).startsWith("DELETE")));
     }),
   );
 });

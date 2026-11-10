@@ -1,4 +1,8 @@
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
+import {
+  cloudSessionDeleteConfirmation,
+  cloudSessionDeletedTitle,
+} from "@t3tools/client-runtime/state/cloud-sessions";
 import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
@@ -210,15 +214,7 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
           );
           return;
         }
-        const info = infoResult.value;
-        const lines = [
-          `The machine stops now. Its saved state is removed: threads on it stop, and the next session starts clean.`,
-          ...(info.repository !== null ? [`Machine: ${info.repository}`] : []),
-          ...(info.projects.length > 0
-            ? [`Projects that use it on this device: ${info.projects.join(", ")}`]
-            : []),
-          "Unpushed work is saved to a wip/ branch on the project's remote first; if it cannot be, the delete is not done.",
-        ];
+        const lines = cloudSessionDeleteConfirmation(infoResult.value);
         const confirmed =
           (await requestConfirmDialog(lines.join("\n"), { variant: "destructive" })) === true;
         if (!confirmed) return;
@@ -229,10 +225,7 @@ export function useCloudSessionController(options?: { readonly scopeKey?: string
         if (result._tag === "Success") {
           toastManager.add({
             type: "success",
-            title:
-              result.value.wipBranch !== null
-                ? `Machine deleted. Unpushed work is saved on ${result.value.wipBranch}.`
-                : "Machine deleted.",
+            title: cloudSessionDeletedTitle(result.value.wipBranch),
           });
           refreshCloudSessionList();
         } else {

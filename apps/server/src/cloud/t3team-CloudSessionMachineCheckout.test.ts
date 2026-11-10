@@ -42,9 +42,9 @@ const fakeGit = (
       }),
     listResumeBranches: (_cwd, _remote, workspace) =>
       Effect.succeed(branches.filter((branch) => branch.branch.endsWith(`/${workspace}`))),
-    fetchBranch: (_cwd, _remote, branch) =>
+    fetchBranch: (_cwd, _remote, branch, ref) =>
       Effect.sync(() => {
-        calls.push(`fetch ${branch}`);
+        calls.push(`fetch ${branch}`, `into ${ref}`);
         return branches.find((entry) => entry.branch === branch)?.sha ?? "";
       }),
     credentialFor: () => Effect.succeed("token"),
@@ -82,16 +82,28 @@ describe("deleteMachineCheckout", () => {
         const result = yield* deleteMachineCheckout(git, input());
         assert.equal(result.wipBranch, "wip/nexi-m-pj.acme.api-999");
         const push = calls.find((call) => call.includes("refs/heads/wip/"));
-        assert.equal(
-          push,
-          "push --quiet origin refs/nexi/delete-check:refs/heads/wip/nexi-m-pj.acme.api-999",
-        );
+        assert.equal(push, `push --quiet origin ${TIP}:refs/heads/wip/nexi-m-pj.acme.api-999`);
         assert.include(
           calls,
           `push --quiet --force-with-lease=refs/heads/${OURS}:${TIP} origin :refs/heads/${OURS}`,
         );
         assert.isFalse(calls.some((call) => call.includes("--force ") || call.endsWith("--force")));
       }),
+  );
+
+  it.effect("fetches into a ref of its own per delete, and removes exactly that ref", () =>
+    Effect.gen(function* () {
+      const refs: string[] = [];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { git, calls } = fakeGit([{ owner: OWNER, branch: OURS, sha: TIP }]);
+        yield* deleteMachineCheckout(git, input());
+        const ref = calls.find((call) => call.startsWith("into "))!.slice("into ".length);
+        assert.match(ref, /^refs\/nexi\/delete-999-/);
+        assert.include(calls, `update-ref -d ${ref}`);
+        refs.push(ref);
+      }
+      assert.notEqual(refs[0], refs[1]);
+    }),
   );
 
   it.effect(

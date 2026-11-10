@@ -143,3 +143,7 @@ export function createCloudSessionAtoms<R, E>(
     }),
   };
 }
+export {
+  cloudSessionDeleteConfirmation,
+  cloudSessionDeletedTitle,
+} from "./t3team-cloudSessionDeleteCopy.ts";

@@ -183,15 +183,21 @@ export function cancelRunRequest(ref: CloudSessionRepoRef, runId: number): GitHu
 }
 
 /**
- * List the fleet repository's Actions cache entries (the delete flow). No page cap here:
- * the caller bounds the pagination, because a fleet with many users' caches is normal, not an
- * error.
+ * One page of the fleet's Actions caches whose key starts with `keyPrefix` (the API's `key`
+ * filter). The caller bounds the pagination.
  */
-export function listCachesRequest(ref: CloudSessionRepoRef, page: number): GitHubActionsRequest {
+export function listCachesRequest(
+  ref: CloudSessionRepoRef,
+  page: number,
+  keyPrefix: string,
+): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.listCaches",
-    path: repoApiPath(ref, `actions/caches?per_page=100&page=${page}`),
+    path: repoApiPath(
+      ref,
+      `actions/caches?per_page=100&page=${page}&key=${encodeURIComponent(keyPrefix)}`,
+    ),
   };
 }
 

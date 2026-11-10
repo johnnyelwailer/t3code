@@ -201,6 +201,8 @@ export const CloudSessionDeleteInfoSchema = Schema.Struct({
   repository: Schema.NullOr(Schema.String),
   /** The names of this server's projects whose machine is this one. */
   projects: Schema.Array(Schema.String),
+  /** Earlier sessions of the machine whose saved state the delete removes too. */
+  otherSessions: Schema.optional(Schema.Number),
 });
 export type CloudSessionDeleteInfo = typeof CloudSessionDeleteInfoSchema.Type;
 
