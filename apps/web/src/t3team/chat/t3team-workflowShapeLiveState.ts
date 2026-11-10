@@ -26,6 +26,7 @@ import {
   repairStatus,
 } from "~/t3team/chat/t3team-workflowRunLabels";
 import { reconcileT3TeamWorkflowShapeProgress } from "./t3team-workflowShapeProgress";
+import { terminalRunEventStatus } from "./t3team-workflowRunEffectiveStatus";
 import { foldAdjacentThreadTurnRows } from "./t3team-workflowShapeThreadTurnFold";
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
@@ -118,7 +119,10 @@ export function useT3TeamWorkflowShapeLiveState(input: {
   const serverStatus = workflowRunStatus?.status;
   const status = FORCE_SERVER_STATUS.has(serverStatus ?? "")
     ? (serverStatus as "completed" | "cancelled")
-    : (localStatus ?? serverStatus ?? inferredRunStatus(progress));
+    : (localStatus ??
+      terminalRunEventStatus(progress, workflowRunStatus) ??
+      serverStatus ??
+      inferredRunStatus(progress));
   // Repair entries are historical workflow activity. Once a run is terminal, they must not
   // keep a stale spinner/"Getting orchestration ready" strip visible after Stop succeeds.
   const repair = TERMINAL.has(status) ? null : repairStatus(progress.steps);
