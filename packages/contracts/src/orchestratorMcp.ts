@@ -836,7 +836,7 @@ export const OrchestratorMcpRequestSecretInput = Schema.Struct({
   }),
   host: Schema.optional(CredentialHostInput).annotate({
     description:
-      "The host the credential is for (e.g. npm.pkg.github.com). Lets the card offer the user's own sign-in for it.",
+      "The host the credential is for (e.g. npm.pkg.github.com). Lets the card offer the user's own sign-in for it",
   }),
   name: Schema.optional(CredentialVariableName).annotate({
     description:
