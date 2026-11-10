@@ -1,11 +1,12 @@
 import type { DesktopRouteCard } from "@t3tools/contracts";
 
 import { Button } from "../ui/button";
+import { T3TeamPendingQuestionMarkdown } from "./t3team-pendingQuestionMarkdown";
 import { T3TeamDesktopRouteActions } from "./t3team-DesktopRouteActions";
 
 /**
  * "Let this cloud session reach HOST through your computer?": session, host, the agent's reason as
- * plain text, then Approve / wider scopes / Deny. A thread already on this computer has nothing to
+ * Markdown (agent text always is), then Approve / wider scopes / Deny. A thread already on this computer has nothing to
  * route, so it says so and offers only Dismiss (answers Deny). `onAnswer` is the ordinary response.
  */
 export function T3TeamDesktopRouteCard(props: {
@@ -53,8 +54,12 @@ export function T3TeamDesktopRouteCard(props: {
           ) : null}
         </dd>
         <dt className="text-muted-foreground">{local ? "Agent said" : "Why"}</dt>
-        <dd className="min-w-0 whitespace-pre-wrap break-words">
-          {card.reason === "" ? "The agent gave no reason." : card.reason}
+        <dd className="min-w-0 break-words" data-desktop-route-reason>
+          {card.reason === "" ? (
+            "The agent gave no reason."
+          ) : (
+            <T3TeamPendingQuestionMarkdown text={card.reason} className="text-sm" />
+          )}
         </dd>
       </dl>
       {local ? (
