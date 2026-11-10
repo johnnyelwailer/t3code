@@ -20,5 +20,7 @@ export const updateMainRepositoryCheckout = Effect.fn("updateMainRepositoryCheck
   );
   if (fetchError !== undefined) return fetchError;
   if (!branch) return undefined;
-  return yield* alignLinkedCheckoutBranch(localPath, branch);
+  return yield* alignLinkedCheckoutBranch(localPath, branch).pipe(
+    Effect.catch((cause) => Effect.succeed(describeSyncError(cause))),
+  );
 });
