@@ -92,4 +92,32 @@ describe("classifyTransientRunFailure", () => {
     ).toBeNull();
     expect(classifyTransientRunFailure(failure({ message: "400 invalid request" }))).toBeNull();
   });
+
+  // nx-nexi#1216: a configuration error answers the same on every try, so no retry ladder and no
+  // "Gateway keeps failing" auto-resume, even when the failure arrived marked retryable.
+  it("never retries a deterministic model/provider configuration error", () => {
+    for (const message of [
+      "Provider instance 'nexplore' has no declared default model. Valid models: 'no-thinking', 'low', 'medium'. Use model: \"nexplore/<slug>\" with one of these exact slugs.",
+      "Model 'gpt-9' is not available on provider instance 'codex'. Valid models: 'gpt-5'.",
+      "Unknown provider instance 'nexplroe'. Available provider instances: 'nexplore'.",
+      "Provider instance 'claudeAgent' cannot run a child: the provider is not installed.",
+      "Provider instance 'nexplore' has no models configured to run a child on.",
+      "Cannot choose the latest model for provider instance 'nexplore' because no provider registry is wired.",
+    ]) {
+      expect(
+        classifyTransientRunFailure(failure({ message, retryable: true })),
+        message,
+      ).toBeNull();
+      expect(
+        classifyTransientRunFailure(failure({ class: "transport_error", message })),
+        message,
+      ).toBeNull();
+    }
+  });
+
+  it("keeps retrying a gateway error that merely mentions a model", () => {
+    expect(
+      classifyTransientRunFailure(failure({ message: "HTTP 503: model medium is overloaded" })),
+    ).not.toBeNull();
+  });
 });

@@ -11,12 +11,14 @@
  * only transient ones (`@t3tools/shared/t3team-manualContinuation`).
  *
  * Never transient: usage limits (upstream limit recovery owns them),
- * permission/validation errors, and a Stop the provider never acknowledged
+ * permission/validation errors, deterministic model/provider configuration
+ * errors (`t3team-deterministicConfigFailure.ts`), and a Stop the provider never acknowledged
  * (`interrupt_no_terminal`, on runs settled before the Stop backstop recorded
  * such a Stop as `interrupted`) — re-running that would undo the user's stop.
  */
 import type { OrchestrationV2ProviderFailure } from "@t3tools/contracts";
 
+import { isDeterministicConfigFailureText } from "./t3team-deterministicConfigFailure.ts";
 import { isNetworkOutageFailure } from "./t3team-networkOutageFailure.ts";
 import {
   isTransientGatewayErrorText,
@@ -60,6 +62,9 @@ export const classifyTransientRunFailure = (
     return null;
   }
   if (failure.code !== null && NEVER_TRANSIENT_CODES.has(failure.code)) return null;
+  // A model/provider configuration error answers the same on every try, even when the
+  // provider marked the run retryable (nx-nexi#1216).
+  if (isDeterministicConfigFailureText(failure.message)) return null;
   const unreachable = isProviderUnreachableFailure(failure);
   const outage = unreachable || isNetworkOutageFailure(failure);
   const transient =
