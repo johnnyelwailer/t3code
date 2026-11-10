@@ -52,6 +52,15 @@ describe("decideCloudQueuedSendFlush", () => {
         session: session("ready"),
         machineConnected: true,
         projectId: ProjectId.make("p"),
+        providerReady: false,
+      }).kind,
+    ).toBe("wait");
+    expect(
+      decideCloudQueuedSendFlush({
+        ...base,
+        session: session("ready"),
+        machineConnected: true,
+        projectId: ProjectId.make("p"),
       }),
     ).toEqual({ kind: "dispatch", environmentId: "env-cloud", projectId: "p" });
   });

@@ -63,6 +63,23 @@ describe("queueCloudSessionSendIfNeeded", () => {
     ).toBe("Cloud session");
   });
 
+  it("stamps the composer project at queue time for checkout", () => {
+    selectCloudSessionTarget({
+      scopeKey: draftId,
+      sessionId: "s-1",
+      label: "Cloud session",
+      projectKey: "stale-create-stamp",
+    });
+    expect(
+      queueCloudSessionSendIfNeeded({
+        draftId,
+        turn,
+        sessions: [],
+        projectKey: "github.com/acme/final",
+      })?.projectKey,
+    ).toBe("github.com/acme/final");
+  });
+
   it("sends normally without a target, for an ended session, or outside a draft", () => {
     expect(queueCloudSessionSendIfNeeded({ draftId, turn, sessions: [] })).toBeNull();
     selectCloudSessionTarget({ scopeKey: draftId, sessionId: "s-1", label: "x" });

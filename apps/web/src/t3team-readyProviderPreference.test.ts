@@ -61,6 +61,19 @@ describe("resolveReadyProviderOverride", () => {
     ).toBeUndefined();
   });
 
+  it("keeps Claude when it reports an error, including an empty cloud auth slot", () => {
+    const claude = entry("claudeAgent", {
+      status: "error",
+      auth: { status: "unauthenticated" },
+    });
+    expect(
+      resolveReadyProviderOverride({
+        entries: [claude, nexplore],
+        candidateInstanceIds: [id("claudeAgent")],
+      }),
+    ).toBeUndefined();
+  });
+
   it("ignores a disabled or unavailable requested provider (the usual fallback handles it)", () => {
     const disabled = entry("codex", { status: "error", enabled: false });
     expect(
@@ -95,6 +108,38 @@ describe("resolveComposerProviderSelection with preferReadyProvider", () => {
       resolveComposerProviderSelection({ ...base, preferReadyProvider: false })
         .selectedProviderEntry?.instanceId,
     ).toBe(id("codex"));
+  });
+
+  it("uses the machine's one Claude instance when the picked Claude id is not on it", () => {
+    const claude = entry("claudeAgent", {
+      status: "error",
+      auth: { status: "unauthenticated" },
+    });
+    expect(
+      resolveComposerProviderSelection({
+        entries: [nexplore, claude],
+        candidateInstanceIds: [id("claudeAgent2")],
+        lockedProvider: null,
+        lockedInstanceId: null,
+        preferReadyProvider: true,
+      }).selectedProviderEntry?.instanceId,
+    ).toBe(id("claudeAgent"));
+  });
+
+  it("keeps a Claude thread when prefer-ready would otherwise move it", () => {
+    const claude = entry("claudeAgent", {
+      status: "error",
+      auth: { status: "unauthenticated" },
+    });
+    expect(
+      resolveComposerProviderSelection({
+        entries: [claude, nexplore],
+        candidateInstanceIds: [id("claudeAgent")],
+        lockedProvider: null,
+        lockedInstanceId: null,
+        preferReadyProvider: true,
+      }).selectedProviderEntry?.instanceId,
+    ).toBe(id("claudeAgent"));
   });
 
   it("never moves a thread locked to its provider", () => {
