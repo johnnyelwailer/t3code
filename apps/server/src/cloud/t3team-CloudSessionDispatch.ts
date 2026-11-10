@@ -12,6 +12,7 @@ import {
   type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { sessionRepositoryInput } from "./t3team-CloudSessionDelete.ts";
 import type { CloudSessionMachine, CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
 import {
   type CloudSessionPlainProject,
@@ -88,6 +89,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
         ...(input.machine
           ? {
               machine_repository: input.machine.repository.url,
+              session_repository: sessionRepositoryInput(input.machine.repository),
               machine_commit: input.machine.commit,
               machine_devcontainer: input.machine.devcontainerPath,
               ...(input.machine.healthCheck
@@ -101,6 +103,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
         ...(input.setup
           ? {
               machine_repository: input.setup.repository.url,
+              session_repository: sessionRepositoryInput(input.setup.repository),
               machine_commit: input.setup.commit,
               machine_setup: "true",
             }
