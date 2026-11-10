@@ -14,9 +14,11 @@ export function T3TeamDesktopRouteCard(props: {
   /** The cloud session's name, or null when the thread runs on this computer. */
   readonly sessionLabel: string | null;
   readonly disabled?: boolean;
+  /** This computer could not resolve the host: most often a typo of the repo's own host name. */
+  readonly hostUnresolved?: boolean;
   readonly onAnswer: (label: string) => void;
 }) {
-  const { card, sessionLabel, disabled = false, onAnswer } = props;
+  const { card, sessionLabel, disabled = false, hostUnresolved = false, onAnswer } = props;
   const local = sessionLabel === null;
   const { decline } = card.actions;
   return (
@@ -51,6 +53,12 @@ export function T3TeamDesktopRouteCard(props: {
             >
               Internal address
             </span>
+          ) : null}
+          {hostUnresolved && !local ? (
+            <p className="mt-1 text-destructive-foreground text-xs" data-desktop-route-unresolved>
+              This host doesn't resolve on your computer. Check the spelling against the
+              repository's config before you approve.
+            </p>
           ) : null}
         </dd>
         <dt className="text-muted-foreground">{local ? "Agent said" : "Why"}</dt>

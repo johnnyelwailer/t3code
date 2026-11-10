@@ -1,6 +1,7 @@
 import type { DesktopRouteCard, ScopedThreadRef } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 
+import { desktopRouteTargetResolves } from "../../cloud/t3team-desktopRouteResolveCheck";
 import { usePrimaryEnvironmentId, useCloudSessions } from "../../state/t3team-cloudSessions";
 import { T3TeamDesktopRouteCard } from "./t3team-DesktopRouteCard";
 import { desktopRouteSessionLabel } from "./t3team-desktopRouteSessionLabel";
@@ -33,6 +34,19 @@ export function T3TeamDesktopRoutePrompt(props: {
     setSawResponding(false);
     setAnswered(false);
   }
+  const [unresolved, setUnresolved] = useState<string | null>(null);
+  const local = props.threadRef.environmentId === primaryEnvironmentId;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the desktop route service once per host
+  useEffect(() => {
+    if (local) return;
+    let live = true;
+    void desktopRouteTargetResolves(props.card.target).then((resolves) => {
+      if (live) setUnresolved(resolves === false ? props.card.target : null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [local, props.card.target]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the pending submit timer on unmount
   useEffect(
     () => () => {
@@ -48,6 +62,7 @@ export function T3TeamDesktopRoutePrompt(props: {
         primaryEnvironmentId,
         sessions,
       )}
+      hostUnresolved={unresolved === props.card.target}
       disabled={props.disabled || props.responding || answered}
       onAnswer={(label) => {
         setAnswered(true);

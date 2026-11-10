@@ -79,4 +79,20 @@ describe("T3TeamDesktopRouteCard", () => {
     expect(html).not.toContain("`npm ci`");
     expect(html).not.toContain("**this**");
   });
+
+  it("flags a host this computer can't resolve, and only on a cloud session", () => {
+    const typo = card({ target: "npm.nexpore.ch", internal: false });
+    const flagged = (sessionLabel: string | null, hostUnresolved?: boolean) =>
+      renderToStaticMarkup(
+        <T3TeamDesktopRouteCard
+          card={typo}
+          sessionLabel={sessionLabel}
+          {...(hostUnresolved === undefined ? {} : { hostUnresolved })}
+          onAnswer={() => {}}
+        />,
+      ).includes("data-desktop-route-unresolved");
+    expect(flagged("Cloud session 1", true)).toBe(true);
+    expect(flagged("Cloud session 1")).toBe(false);
+    expect(flagged(null, true)).toBe(false);
+  });
 });

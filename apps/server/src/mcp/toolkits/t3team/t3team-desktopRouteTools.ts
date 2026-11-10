@@ -18,7 +18,8 @@ export const T3TeamDesktopRouteRequestTool = Tool.make("request_desktop_route", 
   description: mcpDescriptionOf("t3team.desktop_route.request"),
   parameters: Schema.Struct({
     target: Schema.String.annotate({
-      description: "One host name, URL, IP address or small range (/24 or narrower). No wildcards.",
+      description:
+        "One host name, URL, IP address or small range (/24 or narrower). No wildcards. Copy a host verbatim from the failing command's output or the repo's config (.npmrc, NuGet.config, package.json); never retype it.",
     }),
     reason: Schema.String.annotate({
       description: "One or two sentences the user reads: what fails and why this host is needed.",
