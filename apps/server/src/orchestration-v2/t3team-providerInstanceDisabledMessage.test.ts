@@ -10,7 +10,7 @@ describe("disabled provider message", () => {
       instanceId: ProviderInstanceId.make("claude-work"),
     });
 
-    expect(message).toContain('"claude-work" provider');
+    expect(message).toContain('"claude-work" provider is disabled');
     expect(message).toContain("project-polassist");
     expect(message).toContain("Settings → Providers");
     expect(message).toContain("this project's provider settings");
