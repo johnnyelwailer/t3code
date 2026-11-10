@@ -16,7 +16,7 @@ import {
   StatusLabel,
   WelcomeItem,
 } from "./t3team-NexiWelcomeLayout.fixtures";
-import { NexploreAccountMark } from "./t3team-NexploreAccountMark";
+import { MicrosoftEntraMark } from "./t3team-MicrosoftEntraMark";
 import type {
   AccountStoryState,
   AgentsStoryState,
@@ -88,7 +88,7 @@ function AgentItem({
 export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
   const mark = (
     <ServiceMark label="Nexplore">
-      <NexploreAccountMark />
+      <MicrosoftEntraMark />
     </ServiceMark>
   );
 
