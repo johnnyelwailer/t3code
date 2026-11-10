@@ -32,6 +32,20 @@ export function classifyT3TeamProviderStatusSeverity(
 }
 
 /**
+ * On a cloud session, provider readiness runs after the machine is up: install, then sign-in, then the
+ * queued message. Not installed, not signed in, an unanswered probe or a disabled instance are states
+ * that flow resolves, so they never raise a banner; only a provider that answered with an error does.
+ */
+function isCloudReadinessState(status: Pick<ServerProvider, "status" | "auth" | "installed">) {
+  return (
+    status.installed === false ||
+    status.status === "disabled" ||
+    status.auth.status === "unauthenticated" ||
+    status.auth.status === "unknown"
+  );
+}
+
+/**
  * Whether an informational status is worth interrupting for while work is visibly succeeding elsewhere.
  *
  * A probe that timed out on one instance says nothing about the instance currently streaming a turn, and the
@@ -45,8 +59,7 @@ export function shouldSuppressT3TeamProviderStatus(input: {
   readonly onRemoteEnvironment?: boolean;
 }): boolean {
   if (!input.status) return false;
-  // A CLI missing on a cloud machine is not a desktop problem: the model picker installs it.
-  if (input.onRemoteEnvironment === true && input.status.installed === false) return true;
+  if (input.onRemoteEnvironment === true && isCloudReadinessState(input.status)) return true;
   if (!input.isTurnInProgress) return false;
   if (classifyT3TeamProviderStatusSeverity(input.status) !== "info") return false;
   return (

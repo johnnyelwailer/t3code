@@ -126,3 +126,31 @@ describe("a provider CLI missing on a cloud machine", () => {
     ).toBe(false);
   });
 });
+
+describe("provider readiness on a cloud session", () => {
+  const remote = (status: unknown) =>
+    shouldSuppressT3TeamProviderStatus({
+      status: status as never,
+      isTurnInProgress: false,
+      onRemoteEnvironment: true,
+    });
+
+  it("raises no banner for states the install-then-sign-in flow resolves", () => {
+    expect(remote(UNAUTHENTICATED)).toBe(true);
+    expect(remote(PROBE_TIMEOUT)).toBe(true);
+    expect(remote({ status: "disabled", auth: { status: "authenticated" }, instanceId: "x" })).toBe(
+      true,
+    );
+  });
+
+  it("still shows a provider that answered with a real error, and limited availability", () => {
+    expect(remote(REAL_ERROR)).toBe(false);
+    expect(remote(LIMITED)).toBe(false);
+  });
+
+  it("changes nothing on this desktop", () => {
+    expect(
+      shouldSuppressT3TeamProviderStatus({ status: UNAUTHENTICATED, isTurnInProgress: false }),
+    ).toBe(false);
+  });
+});
