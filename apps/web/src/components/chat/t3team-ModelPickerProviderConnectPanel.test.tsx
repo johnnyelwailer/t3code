@@ -1,9 +1,33 @@
-import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { deriveProviderInstanceEntries } from "../../providerInstances";
-import { ModelPickerProviderConnectPanel } from "./t3team-ModelPickerProviderConnectPanel";
+
+vi.mock("../../state/t3team-toolauth", () => ({
+  useToolAuthStates: () => new Map(),
+  useToolAuthActions: () => ({
+    onConnect: () => {},
+    onInstall: () => {},
+    onSubmitCode: () => {},
+    onCancel: () => {},
+    environmentId: EnvironmentId.make("env-primary"),
+  }),
+}));
+vi.mock("../../state/environments", () => ({
+  usePrimaryEnvironmentId: () => EnvironmentId.make("env-primary"),
+}));
+vi.mock("../../cloud/t3team-cloudMachineSignIn", () => ({
+  useSignInDescriptionForEnvironment: () => null,
+}));
+
+const { ModelPickerProviderConnectPanel } =
+  await import("./t3team-ModelPickerProviderConnectPanel");
 
 function provider(input: {
   driverKind: ProviderDriverKind;
