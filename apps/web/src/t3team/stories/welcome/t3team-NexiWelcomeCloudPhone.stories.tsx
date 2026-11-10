@@ -16,7 +16,7 @@ type Story = StoryObj;
 
 export const LockedNeedsSignIn: Story = {
   render: () => (
-    <SectionFrame title="Cloud & phone" optional>
+    <SectionFrame title="Cloud & phone">
       <CloudPhoneBlock state="locked" entraSignedIn={false} />
     </SectionFrame>
   ),
@@ -24,7 +24,7 @@ export const LockedNeedsSignIn: Story = {
 
 export const OptIn: Story = {
   render: () => (
-    <SectionFrame title="Cloud & phone" optional>
+    <SectionFrame title="Cloud & phone">
       <CloudPhoneBlock state="optIn" entraSignedIn />
     </SectionFrame>
   ),
@@ -32,7 +32,7 @@ export const OptIn: Story = {
 
 export const On: Story = {
   render: () => (
-    <SectionFrame title="Cloud & phone" optional>
+    <SectionFrame title="Cloud & phone">
       <CloudPhoneBlock state="on" entraSignedIn />
     </SectionFrame>
   ),
@@ -40,7 +40,7 @@ export const On: Story = {
 
 export const Skipped: Story = {
   render: () => (
-    <SectionFrame title="Cloud & phone" optional>
+    <SectionFrame title="Cloud & phone">
       <CloudPhoneBlock state="skipped" entraSignedIn />
     </SectionFrame>
   ),

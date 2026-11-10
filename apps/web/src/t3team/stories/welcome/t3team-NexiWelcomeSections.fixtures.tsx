@@ -1,38 +1,21 @@
-import type { AccountStatus, CloudSession, ServerProvider } from "@t3tools/contracts";
-import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
-import {
-  BotIcon,
-  CheckIcon,
-  CloudIcon,
-  FolderGit2Icon,
-  LockIcon,
-  SmartphoneIcon,
-  UserIcon,
-} from "lucide-react";
-import { useState } from "react";
+import type { AccountStatus } from "@t3tools/contracts";
+import { CloudIcon, SmartphoneIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-import { AccountSignInCard } from "~/components/account/t3team-AccountSignInCard";
-import { ModelPickerProviderConnectPanel } from "~/components/chat/t3team-ModelPickerProviderConnectPanel";
-import { OnboardingReadyAgents } from "~/components/onboarding/t3team-OnboardingReadyAgents";
-import { JiraConnectionSettings } from "~/components/settings/t3team-JiraConnectionSettings";
-import { CloudSessionSetupCard } from "~/cloud/t3team-CloudSessionSetupCard";
-import { deriveProviderInstanceEntries } from "~/providerInstances";
-import type { AtlassianAccountStatus } from "~/t3team/backend/t3team-atlassianAccountStatus";
-import { BackendProvider } from "~/t3team/backend/t3team-BackendContext";
-import { createMockBackend } from "~/t3team/backend/t3team-mockBackend";
-import { GitHubSignInView } from "~/t3team/components/t3team-GitHubSignInAction";
-import { RepositoryPicker } from "~/t3team/components/t3team-RepositoryPicker";
-import { Button } from "~/t3team/components/ui/t3team-button";
+import { ClaudeAI, CursorIcon, OpenAI } from "~/components/Icons";
+import { NexploreAI } from "~/components/t3team-NexploreAIIcon";
+import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
+import { JiraIcon } from "~/t3team/components/brand/t3team-AtlassianLogos";
 import { T3TeamRichChoice } from "~/t3team/rich-choice/t3team-RichChoice";
 import type { RichChoiceOption } from "~/t3team/rich-choice/t3team-richChoice.logic";
-import { CreateProjectChooseStep } from "~/t3team/t3team-CreateProjectChooseStep";
-import { CreateProjectConnectView } from "~/t3team/t3team-CreateProjectConnectPanel";
 
 import {
-  AddMoreAgents,
-  LockedNote,
-  SkippedNote,
-  WelcomeRow,
+  PrimaryAction,
+  SecondaryAction,
+  ServiceMark,
+  ShowMore,
+  StatusLabel,
+  WelcomeItem,
 } from "./t3team-NexiWelcomeLayout.fixtures";
 import type {
   AccountStoryState,
@@ -40,16 +23,9 @@ import type {
   CloudPhoneStoryState,
   GitHubStoryState,
   JiraStoryState,
-  ProjectStoryState,
 } from "./t3team-NexiWelcomeScenario.fixtures";
-import {
-  catalogState,
-  chooseProps,
-  connectFixture,
-  discovery,
-  nexploreProjects,
-} from "../t3team-createProjectStoryFixtures";
 
+const GitHubIcon = getSourceControlPresentationForKind("github").Icon;
 const noop = () => {};
 
 export function accountStatus(
@@ -59,42 +35,7 @@ export function accountStatus(
   return { id: "nexplore", label: "Nexplore", auth, lastError };
 }
 
-export function readyNexploreProvider(): ServerProvider {
-  return {
-    instanceId: ProviderInstanceId.make("nexplore-default"),
-    driver: ProviderDriverKind.make("nexplore"),
-    displayName: "Nexplore AI",
-    enabled: true,
-    installed: true,
-    version: "1.0.0",
-    status: "ready",
-    auth: { status: "authenticated" },
-    checkedAt: "2026-11-10T00:00:00.000Z",
-    models: [],
-    slashCommands: [],
-    skills: [],
-  };
-}
-
-export function providerEntry(driver: string, displayName: string, installed = true) {
-  const provider: ServerProvider = {
-    instanceId: ProviderInstanceId.make(driver),
-    driver: ProviderDriverKind.make(driver),
-    displayName,
-    enabled: true,
-    installed,
-    version: installed ? "1.0.0" : null,
-    status: "error",
-    auth: { status: "unknown" },
-    checkedAt: "2026-11-10T00:00:00.000Z",
-    models: [],
-    slashCommands: [],
-    skills: [],
-  };
-  return deriveProviderInstanceEntries([provider])[0]!;
-}
-
-export const ROLE_OPTIONS: readonly RichChoiceOption[] = [
+const ROLE_OPTIONS: readonly RichChoiceOption[] = [
   {
     id: "requirements-product",
     title: "Requirements & Product",
@@ -118,304 +59,269 @@ export const ROLE_OPTIONS: readonly RichChoiceOption[] = [
   },
 ];
 
-export const connectedJira: AtlassianAccountStatus = {
-  id: "cloud-nexplore",
-  provider: "atlassian",
-  label: "Philip Jonientz",
-  accountUrl: "https://nexplore.atlassian.net",
-  status: "connected",
-  needsReconnect: false,
-  lastSyncAt: new Date().toISOString(),
-};
-
-export function JiraSettingsFrame({
-  accounts,
+function AgentItem({
+  mark,
+  markLabel,
+  title,
+  description,
+  status,
+  action,
 }: {
-  readonly accounts: ReadonlyArray<AtlassianAccountStatus>;
+  readonly mark: ReactNode;
+  readonly markLabel: string;
+  readonly title: string;
+  readonly description?: ReactNode;
+  readonly status?: ReactNode;
+  readonly action?: ReactNode;
 }) {
-  const mock = createMockBackend();
-  const backend = {
-    ...mock,
-    atlassian: {
-      ...mock.atlassian,
-      listAccountStatuses: async () => accounts,
-      disconnectAccount: async () => {},
-    },
-  };
   return (
-    <BackendProvider backend={backend}>
-      <JiraConnectionSettings />
-    </BackendProvider>
+    <WelcomeItem
+      mark={<ServiceMark label={markLabel}>{mark}</ServiceMark>}
+      title={title}
+      description={description}
+      status={status}
+      action={action}
+    />
   );
 }
 
-function cloudSession(overrides: Partial<CloudSession> = {}): CloudSession {
-  return {
-    sessionId: "session-welcome",
-    providerKind: "github_actions",
-    phase: "preparing",
-    elapsedSeconds: 38,
-    remainingSeconds: null,
-    machineLabel: "ubuntu-slim · 12 GB · 4 cores",
-    failureReason: null,
-    detailsUrl: null,
-    ...overrides,
-  };
-}
-
 export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
+  const mark = (
+    <ServiceMark label="Nexplore">
+      <NexploreAI aria-hidden />
+    </ServiceMark>
+  );
+
   if (state === "skipped") {
-    return <SkippedNote>Skipped — reopen in Settings → About.</SkippedNote>;
+    return (
+      <WelcomeItem
+        mark={mark}
+        title="Nexplore"
+        status={<StatusLabel status="skipped" label="Skipped" />}
+      />
+    );
   }
   if (state === "signedIn") {
     return (
-      <WelcomeRow
-        icon={<UserIcon className="size-4" />}
-        trailing={<CheckIcon className="size-4 text-success-foreground" />}
-      >
-        <p className="text-sm font-medium">Signed in to Nexplore</p>
-        <p className="text-xs text-muted-foreground">Philip Jonientz · Entra</p>
-      </WelcomeRow>
+      <WelcomeItem
+        mark={mark}
+        title="Nexplore"
+        description="Philip Jonientz"
+        status={<StatusLabel status="connected" label="Signed in" />}
+      />
     );
   }
   if (state === "waitingForCode") {
     return (
-      <AccountSignInCard
-        account={accountStatus({
-          _tag: "SigningIn",
-          userCode: "LD5PUZ45H",
-          verificationUri: "https://id.example.com/device",
-          expiresAtMs: Date.now() + 900_000,
-        })}
-        purpose="to use Nexi Work cloud sessions and phone"
-        onSignIn={noop}
-        onOpenVerification={noop}
+      <WelcomeItem
+        mark={mark}
+        title="Nexplore"
+        description={
+          <span className="font-mono font-medium tracking-wider text-foreground">LD5PUZ45H</span>
+        }
+        status={<StatusLabel status="pending" label="Waiting" />}
+        action={<PrimaryAction onClick={noop}>Copy code & open</PrimaryAction>}
       />
     );
   }
   if (state === "serverUnreachable") {
     return (
-      <AccountSignInCard
-        account={accountStatus({ _tag: "SignedOut" })}
-        purpose="to use Nexi Work cloud sessions and phone"
-        error="Could not reach this machine's server: TypeError: Failed to fetch"
-        onSignIn={noop}
-        onOpenVerification={noop}
+      <WelcomeItem
+        mark={mark}
+        title="Nexplore"
+        description="Could not reach this machine's server."
+        action={<SecondaryAction onClick={noop}>Retry</SecondaryAction>}
       />
     );
   }
   return (
-    <div className="space-y-2">
-      <AccountSignInCard
-        account={accountStatus({ _tag: "SignedOut" })}
-        purpose="to use Nexi Work cloud sessions and phone"
-        onSignIn={noop}
-        onOpenVerification={noop}
-      />
-      <SkippedNote>Recommended and skippable.</SkippedNote>
-    </div>
+    <WelcomeItem
+      mark={mark}
+      title="Nexplore"
+      action={<PrimaryAction onClick={noop}>Sign in</PrimaryAction>}
+    />
   );
 }
 
 export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
-  const addMore = (
-    <AddMoreAgents
+  const extras = (
+    <ShowMore
       open={state === "none" || state === "addMoreOpen" || state === "unreachable"}
-      emptyLabel={state === "none" ? "Set up an agent" : "Add more agents"}
+      label={state === "none" ? "Set up an agent" : "Add more agents"}
     >
-      <ModelPickerProviderConnectPanel
-        entry={providerEntry("claudeAgent", "Claude Code")}
-        tool="claude"
-        readiness="needsAuth"
+      <AgentItem
+        mark={<ClaudeAI aria-hidden />}
+        markLabel="Claude Code"
+        title="Claude Code"
+        action={<SecondaryAction onClick={noop}>Connect</SecondaryAction>}
       />
-      <ModelPickerProviderConnectPanel
-        entry={providerEntry("codex", "Codex", false)}
-        tool="codex"
-        readiness="needsInstall"
+      <AgentItem
+        mark={<OpenAI aria-hidden />}
+        markLabel="Codex"
+        title="Codex"
+        action={<SecondaryAction onClick={noop}>Install</SecondaryAction>}
       />
-      <WelcomeRow
-        icon={<BotIcon className="size-4" />}
-        trailing={
-          <Button size="sm" variant="outline">
-            Details
-          </Button>
-        }
-      >
-        <p className="text-sm font-medium">Cursor</p>
-        <p className="text-xs text-muted-foreground">
-          Open Settings → Providers to connect Cursor.
-        </p>
-      </WelcomeRow>
-    </AddMoreAgents>
+      <AgentItem
+        mark={<CursorIcon aria-hidden />}
+        markLabel="Cursor"
+        title="Cursor"
+        action={<SecondaryAction onClick={noop}>Open</SecondaryAction>}
+      />
+    </ShowMore>
   );
 
   if (state === "ready") {
     return (
-      <div className="space-y-1">
-        <OnboardingReadyAgents providers={[readyNexploreProvider()]} excludeDrivers={[]} />
-        {addMore}
-      </div>
+      <>
+        <AgentItem
+          mark={<NexploreAI aria-hidden />}
+          markLabel="Nexplore AI"
+          title="Nexplore AI"
+          status={<StatusLabel status="ready" label="Ready" />}
+        />
+        {extras}
+      </>
     );
   }
   if (state === "unreachable") {
     return (
-      <div className="space-y-2">
-        <WelcomeRow
-          icon={<BotIcon className="size-4" />}
-          trailing={
-            <Button size="sm" variant="outline">
-              Manual setup
-            </Button>
-          }
-        >
-          <p className="text-sm font-medium">Nexplore AI</p>
-          <p className="text-xs text-muted-foreground">
-            Could not reach Nexplore AI on this computer. Use the manual path, or add Claude / Codex
-            below.
-          </p>
-        </WelcomeRow>
-        {addMore}
-      </div>
+      <>
+        <AgentItem
+          mark={<NexploreAI aria-hidden />}
+          markLabel="Nexplore AI"
+          title="Nexplore AI"
+          description="Could not reach Nexplore AI."
+          action={<SecondaryAction onClick={noop}>Manual setup</SecondaryAction>}
+        />
+        {extras}
+      </>
     );
   }
-  return (
-    <div className="space-y-1">
-      <WelcomeRow icon={<BotIcon className="size-4" />}>
-        <p className="text-sm text-muted-foreground">No agents found yet on this computer.</p>
-      </WelcomeRow>
-      {addMore}
-    </div>
-  );
+  return extras;
 }
 
 export function RoleBlock() {
   const [last, setLast] = useState<string | null>(null);
   return (
-    <div className="space-y-2">
+    <div className="py-1">
       <T3TeamRichChoice
         prompt="Choose your role"
         options={ROLE_OPTIONS}
         selectedIds={last ? [last] : []}
         onChoose={([id]) => setLast(id ?? null)}
       />
-      <SkippedNote>
-        Behind a feature toggle (off by default). Shown here with the toggle on.
-      </SkippedNote>
     </div>
   );
 }
 
 export function JiraBlock({ state }: { readonly state: JiraStoryState }) {
-  if (state === "skipped") {
-    return <SkippedNote>Skipped — connect later in Settings → Jira.</SkippedNote>;
-  }
-  if (state === "connected") {
-    return <JiraSettingsFrame accounts={[connectedJira]} />;
-  }
-  if (state === "tokenFallback") {
-    return <CreateProjectConnectView connect={connectFixture()} initialShowTokenForm />;
-  }
-  return <CreateProjectConnectView connect={connectFixture()} />;
-}
+  const mark = (
+    <ServiceMark label="Jira">
+      <JiraIcon aria-hidden className="size-5" />
+    </ServiceMark>
+  );
 
-export function ProjectBlock({ state }: { readonly state: ProjectStoryState }) {
-  const [linked, setLinked] = useState<ReadonlyArray<string>>([]);
   if (state === "skipped") {
-    return <SkippedNote>Skipped — create a project from Home anytime.</SkippedNote>;
-  }
-  if (state === "chosen") {
     return (
-      <WelcomeRow
-        icon={<FolderGit2Icon className="size-4" />}
-        trailing={<CheckIcon className="size-4 text-success-foreground" />}
-      >
-        <p className="text-sm font-medium">IES NG</p>
-        <p className="text-xs text-muted-foreground">nexplore.atlassian.net · hive/ies-alarm</p>
-      </WelcomeRow>
+      <WelcomeItem
+        mark={mark}
+        title="Jira"
+        status={<StatusLabel status="skipped" label="Skipped" />}
+      />
     );
   }
-  if (state === "choosing") {
+  if (state === "connected") {
     return (
-      <div className="space-y-4">
-        <CreateProjectChooseStep
-          {...chooseProps({
-            catalogState: catalogState({ catalog: nexploreProjects }),
-          })}
-        />
-        <RepositoryPicker
-          discovery={discovery()}
-          linkedUrls={linked}
-          onToggle={(url) =>
-            setLinked((current) =>
-              current.includes(url) ? current.filter((entry) => entry !== url) : [...current, url],
-            )
-          }
-          onLinkMany={(urls) => setLinked((current) => [...new Set([...current, ...urls])])}
-        />
-      </div>
+      <WelcomeItem
+        mark={mark}
+        title="Jira"
+        description="nexplore.atlassian.net · Philip Jonientz"
+        status={<StatusLabel status="connected" label="Connected" />}
+      />
+    );
+  }
+  if (state === "tokenFallback") {
+    return (
+      <WelcomeItem
+        mark={mark}
+        title="Jira"
+        action={<PrimaryAction onClick={noop}>Connect with token</PrimaryAction>}
+      />
     );
   }
   return (
-    <WelcomeRow
-      icon={<FolderGit2Icon className="size-4" />}
-      trailing={
-        <Button size="sm" variant="outline">
-          Set up
-        </Button>
-      }
-    >
-      <p className="text-sm font-medium">First project</p>
-      <p className="text-xs text-muted-foreground">Pick a Jira project and link a repository.</p>
-    </WelcomeRow>
+    <WelcomeItem
+      mark={mark}
+      title="Jira"
+      action={<PrimaryAction onClick={noop}>Connect</PrimaryAction>}
+    />
   );
 }
 
 export function GitHubBlock({ state }: { readonly state: GitHubStoryState }) {
+  const mark = (label: string) => (
+    <ServiceMark label={label}>
+      <GitHubIcon aria-hidden className="size-5" />
+    </ServiceMark>
+  );
+
   if (state === "skipped") {
-    return <SkippedNote>Skipped — sign in from Settings → GitHub.</SkippedNote>;
-  }
-  if (state === "bothSignedIn") {
     return (
-      <div className="space-y-3">
-        <GitHubSignInView
-          host="nexplore.ghe.com"
-          state={{ tool: "gh", phase: "connected", hostname: "nexplore.ghe.com", account: "pj" }}
-          onStart={noop}
-          onCancel={noop}
-        />
-        <GitHubSignInView
-          host="github.com"
-          state={{ tool: "gh", phase: "connected", hostname: "github.com", account: "djangal" }}
-          onStart={noop}
-          onCancel={noop}
-        />
-      </div>
+      <WelcomeItem
+        mark={mark("GitHub")}
+        title="GitHub"
+        status={<StatusLabel status="skipped" label="Skipped" />}
+      />
     );
   }
-  if (state === "gheAwaiting") {
-    return (
-      <div className="space-y-3">
-        <GitHubSignInView
-          host="nexplore.ghe.com"
-          state={{
-            tool: "gh",
-            phase: "awaiting-open",
-            hostname: "nexplore.ghe.com",
-            url: "https://nexplore.ghe.com/login/device",
-            displayCode: "0749-5FAA",
-          }}
-          onStart={noop}
-          onCancel={noop}
-        />
-        <GitHubSignInView host="github.com" state={undefined} onStart={noop} onCancel={noop} />
-      </div>
+
+  const ghe =
+    state === "bothSignedIn" ? (
+      <WelcomeItem
+        mark={mark("GitHub Enterprise")}
+        title="nexplore.ghe.com"
+        description="pj"
+        status={<StatusLabel status="connected" label="Signed in" />}
+      />
+    ) : state === "gheAwaiting" ? (
+      <WelcomeItem
+        mark={mark("GitHub Enterprise")}
+        title="nexplore.ghe.com"
+        description={
+          <span className="font-mono font-medium tracking-wider text-foreground">0749-5FAA</span>
+        }
+        status={<StatusLabel status="pending" label="Waiting" />}
+        action={<PrimaryAction onClick={noop}>Copy code & open</PrimaryAction>}
+      />
+    ) : (
+      <WelcomeItem
+        mark={mark("GitHub Enterprise")}
+        title="nexplore.ghe.com"
+        action={<SecondaryAction onClick={noop}>Sign in</SecondaryAction>}
+      />
     );
-  }
+
+  const dotcom =
+    state === "bothSignedIn" ? (
+      <WelcomeItem
+        mark={mark("GitHub")}
+        title="github.com"
+        description="djangal"
+        status={<StatusLabel status="connected" label="Signed in" />}
+      />
+    ) : (
+      <WelcomeItem
+        mark={mark("GitHub")}
+        title="github.com"
+        action={<SecondaryAction onClick={noop}>Sign in</SecondaryAction>}
+      />
+    );
+
   return (
-    <div className="space-y-3">
-      <GitHubSignInView host="nexplore.ghe.com" state={undefined} onStart={noop} onCancel={noop} />
-      <GitHubSignInView host="github.com" state={undefined} onStart={noop} onCancel={noop} />
-    </div>
+    <>
+      {ghe}
+      {dotcom}
+    </>
   );
 }
 
@@ -426,70 +332,70 @@ export function CloudPhoneBlock({
   readonly state: CloudPhoneStoryState;
   readonly entraSignedIn: boolean;
 }) {
+  const cloudMark = (
+    <ServiceMark label="Cloud">
+      <CloudIcon className="size-5" aria-hidden />
+    </ServiceMark>
+  );
+  const phoneMark = (
+    <ServiceMark label="Phone">
+      <SmartphoneIcon className="size-5" aria-hidden />
+    </ServiceMark>
+  );
+
   if (state === "skipped") {
-    return <SkippedNote>Skipped — enable cloud sessions in Settings → Features.</SkippedNote>;
+    return (
+      <WelcomeItem
+        mark={cloudMark}
+        title="Cloud sessions"
+        status={<StatusLabel status="skipped" label="Skipped" />}
+      />
+    );
   }
   if (state === "locked" || !entraSignedIn) {
     return (
-      <LockedNote>
-        <div className="flex items-start gap-2">
-          <LockIcon className="mt-0.5 size-4 shrink-0" />
-          <div>
-            <p className="font-medium text-foreground">Needs Nexplore sign-in</p>
-            <p className="mt-0.5 text-xs">
-              Cloud sessions and phone setup unlock after you sign in with your Nexplore account
-              above.
-            </p>
-          </div>
-        </div>
-      </LockedNote>
+      <>
+        <WelcomeItem
+          mark={cloudMark}
+          title="Cloud sessions"
+          status={<StatusLabel status="locked" label="Needs Nexplore sign-in" />}
+        />
+        <WelcomeItem
+          mark={phoneMark}
+          title="Phone"
+          status={<StatusLabel status="locked" label="Needs Nexplore sign-in" />}
+        />
+      </>
     );
   }
   if (state === "optIn") {
     return (
-      <div className="space-y-3">
-        <WelcomeRow
-          icon={<CloudIcon className="size-4" />}
-          trailing={
-            <Button size="sm" variant="outline">
-              Turn on
-            </Button>
-          }
-        >
-          <p className="text-sm font-medium">Cloud sessions</p>
-          <p className="text-xs text-muted-foreground">
-            Run agents on a remote machine when this one is busy.
-          </p>
-        </WelcomeRow>
-        <WelcomeRow
-          icon={<SmartphoneIcon className="size-4" />}
-          trailing={
-            <Button size="sm" variant="outline">
-              Set up
-            </Button>
-          }
-        >
-          <p className="text-sm font-medium">Phone</p>
-          <p className="text-xs text-muted-foreground">
-            Optional. Continue work from the mobile app.
-          </p>
-        </WelcomeRow>
-      </div>
+      <>
+        <WelcomeItem
+          mark={cloudMark}
+          title="Cloud sessions"
+          action={<SecondaryAction onClick={noop}>Turn on</SecondaryAction>}
+        />
+        <WelcomeItem
+          mark={phoneMark}
+          title="Phone"
+          action={<SecondaryAction onClick={noop}>Set up</SecondaryAction>}
+        />
+      </>
     );
   }
   return (
-    <div className="space-y-3">
-      <CloudSessionSetupCard
-        facts={{ session: cloudSession({}), machineConnected: false }}
-        frozenElapsedSeconds={38}
+    <>
+      <WelcomeItem
+        mark={cloudMark}
+        title="Cloud sessions"
+        status={<StatusLabel status="pending" label="Setting up" />}
       />
-      <WelcomeRow
-        icon={<SmartphoneIcon className="size-4" />}
-        trailing={<CheckIcon className="size-4 text-success-foreground" />}
-      >
-        <p className="text-sm font-medium">Phone</p>
-        <p className="text-xs text-muted-foreground">Ready — same Nexplore account on the app.</p>
-      </WelcomeRow>
-    </div>
+      <WelcomeItem
+        mark={phoneMark}
+        title="Phone"
+        status={<StatusLabel status="ready" label="Ready" />}
+      />
+    </>
   );
 }

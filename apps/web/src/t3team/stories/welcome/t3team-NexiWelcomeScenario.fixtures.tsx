@@ -1,19 +1,12 @@
 import type { ReactNode } from "react";
 
-import {
-  BrandHeader,
-  MoreInSettingsLine,
-  StartFooter,
-  WelcomePageShell,
-  WelcomeSection,
-} from "./t3team-NexiWelcomeLayout.fixtures";
+import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-NexiWelcomeLayout.fixtures";
 import {
   AccountBlock,
   AgentsBlock,
   CloudPhoneBlock,
   GitHubBlock,
   JiraBlock,
-  ProjectBlock,
   RoleBlock,
 } from "./t3team-NexiWelcomeSections.fixtures";
 
@@ -28,8 +21,6 @@ export type AgentsStoryState = "ready" | "unreachable" | "none" | "addMoreOpen";
 
 export type JiraStoryState = "notConnected" | "tokenFallback" | "connected" | "skipped";
 
-export type ProjectStoryState = "idle" | "choosing" | "chosen" | "skipped";
-
 export type GitHubStoryState = "signedOut" | "gheAwaiting" | "bothSignedIn" | "skipped";
 
 export type CloudPhoneStoryState = "locked" | "optIn" | "on" | "skipped";
@@ -39,7 +30,6 @@ export type WelcomeScenario = {
   readonly agents: AgentsStoryState;
   readonly roleToggleOn: boolean;
   readonly jira: JiraStoryState;
-  readonly project: ProjectStoryState;
   readonly github: GitHubStoryState;
   readonly cloudPhone: CloudPhoneStoryState;
   readonly narrow?: boolean;
@@ -51,7 +41,6 @@ export const SCENARIOS = {
     agents: "none",
     roleToggleOn: false,
     jira: "notConnected",
-    project: "idle",
     github: "signedOut",
     cloudPhone: "locked",
   },
@@ -60,7 +49,6 @@ export const SCENARIOS = {
     agents: "ready",
     roleToggleOn: false,
     jira: "connected",
-    project: "choosing",
     github: "gheAwaiting",
     cloudPhone: "locked",
   },
@@ -69,7 +57,6 @@ export const SCENARIOS = {
     agents: "ready",
     roleToggleOn: false,
     jira: "connected",
-    project: "chosen",
     github: "bothSignedIn",
     cloudPhone: "on",
   },
@@ -78,7 +65,6 @@ export const SCENARIOS = {
     agents: "ready",
     roleToggleOn: false,
     jira: "skipped",
-    project: "skipped",
     github: "skipped",
     cloudPhone: "skipped",
   },
@@ -87,7 +73,6 @@ export const SCENARIOS = {
     agents: "ready",
     roleToggleOn: true,
     jira: "connected",
-    project: "idle",
     github: "signedOut",
     cloudPhone: "optIn",
   },
@@ -96,7 +81,6 @@ export const SCENARIOS = {
     agents: "unreachable",
     roleToggleOn: false,
     jira: "notConnected",
-    project: "idle",
     github: "signedOut",
     cloudPhone: "optIn",
   },
@@ -105,7 +89,6 @@ export const SCENARIOS = {
     agents: "none",
     roleToggleOn: false,
     jira: "notConnected",
-    project: "idle",
     github: "signedOut",
     cloudPhone: "locked",
   },
@@ -114,7 +97,6 @@ export const SCENARIOS = {
     agents: "none",
     roleToggleOn: false,
     jira: "notConnected",
-    project: "idle",
     github: "signedOut",
     cloudPhone: "locked",
     narrow: true,
@@ -123,62 +105,50 @@ export const SCENARIOS = {
 
 const noop = () => {};
 
+/** First-run general setup only — rows + Start, no page chrome. */
 export function NexiWelcomePageMockup({ scenario }: { readonly scenario: WelcomeScenario }) {
   const entraSignedIn = scenario.account === "signedIn";
   const agentReady = scenario.agents === "ready";
   return (
     <WelcomePageShell narrow={scenario.narrow}>
-      <BrandHeader />
-      <div className="border-t border-border/60">
-        <WelcomeSection title="Account" recommended>
+      <div className="border-t border-border/50">
+        <WelcomeSection title="Account">
           <AccountBlock state={scenario.account} />
         </WelcomeSection>
         <WelcomeSection title="Agents">
           <AgentsBlock state={scenario.agents} />
         </WelcomeSection>
         {scenario.roleToggleOn ? (
-          <WelcomeSection title="Role" optional>
+          <WelcomeSection title="Role">
             <RoleBlock />
           </WelcomeSection>
         ) : null}
-        <WelcomeSection title="Jira" recommended>
+        <WelcomeSection title="Jira">
           <JiraBlock state={scenario.jira} />
         </WelcomeSection>
-        <WelcomeSection title="Project" optional>
-          <ProjectBlock state={scenario.project} />
-        </WelcomeSection>
-        <WelcomeSection title="GitHub" optional>
+        <WelcomeSection title="GitHub">
           <GitHubBlock state={scenario.github} />
         </WelcomeSection>
-        <WelcomeSection title="Cloud & phone" optional>
+        <WelcomeSection title="Cloud">
           <CloudPhoneBlock state={scenario.cloudPhone} entraSignedIn={entraSignedIn} />
         </WelcomeSection>
       </div>
-      <MoreInSettingsLine />
       <StartFooter agentReady={agentReady} onStart={noop} onStartWithoutAgent={noop} />
     </WelcomePageShell>
   );
 }
 
-/** Section-only frame for per-section stories. */
 export function SectionFrame({
   title,
-  recommended,
-  optional,
   children,
 }: {
   readonly title: string;
-  readonly recommended?: boolean;
-  readonly optional?: boolean;
   readonly children: ReactNode;
 }) {
   return (
     <WelcomePageShell>
-      <BrandHeader />
-      <div className="border-t border-border/60">
-        <WelcomeSection title={title} recommended={recommended} optional={optional}>
-          {children}
-        </WelcomeSection>
+      <div className="border-t border-border/50">
+        <WelcomeSection title={title}>{children}</WelcomeSection>
       </div>
     </WelcomePageShell>
   );
@@ -190,6 +160,5 @@ export {
   CloudPhoneBlock,
   GitHubBlock,
   JiraBlock,
-  ProjectBlock,
   RoleBlock,
 } from "./t3team-NexiWelcomeSections.fixtures";

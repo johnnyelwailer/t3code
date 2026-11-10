@@ -16,7 +16,7 @@ type Story = StoryObj;
 
 export const NotConnected: Story = {
   render: () => (
-    <SectionFrame title="Jira" recommended>
+    <SectionFrame title="Jira">
       <JiraBlock state="notConnected" />
     </SectionFrame>
   ),
@@ -24,7 +24,7 @@ export const NotConnected: Story = {
 
 export const TokenFallback: Story = {
   render: () => (
-    <SectionFrame title="Jira" recommended>
+    <SectionFrame title="Jira">
       <JiraBlock state="tokenFallback" />
     </SectionFrame>
   ),
@@ -32,7 +32,7 @@ export const TokenFallback: Story = {
 
 export const Connected: Story = {
   render: () => (
-    <SectionFrame title="Jira" recommended>
+    <SectionFrame title="Jira">
       <JiraBlock state="connected" />
     </SectionFrame>
   ),
@@ -40,7 +40,7 @@ export const Connected: Story = {
 
 export const Skipped: Story = {
   render: () => (
-    <SectionFrame title="Jira" recommended>
+    <SectionFrame title="Jira">
       <JiraBlock state="skipped" />
     </SectionFrame>
   ),

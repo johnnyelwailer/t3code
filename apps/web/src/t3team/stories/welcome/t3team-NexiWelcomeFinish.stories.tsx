@@ -1,92 +1,62 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { CheckIcon, CircleDashedIcon } from "lucide-react";
 
-import { Button } from "~/t3team/components/ui/t3team-button";
+import { NexploreAI } from "~/components/t3team-NexploreAIIcon";
 
 import {
-  BrandHeader,
-  MoreInSettingsLine,
+  PrimaryAction,
+  ServiceMark,
+  StatusLabel,
+  WelcomeItem,
   WelcomePageShell,
-  WelcomeRow,
   WelcomeSection,
 } from "./t3team-NexiWelcomeLayout.fixtures";
 
 type FinishItem = {
   readonly label: string;
   readonly status: "done" | "skipped" | "ready";
-  readonly detail: string;
+  readonly detail?: string;
 };
 
 const ITEMS: readonly FinishItem[] = [
-  {
-    label: "Nexplore account",
-    status: "done",
-    detail: "Signed in · reopen from Settings → About",
-  },
-  {
-    label: "Agents",
-    status: "ready",
-    detail: "Nexplore AI ready",
-  },
-  {
-    label: "Role",
-    status: "skipped",
-    detail: "Toggle off · enable in Settings → Features",
-  },
-  {
-    label: "Jira",
-    status: "skipped",
-    detail: "Skipped · Settings → Jira",
-  },
-  {
-    label: "First project",
-    status: "skipped",
-    detail: "Skipped · create from Home",
-  },
-  {
-    label: "GitHub",
-    status: "skipped",
-    detail: "Skipped · Settings → GitHub",
-  },
-  {
-    label: "Cloud sessions & phone",
-    status: "skipped",
-    detail: "Skipped · Settings → Features",
-  },
+  { label: "Nexplore", status: "done" },
+  { label: "Agents", status: "ready", detail: "Nexplore AI" },
+  { label: "Role", status: "skipped" },
+  { label: "Jira", status: "skipped" },
+  { label: "GitHub", status: "skipped" },
+  { label: "Cloud", status: "skipped" },
 ];
 
 function FinishSummary({ items }: { readonly items: readonly FinishItem[] }) {
   return (
     <WelcomePageShell>
-      <BrandHeader />
-      <div className="border-t border-border/60">
+      <div className="border-t border-border/50">
         <WelcomeSection title="Finish">
-          <div className="space-y-1">
-            <p className="mb-3 text-sm text-muted-foreground">
-              You can reopen this setup anytime from{" "}
-              <span className="font-medium text-foreground">Settings → About → Welcome page</span>.
-            </p>
-            {items.map((item) => (
-              <WelcomeRow
-                key={item.label}
-                icon={
-                  item.status === "skipped" ? (
-                    <CircleDashedIcon className="size-4" />
+          {items.map((item) => (
+            <WelcomeItem
+              key={item.label}
+              mark={
+                <ServiceMark label={item.label}>
+                  {item.label === "Nexplore" || item.label === "Agents" ? (
+                    <NexploreAI aria-hidden />
                   ) : (
-                    <CheckIcon className="size-4 text-success-foreground" />
-                  )
-                }
-              >
-                <p className="text-sm font-medium">{item.label}</p>
-                <p className="text-xs text-muted-foreground">{item.detail}</p>
-              </WelcomeRow>
-            ))}
-          </div>
+                    <span className="text-xs font-semibold">{item.label.slice(0, 1)}</span>
+                  )}
+                </ServiceMark>
+              }
+              title={item.label}
+              description={item.detail}
+              status={
+                <StatusLabel
+                  status={item.status === "skipped" ? "skipped" : "ready"}
+                  label={item.status === "skipped" ? "Skipped" : "Done"}
+                />
+              }
+            />
+          ))}
         </WelcomeSection>
       </div>
-      <MoreInSettingsLine />
-      <div className="mt-6 flex justify-end">
-        <Button>Start</Button>
+      <div className="mt-6 flex justify-end border-t border-border/50 pt-5">
+        <PrimaryAction>Start</PrimaryAction>
       </div>
     </WelcomePageShell>
   );
@@ -100,7 +70,6 @@ const meta = {
 export default meta;
 type Story = StoryObj;
 
-/** Lists what was skipped and where to reopen setup. */
 export const SummarySkippedOptional: Story = {
   render: () => <FinishSummary items={ITEMS} />,
 };
@@ -109,9 +78,7 @@ export const SummaryAllDone: Story = {
   render: () => (
     <FinishSummary
       items={ITEMS.map((item) =>
-        item.status === "skipped"
-          ? { ...item, status: "done" as const, detail: "Completed during setup" }
-          : item,
+        item.status === "skipped" ? { ...item, status: "done" as const } : item,
       )}
     />
   ),

@@ -16,7 +16,7 @@ type Story = StoryObj;
 
 export const ToggleOn: Story = {
   render: () => (
-    <SectionFrame title="Role" optional>
+    <SectionFrame title="Role">
       <RoleBlock />
     </SectionFrame>
   ),

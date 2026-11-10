@@ -16,7 +16,7 @@ type Story = StoryObj;
 
 export const SignedOut: Story = {
   render: () => (
-    <SectionFrame title="GitHub" optional>
+    <SectionFrame title="GitHub">
       <GitHubBlock state="signedOut" />
     </SectionFrame>
   ),
@@ -24,7 +24,7 @@ export const SignedOut: Story = {
 
 export const GheAwaitingApproval: Story = {
   render: () => (
-    <SectionFrame title="GitHub" optional>
+    <SectionFrame title="GitHub">
       <GitHubBlock state="gheAwaiting" />
     </SectionFrame>
   ),
@@ -32,7 +32,7 @@ export const GheAwaitingApproval: Story = {
 
 export const BothSignedIn: Story = {
   render: () => (
-    <SectionFrame title="GitHub" optional>
+    <SectionFrame title="GitHub">
       <GitHubBlock state="bothSignedIn" />
     </SectionFrame>
   ),
@@ -40,7 +40,7 @@ export const BothSignedIn: Story = {
 
 export const Skipped: Story = {
   render: () => (
-    <SectionFrame title="GitHub" optional>
+    <SectionFrame title="GitHub">
       <GitHubBlock state="skipped" />
     </SectionFrame>
   ),

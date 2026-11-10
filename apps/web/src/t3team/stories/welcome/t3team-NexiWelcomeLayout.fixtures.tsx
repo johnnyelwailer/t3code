@@ -1,85 +1,107 @@
 import type { ReactNode } from "react";
-import { ChevronDownIcon, SparklesIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, CircleDashedIcon, LockIcon } from "lucide-react";
 
-import { Button } from "~/t3team/components/ui/t3team-button";
-import { T3TeamNexploreStripArt } from "~/t3team/t3team-NexploreStageArt";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "~/components/ui/collapsible";
+import { Button } from "~/t3team/components/ui/t3team-button";
 
-/** Left label + content band — mirrors upstream WelcomePage section chrome. */
-export function WelcomeSection({
-  title,
+/** Shared mark tile — same size/placement for Nexplore, Jira, GitHub, agents. */
+export function ServiceMark({
   children,
-  recommended,
-  optional,
+  label,
 }: {
-  readonly title: string;
   readonly children: ReactNode;
-  readonly recommended?: boolean;
-  readonly optional?: boolean;
+  readonly label: string;
 }) {
   return (
-    <section className="grid gap-x-10 border-b border-border/60 py-4 sm:grid-cols-[7.5rem_minmax(0,1fr)]">
-      <div className="space-y-1 pt-2">
-        <h2 className="text-sm leading-5 text-muted-foreground">{title}</h2>
-        {recommended ? (
-          <p className="text-3xs font-medium tracking-wide text-foreground/70 uppercase">
-            Recommended
-          </p>
-        ) : null}
-        {optional ? <p className="text-3xs text-muted-foreground">Optional</p> : null}
-      </div>
-      <div className="min-w-0">{children}</div>
-    </section>
-  );
-}
-
-/** Shared icon column so agent / account / cloud rows line up. */
-export function RowIcon({ children }: { readonly children: ReactNode }) {
-  return (
-    <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-      {children}
+    <span
+      aria-label={label}
+      className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground"
+    >
+      <span className="flex size-5 items-center justify-center [&_svg]:size-5">{children}</span>
     </span>
   );
 }
 
-export function WelcomeRow({
-  icon,
-  children,
-  trailing,
+export type WelcomeStatus = "ready" | "connected" | "pending" | "locked" | "skipped" | "action";
+
+export function StatusLabel({
+  status,
+  label,
 }: {
-  readonly icon?: ReactNode;
-  readonly children: ReactNode;
-  readonly trailing?: ReactNode;
+  readonly status: WelcomeStatus;
+  readonly label: string;
+}) {
+  if (status === "ready" || status === "connected") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <CheckIcon className="size-3.5 text-foreground/70" aria-hidden />
+        {label}
+      </span>
+    );
+  }
+  if (status === "locked") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <LockIcon className="size-3.5" aria-hidden />
+        {label}
+      </span>
+    );
+  }
+  if (status === "skipped") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <CircleDashedIcon className="size-3.5" aria-hidden />
+        {label}
+      </span>
+    );
+  }
+  return <span className="text-xs text-muted-foreground">{label}</span>;
+}
+
+/** mark | name | optional act-needed detail | status | one action */
+export function WelcomeItem({
+  mark,
+  title,
+  description,
+  status,
+  action,
+}: {
+  readonly mark: ReactNode;
+  readonly title: string;
+  readonly description?: ReactNode;
+  readonly status?: ReactNode;
+  readonly action?: ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-3 py-2">
-      <RowIcon>{icon ?? <span className="size-2 rounded-full bg-border" />}</RowIcon>
-      <div className="min-w-0 flex-1">{children}</div>
-      {trailing ? <div className="shrink-0 self-center">{trailing}</div> : null}
+    <div className="flex items-center gap-3 py-2.5">
+      {mark}
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        {description ? (
+          <div className="text-xs leading-5 text-muted-foreground">{description}</div>
+        ) : null}
+      </div>
+      {status ? <div className="hidden shrink-0 sm:block">{status}</div> : null}
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
 
-export function BrandHeader({ productName = "Nexi Work" }: { readonly productName?: string }) {
+/** Left section label only — no Recommended / Optional tags. */
+export function WelcomeSection({
+  title,
+  children,
+}: {
+  readonly title: string;
+  readonly children: ReactNode;
+}) {
   return (
-    <header className="relative mb-8 overflow-hidden rounded-2xl border border-border/60">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 overflow-hidden opacity-90">
-        <T3TeamNexploreStripArt />
-      </div>
-      <div className="relative flex flex-col gap-2 px-5 pt-14 pb-5 sm:px-6">
-        <div className="inline-flex w-fit items-center gap-1.5 rounded-full bg-background/80 px-2.5 py-1 text-3xs font-medium text-foreground/80 shadow-sm backdrop-blur-sm">
-          <SparklesIcon className="size-3 text-info" />
-          First-run setup
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Welcome to {productName}
-        </h1>
-        <p className="max-w-xl text-sm text-muted-foreground">
-          Sign in, confirm an agent, connect your work sources, then start. Everything except one
-          ready agent is optional.
-        </p>
-      </div>
-    </header>
+    <section className="grid items-start gap-x-8 border-b border-border/50 py-4 sm:grid-cols-[5.5rem_minmax(0,1fr)]">
+      <h2 className="pt-2.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h2>
+      <div className="min-w-0 divide-y divide-border/40">{children}</div>
+    </section>
   );
 }
 
@@ -96,22 +118,14 @@ export function WelcomePageShell({
       data-welcome-mockup=""
       style={narrow ? { width: 390, marginInline: "auto" } : undefined}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-52 t3team-welcome-glow opacity-70" />
-      <div className="pointer-events-none absolute inset-0 t3team-welcome-wash" />
       <div
-        className={`relative mx-auto flex min-h-screen w-full flex-col px-5 pt-10 pb-10 sm:px-6 sm:pt-14 ${
+        className={`relative mx-auto flex min-h-screen w-full flex-col px-5 pt-8 pb-12 sm:px-6 sm:pt-10 ${
           narrow ? "max-w-[390px]" : "max-w-3xl"
         }`}
       >
         {children}
       </div>
     </div>
-  );
-}
-
-export function MoreInSettingsLine() {
-  return (
-    <p className="mt-6 text-xs text-muted-foreground">More in Settings → Features (voice, Labs).</p>
   );
 }
 
@@ -125,54 +139,69 @@ export function StartFooter({
   readonly onStartWithoutAgent?: () => void;
 }) {
   return (
-    <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-5">
       {agentReady ? (
         <span />
       ) : (
-        <Button variant="ghost-muted" onClick={onStartWithoutAgent}>
+        <Button variant="ghost-muted" size="sm" onClick={onStartWithoutAgent}>
           Start without an agent
         </Button>
       )}
-      <div className="flex items-center gap-3">
-        {agentReady ? null : (
-          <span className="text-xs text-muted-foreground">Set up one agent to start.</span>
-        )}
-        <Button disabled={!agentReady} onClick={onStart}>
-          Start
-        </Button>
-      </div>
+      <Button size="sm" disabled={!agentReady} onClick={onStart}>
+        Start
+      </Button>
     </div>
   );
 }
 
-export function AddMoreAgents({
+export function ShowMore({
   open,
+  label,
   children,
-  emptyLabel = "Add more agents",
 }: {
   readonly open?: boolean;
+  readonly label: string;
   readonly children: ReactNode;
-  readonly emptyLabel?: string;
 }) {
   return (
     <Collapsible defaultOpen={open}>
-      <CollapsibleTrigger className="mt-2 flex w-full items-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground">
-        <ChevronDownIcon className="size-4" />
-        {emptyLabel}
+      <CollapsibleTrigger className="flex w-full items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground">
+        <ChevronDownIcon className="size-3.5" />
+        {label}
       </CollapsibleTrigger>
-      <CollapsiblePanel className="space-y-2 pt-1 pb-2">{children}</CollapsiblePanel>
+      <CollapsiblePanel className="divide-y divide-border/40 pb-1">{children}</CollapsiblePanel>
     </Collapsible>
   );
 }
 
-export function SkippedNote({ children }: { readonly children: ReactNode }) {
-  return <p className="text-xs text-muted-foreground">{children}</p>;
+export function PrimaryAction({
+  children,
+  onClick,
+  disabled,
+}: {
+  readonly children: ReactNode;
+  readonly onClick?: () => void;
+  readonly disabled?: boolean;
+}) {
+  return (
+    <Button size="sm" onClick={onClick} disabled={disabled}>
+      {children}
+    </Button>
+  );
 }
 
-export function LockedNote({ children }: { readonly children: ReactNode }) {
+export function SecondaryAction({
+  children,
+  onClick,
+  disabled,
+}: {
+  readonly children: ReactNode;
+  readonly onClick?: () => void;
+  readonly disabled?: boolean;
+}) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+    <Button size="sm" variant="outline" onClick={onClick} disabled={disabled}>
       {children}
-    </div>
+    </Button>
   );
 }

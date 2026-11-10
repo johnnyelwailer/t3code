@@ -16,7 +16,7 @@ type Story = StoryObj;
 
 export const SignedOut: Story = {
   render: () => (
-    <SectionFrame title="Account" recommended>
+    <SectionFrame title="Account">
       <AccountBlock state="signedOut" />
     </SectionFrame>
   ),
@@ -24,7 +24,7 @@ export const SignedOut: Story = {
 
 export const WaitingForCode: Story = {
   render: () => (
-    <SectionFrame title="Account" recommended>
+    <SectionFrame title="Account">
       <AccountBlock state="waitingForCode" />
     </SectionFrame>
   ),
@@ -32,7 +32,7 @@ export const WaitingForCode: Story = {
 
 export const SignedIn: Story = {
   render: () => (
-    <SectionFrame title="Account" recommended>
+    <SectionFrame title="Account">
       <AccountBlock state="signedIn" />
     </SectionFrame>
   ),
@@ -40,7 +40,7 @@ export const SignedIn: Story = {
 
 export const ServerUnreachable: Story = {
   render: () => (
-    <SectionFrame title="Account" recommended>
+    <SectionFrame title="Account">
       <AccountBlock state="serverUnreachable" />
     </SectionFrame>
   ),
@@ -48,7 +48,7 @@ export const ServerUnreachable: Story = {
 
 export const Skipped: Story = {
   render: () => (
-    <SectionFrame title="Account" recommended>
+    <SectionFrame title="Account">
       <AccountBlock state="skipped" />
     </SectionFrame>
   ),
