@@ -1,10 +1,13 @@
-import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { plainProjectFolderName } from "@t3tools/contracts";
 import { bootstrapProjectTitle } from "./t3team-cloudSessionBootstrapTitle.ts";
 
-const path = NodePath.posix;
+const path = {
+  basename: (p: string) => p.slice(p.lastIndexOf("/") + 1),
+  dirname: (p: string) => p.slice(0, p.lastIndexOf("/")),
+  resolve: (...segments: string[]) => segments.join("/").replace(/\/+/g, "/"),
+};
 const baseDir = "/home/runner/t3";
 const folder = plainProjectFolderName("Nexi AI", "0b9c1e7a-1234-4c4c-9c9c-123456789abc");
 
