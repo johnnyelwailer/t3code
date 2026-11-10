@@ -1,9 +1,27 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { plainProjectFolderName } from "./t3team-cloudSessionProjectFolder.ts";
+import {
+  plainProjectFolderName,
+  plainProjectTitleFromFolder,
+} from "./t3team-cloudSessionProjectFolder.ts";
 
 /** The session workflow's `project_name` rule (session.yml, "Resolve the session"). */
 const WORKFLOW_RULE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/;
+
+describe("plainProjectTitleFromFolder", () => {
+  it("is the title a folder was made from", () => {
+    expect(plainProjectTitleFromFolder(plainProjectFolderName("IES NG", "project-1"))).toBe(
+      "IES NG",
+    );
+    expect(plainProjectTitleFromFolder(plainProjectFolderName("", "project-1"))).toBe("project");
+  });
+
+  it("is null for any other folder name", () => {
+    for (const folder of ["IES NG", "IES NG-781A8188", "IES NG-781a818", "-781a8188", ""]) {
+      expect(plainProjectTitleFromFolder(folder)).toBeNull();
+    }
+  });
+});
 
 describe("plainProjectFolderName", () => {
   it("is the readable title plus a suffix that is the same every session", () => {

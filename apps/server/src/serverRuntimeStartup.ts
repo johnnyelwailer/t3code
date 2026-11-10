@@ -27,6 +27,7 @@ import * as Schema from "effect/Schema";
 
 import * as ServerConfig from "./config.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
+import { bootstrapProjectTitle } from "./cloud/t3team-cloudSessionBootstrapTitle.ts";
 import { flushCompileCache } from "./compileCache.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
@@ -287,7 +288,12 @@ const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
     const { project, created } = yield* projects.bootstrap({
       commandId: CommandId.make(yield* randomUUID),
       projectId: ProjectId.make(yield* randomUUID),
-      title: repositoryName || path.basename(serverConfig.cwd) || "project",
+      title: bootstrapProjectTitle({
+        repositoryName,
+        cwd: serverConfig.cwd,
+        baseDir: serverConfig.baseDir,
+        path,
+      }),
       workspaceRoot: serverConfig.cwd,
     });
     if (created) {
