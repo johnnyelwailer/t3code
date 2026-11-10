@@ -28,7 +28,7 @@ const queued = decodeCloudQueuedSend({
   createdAt: "2026-10-12T00:00:00.000Z",
 })!;
 
-describe("cloud session follows the composer project (409)", () => {
+describe("cloud session follows the composer project (1215)", () => {
   beforeEach(() => {
     clearCloudSessionTarget("draft-1");
   });
@@ -51,11 +51,14 @@ describe("cloud session follows the composer project (409)", () => {
 
   it("keeps the target while the project is the one it was created for", () => {
     selectCloudSessionCreating("draft-1", "New cloud session", "project-a");
-    expect(followCloudSessionProject("draft-1", "project-a")).toEqual({ kind: "kept" });
+    expect(followCloudSessionProject("draft-1", "project-a")).toEqual({
+      kind: "kept",
+      otherProject: false,
+    });
     expect(getCloudSessionTarget("draft-1")).not.toBeNull();
   });
 
-  it("clears an unsent target when the project changes before the first message", () => {
+  it("keeps an unsent target when the project changes before the first message", () => {
     selectCloudSessionTarget({
       scopeKey: "draft-1",
       sessionId: "session-9",
@@ -63,13 +66,17 @@ describe("cloud session follows the composer project (409)", () => {
       projectKey: "project-a",
     });
     expect(followCloudSessionProject("draft-1", "project-b")).toEqual({
-      kind: "cleared",
+      kind: "kept",
+      otherProject: true,
+    });
+    expect(getCloudSessionTarget("draft-1")).toMatchObject({
+      sessionId: "session-9",
+      projectKey: "project-a",
       label: "machine-a",
     });
-    expect(getCloudSessionTarget("draft-1")).toBeNull();
   });
 
-  it("hands a queued first message back as a draft when the project changes", () => {
+  it("keeps a queued first message when the project changes mid-setup", () => {
     selectCloudSessionTarget({
       scopeKey: "draft-1",
       sessionId: "session-9",
@@ -80,14 +87,27 @@ describe("cloud session follows the composer project (409)", () => {
     useComposerDraftStore.getState().setPrompt(draftId, "hello");
     writeDraftCloudQueuedSend("draft-1", queued);
     useComposerDraftStore.getState().setPrompt(draftId, "");
-    expect(followCloudSessionProject("draft-1", "project-b")).toEqual({ kind: "restored" });
-    expect(getCloudSessionTarget("draft-1")).toBeNull();
-    expect(getDraftCloudQueuedSend("draft-1")).toBeNull();
-    expect(useComposerDraftStore.getState().draftsByThreadKey["draft-1"]?.prompt).toBe("hello");
+    expect(followCloudSessionProject("draft-1", "project-b")).toEqual({
+      kind: "kept",
+      otherProject: true,
+    });
+    expect(getCloudSessionTarget("draft-1")).toMatchObject({
+      sessionId: "session-9",
+      projectKey: "project-a",
+    });
+    expect(getDraftCloudQueuedSend("draft-1")).toMatchObject({
+      messageId: "msg-1",
+      sessionId: "session-9",
+      messageText: "hello",
+    });
+    expect(useComposerDraftStore.getState().draftsByThreadKey["draft-1"]?.prompt).toBe("");
   });
 
   it("leaves a target with no project stamp alone", () => {
     selectCloudSessionTarget({ scopeKey: "draft-1", sessionId: "session-9", label: "machine" });
-    expect(followCloudSessionProject("draft-1", "project-b")).toEqual({ kind: "kept" });
+    expect(followCloudSessionProject("draft-1", "project-b")).toEqual({
+      kind: "kept",
+      otherProject: false,
+    });
   });
 });
