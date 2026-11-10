@@ -30,14 +30,6 @@ export const NoneFound: Story = {
   ),
 };
 
-export const AddMoreOpen: Story = {
-  render: () => (
-    <SectionFrame title="Agents">
-      <AgentsBlock state="addMoreOpen" />
-    </SectionFrame>
-  ),
-};
-
 export const NexploreUnreachable: Story = {
   render: () => (
     <SectionFrame title="Agents">

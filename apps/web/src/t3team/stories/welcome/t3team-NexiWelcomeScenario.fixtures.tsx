@@ -17,7 +17,7 @@ export type AccountStoryState =
   | "serverUnreachable"
   | "skipped";
 
-export type AgentsStoryState = "ready" | "unreachable" | "none" | "addMoreOpen";
+export type AgentsStoryState = "ready" | "unreachable" | "none";
 
 export type JiraStoryState = "notConnected" | "tokenFallback" | "connected" | "skipped";
 

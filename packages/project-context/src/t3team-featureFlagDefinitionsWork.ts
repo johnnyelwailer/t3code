@@ -90,6 +90,15 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  NEXI_WELCOME_SETUP: {
+    group: "UI & rendering",
+    label: "Nexi welcome setup",
+    description:
+      "Single-page Nexi Work first-run setup on /welcome (account, agents, Jira, GitHub, cloud). Off: the upstream multi-step WelcomeWizard.",
+    defaultEnabled: false,
+    requiresRestart: false,
+    addedOn: "2026-11-10",
+  },
   CLOUD_SESSIONS: {
     group: "Cloud & machines",
     subgroup: "Cloud sessions",

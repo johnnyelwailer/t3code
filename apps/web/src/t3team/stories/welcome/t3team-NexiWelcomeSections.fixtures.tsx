@@ -8,12 +8,12 @@ import { getSourceControlPresentationForKind } from "~/sourceControlPresentation
 import { JiraIcon } from "~/t3team/components/brand/t3team-AtlassianLogos";
 import { T3TeamRichChoice } from "~/t3team/rich-choice/t3team-RichChoice";
 import type { RichChoiceOption } from "~/t3team/rich-choice/t3team-richChoice.logic";
+import { MicrosoftEntraMark } from "~/t3team/welcome/t3team-MicrosoftEntraMark";
 
 import {
   PrimaryAction,
   SecondaryAction,
   ServiceMark,
-  ShowMore,
   StatusLabel,
   WelcomeItem,
 } from "./t3team-NexiWelcomeLayout.fixtures";
@@ -88,7 +88,7 @@ function AgentItem({
 export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
   const mark = (
     <ServiceMark label="Nexplore">
-      <NexploreAI aria-hidden />
+      <MicrosoftEntraMark />
     </ServiceMark>
   );
 
@@ -138,22 +138,52 @@ export function AccountBlock({ state }: { readonly state: AccountStoryState }) {
     <WelcomeItem
       mark={mark}
       title="Nexplore"
-      action={<PrimaryAction onClick={noop}>Sign in</PrimaryAction>}
+      action={
+        <div className="flex items-center gap-2">
+          <SecondaryAction onClick={noop}>Skip</SecondaryAction>
+          <PrimaryAction onClick={noop}>Sign in</PrimaryAction>
+        </div>
+      }
     />
   );
 }
 
+/** Full agent list — no Add more agents collapse. */
 export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
-  const extras = (
-    <ShowMore
-      open={state === "none" || state === "addMoreOpen" || state === "unreachable"}
-      label={state === "none" ? "Set up an agent" : "Add more agents"}
-    >
+  const nexplore =
+    state === "ready" ? (
+      <AgentItem
+        mark={<NexploreAI aria-hidden />}
+        markLabel="Nexplore AI"
+        title="Nexplore AI"
+        status={<StatusLabel status="ready" label="Ready" />}
+      />
+    ) : state === "unreachable" ? (
+      <AgentItem
+        mark={<NexploreAI aria-hidden />}
+        markLabel="Nexplore AI"
+        title="Nexplore AI"
+        description="Could not reach Nexplore AI."
+        status={<StatusLabel status="locked" label="Unavailable" />}
+      />
+    ) : (
+      <AgentItem
+        mark={<NexploreAI aria-hidden />}
+        markLabel="Nexplore AI"
+        title="Nexplore AI"
+        description="Nexplore AI is not available on this machine."
+        status={<StatusLabel status="locked" label="Unavailable" />}
+      />
+    );
+
+  return (
+    <>
+      {nexplore}
       <AgentItem
         mark={<ClaudeAI aria-hidden />}
         markLabel="Claude Code"
         title="Claude Code"
-        action={<SecondaryAction onClick={noop}>Connect</SecondaryAction>}
+        action={<SecondaryAction onClick={noop}>Install</SecondaryAction>}
       />
       <AgentItem
         mark={<OpenAI aria-hidden />}
@@ -165,39 +195,10 @@ export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
         mark={<CursorIcon aria-hidden />}
         markLabel="Cursor"
         title="Cursor"
-        action={<SecondaryAction onClick={noop}>Open</SecondaryAction>}
+        action={<SecondaryAction onClick={noop}>Install</SecondaryAction>}
       />
-    </ShowMore>
+    </>
   );
-
-  if (state === "ready") {
-    return (
-      <>
-        <AgentItem
-          mark={<NexploreAI aria-hidden />}
-          markLabel="Nexplore AI"
-          title="Nexplore AI"
-          status={<StatusLabel status="ready" label="Ready" />}
-        />
-        {extras}
-      </>
-    );
-  }
-  if (state === "unreachable") {
-    return (
-      <>
-        <AgentItem
-          mark={<NexploreAI aria-hidden />}
-          markLabel="Nexplore AI"
-          title="Nexplore AI"
-          description="Could not reach Nexplore AI."
-          action={<SecondaryAction onClick={noop}>Manual setup</SecondaryAction>}
-        />
-        {extras}
-      </>
-    );
-  }
-  return extras;
 }
 
 export function RoleBlock() {
@@ -253,7 +254,12 @@ export function JiraBlock({ state }: { readonly state: JiraStoryState }) {
     <WelcomeItem
       mark={mark}
       title="Jira"
-      action={<PrimaryAction onClick={noop}>Connect</PrimaryAction>}
+      action={
+        <div className="flex items-center gap-2">
+          <SecondaryAction onClick={noop}>Skip</SecondaryAction>
+          <PrimaryAction onClick={noop}>Connect</PrimaryAction>
+        </div>
+      }
     />
   );
 }
@@ -297,7 +303,12 @@ export function GitHubBlock({ state }: { readonly state: GitHubStoryState }) {
       <WelcomeItem
         mark={mark("GitHub Enterprise")}
         title="nexplore.ghe.com"
-        action={<SecondaryAction onClick={noop}>Sign in</SecondaryAction>}
+        action={
+          <div className="flex items-center gap-2">
+            <SecondaryAction onClick={noop}>Skip</SecondaryAction>
+            <SecondaryAction onClick={noop}>Sign in</SecondaryAction>
+          </div>
+        }
       />
     );
 
@@ -374,7 +385,12 @@ export function CloudPhoneBlock({
         <WelcomeItem
           mark={cloudMark}
           title="Cloud sessions"
-          action={<SecondaryAction onClick={noop}>Turn on</SecondaryAction>}
+          action={
+            <div className="flex items-center gap-2">
+              <SecondaryAction onClick={noop}>Skip</SecondaryAction>
+              <SecondaryAction onClick={noop}>Turn on</SecondaryAction>
+            </div>
+          }
         />
         <WelcomeItem
           mark={phoneMark}

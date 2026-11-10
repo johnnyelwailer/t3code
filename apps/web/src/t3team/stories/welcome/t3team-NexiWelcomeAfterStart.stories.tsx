@@ -7,13 +7,7 @@ import { getSourceControlPresentationForKind } from "~/sourceControlPresentation
 import { JiraIcon } from "~/t3team/components/brand/t3team-AtlassianLogos";
 import { Button } from "~/t3team/components/ui/t3team-button";
 
-/**
- * Landing after Welcome → Start: the normal empty home (NoProjectsHero).
- * "Add project" opens the existing command-palette add-project flow
- * (`CommandPaletteAddProject` / CommandPalette open: "add-project"):
- * local folder, new project, Git URL, clone from provider — plus this fork's
- * Jira project entry (`buildT3TeamAddProjectJiraSource`). Do not rebuild it here.
- */
+/** After Start: empty home; Add project opens CommandPaletteAddProject (do not rebuild). */
 const GitHubIcon = getSourceControlPresentationForKind("github").Icon;
 
 function AfterStartHome() {
@@ -95,8 +89,8 @@ function AddProjectPaletteProposal() {
           <div className="rounded-md border border-dashed border-border/80 bg-muted/30 px-3 py-2.5">
             <p className="text-xs font-medium text-foreground">Proposed follow-on (not built)</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              After choosing a Jira project, optionally link a repository — still inside this
-              palette, never on welcome.
+              After choosing a Jira project, optionally link a repository (still inside this
+              palette, never on welcome).
             </p>
           </div>
         </div>
