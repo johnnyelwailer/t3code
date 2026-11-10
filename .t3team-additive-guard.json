@@ -846,7 +846,8 @@
     "packages/shared/src/mcpApp.test.ts",
     "packages/shared/src/mcpApp.ts",
     "packages/shared/src/toolOutput.test.ts",
-    "apps/web/src/components/settings/LabsSettingsPanel.tsx"
+    "apps/web/src/components/settings/LabsSettingsPanel.tsx",
+    "apps/web/scripts/verify-built-boot.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
@@ -888,7 +889,6 @@
     "apps/server/src/provider/Layers/ProviderService.turnWatchdog.test.ts",
     "apps/web/.storybook/main.ts",
     "apps/web/.storybook/preview.ts",
-    "apps/web/scripts/verify-built-boot.ts",
     "apps/web/src/components/auth/ConnectAgentSurface.tsx",
     "apps/web/src/components/chat/BackgroundJobOutputPanel.test.tsx",
     "apps/web/src/components/chat/BackgroundJobOutputPanel.tsx",
