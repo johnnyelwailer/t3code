@@ -35,7 +35,10 @@ it("request_secret accepts a registry URL or mixed-case host and keeps the host"
     decodeInput({ ...base, host: "https://npm.pkg.github.com" }).host,
     "npm.pkg.github.com",
   );
-  assert.strictEqual(decodeInput({ ...base, host: "NPM.pkg.github.com" }).host, "npm.pkg.github.com");
+  assert.strictEqual(
+    decodeInput({ ...base, host: "NPM.pkg.github.com" }).host,
+    "npm.pkg.github.com",
+  );
 });
 
 it("request_secret rejects hints the credential probe could not use, up front", () => {
