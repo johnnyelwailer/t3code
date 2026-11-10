@@ -41,6 +41,7 @@ const MCP_TOOL_FEATURE_FLAGS: ReadonlyMap<string, FeatureFlagKey> = new Map([
   ["t3_recipe_validate", "ORCHESTRATION_RECIPES"],
   ["t3_work_item_draft", "WORKITEM_DETAIL_DRAFTS"],
   ["t3_work_item_change_set", "WORKITEM_DETAIL_DRAFTS"],
+  ["cloud_session_delete", "CLOUD_SESSION_STOP_DELETE"],
 ]);
 
 /**

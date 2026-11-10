@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 
 import { makeClaimLedger } from "./t3team-CloudSessionClaim.ts";
 import type { DeleteFlow, DeleteSessionContext } from "./t3team-CloudSessionDeleteFlow.ts";
+import { findSessionForDelete } from "./t3team-CloudSessionDeleteFlow.ts";
 import { deleteCloudSession, describeCloudSessionDelete } from "./t3team-CloudSessionDeleteRun.ts";
 import { planDelete } from "./t3team-CloudSessionDeletePlan.ts";
 import type { MachineCheckoutInput, ResumeBranch } from "./t3team-CloudSessionMachineCheckout.ts";
@@ -355,6 +356,19 @@ describe("deleteCloudSession", () => {
       };
       const message = yield* blockedBy({ caches: OWN, annotations: [lost] });
       assert.match(message, /Could not push/);
+    }),
+  );
+
+  it.effect("deletes a session this user started and refuses someone else's", () =>
+    Effect.gen(function* () {
+      const foreign = { ...run(222, "completed"), actor: "someone-else" };
+      const { flow } = yield* makeFlow({ runs: [run(111, "completed"), foreign] });
+      const owned = yield* findSessionForDelete(flow, { sessionId: "111" });
+      assert.equal(owned.runId, 111);
+      assert.equal(owned.kind, "run");
+      const error = yield* Effect.flip(findSessionForDelete(flow, { sessionId: "222" }));
+      assert.equal(error.reason, "unknown_session");
+      assert.equal(error.message, "That session does not exist.");
     }),
   );
 });

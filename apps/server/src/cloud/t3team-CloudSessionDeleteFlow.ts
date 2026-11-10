@@ -19,6 +19,7 @@ import type { MachineStateOperations } from "./t3team-CloudSessionMachineState.t
 import type { makeSessionGh } from "./t3team-CloudSessionGh.ts";
 import type { ClaimLedger } from "./t3team-CloudSessionClaim.ts";
 import { claimedIdentity, isClaimed } from "./t3team-CloudSessionClaim.ts";
+import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import type { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 
 /** The session gh operations a delete uses (makeSessionGh's result provides them). */
@@ -79,7 +80,9 @@ export const findSessionForDelete = Effect.fn("cloud.session.delete.find")(funct
   const { gh } = flow;
   const login = yield* gh.resolveLogin({ allowReserve: true });
   const sessionRuns = yield* gh.listRunsFor(login, { allowReserve: true });
-  const sessionRun = sessionRuns.find((item) => item.id === runId);
+  // listRunsFor already keeps this login's runs. Filter again so a list that still
+  // contains someone else's run, or a warm standby, cannot be deleted as this user's.
+  const sessionRun = sessionRunsForLogin(sessionRuns, login).find((item) => item.id === runId);
   if (sessionRun !== undefined) {
     const identity = parseSessionRunIdentity(sessionRun.name);
     // A machine session whose run predates the `· repo` marker cannot have its repository
