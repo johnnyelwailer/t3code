@@ -128,10 +128,7 @@ export function NexiWelcomePageMockup({ scenario }: { readonly scenario: Welcome
         </WelcomeSection>
         <WelcomeSection title="Cloud">
           <AccountBlock state={scenario.account} />
-          <CloudPhoneBlock
-            state={scenario.cloudPhone}
-            entraSignedIn={entraSignedIn && scenario.account !== "skipped"}
-          />
+          <CloudPhoneBlock state={scenario.cloudPhone} entraSignedIn={entraSignedIn} />
         </WelcomeSection>
       </div>
       <StartFooter agentReady={agentReady} onStart={noop} onStartWithoutAgent={noop} />

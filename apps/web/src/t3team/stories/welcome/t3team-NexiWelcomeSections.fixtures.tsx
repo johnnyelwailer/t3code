@@ -158,21 +158,12 @@ export function AgentsBlock({ state }: { readonly state: AgentsStoryState }) {
         title="Nexplore AI"
         status={<StatusLabel status="ready" label="Ready" />}
       />
-    ) : state === "unreachable" ? (
-      <AgentItem
-        mark={<NexploreAI aria-hidden />}
-        markLabel="Nexplore AI"
-        title="Nexplore AI"
-        description="Could not reach Nexplore AI."
-        status={<StatusLabel status="locked" label="Unavailable" />}
-      />
     ) : (
       <AgentItem
         mark={<NexploreAI aria-hidden />}
         markLabel="Nexplore AI"
         title="Nexplore AI"
-        description="Nexplore AI is not available on this machine."
-        status={<StatusLabel status="locked" label="Unavailable" />}
+        description="Not reachable on this network"
       />
     );
 
@@ -405,7 +396,7 @@ export function CloudPhoneBlock({
       <WelcomeItem
         mark={cloudMark}
         title="Cloud sessions"
-        status={<StatusLabel status="pending" label="Setting up" />}
+        status={<StatusLabel status="ready" label="Ready" />}
       />
       <WelcomeItem
         mark={phoneMark}

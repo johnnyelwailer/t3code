@@ -112,6 +112,21 @@ export function NexiWelcomeAgentsSection({
           );
         }
 
+        // Nexplore AI: no install/sign-in; health probe failure is a muted hint only.
+        if (row.driver === "nexplore") {
+          return (
+            <WelcomeItem
+              key={row.key}
+              mark={<ServiceMark label={row.title}>{agentMark(row.driver)}</ServiceMark>}
+              title={row.title}
+              description={row.description ?? undefined}
+              status={
+                row.statusLabel ? <StatusLabel status="ready" label={row.statusLabel} /> : undefined
+              }
+            />
+          );
+        }
+
         const dispatched = dispatchWelcomeAgentAction(row.action, {
           onInstall,
           onSignIn,

@@ -40,7 +40,37 @@ describe("buildWelcomeAgentRows", () => {
     const nexplore = rows.find((row) => row.driver === "nexplore");
     expect(nexplore?.state).toBe("ready");
     expect(nexplore?.action).toEqual({ kind: "none" });
+    expect(nexplore?.description).toBeNull();
     expect(isWelcomeAgentReady(rows)).toBe(true);
+  });
+
+  it("never asks Nexplore AI to sign in or set up; unreachable is a muted hint only", () => {
+    const signedOut = buildWelcomeAgentRows([
+      provider("nexplore", {
+        displayName: "Nexplore AI",
+        status: "ready",
+        auth: { status: "unauthenticated" },
+      }),
+    ]).find((row) => row.driver === "nexplore");
+    expect(signedOut?.state).toBe("ready");
+    expect(signedOut?.action).toEqual({ kind: "none" });
+    expect(signedOut?.statusLabel).toBe("Ready");
+
+    const unreachable = buildWelcomeAgentRows([
+      provider("nexplore", {
+        displayName: "Nexplore AI",
+        status: "error",
+        message: "gateway timed out",
+        auth: { status: "unknown" },
+      }),
+    ]).find((row) => row.driver === "nexplore");
+    expect(unreachable?.action).toEqual({ kind: "none" });
+    expect(unreachable?.statusLabel).toBeNull();
+    expect(unreachable?.description).toBe("Not reachable on this network");
+
+    const missing = buildWelcomeAgentRows([]).find((row) => row.driver === "nexplore");
+    expect(missing?.action).toEqual({ kind: "none" });
+    expect(missing?.description).toBe("Not reachable on this network");
   });
 
   it("routes Cursor install through provider setup when the server advertises it", () => {

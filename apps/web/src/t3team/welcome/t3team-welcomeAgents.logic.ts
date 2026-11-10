@@ -27,9 +27,35 @@ export type WelcomeAgentRowModel = {
 
 const PREFERRED_ORDER = ["nexplore", "claudeAgent", "codex", "cursor"] as const;
 
+const NEXPLORE_UNREACHABLE_HINT = "Not reachable on this network";
+
 function preferredIndex(driver: string): number {
   const index = PREFERRED_ORDER.indexOf(driver as (typeof PREFERRED_ORDER)[number]);
   return index === -1 ? PREFERRED_ORDER.length : index;
+}
+
+/** Reuses the provider health probe (`ServerProvider.status`) — no separate Entra/key/setup. */
+export function isNexploreAiReachable(provider: ServerProvider | undefined): boolean {
+  return provider !== undefined && provider.enabled !== false && provider.status === "ready";
+}
+
+function nexploreRow(provider: ServerProvider | undefined): WelcomeAgentRowModel {
+  const reachable = isNexploreAiReachable(provider);
+  const checking =
+    provider !== undefined &&
+    !provider.installed &&
+    provider.status === "warning" &&
+    provider.auth.status === "unknown";
+  return {
+    key: provider?.instanceId ?? "missing:nexplore",
+    driver: "nexplore",
+    title: provider?.displayName?.trim() || "Nexplore AI",
+    instanceId: provider?.instanceId,
+    state: reachable ? "ready" : checking ? "checking" : provider ? "attention" : "missing",
+    action: { kind: "none" },
+    statusLabel: reachable ? "Ready" : null,
+    description: reachable || checking ? null : NEXPLORE_UNREACHABLE_HINT,
+  };
 }
 
 function resolveAction(provider: ServerProvider | undefined): WelcomeAgentAction {
@@ -65,6 +91,7 @@ function resolveAction(provider: ServerProvider | undefined): WelcomeAgentAction
 }
 
 function rowFromProvider(provider: ServerProvider): WelcomeAgentRowModel {
+  if (provider.driver === "nexplore") return nexploreRow(provider);
   const state = getOnboardingProviderState(provider);
   const action = resolveAction(provider);
   return {
@@ -104,6 +131,11 @@ export function buildWelcomeAgentRows(
   const rows: WelcomeAgentRowModel[] = [];
   for (const driver of PREFERRED_ORDER) {
     const provider = byDriver.get(driver);
+    if (driver === "nexplore") {
+      rows.push(nexploreRow(provider));
+      byDriver.delete(driver);
+      continue;
+    }
     if (provider) {
       rows.push(rowFromProvider(provider));
       byDriver.delete(driver);
@@ -112,14 +144,7 @@ export function buildWelcomeAgentRows(
     rows.push({
       key: `missing:${driver}`,
       driver,
-      title:
-        driver === "nexplore"
-          ? "Nexplore AI"
-          : driver === "claudeAgent"
-            ? "Claude Code"
-            : driver === "codex"
-              ? "Codex"
-              : "Cursor",
+      title: driver === "claudeAgent" ? "Claude Code" : driver === "codex" ? "Codex" : "Cursor",
       instanceId: undefined,
       state: "missing",
       action:
@@ -129,10 +154,7 @@ export function buildWelcomeAgentRows(
             ? { kind: "toolAuthInstall", tool: "codex" }
             : {
                 kind: "disabled",
-                reason:
-                  driver === "nexplore"
-                    ? "Nexplore AI is not available on this machine."
-                    : "Open Settings → Providers to install Cursor.",
+                reason: "Open Settings → Providers to install Cursor.",
               },
       statusLabel: null,
       description: null,
