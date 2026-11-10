@@ -6,6 +6,7 @@ import { useSignInDescriptionForEnvironment } from "../../cloud/t3team-cloudMach
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
+import { resolveToolAuthEnvironmentId } from "../../state/t3team-toolauthActions";
 import { ToolAuthCard } from "../settings/t3team-ToolAuthCard";
 import { toolAuthMetaForTool } from "../settings/t3team-toolAuthTools";
 import { ModelPickerSignInRefreshNotice } from "./t3team-ModelPickerSignInRefreshNotice";
@@ -22,7 +23,7 @@ export interface ModelPickerProviderConnectPanelProps {
    * every connect/install act on that machine, not on the primary: a thread on a cloud session must
    * not show (or change) this computer's CLI login. Defaults to the primary environment.
    */
-  readonly environmentId?: EnvironmentId | undefined;
+  readonly environmentId?: EnvironmentId | null | undefined;
 }
 
 /**
@@ -45,7 +46,7 @@ export function ModelPickerProviderConnectPanel({
 }: ModelPickerProviderConnectPanelProps) {
   const meta = toolAuthMetaForTool(tool);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const environmentId = threadEnvironmentId ?? primaryEnvironmentId;
+  const environmentId = resolveToolAuthEnvironmentId(threadEnvironmentId, primaryEnvironmentId);
   const states = useToolAuthStates(environmentId);
   const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
   const signInDescription = useSignInDescriptionForEnvironment(environmentId);
@@ -56,6 +57,15 @@ export function ModelPickerProviderConnectPanel({
     instanceId: entry.instanceId,
     signedIn: states.get(meta.tool)?.phase === "connected",
   });
+  const missingEnvironment = environmentId === null;
+  const state =
+    missingEnvironment && readiness === "needsInstall"
+      ? {
+          tool: meta.tool,
+          phase: "failed" as const,
+          message: "No cloud session environment is available to install on yet.",
+        }
+      : states.get(meta.tool);
 
   // Top-aligned, not centred: the card is short and the picker's list area is
   // tall, so centring left a big dead gap above it that read as a broken panel.
@@ -72,7 +82,7 @@ export function ModelPickerProviderConnectPanel({
         */}
         <ToolAuthCard
           meta={meta}
-          state={states.get(meta.tool)}
+          state={state}
           signInDescription={signInDescription}
           onConnect={onConnect}
           onInstall={readiness === "needsInstall" ? onInstall : undefined}
