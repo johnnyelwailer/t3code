@@ -52,7 +52,7 @@ export function useCloudSessionComposerGate(input: {
   readonly draftId: string | null;
   /** Composer/draft/thread key the Run-on preference belongs to. */
   readonly scopeKey: string | null;
-  /** The composer's project: the cloud Run-on stamp rebinds to this project on switch. */
+  /** The composer's project: stamped onto the queued send when the first message confirms it. */
   readonly projectRef: ScopedProjectRef | null;
 }): {
   readonly tryQueueSend: (turn: CloudQueuedTurn) => CloudQueuedSend | null;
@@ -74,8 +74,8 @@ export function useCloudSessionComposerGate(input: {
 
   const tryQueueSend = useCallback(
     (turn: CloudQueuedTurn) =>
-      queueCloudSessionSendIfNeeded({ draftId, turn, sessions: cloud.sessions }),
-    [cloud.sessions, draftId],
+      queueCloudSessionSendIfNeeded({ draftId, turn, sessions: cloud.sessions, projectKey }),
+    [cloud.sessions, draftId, projectKey],
   );
   const retryQueuedSend = useCallback(() => {
     if (draftId !== null) retryDraftCloudQueuedSend(draftId);
