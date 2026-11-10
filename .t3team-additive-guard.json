@@ -847,7 +847,9 @@
     "packages/shared/src/mcpApp.ts",
     "packages/shared/src/toolOutput.test.ts",
     "apps/web/src/components/settings/LabsSettingsPanel.tsx",
-    "apps/web/scripts/verify-built-boot.ts"
+    "apps/web/scripts/verify-built-boot.ts",
+    "packages/contracts/src/providerPolicy.ts",
+    "packages/shared/src/projectSettings.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",
