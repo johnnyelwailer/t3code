@@ -136,9 +136,9 @@ export function failCloudSessionCreate(
 ): void {
   apply(scopeKey, {
     kind: "createFailed",
-    message: failure?.message,
-    reason: failure?.reason,
-    host: failure?.host,
+    ...(failure?.message !== undefined ? { message: failure.message } : {}),
+    ...(failure?.reason !== undefined ? { reason: failure.reason } : {}),
+    ...(failure?.host !== undefined ? { host: failure.host } : {}),
   });
 }
 

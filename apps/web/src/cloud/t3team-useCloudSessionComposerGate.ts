@@ -150,9 +150,9 @@ export function useCloudSessionComposerGate(input: {
     });
   }, [draftId, stepFacts]);
   const signInAction = cloudSessionCreateSignInAction({
-    createFailed: target?.createFailed,
+    createFailed: target?.createFailed === true,
     failureKind: queued?.failureKind,
-    failureReason: target?.createFailureReason ?? queued?.failureReason,
+    failureReason: target?.createFailureReason ?? queued?.failureReason ?? null,
     onSignIn: () => {
       const reason = target?.createFailureReason ?? queued?.failureReason;
       if (reason === "unauthorized" || reason === "repository_sign_in_required") {

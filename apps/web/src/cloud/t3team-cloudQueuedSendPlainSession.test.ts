@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { setCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
+import type { CloudSessionCreateOptions } from "./t3team-useCloudSessionCreate";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
 import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
@@ -71,7 +72,7 @@ function park() {
   });
 }
 
-type Options = { plain?: boolean; onCreated?: (s: CloudSession) => void; onFailed?: () => void };
+type Options = CloudSessionCreateOptions;
 
 /** A create the test answers by hand; `started: false` is a create that refused to start. */
 function create(started = true) {
