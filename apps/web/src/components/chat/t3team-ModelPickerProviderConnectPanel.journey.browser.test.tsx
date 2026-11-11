@@ -59,6 +59,10 @@ vi.mock("../../state/environments", () => ({
 }));
 vi.mock("../../cloud/t3team-cloudMachineSignIn", () => ({
   useSignInDescriptionForEnvironment: () => null,
+  useToolAuthMachineLabel: () => "this cloud machine",
+}));
+vi.mock("~/t3team/t3team-useToolAuthEnvironmentFlag", () => ({
+  useToolAuthEnvironmentAvailability: () => "enabled",
 }));
 vi.mock("../../state/server", () => ({ serverEnvironment: { refreshProviders: "refresh" } }));
 vi.mock("../../state/use-atom-command", () => ({
@@ -167,13 +171,14 @@ describe("model picker connect panel journey", () => {
     await expect.element(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
   });
 
-  it("a failed install shows the installer's message and retries the install", async () => {
+  it("a failed install says so in plain words, hides npm's own text, and retries the install", async () => {
     setup();
     await using screen = await render(panel, { router: false });
-    await phase({ phase: "failed", message: "npm ERR! 403 Forbidden" });
+    await phase({ phase: "failed", reason: "installFailed", message: "npm ERR! 403 Forbidden" });
     await expect
-      .element(screen.getByText("npm ERR! 403 Forbidden", { exact: false }))
+      .element(screen.getByText("Installing Codex on this cloud machine", { exact: false }))
       .toBeInTheDocument();
+    expect(screen.container.textContent).not.toContain("npm ERR!");
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(harness.state.install).toHaveBeenCalledTimes(1);
     expect(harness.state.refresh).not.toHaveBeenCalled();
@@ -183,7 +188,7 @@ describe("model picker connect panel journey", () => {
     setup();
     await using screen = await render(panel, { router: false });
     await phase({ phase: "expired", message: "The code expired." });
-    await expect.element(screen.getByText("The code expired.")).toBeInTheDocument();
+    await expect.element(screen.getByText("has expired", { exact: false })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Reconnect" }));
     expect(harness.state.connect).toHaveBeenCalledTimes(1);
     expect(harness.state.refresh).not.toHaveBeenCalled();

@@ -21,11 +21,11 @@
  *
  * @module toolauth/types
  */
-import type { ToolAuthPhase } from "@t3tools/contracts";
+import type { ToolAuthFailureReason, ToolAuthPhase } from "@t3tools/contracts";
 
 import type * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 
-export type { ToolAuthPhase };
+export type { ToolAuthFailureReason, ToolAuthPhase };
 
 /**
  * Server-internal phase/tool state. Broader than the wire `ToolAuthState`
@@ -45,6 +45,8 @@ export interface AuthState {
    */
   displayCode?: string | undefined;
   message?: string | undefined;
+  /** Classifies a `failed`/`expired` phase so a client renders its own words, not `message`. */
+  reason?: ToolAuthFailureReason | undefined;
   /**
    * Account identifier, when the CLI (or its probe) reports one. Never a
    * stand-in for `authMethod`/`apiProvider`-shaped fields — those describe

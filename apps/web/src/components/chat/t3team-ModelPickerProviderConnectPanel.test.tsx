@@ -24,6 +24,10 @@ vi.mock("../../state/environments", () => ({
 }));
 vi.mock("../../cloud/t3team-cloudMachineSignIn", () => ({
   useSignInDescriptionForEnvironment: () => null,
+  useToolAuthMachineLabel: () => "this machine",
+}));
+vi.mock("../../t3team/t3team-useToolAuthEnvironmentFlag", () => ({
+  useToolAuthEnvironmentAvailability: () => "enabled",
 }));
 
 const { ModelPickerProviderConnectPanel } =
