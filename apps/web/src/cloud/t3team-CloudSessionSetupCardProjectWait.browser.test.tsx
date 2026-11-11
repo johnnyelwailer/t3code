@@ -185,6 +185,8 @@ describe("CloudSessionSetupCard project wait", () => {
     expect(card.querySelector("h3")?.textContent).toBe("Still setting up");
     // Not alarming: a kept message that only ran out of waiting gets a calm icon, not the alert.
     expect(card.querySelector("[data-cloud-setup-calm]")).not.toBeNull();
+    expect(card.getAttribute("data-calm")).toBe("true");
+    expect(card.querySelector("[role='status']")?.textContent).not.toContain("failed");
     expect(card.textContent).toContain("Your message is saved.");
     expect(card.textContent).not.toContain("did not appear");
     const primary = card.querySelectorAll("[data-cloud-setup-action='primary']");

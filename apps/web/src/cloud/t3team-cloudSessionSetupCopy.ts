@@ -18,7 +18,11 @@ export function formatCloudSetupRemaining(seconds: number): string {
 /** What assistive tech hears: changes with the step, never with the clock. */
 export function cloudSetupAnnouncement(model: CloudSetupModel): string {
   if (model.stage === "ready") return "Your cloud session is ready.";
-  if (model.stage === "failed") return "Cloud session setup failed.";
+  if (model.stage === "failed") {
+    return model.keptWaiting
+      ? "Still setting up. Your message is saved."
+      : "Cloud session setup failed.";
+  }
   // The step list already names the current step; keep the live region short.
   if (model.delivery === "sending") return "Sending your message.";
   return model.activity;

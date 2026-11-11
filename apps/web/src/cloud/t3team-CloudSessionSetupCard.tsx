@@ -97,6 +97,7 @@ export function CloudSessionSetupCard({
       data-state={model.stage}
       data-slow={slow ? "true" : "false"}
       data-not-seen={model.notSeen ? "true" : "false"}
+      data-calm={model.keptWaiting ? "true" : "false"}
       data-motion={motionMode}
       data-cloud-setup-step-current={model.currentStep.id}
       className="t3team-setup-card mt-1 mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-4 text-card-foreground shadow-xs/5"
