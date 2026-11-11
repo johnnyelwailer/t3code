@@ -2,7 +2,7 @@ import type {
   WorkspaceTab,
   WorkspaceTabsAction,
   WorkspaceTabsState,
-} from "../features/workspace/workspace-tabs-state";
+} from "../features/layout/workspace/workspace-tabs-state";
 import type { WorkspaceExtraTab } from "./t3team-extensionTypes";
 
 /**

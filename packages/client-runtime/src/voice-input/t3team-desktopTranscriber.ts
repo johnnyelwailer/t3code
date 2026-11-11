@@ -48,10 +48,10 @@ export function createDesktopVoiceTranscriber(input: {
       const prepared = await input.bridge.prepareVoiceTranscriber({ config, allowDownload: true });
       throwIfVoiceTranscriptionAborted(options.signal);
       if (!prepared.ok) {
-        throw new VoiceTranscriptionError(
-          prepared.code === "runtime-unavailable" ? "unavailable" : "model-unavailable",
-          prepared.message,
-        );
+        throw new VoiceTranscriptionError({
+          code: prepared.code === "runtime-unavailable" ? "unavailable" : "model-unavailable",
+          message: prepared.message,
+        });
       }
       return {
         locale: config.language,
@@ -61,7 +61,10 @@ export function createDesktopVoiceTranscriber(input: {
           throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
           if (live) {
             if (live.error !== undefined) {
-              throw new VoiceTranscriptionError("transcription-failed", live.error);
+              throw new VoiceTranscriptionError({
+                code: "transcription-failed",
+                message: live.error,
+              });
             }
             return sanitizeTranscript(live.text);
           }
@@ -72,7 +75,12 @@ export function createDesktopVoiceTranscriber(input: {
             pcm16Base64,
           });
           throwIfVoiceTranscriptionAborted(transcribeOptions.signal);
-          if (!result.ok) throw new VoiceTranscriptionError("transcription-failed", result.message);
+          if (!result.ok) {
+            throw new VoiceTranscriptionError({
+              code: "transcription-failed",
+              message: result.message,
+            });
+          }
           return sanitizeTranscript(result.text);
         },
       };

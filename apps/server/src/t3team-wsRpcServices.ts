@@ -96,7 +96,7 @@ import type * as RelayClient from "@t3tools/shared/relayClient";
 import type * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import type * as NpmRelease from "./cloud/npmRelease.ts";
 import type * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
-import type * as Crypto from "effect/Crypto";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 import type * as SqlClient from "effect/sql/SqlClient";
@@ -119,7 +119,7 @@ export type WsRpcHandlerServices =
   | CloudSessionService
   | CodexInstallation.CodexInstallation
   | CommandOutputHub.CommandOutputHub
-  | Crypto.Crypto
+  | SecureRandom.SecureRandom
   | DatabaseStorage.DatabaseStorage
   | DeviceService.DeviceService
   | DocumentText.DocumentText

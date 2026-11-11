@@ -1,6 +1,6 @@
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
-import { useSelectWorkspaceDetail } from "../features/workspace/useSelectWorkspaceDetail";
+import { useSelectWorkspaceDetail } from "../features/layout/workspace/useSelectWorkspaceDetail";
 import { createNewTaskDraft, waitForComposerDraftsLoaded } from "../state/use-composer-drafts";
 import { openPendingDraft } from "./t3team-openPendingDraft";
 import type { PendingDraftProject } from "./t3team-pendingDraftTypes";

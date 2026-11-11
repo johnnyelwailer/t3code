@@ -10,7 +10,7 @@
   "scripts": {
     "run-job": "tsx src/run-job.ts",
     "test": "vp test run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "effect-tsgo tsrs --noEmit"
   },
   "dependencies": {
     "execa": "^9.5.2"
@@ -18,7 +18,6 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "tsx": "^4.23.5",
-    "typescript": "catalog:",
     "vite-plus": "catalog:"
   },
   "engines": {

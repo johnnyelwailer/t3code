@@ -6,7 +6,7 @@ import type { ServerConfig } from "@t3tools/contracts";
 
 export const NEXI_WELCOME_SETUP_FLAG = "NEXI_WELCOME_SETUP" satisfies FeatureFlagKey;
 
-/** Whether /welcome should render the Nexi single-page setup instead of WelcomeWizard. */
+/** Whether /welcome should render the Nexi single-page setup instead of WelcomePage. */
 export function isNexiWelcomeSetupEnabled(
   config: Pick<ServerConfig, "featureFlags"> | null | undefined,
 ): boolean {

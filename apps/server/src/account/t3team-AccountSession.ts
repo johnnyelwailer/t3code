@@ -1,7 +1,8 @@
 import type { AccountStatus } from "@t3tools/contracts";
 import type { AccountDefinition } from "@t3team/pack-api";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -40,7 +41,8 @@ export const makeAccountSession = Effect.fn("account.session.make")(function* (
     readonly secrets: ServerSecretStore.ServerSecretStore["Service"];
     readonly http: HttpClient.HttpClient;
     readonly launcher: ExternalLauncher.ExternalLauncher["Service"];
-    readonly crypto: Crypto.Crypto;
+    readonly random: SecureRandom.SecureRandom["Service"];
+    readonly digest: Digest.Digest["Service"];
   },
 ) {
   const signInRequired = (message = `Sign in to ${account.label} to continue.`) =>
@@ -87,7 +89,10 @@ export const makeAccountSession = Effect.fn("account.session.make")(function* (
       oauth,
       launchBrowser: deps.launcher.launchBrowser,
       timeout,
-    }).pipe(Effect.provideService(Crypto.Crypto, deps.crypto));
+    }).pipe(
+      Effect.provideService(SecureRandom.SecureRandom, deps.random),
+      Effect.provideService(Digest.Digest, deps.digest),
+    );
     // With a device code, it decides the end: the browser failing (no browser here, declined,
     // blocked by policy) is shown but never ends the attempt, the code keeps working. Without one,
     // the browser is the attempt.

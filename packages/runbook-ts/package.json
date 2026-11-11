@@ -36,7 +36,7 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "effect-tsgo tsrs --noEmit",
     "test": "./node_modules/.bin/vp test run"
   },
   "dependencies": {

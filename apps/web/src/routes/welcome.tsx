@@ -1,12 +1,15 @@
 import { createFileRoute, redirect, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 
 import { NoProjectsHero } from "../components/NoProjectsHero";
-import { WelcomeWizard } from "../components/onboarding/WelcomeWizard";
+import { WelcomePage } from "../components/onboarding/WelcomePage";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
+import { NexiWelcomePage } from "~/t3team/welcome/t3team-NexiWelcomePage";
+import { useNexiWelcomeEnabled } from "~/t3team/welcome/t3team-useNexiWelcomeEnabled";
 
 const decodeEnvironmentId = Schema.decodeOption(EnvironmentId);
 
@@ -21,36 +24,41 @@ export const Route = createFileRoute("/welcome")({
 });
 
 function WelcomeRouteView() {
-  const { authGateState } = Route.useRouteContext();
   const navigate = useNavigate();
   const hash = useLocation({ select: (location) => location.hash });
+  // A ChatGPT sign-in returns here with the computer it set up.
   const resumeEnvironmentId = hash.startsWith("agents:")
     ? Option.getOrUndefined(decodeEnvironmentId(hash.slice("agents:".length)))
     : undefined;
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const { environments, isReady } = useEnvironments();
+  // Trust the id only once the catalog has it; an unknown computer falls back to this one.
+  const waitingForCatalog =
+    !isReady && (resumeEnvironmentId !== undefined || primaryEnvironmentId === null);
+  const resumeKnown =
+    resumeEnvironmentId !== undefined &&
+    environments.some((environment) => environment.environmentId === resumeEnvironmentId);
+  const environmentId = (resumeKnown ? resumeEnvironmentId : undefined) ?? primaryEnvironmentId;
   // The root can remount this pending outlet after navigation; do not reopen setup.
   const isWelcomeRoute = useLocation({ select: (location) => location.pathname === "/welcome" });
   const [dismissed, setDismissed] = useState(false);
   const openNewThread = useNewThreadHandler();
-  const localAvailable = authGateState.status === "authenticated";
-  return (
-    <>
-      <NoProjectsHero />
-      {isWelcomeRoute && !dismissed ? (
-        <WelcomeWizard
-          localAvailable={localAvailable}
-          resumeEnvironmentId={resumeEnvironmentId}
-          onDone={async (projectRef) => {
-            setDismissed(true);
-            if (projectRef !== undefined) {
-              await openNewThread(projectRef, { replace: true }).catch(() =>
-                navigate({ to: "/", replace: true }),
-              );
-              return;
-            }
-            await navigate({ to: "/", replace: true });
-          }}
-        />
-      ) : null}
-    </>
-  );
+  const nexiWelcome = useNexiWelcomeEnabled();
+  const onDone = async (projectRef?: ScopedProjectRef) => {
+    setDismissed(true);
+    if (projectRef !== undefined) {
+      await openNewThread(projectRef, { replace: true }).catch(() =>
+        navigate({ to: "/", replace: true }),
+      );
+      return;
+    }
+    await navigate({ to: "/", replace: true });
+  };
+  // t3team: Nexi's branded welcome replaces the Welcome page and needs no computer picked first.
+  if (nexiWelcome) {
+    return isWelcomeRoute && !dismissed ? <NexiWelcomePage onDone={onDone} /> : <NoProjectsHero />;
+  }
+  if (waitingForCatalog) return null;
+  if (environmentId === null || !isWelcomeRoute || dismissed) return <NoProjectsHero />;
+  return <WelcomePage key={environmentId} environmentId={environmentId} onDone={onDone} />;
 }

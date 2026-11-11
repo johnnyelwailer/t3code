@@ -1,11 +1,11 @@
 import * as Cause from "effect/Cause";
-import * as Duration from "effect/Duration";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
@@ -14,9 +14,11 @@ import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
 import * as DesktopClerk from "./DesktopClerk.ts";
+import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as PreviewPasskeys from "../preview/Passkeys.ts";
+import * as DesktopBackendManager from "../backend/DesktopBackendManager.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopBackendPort from "./DesktopBackendPort.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -43,8 +45,13 @@ import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts"
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { pinnedBackendPortFromDefine } from "./t3team-isolatedInstance.ts";
 
-const makeDesktopRunId = Crypto.Crypto.pipe(
-  Effect.flatMap((crypto) => crypto.randomUUIDv4()),
+const LinuxDesktopSessionConfig = Config.all({
+  current: Config.String("XDG_CURRENT_DESKTOP").pipe(Config.option),
+  session: Config.String("XDG_SESSION_DESKTOP").pipe(Config.option),
+});
+
+const makeDesktopRunId = SecureRandom.SecureRandom.pipe(
+  Effect.flatMap((random) => random.uuidV4()),
   Effect.map((value) => value.replaceAll("-", "").slice(0, 12)),
 );
 
@@ -126,7 +133,7 @@ const stopAllPoolInstances = Effect.fn("desktop.app.stopAllPoolInstances")(
     const instances = yield* pool.list;
     yield* Effect.forEach(
       instances,
-      (instance) => instance.stop({ timeout: Duration.seconds(5) }),
+      (instance) => instance.stop({ timeout: DesktopBackendManager.BACKEND_QUIT_STOP_TIMEOUT }),
       { concurrency: "unbounded" },
     );
   },
@@ -161,6 +168,18 @@ const bootstrap = Effect.gen(function* () {
   yield* snapShot.initialize;
   yield* voiceHotkey.initialize;
   yield* Effect.sync(() => configureDesktopVoiceLog(environment.logDir));
+  // Only the user's own login shell PATH shows every t3 a new terminal runs; a fresh install has
+  // no cached one. Without it, the command is left to Settings.
+  const installCli = (yield* DesktopCliCommand.DesktopCliCommand).installOnFirstLaunch;
+  yield* Effect.forkScoped(
+    (yield* DesktopShellEnvironment.DesktopShellEnvironment).awaitUserShellDiscovery.pipe(
+      Effect.flatMap((found) =>
+        found || environment.platform === "win32"
+          ? installCli
+          : logBootstrapInfo("skipped installing the t3 command without the shell PATH"),
+      ),
+    ),
+  );
 
   if (!settings.localEnvironmentEnabled) {
     yield* logBootstrapInfo("bootstrap skipping local environment (disabled in settings)");
@@ -289,12 +308,13 @@ const startup = Effect.gen(function* () {
   yield* desktopSettings.load;
 
   if (linuxElectronOptions !== null) {
+    const xdgDesktop = yield* LinuxDesktopSessionConfig;
     yield* logStartupInfo("linux password store configured", {
       passwordStore: hasCommandLinePasswordStore
         ? "command-line"
         : (linuxElectronOptions.passwordStore ?? "electron-default"),
-      xdgCurrentDesktop: process.env.XDG_CURRENT_DESKTOP ?? null,
-      xdgSessionDesktop: process.env.XDG_SESSION_DESKTOP ?? null,
+      xdgCurrentDesktop: Option.getOrNull(xdgDesktop.current),
+      xdgSessionDesktop: Option.getOrNull(xdgDesktop.session),
     });
   }
 
@@ -323,7 +343,8 @@ const startup = Effect.gen(function* () {
   yield* updates.configure;
   yield* DesktopRemoteUpdates.listen;
   yield* DesktopStartupRecovery.listen;
-  yield* linuxUrlHandler.register;
+  // Portal identity is prepared pre-ready; MIME helpers must not gate the backend or window.
+  yield* linuxUrlHandler.register.pipe(Effect.forkScoped);
   yield* bootstrap.pipe(Effect.catchCause((cause) => fatalStartupCause("bootstrap", cause)));
 }).pipe(Effect.withSpan("desktop.startup"));
 
@@ -341,6 +362,7 @@ const scopedProgram = Effect.scoped(
       stopAllPoolInstances().pipe(
         Effect.ensuring(rendererHistory.shutdown),
         Effect.ensuring(shutdown.markComplete),
+        Effect.withSpan("desktop.app.shutdown"),
       ),
     );
 

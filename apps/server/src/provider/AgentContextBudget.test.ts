@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@t3tools/contracts";
@@ -6,6 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { McpServer } from "effect/ai";
 
+import { AssetSigner } from "../assets/AssetSigner.ts";
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
 import { ServerConfig } from "../config.ts";
 import { DeviceService } from "../device/DeviceService.ts";
@@ -60,6 +62,7 @@ import budget from "./agentContextBudget.json" with { type: "json" };
 
 // Registration only stores tool definitions, so the handlers' services are never called.
 const toolHandlerServices = Layer.mergeAll(
+  Layer.mock(AssetSigner)({}),
   Layer.mock(DeviceService)({}),
   Layer.mock(DocumentText)({}),
   Layer.mock(GitVcsDriver)({}),
@@ -94,7 +97,7 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(ThreadManagementService)({}),
   Layer.mock(ThreadSearch)({}),
   Layer.mock(VcsStatusBroadcaster)({}),
-).pipe(Layer.provideMerge(NodeServices.layer));
+).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
 
 const utf8Bytes = (text: string) => Buffer.byteLength(text, "utf8");
 
@@ -122,9 +125,20 @@ const codexAdditionalContext = () =>
     .map((entry) => entry.value)
     .join("");
 
-const toolsLayer = McpHttpServer.layerTools.pipe(
-  Layer.provideMerge(McpServer.McpServer.layer),
+const layerAdvertisedTools = McpHttpServer.layerTools.pipe(
+  Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
   Layer.provide(toolHandlerServices),
+);
+
+// Claude Code loads these tools up front instead of behind ToolSearch, outside this budget.
+it.effect("only request_secret asks Claude Code to load it up front", () =>
+  Effect.gen(function* () {
+    const mcp = yield* McpServer.McpServer;
+    const alwaysLoad = mcp.tools
+      .filter(({ tool }) => tool._meta?.["anthropic/alwaysLoad"] !== undefined)
+      .map(({ tool }) => [tool.name, tool._meta]);
+    expect(alwaysLoad).toEqual([["request_secret", { "anthropic/alwaysLoad": true }]]);
+  }).pipe(Effect.provide(layerAdvertisedTools)),
 );
 
 // CI rejects a PR that raises any value above main's agentContextBudget.json, so growth
@@ -151,7 +165,7 @@ it.effect("agent context matches the committed budget", () =>
       measured,
       "Set agentContextBudget.json to the measured values. Before you cut text to fit, run the evals that cover it (evals/README.md).",
     ).toEqual(budget);
-  }).pipe(Effect.provide(toolsLayer)),
+  }).pipe(Effect.provide(layerAdvertisedTools)),
 );
 
 // The tool list is part of the cacheable prompt prefix: two builds must serialize to the same bytes
@@ -165,7 +179,7 @@ const serializedToolList = Effect.gen(function* () {
       inputSchema: tool.inputSchema,
     })),
   );
-}).pipe(Effect.provide(toolsLayer));
+}).pipe(Effect.provide(layerAdvertisedTools));
 
 it.effect("the tool list serializes to identical bytes on every build", () =>
   Effect.gen(function* () {
@@ -197,7 +211,7 @@ it.effect("every fork tool description and field note is within the cap", () =>
       { over, notFork },
       `Add a minimal entry to t3team-toolDocs-fork.ts: at most ${TOOL_DESCRIPTION_CAP_BYTES} B a description, ${FIELD_DESCRIPTION_CAP_BYTES} B a field note. The long text stays registered and t3_tool_help returns it. Upstream tools are not trimmed.`,
     ).toEqual({ over: [], notFork: [] });
-  }).pipe(Effect.provide(toolsLayer)),
+  }).pipe(Effect.provide(layerAdvertisedTools)),
 );
 
 // `T3_TOOL_SIZE_REPORT=1 vp test run src/provider/AgentContextBudget.test.ts` prints what each tool costs.
@@ -209,5 +223,5 @@ it.effect.skipIf(!process.env.T3_TOOL_SIZE_REPORT)("prints the per-tool size tab
       new Set(Object.keys(T3TeamToolkit.tools)),
     );
     yield* Effect.sync(() => process.stdout.write(`\n${formatToolSizeTable(rows)}\n`));
-  }).pipe(Effect.provide(toolsLayer)),
+  }).pipe(Effect.provide(layerAdvertisedTools)),
 );

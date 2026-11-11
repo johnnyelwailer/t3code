@@ -11,7 +11,7 @@ import {
   readMcpAppReference,
   type McpAppReference,
 } from "./mcpApp.ts";
-import { resolveT3McpToolDefinition } from "./t3McpToolPresentation.ts";
+import { resolveT3McpToolDefinition, resolveT3McpToolId } from "./t3McpToolPresentation.ts";
 
 const MAX_PARSED_BYTES = 16_384;
 const MAX_METADATA_BYTES = 8_192;
@@ -195,6 +195,21 @@ export function htmlRenderFromToolItem(item: {
   if (resolveT3McpToolDefinition(item.toolName)?.summaryAction !== "html-render") return undefined;
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.htmlRender;
+}
+
+/** The thread-owned file `preview_recording_stop` stored for the agent. */
+export function previewRecordingIdFromToolItem(item: {
+  readonly toolName: string | null | undefined;
+  readonly output?: unknown;
+}): string | undefined {
+  if (resolveT3McpToolId(item.toolName) !== "preview_recording_stop") return undefined;
+  const budget: ResultReadBudget = {
+    remainingBytes: MAX_PARSED_BYTES,
+    remainingNodes: MAX_ENVELOPE_NODES,
+    exceeded: false,
+  };
+  const result = readResult(item.output, budget);
+  return result.failed || budget.exceeded ? undefined : boundedId(result.data?.id);
 }
 
 /** Accept app references only when server and tool match the item, so tools cannot impersonate another app source. */

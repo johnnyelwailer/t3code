@@ -46,14 +46,13 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "effect-tsgo tsrs --noEmit",
     "test": "vp test run --passWithNoTests"
   },
   "dependencies": {
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/vitest": "catalog:",
-    "typescript": "catalog:"
+    "@effect/vitest": "catalog:"
   }
 }
