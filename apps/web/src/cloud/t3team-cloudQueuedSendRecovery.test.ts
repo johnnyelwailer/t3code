@@ -1,5 +1,5 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId, type CloudSession } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
@@ -15,12 +15,16 @@ import {
   isProjectNotResolved,
   type CloudQueuedSend,
 } from "./t3team-cloudQueuedSendModel";
-import { sendQueuedInMachineProject } from "./t3team-cloudQueuedSendRecovery";
+import {
+  resumeParkedSendOnSession,
+  sendQueuedInMachineProject,
+} from "./t3team-cloudQueuedSendRecovery";
 import {
   failDraftCloudQueuedSend,
   getDraftCloudQueuedSend,
   writeDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
+import { clearCloudSessionTarget, getCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 
 const draftId = "draft-1";
 const T0 = Date.parse("2026-10-13T08:00:00.000Z");
@@ -57,6 +61,7 @@ function queue(record: CloudQueuedSend) {
 
 beforeEach(() => {
   resetCloudProjectWaitLog();
+  clearCloudSessionTarget(draftId);
   useComposerDraftStore.setState({
     draftsByThreadKey: {},
     draftThreadsByThreadKey: {},
@@ -112,6 +117,45 @@ describe("ways out of project_not_resolved", () => {
     queue(stamped({ failureMessage: "relay denied", retryable: true }));
     sendQueuedInMachineProject(draftId);
     expect(getDraftCloudQueuedSend(draftId)!.sendInMachineProject).toBeUndefined();
+  });
+});
+
+describe("resuming a send whose session ended", () => {
+  const live = { sessionId: "session-10", phase: "ready", environmentId: "env-cloud" } as const;
+  const resume = () =>
+    resumeParkedSendOnSession({
+      draftId,
+      messageId: "msg-1",
+      scopeKey: draftId,
+      projectKey: "polassist",
+      session: live as unknown as CloudSession,
+    });
+
+  it("moves the message and the Run-on pick onto the new session, steps started over", () => {
+    queue(stamped());
+    failDraftCloudQueuedSend(
+      draftId,
+      "msg-1",
+      "Cloud session ended before it could connect.",
+      true,
+      {
+        kind: "session_ended",
+        reason: null,
+      },
+    );
+    resume();
+    const record = getDraftCloudQueuedSend(draftId)!;
+    expect(record).toMatchObject({ sessionId: "session-10", messageText: "deploy the preview" });
+    expect(record.failureMessage).toBeUndefined();
+    expect(record.stepStartedAt).toEqual({ queued: raw.createdAt });
+    expect(getCloudSessionTarget(draftId)).toMatchObject({ sessionId: "session-10" });
+  });
+
+  it("leaves a send alone once it is on its way again", () => {
+    queue(stamped());
+    resume();
+    expect(getDraftCloudQueuedSend(draftId)!.sessionId).toBe("session-9");
+    expect(getCloudSessionTarget(draftId)).toBeNull();
   });
 });
 
