@@ -52,6 +52,22 @@ function displayFontCss(appearance: EnvironmentAppearance): string {
     h1,h2,h3{font-family:var(--t3team-font-display)}`;
 }
 
+/**
+ * Colors apply only while the pack theme's own library entry is selected: a user who picks another
+ * theme in Settings → Appearance gets that theme whole, not a pack colour layered on top of it.
+ * Upstream's theme block is `html[data-theme-id]:not([data-theme-id=""])`, (0,2,1). Derived
+ * overrides match that with `html:not(.dark)[…]` / `html.dark[…]` and win by document order.
+ */
+function themeColorRules(theme: Pick<EnvironmentAppearance, "themeId" | "colors">): string {
+  const selector = `[data-theme-id="${t3teamPackThemeId(theme.themeId).replace(/["\\]/g, "\\$&")}"]`;
+  const { light, dark } = theme.colors;
+  const darkColors = [declarations(dark), overrideDeclarations(dark)].filter(Boolean).join(";");
+  return `html${selector}{${declarations(light)}}
+    html:not(.dark)${selector}{${overrideDeclarations(light)}}
+    html.dark${selector}{${darkColors}}
+    ${packPrimaryActionCss(theme.colors, selector)}`;
+}
+
 function themeCss(appearance: EnvironmentAppearance): string {
   // Pack fonts declare upstream's OWN variables, and do it from a stylesheet on purpose.
   // `applyAppearanceFontVariables` writes `--font-sans`/`--font-mono` as INLINE styles on <html>
@@ -69,21 +85,9 @@ function themeCss(appearance: EnvironmentAppearance): string {
   // `root.style.fontSize` inline and unconditionally, so a stylesheet percentage never won —
   // pack density was silently dead. It now seeds the user's interface font size once, via
   // `appearanceDefaults` (see t3team-packAppearanceDefaults.ts).
-  const light = declarations(appearance.colors.light);
-  const dark = declarations(appearance.colors.dark);
-  const lightOverride = overrideDeclarations(appearance.colors.light);
-  const darkOverride = overrideDeclarations(appearance.colors.dark);
-  // Colors apply only while the pack's own theme is selected: a user who picks another theme in
-  // Settings → Appearance gets that theme whole, not a pack colour layered on top of it.
-  // Upstream's theme block is `html[data-theme-id]:not([data-theme-id=""])`, (0,2,1). Derived
-  // overrides match that with `html:not(.dark)[…]` / `html.dark[…]` and win by document order.
-  const theme = `[data-theme-id="${t3teamPackThemeId(appearance.themeId).replace(/["\\]/g, "\\$&")}"]`;
-  const darkColors = [dark, darkOverride].filter(Boolean).join(";");
+  const themes = [appearance, ...(appearance.alternates ?? [])];
   return `:root{${sans}${mono}${display}${radius}}
-    html${theme}{${light}}
-    html:not(.dark)${theme}{${lightOverride}}
-    html.dark${theme}{${darkColors}}
-    ${packPrimaryActionCss(appearance.colors, theme)}
+    ${themes.map(themeColorRules).join("\n")}
     ${displayFontCss(appearance)}`;
 }
 

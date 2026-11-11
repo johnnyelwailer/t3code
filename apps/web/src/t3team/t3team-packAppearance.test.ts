@@ -245,4 +245,26 @@ describe("pack appearance", () => {
     expect(original.isConnected).toBe(true);
     original.remove();
   });
+
+  it("installs alternate themes beside the default and selects only the default", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore-orange",
+      name: "Nexplore Orange",
+      colors: { light: { primary: "#f05a0a" }, dark: { primary: "#f05a0a" } },
+      alternates: [
+        {
+          themeId: "nexplore",
+          name: "Nexplore",
+          colors: { light: { primary: "#4c3cf6" }, dark: { primary: "#4c3cf6" } },
+        },
+      ],
+    });
+    const ids = getCustomThemes().map((theme) => theme.id);
+    expect(ids).toContain(t3teamPackThemeId("nexplore-orange"));
+    expect(ids).toContain(t3teamPackThemeId("nexplore"));
+    expect(readThemePreference()).toBe(t3teamPackThemeId("nexplore-orange"));
+    expect(document.getElementById("t3team-pack-theme")?.textContent).toContain(
+      `[data-theme-id="${t3teamPackThemeId("nexplore")}"]`,
+    );
+  });
 });
