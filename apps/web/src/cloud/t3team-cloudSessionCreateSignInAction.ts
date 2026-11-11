@@ -7,9 +7,9 @@ import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotReso
 import { isCloudSessionSignInFailure } from "./t3team-cloudSessionFailure";
 
 export function cloudSessionCreateSignInAction(input: {
-  readonly createFailed?: boolean;
-  readonly failureKind?: string;
-  readonly failureReason?: string | null;
+  readonly createFailed?: boolean | undefined;
+  readonly failureKind?: string | undefined;
+  readonly failureReason?: string | null | undefined;
   readonly onSignIn: () => void;
 }): CloudQueuedSendRecoveryAction | null {
   if (input.createFailed !== true && input.failureKind !== "create_failed") return null;

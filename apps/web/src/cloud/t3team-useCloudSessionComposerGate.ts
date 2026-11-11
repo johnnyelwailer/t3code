@@ -151,7 +151,7 @@ export function useCloudSessionComposerGate(input: {
   }, [draftId, stepFacts]);
   const signInAction = cloudSessionCreateSignInAction({
     createFailed: target?.createFailed === true,
-    failureKind: queued?.failureKind,
+    ...(queued?.failureKind !== undefined ? { failureKind: queued.failureKind } : {}),
     failureReason: target?.createFailureReason ?? queued?.failureReason ?? null,
     onSignIn: () => {
       const reason = target?.createFailureReason ?? queued?.failureReason;
