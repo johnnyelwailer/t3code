@@ -12,11 +12,9 @@ export const DESKTOP_ROUTE_EXPIRED_MESSAGE =
   "This request expired with the session and is no longer actionable.";
 
 /**
- * A local thread (this computer) never expires this way. A cloud thread expires when the
- * supervisor already parked on `session_ended`, or when the session list shows that this
- * environment's sessions have all stopped, cancelled or failed. A session missing from the list
- * is not called ended: the list is a bounded history, so absence proves nothing. A later live
- * session for the same environment is not ended.
+ * A local thread never expires this way. A cloud thread expires when parked on session_ended,
+ * or when every session for this environment has ended. A missing session, or a later live one,
+ * is not ended (the list is a bounded history).
  */
 export function desktopRouteRequestExpired(input: {
   readonly isLocal: boolean;
