@@ -25,7 +25,7 @@ describe("selectThreadActiveRoots", () => {
   it("drops settled clean worktrees: recently touched alone never qualifies", () => {
     const roots = selectThreadActiveRoots([
       { path: "/repo", primary: true },
-      child("/repo/.t3team/child-session-worktrees/a", { updatedAtMs: Date.now() }),
+      child("/repo/.t3team/child-session-worktrees/a", { updatedAtMs: 1_700_000_000_000 }),
       child("/repo/.t3team/child-session-worktrees/b", { runningChild: true }),
     ]);
     expect(roots.map((root) => root.path)).toEqual([

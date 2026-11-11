@@ -1,10 +1,6 @@
 /**
- * The active roots of one thread (`@t3tools/shared/t3team-threadActiveRoots` holds the rule):
- * its own checkout plus the worktrees of children that are running or hold an open pull request.
- * Folders are confirmed with one batched metadata read; a folder that is gone drops quietly.
- *
- * Not known on the client yet: dirty or unpushed worktrees (a later server fact). Until then a
- * settled clean or dirty child worktree is simply not listed.
+ * Confirms the thread's active roots with one batched metadata read. A missing folder drops
+ * quietly. Dirty or unpushed worktrees are not known on the client yet and are not listed.
  */
 import {
   AuthFilesystemReadScope,
