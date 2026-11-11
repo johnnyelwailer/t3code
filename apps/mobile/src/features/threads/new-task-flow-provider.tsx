@@ -110,6 +110,7 @@ import {
 } from "./new-task-flow-state";
 import { useEnvironmentShellReadiness } from "../../state/shell";
 import { useConnectionsReady, useWorkspaceEnvironments } from "../../state/workspace";
+import { withPendingDraftFirstTurn } from "../../extensions/t3team-pendingDraftFirstTurn";
 import { usePendingDraftProjects } from "../../extensions/t3team-usePendingDraft";
 import { followDraftStamp, pendingDraftHolding } from "../../extensions/t3team-pendingDraft";
 import type { PendingDraft } from "../../extensions/t3team-pendingDraftTypes";
@@ -765,7 +766,7 @@ export function NewTaskFlowProvider(
     }
     const workspaceSelection = resolveWorkspaceSelection(draft.workspaceSelection);
     const mode = workspaceSelection.mode;
-    return {
+    const message: QueuedThreadMessage = {
       environmentId: selectedProject.environmentId,
       threadId: ThreadId.make(metadata.threadId),
       messageId: MessageId.make(metadata.messageId),
@@ -807,6 +808,7 @@ export function NewTaskFlowProvider(
       },
       createdAt: metadata.createdAt,
     };
+    return withPendingDraftFirstTurn(message, heldDraft);
   };
 
   const scratchEnvironments = connectedEnvironments.filter(
@@ -898,13 +900,7 @@ export function NewTaskFlowProvider(
     expandedProvider,
     environments,
     selectedProject,
-    pendingDraft: pendingDraftHolding(
-      heldDraft,
-      selectedProject && {
-        environmentId: selectedProject.environmentId,
-        projectId: selectedProject.id,
-      },
-    ),
+    pendingDraft: pendingDraftHolding(heldDraft),
     linkedEnvironments,
     isScratchDraft,
     modelOptions,

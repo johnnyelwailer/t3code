@@ -181,6 +181,22 @@ describe("cloud checkout keeps the Jira project's identity (#999)", () => {
     });
   });
 
+  it("adopts the Jira project's icon and loads its favicon from the user's environment", () => {
+    const icon = { kind: "emoji" as const, emoji: "📝" };
+    const local = { ...selected, projectIcon: icon, faviconPath: "logo.png" };
+    const [, adopted] = adoptFromOwnEnvironments([local, machine]) as EnvironmentProject[];
+    expect(adopted).toMatchObject({
+      environmentId: CLOUD,
+      id: "machine",
+      title: "Nexi AI",
+      source: jira,
+      projectIcon: icon,
+      faviconPath: "logo.png",
+      faviconEnvironmentId: LOCAL,
+      faviconWorkspaceRoot: "/work/nexi",
+    });
+  });
+
   it("the machine's scratch project is never adopted", () => {
     const scratch = project(CLOUD, "scratch", "Scratch", null, { isScratch: true });
     expect(adoptFromOwnEnvironments([selected, machine, scratch])).toHaveLength(3);

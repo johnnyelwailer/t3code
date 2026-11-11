@@ -6,6 +6,7 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as ConfigProvider from "effect/ConfigProvider";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -20,9 +21,11 @@ import * as CliTokenManager from "./CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
 import type { StandbyClaim } from "./t3team-NexiBrokerClient.ts";
 import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
+import * as ProjectServiceModule from "../project/ProjectService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import { TEARDOWN_STEPS } from "./t3team-CloudSessionDeleteSteps.ts";
 import type { CloudSessionPlainProject } from "./t3team-cloudSessionPlainProject.ts";
 
 /** Sessions here are plain ones: no project, so the machine resolver is never consulted. */
@@ -79,7 +82,7 @@ const GhWorkflowRunsJson = Schema.Struct({
       updated_at: Schema.String,
       html_url: Schema.String,
       name: Schema.String,
-      actor: Schema.Struct({ login: Schema.String }),
+      actor: Schema.Struct({ login: Schema.String, id: Schema.Number }),
     }),
   ),
 });
@@ -109,12 +112,23 @@ const makeGithubMock = (
   options: {
     login?: string;
     runStatus?: string;
+    /** The run's display name (the delete reads its machine identity from it). */
+    runName?: string;
+    /** The single-run read answers this until the cancel has landed, then the list's status. */
+    getRunStatusBeforeCancel?: string;
+    /** The single-run read's status after the cancel has landed (defaults to "completed"). */
+    getRunStatusAfterCancel?: string;
+    /** The cache ids the fleet's cache list carries for run 999's snapshot. */
+    snapshotCacheIds?: number[];
+    /** The user's run list is empty: run 999 is not theirs. */
+    noSession?: boolean;
     /** The cancel call fails (GitHub's 409), and later listings show this status. */
     cancelFailsThenStatus?: string;
   } = {},
 ) => {
   const login = options.login ?? "pj";
   let cancelAttempted = false;
+  const removedCaches = new Set<number>();
   const calls: Array<RecordedCall> = [];
   let tag: string | null = null;
   const rest: GitHubApi.GitHubApi["Service"]["rest"] = (input) =>
@@ -123,8 +137,8 @@ const makeGithubMock = (
       const call: RecordedCall = { method: input.method ?? "GET", path: input.path, stdin };
       calls.push(call);
       const joined = joinedOf(call);
-      if (joined.includes("/cancel") && options.cancelFailsThenStatus !== undefined) {
-        cancelAttempted = true;
+      if (joined.endsWith("/cancel")) cancelAttempted = true;
+      if (joined.endsWith("/cancel") && options.cancelFailsThenStatus !== undefined) {
         return Effect.fail(
           new GitHubApi.GitHubApiResponseError({
             host: input.host,
@@ -154,28 +168,76 @@ const makeGithubMock = (
       tag = parsed.inputs?.session_tag ?? null;
       return ghOut("");
     }
-    if (joined.includes("/cancel")) {
+    if (joined.endsWith("/cancel")) {
       // GitHub answers 409 for a run that already completed; a cancel must never get here then.
       return ghOut("{}");
     }
+    if (joined.endsWith("/runs/999")) {
+      // The delete's single-run poll: in progress until the cancel lands, then the list's status.
+      const status = cancelAttempted
+        ? (options.getRunStatusAfterCancel ?? "completed")
+        : (options.getRunStatusBeforeCancel ?? options.runStatus ?? "in_progress");
+      return ghOut(
+        JSON.stringify({
+          workflow_run: {
+            id: 999,
+            status,
+            conclusion: "success",
+            created_at: "2026-09-14T12:00:00Z",
+            updated_at: "2026-09-14T12:00:01Z",
+            html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
+            name: options.runName ?? `hive/nx-nexi [main] [${tag}]`,
+            actor: { login, id: 1283972 },
+          },
+        }),
+      );
+    }
+    if (joined.startsWith("GET repos/hive/nx-nexi/actions/caches?")) {
+      const ids = (options.snapshotCacheIds ?? []).filter((id) => !removedCaches.has(id));
+      return ghOut(
+        JSON.stringify({
+          total_count: ids.length,
+          actions_caches: ids.map((id) => ({
+            id,
+            ref: "refs/heads/main",
+            key: `nexi-session-userdata-g1283972.u-${login}_/${999}`,
+            size_in_bytes: 1,
+          })),
+        }),
+      );
+    }
+    if (/^DELETE repos\/hive\/nx-nexi\/actions\/caches\/[0-9]+$/.test(joined)) {
+      return (removedCaches.add(Number(joined.split("/").pop())), ghOut("{}"));
+    }
+    if (joined.endsWith("/runs/999/jobs")) {
+      const steps = Object.values(TEARDOWN_STEPS).map((name) => ({
+        name,
+        status: "completed",
+        conclusion: "success",
+      }));
+      return ghOut(JSON.stringify({ jobs: [{ id: 55, steps }] }));
+    }
+    if (joined.includes("check-runs/55/annotations")) return ghOut("[]");
     if (joined.includes("/runs")) {
       return ghOut(
         encodeGhWorkflowRuns({
-          workflow_runs: [
-            {
-              id: 999,
-              status:
-                (cancelAttempted ? options.cancelFailsThenStatus : undefined) ??
-                options.runStatus ??
-                "completed",
-              conclusion: "success",
-              created_at: "2026-09-14T12:00:00Z",
-              updated_at: "2026-09-14T12:00:01Z",
-              html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
-              name: `hive/nx-nexi [main] [${tag}]`,
-              actor: { login },
-            },
-          ],
+          workflow_runs: options.noSession
+            ? []
+            : [
+                {
+                  id: 999,
+                  status:
+                    (cancelAttempted ? options.cancelFailsThenStatus : undefined) ??
+                    options.runStatus ??
+                    "completed",
+                  conclusion: "success",
+                  created_at: "2026-09-14T12:00:00Z",
+                  updated_at: "2026-09-14T12:00:01Z",
+                  html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
+                  name: options.runName ?? `hive/nx-nexi [main] [${tag}]`,
+                  actor: { login, id: 1283972 },
+                },
+              ],
         }),
       );
     }
@@ -634,6 +696,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin;
       for (const input of [
         '"machine_repository":"https://nexplore.ghe.com/acme/api.git"',
+        '"session_repository":"nexplore.ghe.com/acme/api"',
         `"machine_commit":"${"a".repeat(40)}"`,
         '"machine_devcontainer":".devcontainer/devcontainer.json"',
         // The creator's own workspace, so no other user's session restores this one's snapshot.
@@ -1093,6 +1156,212 @@ describe("CloudSessionService.cancel", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(cancelSession("in_progress", "in_progress"));
       assert.isTrue(exit._tag === "Failure");
+    }),
+  );
+});
+
+describe("CloudSessionService.delete", () => {
+  /** The session error behind a failed exit: unwraps the Effect cause and checks its type. */
+  const sessionError = (exit: unknown) => {
+    assert.isTrue((exit as { _tag: string })._tag === "Failure");
+    const error = Cause.squash((exit as { cause: Cause.Cause<unknown> }).cause);
+    assert.instanceOf(error, CloudSessionFailedError);
+    return error;
+  };
+  /** The providers a delete test shares with cancel, plus the stop/delete flag turned on. */
+  const providersFor = (options: Parameters<typeof makeGithubMock>[0] = {}) =>
+    Effect.gen(function* () {
+      replaceFeatureFlagPresetValues(new Map([["CLOUD_SESSION_STOP_DELETE", true]]));
+      const { calls, rest, graphql } = makeGithubMock(options);
+      const providers = Layer.mergeAll(
+        noMachines,
+        Layer.mock(GitHubApi.GitHubApi)({ rest, graphql, credential: ambientCredential }),
+        Layer.mock(CliTokenManager.CloudCliTokenManager)({
+          getExisting: Effect.succeed(Option.none()),
+        }),
+        Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+          mint: () => Effect.die("delete never mints"),
+        }),
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+        NexiBrokerService.layerDisabled,
+      );
+      return { calls, providers };
+    });
+
+  /**
+   * A local project pointing at the machine's repository: with it, the delete reaches the git
+   * step instead of stopping at "no project points at this remote".
+   */
+  const providersForWithProject = (options: Parameters<typeof makeGithubMock>[0] = {}) =>
+    Effect.gen(function* () {
+      const { providers } = yield* providersFor(options);
+      const project = {
+        title: "nx-nexi",
+        workspaceRoot: "D:/projects/nx-nexi",
+        repositoryIdentity: {
+          locator: { remoteUrl: "https://nexplore.ghe.com/hive/nx-nexi.git" },
+        },
+      };
+      const projectService = Layer.mock(ProjectServiceModule.ProjectService)({
+        listPage: () => Effect.succeed({ projects: [project], nextCursor: null }),
+      } as unknown as ProjectServiceModule.ProjectService["Service"]);
+      return { providers: Layer.mergeAll(providers, projectService) };
+    });
+
+  const deleteSession = (options: Parameters<typeof makeGithubMock>[0] = {}) =>
+    Effect.gen(function* () {
+      const { calls, providers } = yield* providersFor(options);
+      yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.delete({ sessionId: "999" })),
+        Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
+      );
+      return calls;
+    });
+
+  it.effect("stops a running plain session, waits for it, then removes its snapshots", () =>
+    Effect.gen(function* () {
+      const calls = yield* deleteSession({ runStatus: "in_progress", snapshotCacheIds: [77, 88] });
+      const joined = calls.map(joinedOf);
+      // Stopped first…
+      assert.equal(
+        joined.filter(
+          (line) =>
+            line.endsWith("POST repos/hive/nx-nexi/actions/runs/999/cancel") ||
+            line.includes("/cancel"),
+        ).length,
+        1,
+      );
+      // …the run was polled to completion…
+      assert.isAtLeast(joined.filter((line) => line.endsWith("/runs/999")).length, 1);
+      // …and both snapshot caches of the run were removed.
+      assert.isTrue(joined.some((line) => line === "DELETE repos/hive/nx-nexi/actions/caches/77"));
+      assert.isTrue(joined.some((line) => line === "DELETE repos/hive/nx-nexi/actions/caches/88"));
+    }),
+  );
+
+  it.effect("deletes an already-ended session without cancelling it", () =>
+    Effect.gen(function* () {
+      const calls = yield* deleteSession({ runStatus: "completed", snapshotCacheIds: [77] });
+      assert.isFalse(calls.some((call) => joinedOf(call).includes("/cancel")));
+      assert.isTrue(
+        calls.some((call) => joinedOf(call) === "DELETE repos/hive/nx-nexi/actions/caches/77"),
+      );
+    }),
+  );
+
+  it.effect("blocks a machine session when git is unavailable, and deletes nothing", () =>
+    Effect.gen(function* () {
+      const { providers } = yield* providersForWithProject({
+        runStatus: "completed",
+        runName:
+          "hive/nx-nexi [main] [s1] · machine · ws u-pj_ · repo nexplore.ghe.com/hive/nx-nexi · setup",
+      });
+      const exit = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => Effect.exit(svc.delete({ sessionId: "999" }))),
+        Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
+      );
+      assert.match(sessionError(exit).message, /Git is not available/);
+    }),
+  );
+
+  it.effect("refuses to delete a session that is not this user's", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(deleteSession({ noSession: true, runStatus: "completed" }));
+      assert.match(sessionError(exit).message, /does not exist/);
+    }),
+  );
+
+  it.effect("refuses to delete a claimed session this server does not remember", () =>
+    Effect.gen(function* () {
+      // The broker knows the session; the ledger does not (server restarted since the claim).
+      const broker = Layer.succeed(NexiBrokerService.NexiBrokerService, {
+        enabled: true,
+        sessions: Effect.succeed([{ runId: "999" }]),
+      } as unknown as NexiBrokerService.NexiBrokerService["Service"]);
+      const { calls, rest, graphql } = makeGithubMock({ noSession: true });
+      replaceFeatureFlagPresetValues(new Map([["CLOUD_SESSION_STOP_DELETE", true]]));
+      try {
+        const providers = Layer.mergeAll(
+          noMachines,
+          Layer.mock(GitHubApi.GitHubApi)({ rest, graphql, credential: ambientCredential }),
+          Layer.mock(CliTokenManager.CloudCliTokenManager)({
+            getExisting: Effect.succeed(Option.none()),
+          }),
+          Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+            mint: () => Effect.die("delete never mints"),
+          }),
+          ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+          broker,
+        );
+        const exit = yield* Effect.exit(
+          Effect.service(CloudSessionService.CloudSessionService).pipe(
+            Effect.flatMap((svc) => svc.delete({ sessionId: "999" })),
+            Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
+          ),
+        );
+        assert.match(sessionError(exit).message, /restart/);
+      } finally {
+        replaceFeatureFlagPresetValues(new Map());
+      }
+      assert.isFalse(calls.some((call) => joinedOf(call).includes("/cancel")));
+    }),
+  );
+
+  it.effect("with the flag off, delete refuses before touching anything", () =>
+    Effect.gen(function* () {
+      const { calls, rest, graphql } = makeGithubMock({ runStatus: "completed" });
+      const providers = Layer.mergeAll(
+        noMachines,
+        Layer.mock(GitHubApi.GitHubApi)({ rest, graphql, credential: ambientCredential }),
+        Layer.mock(CliTokenManager.CloudCliTokenManager)({
+          getExisting: Effect.succeed(Option.none()),
+        }),
+        Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+          mint: () => Effect.die("delete never mints"),
+        }),
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+        NexiBrokerService.layerDisabled,
+      );
+      const exit = yield* Effect.exit(
+        Effect.service(CloudSessionService.CloudSessionService).pipe(
+          Effect.flatMap((svc) => svc.delete({ sessionId: "999" })),
+          Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
+        ),
+      );
+      assert.match(sessionError(exit).message, /turned off/);
+      assert.isFalse(calls.some((call) => joinedOf(call).includes("/cancel")));
+    }),
+  );
+
+  const deleteInfoFor = (options: Parameters<typeof makeGithubMock>[0] = {}) =>
+    Effect.gen(function* () {
+      const { calls, providers } = yield* providersFor(options);
+      const info = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.deleteInfo({ sessionId: "999" })),
+        Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
+      );
+      return { info, calls };
+    });
+
+  it.effect("deleteInfo reports no repository for a plain workspace session", () =>
+    Effect.gen(function* () {
+      const { info } = yield* deleteInfoFor({ runName: "hive/nx-nexi [main] [s1] · ws u-pj_" });
+      assert.equal(info.repository, null);
+      assert.equal(info.otherSessions, 0);
+      assert.deepEqual(info.projects, []);
+    }),
+  );
+
+  it.effect("deleteInfo names the machine's repository from the run name", () =>
+    Effect.gen(function* () {
+      const { info, calls } = yield* deleteInfoFor({
+        runName:
+          "hive/nx-nexi [main] [s1] · machine · ws u-pj_ · repo nexplore.ghe.com/hive/nx-nexi · setup",
+      });
+      assert.equal(info.repository, "hive/nx-nexi");
+      // The info read changes nothing: no cancel, no cache removed.
+      assert.isFalse(calls.some((call) => joinedOf(call).includes("/cancel")));
+      assert.isFalse(calls.some((call) => joinedOf(call).startsWith("DELETE")));
     }),
   );
 });

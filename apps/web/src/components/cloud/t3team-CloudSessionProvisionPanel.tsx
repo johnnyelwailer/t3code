@@ -34,6 +34,7 @@ export function CloudSessionProvisionPanel({
   onCreate,
   onSessionAction,
   onSessionSecondaryAction,
+  onSessionDeleteAction,
   pendingSessionId = null,
   pendingKind = null,
   pendingLabel = null,
@@ -52,10 +53,12 @@ export function CloudSessionProvisionPanel({
   readonly onSessionAction: (session: CloudSession) => void;
   /** Secondary action on a ready row (release the machine). Absent hides it. */
   readonly onSessionSecondaryAction?: ((session: CloudSession) => void) | undefined;
+  /** Delete the machine's persistent state; absent hides the Delete button. */
+  readonly onSessionDeleteAction?: ((session: CloudSession) => void) | undefined;
   /** Session whose action is in flight, so only that row shows a pending state. */
   readonly pendingSessionId?: string | null;
   /** Which action on that session is in flight: drives the pending button. */
-  readonly pendingKind?: "connect" | "cancel" | "stop" | null;
+  readonly pendingKind?: "connect" | "cancel" | "stop" | "delete" | null;
   /** Label for the in-flight primary button (Connect/Cancel); defaults to "Working…". */
   readonly pendingLabel?: string | null;
   /** The provider's page with every session, linked from the capped history. */
@@ -130,9 +133,13 @@ export function CloudSessionProvisionPanel({
                       session={session}
                       onAction={onSessionAction}
                       onSecondaryAction={onSessionSecondaryAction}
+                      onDelete={onSessionDeleteAction}
                       onForget={canForgetSession?.(session) ? onSessionForget : undefined}
-                      actionPending={isThisPending && pendingKind !== "stop"}
+                      actionPending={
+                        isThisPending && pendingKind !== "stop" && pendingKind !== "delete"
+                      }
                       secondaryActionPending={isThisPending && pendingKind === "stop"}
+                      deletePending={isThisPending && pendingKind === "delete"}
                       pendingLabel={pendingLabel}
                     />
                   );

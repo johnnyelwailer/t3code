@@ -108,7 +108,7 @@ describe("serverSettings helpers", () => {
       worktreeOnDelete: false,
       worktreeUnchanged: false,
       worktreeKeepWhen: "uncommitted-changes",
-      browserArtifactsAfterDays: null,
+      browserArtifactsAfterDays: DEFAULT_SERVER_SETTINGS.storageCleanup.browserArtifactsAfterDays,
       logsAfterDays: 30,
     });
   });

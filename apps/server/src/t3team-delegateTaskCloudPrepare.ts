@@ -85,10 +85,15 @@ export const prepareCloudChild = Effect.fn("delegateTask.cloudSession.prepare")(
       "cloudSession runs the child on the cloud session's own checkout; omit workspace isolation.",
     );
   }
-  const identity = input.project?.repositoryIdentity;
-  if (input.project === undefined || identity === undefined || identity === null) {
+  if (input.project === undefined) {
     return yield* invalid(
-      "cloudSession needs a project with a repository: a cloud session runs the project's own repository.",
+      "cloudSession needs a project with a repository: this thread's project was not found.",
+    );
+  }
+  const identity = input.project.repositoryIdentity;
+  if (identity === undefined || identity === null) {
+    return yield* invalid(
+      `cloudSession needs a project with a repository: project "${input.project.title}" (${input.project.workspaceRoot}): this server could not resolve its git remote (no remote, a missing folder, or git timed out). A cloud session runs the project's own repository.`,
     );
   }
   if (input.acceptedChild !== undefined) {

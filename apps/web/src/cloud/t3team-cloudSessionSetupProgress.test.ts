@@ -126,9 +126,22 @@ describe("buildCloudSessionSetup steps", () => {
       "server",
       "connect",
       "project",
+      "provider",
       "sent",
     ]);
     expect(model({ session: session("ready"), delivery: "sending" }).currentStep.id).toBe("sent");
+  });
+
+  it("holds on Provider after project checkout until the selected provider is ready", () => {
+    const m = model({
+      session: session("ready"),
+      machineConnected: true,
+      projectReady: true,
+      providerReady: false,
+      delivery: "queued",
+    });
+    expect(m.currentStep.id).toBe("provider");
+    expect(m.activity).toBe("Setting up the selected provider…");
   });
 
   it("reports a failure with its reason and where to look", () => {
@@ -212,9 +225,9 @@ describe("notes", () => {
     const note = cloudSetupLongWaitNote(
       model({ session: session("preparing", { projectMachine: true }) }),
     );
-    expect(note).toContain("cloning");
+    expect(note).toContain("Cloning");
     expect(note).toContain("several minutes");
-    expect(note).toContain("no time estimate");
+    expect(note).not.toContain("no time estimate");
   });
 
   it("claims no history it does not have", () => {
@@ -232,7 +245,7 @@ describe("notes", () => {
     expect(cloudSetupMeanwhileNote(model({ session: session("preparing") }))).toContain("type");
     expect(
       cloudSetupMeanwhileNote(model({ session: session("preparing"), delivery: "queued" })),
-    ).toContain("waiting");
+    ).toContain("will send");
     expect(
       cloudSetupMeanwhileNote(model({ session: session("ready"), delivery: "sending" })),
     ).toBeNull();
@@ -246,5 +259,22 @@ describe("notes", () => {
     expect(
       cloudSetupReadyNote(model({ session: session("ready"), machineConnected: true })),
     ).toContain("Everything is in place");
+  });
+
+  it("a queued or sending message gets a Ready note that says it will send", () => {
+    const queuedReady = model({
+      session: session("ready"),
+      machineConnected: true,
+      delivery: "queued",
+    });
+    expect(cloudSetupReadyNote(queuedReady)).toBe("Your message will send now.");
+    expect(cloudSetupReadyNote(queuedReady)).not.toContain("first message");
+    expect(cloudSetupMeanwhileNote(queuedReady)).toBeNull();
+    expect(cloudSetupReadyNote(model({ session: session("starting"), delivery: "queued" }))).toBe(
+      "Your message will send when the session is ready.",
+    );
+    expect(cloudSetupReadyNote(model({ session: session("ready"), delivery: "sending" }))).toBe(
+      "Your message is sending.",
+    );
   });
 });

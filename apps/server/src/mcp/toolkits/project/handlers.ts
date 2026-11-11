@@ -297,7 +297,10 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
   t3_project_read: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const projects = yield* access;
-      const result = yield* projects.getById(input.projectId).pipe(Effect.mapError(unavailable));
+      // Resolved like t3_project_list, so read and list agree on the repository.
+      const result = yield* projects
+        .getById(input.projectId, { resolveRepositoryIdentity: true })
+        .pipe(Effect.mapError(unavailable));
       if (Option.isNone(result))
         return yield* new OrchestratorMcpFailure({
           code: "invalid_request",

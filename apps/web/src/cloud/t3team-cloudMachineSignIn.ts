@@ -7,7 +7,7 @@ import { useCloudSessionsOfMachine } from "./t3team-useCloudSessionsOfMachine";
  * A cloud session's machine is new each time, so a sign-in it asks for is one the user already
  * gave somewhere else (nexplore.ghe.com/hive/nx-nexi/issues/656).
  */
-export const CLOUD_MACHINE_SIGN_IN_COPY = "We need to sign you in again for this machine.";
+export const CLOUD_MACHINE_SIGN_IN_COPY = "We need you to sign in on this machine.";
 
 export function signInDescriptionForEnvironment(
   sessions: readonly CloudSession[],

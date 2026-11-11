@@ -6,7 +6,10 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveCloudThreadProjectTitle } from "./t3team-cloudThreadProjectTitle";
+import {
+  resolveCloudThreadProjectIdentity,
+  resolveCloudThreadProjectTitle,
+} from "./t3team-cloudThreadProjectTitle";
 
 const LOCAL = EnvironmentId.make("env-local");
 const VM = EnvironmentId.make("env-vm");
@@ -103,5 +106,43 @@ describe("resolveCloudThreadProjectTitle", () => {
     const c = project(LOCAL, "c", "Nexi docs", NEXI);
     expect(resolve(checkout, [a, b, checkout])).toBe("Nexi AI");
     expect(resolve(checkout, [a, c, checkout])).toBeNull();
+  });
+});
+
+describe("resolveCloudThreadProjectIdentity", () => {
+  const icon = { kind: "emoji", emoji: "📝" } as const;
+
+  it("uses the local project's title and icon record for a cloud checkout", () => {
+    const local = {
+      ...project(LOCAL, "nexi-ai", "Nexi AI", NEXI),
+      projectIcon: icon,
+      faviconPath: "logo.png",
+    };
+    const resolved = resolveCloudThreadProjectIdentity({
+      project: checkout,
+      isCloudSession: true,
+      primaryEnvironmentId: LOCAL,
+      projects: [local, checkout],
+    });
+    expect(resolved.title).toBe("Nexi AI");
+    expect(resolved.iconProject).toBe(local);
+    expect(resolved.iconProject).toMatchObject({
+      id: "nexi-ai",
+      environmentId: LOCAL,
+      projectIcon: icon,
+      faviconPath: "logo.png",
+    });
+  });
+
+  it("keeps the checkout's own identity when it does not match a local project", () => {
+    const other = project(LOCAL, "other", "Other", repository("nexplore.ghe.com/hive/other"));
+    const resolved = resolveCloudThreadProjectIdentity({
+      project: checkout,
+      isCloudSession: true,
+      primaryEnvironmentId: LOCAL,
+      projects: [other, checkout],
+    });
+    expect(resolved.title).toBe("repository");
+    expect(resolved.iconProject).toBe(checkout);
   });
 });

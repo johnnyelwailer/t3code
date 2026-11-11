@@ -17,15 +17,21 @@ export function formatCloudSetupRemaining(seconds: number): string {
 
 /** What assistive tech hears: changes with the step, never with the clock. */
 export function cloudSetupAnnouncement(model: CloudSetupModel): string {
-  return model.stage === "ready"
-    ? "Your cloud session is ready."
-    : model.stage === "failed"
-      ? "Cloud session setup failed."
-      : model.activity;
+  if (model.stage === "ready") return "Your cloud session is ready.";
+  if (model.stage === "failed") return "Cloud session setup failed.";
+  // The step list already names the current step; keep the live region short.
+  if (model.delivery === "sending") return "Sending your message.";
+  return model.activity;
 }
 
 /** The line under the title once the session is ready; only claims a connection that exists. */
 export function cloudSetupReadyNote(model: CloudSetupModel): string {
+  if (model.delivery === "sending") return "Your message is sending.";
+  if (model.delivery === "queued") {
+    return model.session?.phase === "ready"
+      ? "Your message will send now."
+      : "Your message will send when the session is ready.";
+  }
   return model.machineConnected
     ? "Everything is in place. Send your first message to start."
     : "The machine is up. Send your first message to connect to it and start.";
@@ -34,14 +40,42 @@ export function cloudSetupReadyNote(model: CloudSetupModel): string {
 /** The honest long-wait explanation, or null when the setup is the quick kind. */
 export function cloudSetupLongWaitNote(model: CloudSetupModel): string | null {
   if (model.stage !== "working" || !model.longWait) return null;
-  return "Your repository is being prepared: cloning it and installing its dependencies. This can take several minutes, and there is no time estimate for it yet.";
+  return "Cloning the repository and installing dependencies. This can take several minutes.";
 }
 
 /** The one line about typing meanwhile; true to what the composer does. */
 export function cloudSetupMeanwhileNote(model: CloudSetupModel): string | null {
   if (model.stage !== "working") return null;
   if (model.delivery === "sending") return null;
-  return model.delivery === "queued"
-    ? "Your message is waiting and will be sent as soon as the session is ready."
-    : "You can already type: your first message is sent as soon as the session is ready.";
+  if (model.delivery === "queued") {
+    // Once the session is ready, the Ready note owns this; don't also say "when it is ready".
+    return model.session?.phase === "ready"
+      ? null
+      : "Your message will send when the session is ready.";
+  }
+  return "You can type now; the first message sends when the session is ready.";
+}
+
+/** Visible subtitle under the title. Null while the step list alone carries the status. */
+export function cloudSetupSubtitle(input: {
+  readonly failed: boolean;
+  readonly failureReason: string | null;
+  readonly stage: CloudSetupModel["stage"];
+  readonly notSeen: boolean;
+  readonly activity: string;
+  readonly readyNote: string;
+  readonly slow: boolean;
+  readonly delivery?: CloudSetupModel["delivery"];
+  readonly sessionReady?: boolean;
+}): string | null {
+  if (input.failed) {
+    return input.failureReason ?? "Something went wrong while the machine was starting.";
+  }
+  if (input.stage === "ready") return input.readyNote;
+  if (input.sessionReady && (input.delivery === "queued" || input.delivery === "sending")) {
+    return input.readyNote;
+  }
+  if (input.notSeen) return input.activity;
+  if (input.slow) return "Taking longer than the rough estimate.";
+  return null;
 }

@@ -17,12 +17,18 @@ import * as Effect from "effect/Effect";
 import type * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import {
   currentLoginRequest,
+  getRunRequest,
   listRunsRequest,
   type CloudSessionRepoRef,
   type GitHubActionsRequest,
   type GitHubActionsResponse,
+  type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
-import { parseLogin, parseRunsResponse } from "./t3team-githubActionsSessionParse.ts";
+import {
+  parseLogin,
+  parseRunResponse,
+  parseRunsResponse,
+} from "./t3team-githubActionsSessionParse.ts";
 import { sessionRunsForLogin } from "./t3team-cloudSessionRunOwnership.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
 import { makeLoginMemo } from "./t3team-CloudSessionLoginMemo.ts";
@@ -158,6 +164,29 @@ export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
     );
 
   /**
+   * One run by id (the delete flow polls it after a cancel, and claimed sessions are not in the
+   * caller's list at all). Unparseable answers fail: reading "unreadable" as "ended" would let a
+   * delete proceed past a still-running session.
+   */
+  const getRun = (
+    runId: number,
+    options?: SessionGhRunOptions,
+  ): Effect.Effect<WorkflowRunSummary, CloudSessionFailedError> =>
+    run(getRunRequest(repoRef, runId), options).pipe(
+      Effect.flatMap((result) => {
+        const parsed = parseRunResponse(result.body);
+        return parsed === null
+          ? Effect.fail(
+              new CloudSessionFailedError({
+                reason: "unreachable",
+                message: "The provider returned an unreadable session.",
+              }),
+            )
+          : Effect.succeed(parsed);
+      }),
+    );
+
+  /**
    * Resolve the GitHub login the fleet host's credential belongs to — the same
    * identity dispatch uses. Every list/cancel is scoped to this login, which is
    * the whole per-user isolation. If it cannot be resolved we fail closed:
@@ -182,5 +211,13 @@ export const makeSessionGh = Effect.fn("cloud.session_gh.make")(function* (
       return login;
     });
 
-  return { run, runBackground, runInteractive, listRunsFor, resolveLogin, identity } as const;
+  return {
+    run,
+    runBackground,
+    runInteractive,
+    listRunsFor,
+    getRun,
+    resolveLogin,
+    identity,
+  } as const;
 });

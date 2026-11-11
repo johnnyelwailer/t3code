@@ -5,6 +5,7 @@
  * after the user chose that source on the card.
  */
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProjectMachineSecret } from "./t3team-projectMachine.ts";
@@ -14,6 +15,29 @@ const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 export const CredentialHost = Schema.String.check(
   Schema.isMaxLength(253),
   Schema.isPattern(new RegExp(`^${HOST_LABEL}(?:\\.${HOST_LABEL})*$`)),
+);
+
+/**
+ * The host of a registry URL or `host:port`, lower-cased. Agents copy a feed URL verbatim
+ * from the repository's config, so the input accepts that and keeps only the host.
+ */
+export const normalizeCredentialHost = (raw: string): string => {
+  const trimmed = raw.trim().toLowerCase();
+  const withoutScheme = trimmed.replace(/^(?:[a-z][a-z0-9+.-]*:)?\/\//, "");
+  const authority = withoutScheme.split(/[/?#]/, 1)[0] ?? "";
+  const withoutUser = authority.slice(authority.lastIndexOf("@") + 1);
+  return withoutUser.replace(/:\d*$/, "").replace(/\.$/, "");
+};
+
+/** A credential host as an agent sends it: a bare host or a registry URL. */
+export const CredentialHostInput = Schema.String.check(Schema.isMaxLength(2048)).pipe(
+  Schema.decodeTo(
+    CredentialHost,
+    SchemaTransformation.transform({
+      decode: normalizeCredentialHost,
+      encode: (host) => host,
+    }),
+  ),
 );
 
 /** An environment variable name, same rule as a machine secret's. */
