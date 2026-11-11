@@ -575,3 +575,32 @@ describe("live workflow step overlay on the plan card", () => {
 // The header/outcome presentation tests (Defect 3 headline + outcome fold-in, and the
 // two-row header layout fix) live in `t3team-messageShapeCardLiveHeader.test.tsx`, split out
 // once this file outgrew the test-file LOC ceiling.
+
+// machine-setup repro: "Run failed" landed while the server row still said "running".
+describe("a failed run never shows Running", () => {
+  it("renders Failed, not Running, while the server row is still running", () => {
+    const markup = renderToStaticMarkup(
+      <T3TeamWorkflowShapeLiveCard
+        shape={TEST_WORKFLOW_SHAPE}
+        progress={{
+          runId: RUN_ID,
+          steps: [],
+          run: {
+            phase: "failed",
+            error: "no declared default model",
+            updatedAt: "2026-11-10T15:40:00.000Z",
+          },
+        }}
+        workflowRunStatus={{
+          runId: RUN_ID,
+          status: "running",
+          pendingKind: null,
+          wakeAt: null,
+          updatedAt: "2026-11-10T15:39:00.000Z",
+        }}
+      />,
+    );
+    expect(markup).toContain("Failed");
+    expect(markup).not.toContain("Running");
+  });
+});

@@ -1,4 +1,5 @@
-import { CheckIcon, CircleAlertIcon } from "lucide-react";
+import type { EnvironmentId } from "@t3tools/contracts";
+import { CheckIcon, CircleAlertIcon, ClockIcon } from "lucide-react";
 
 import { SetupActions } from "./t3team-CloudSessionSetupActions";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
@@ -8,12 +9,14 @@ import {
   cloudSetupLongWaitNote,
   cloudSetupMeanwhileNote,
   cloudSetupReadyNote,
+  cloudSetupSubtitle,
   readCloudSetup,
   type CloudSetupFacts,
 } from "./t3team-cloudSessionSetupProgress";
 import { CloudProjectWaitNote } from "./t3team-CloudProjectWaitNote";
 import { presentCloudProjectWaitAt } from "./t3team-cloudProjectWaitClock";
-import { SetupLiveReadout, StepList } from "./t3team-CloudSessionSetupParts";
+import { StepList } from "./t3team-CloudSessionSetupParts";
+import { CloudSessionSetupProviderAuth } from "./t3team-CloudSessionSetupProviderAuth";
 import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotResolvedActions";
 import { useCloudProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSetupElapsedSeconds } from "./t3team-useCloudSetupElapsedSeconds";
@@ -24,6 +27,8 @@ export interface CloudSessionSetupCardProps {
   readonly onCancel?: (() => void) | undefined;
   /** Retry a first message that could not be delivered. */
   readonly onRetry?: (() => void) | null | undefined;
+  /** Start the "Project ready" wait over while the message is still waiting for it. */
+  readonly onRestartWait?: (() => void) | undefined;
   /** More ways out of a message that gave up waiting for its project (Retry and Cancel stay). */
   readonly recoveryActions?: ReadonlyArray<CloudQueuedSendRecoveryAction> | undefined;
   /** Start a fresh session after this one failed. */
@@ -45,6 +50,7 @@ export function CloudSessionSetupCard({
   facts,
   onCancel,
   onRetry,
+  onRestartWait,
   recoveryActions,
   onTryAgain,
   sending = false,
@@ -71,13 +77,27 @@ export function CloudSessionSetupCard({
   const meanwhile = cloudSetupMeanwhileNote(model);
   const failed = model.stage === "failed";
   const projectWait = presentCloudProjectWaitAt(model.projectWait, facts.queued, projectWaitNow);
+  const subtitle = cloudSetupSubtitle({
+    failed,
+    failureReason: model.failureReason,
+    stage: model.stage,
+    notSeen: model.notSeen,
+    activity: model.activity,
+    readyNote: cloudSetupReadyNote(model),
+    slow,
+    delivery: model.delivery,
+    sessionReady: model.session?.phase === "ready",
+  });
   return (
     <section
       aria-label="Cloud session setup"
       data-cloud-setup-card=""
+      data-cloud-setup-session={session?.sessionId ?? ""}
+      data-cloud-setup-environment={session?.environmentId ?? ""}
       data-state={model.stage}
       data-slow={slow ? "true" : "false"}
       data-not-seen={model.notSeen ? "true" : "false"}
+      data-calm={model.keptWaiting ? "true" : "false"}
       data-motion={motionMode}
       data-cloud-setup-step-current={model.currentStep.id}
       className="t3team-setup-card mt-1 mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-4 text-card-foreground shadow-xs/5"
@@ -86,48 +106,32 @@ export function CloudSessionSetupCard({
         {cloudSetupAnnouncement(model)}
       </p>
       <div className="flex items-start gap-3">
-        <div className="t3team-setup-orb" aria-hidden>
-          {model.stage === "ready" ? (
-            <CheckIcon className="size-5 stroke-2" />
-          ) : failed ? (
-            <CircleAlertIcon className="size-5" />
-          ) : (
-            <>
-              <span className="t3team-setup-orb-ring" data-ring="1" />
-              <span className="t3team-setup-orb-ring" data-ring="2" />
-              <span className="t3team-setup-orb-core" />
-            </>
-          )}
-        </div>
+        {model.stage === "ready" || failed ? (
+          <div className="t3team-setup-orb" aria-hidden data-cloud-setup-status-icon="">
+            {model.stage === "ready" ? (
+              <CheckIcon className="size-5 stroke-2" />
+            ) : model.keptWaiting ? (
+              <ClockIcon className="size-5" data-cloud-setup-calm="" />
+            ) : (
+              <CircleAlertIcon className="size-5" />
+            )}
+          </div>
+        ) : null}
         <div className="min-w-0 flex-1 space-y-0.5">
           <h3 className="text-sm font-semibold leading-6 tracking-tight">{model.title}</h3>
-          <p
-            className={
-              model.notSeen
-                ? "text-sm leading-5 text-warning-foreground"
-                : "text-sm leading-5 text-muted-foreground"
-            }
-          >
-            {failed
-              ? (model.failureReason ?? "Something went wrong while the machine was starting.")
-              : model.stage === "ready"
-                ? cloudSetupReadyNote(model)
-                : slow
-                  ? `Still working: ${model.currentStep.label.toLowerCase()}. This is taking longer than the rough estimate.`
-                  : model.activity}
-          </p>
+          {subtitle === null ? null : (
+            <p
+              className={
+                model.notSeen
+                  ? "text-sm leading-5 text-warning-foreground"
+                  : "text-sm leading-5 text-muted-foreground"
+              }
+            >
+              {subtitle}
+            </p>
+          )}
         </div>
       </div>
-
-      {failed ? null : (
-        <div className="mt-3.5">
-          <SetupLiveReadout
-            model={model}
-            elapsedSeconds={elapsedSeconds}
-            projectWait={projectWait}
-          />
-        </div>
-      )}
 
       {failed ? null : (
         <div className="mt-3.5">
@@ -136,8 +140,17 @@ export function CloudSessionSetupCard({
       )}
 
       {projectWait === null ? null : (
-        <CloudProjectWaitNote notice={projectWait} className="mt-3.5" />
+        <CloudProjectWaitNote notice={projectWait} onRetry={onRestartWait} className="mt-3.5" />
       )}
+      {model.currentStep.id === "provider" &&
+      session?.environmentId !== undefined &&
+      facts.queued !== undefined ? (
+        <CloudSessionSetupProviderAuth
+          messageId={facts.queued.messageId}
+          environmentId={session.environmentId as EnvironmentId}
+          instanceId={facts.queued.modelSelection.instanceId}
+        />
+      ) : null}
       {longWait === null ? null : (
         <p
           data-cloud-setup-note="long-wait"

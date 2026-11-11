@@ -10,6 +10,9 @@
  */
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ToolAuthFailureReason } from "./t3team-toolAuthReason.ts";
+
+export * from "./t3team-toolAuthReason.ts";
 
 /** The CLIs this surface can sign in. */
 export const ToolAuthToolId = Schema.Literals(["claude", "codex", "gh"]);
@@ -56,6 +59,12 @@ export const ToolAuthState = Schema.Struct({
   displayCode: Schema.optional(Schema.String),
   /** The CLI's own message — used verbatim for `failed`, and for expiry hints. */
   message: Schema.optional(Schema.String),
+  /**
+   * Why a `failed`/`expired` phase happened, for a client that turns it into its own plain-words
+   * sentence and next step. Absent on a server that predates it, and on a failure the server
+   * cannot classify — a client must still fall back to a generic message rather than `message`.
+   */
+  reason: Schema.optional(ToolAuthFailureReason),
   /**
    * Account identifier (email, username, ...), when the CLI reports one.
    * Never a stand-in for `authMethod`/`apiProvider`-shaped fields — those

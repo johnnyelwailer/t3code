@@ -22,6 +22,8 @@ const RUNS_EVERYTHING = [
 const EXTRA_OWNERS = [
   // Vite configs and tsconfigs of these apps import scripts/lib directly.
   [/^scripts\/lib\//, ["@t3tools/desktop", "@t3tools/mobile", "@t3tools/web", "t3"]],
+  // The additive guard (scripts/lib/additive-guard-*.mjs) reads its config; no package's tests do.
+  [/^\.t3team-additive-guard\.json$/, ["@t3tools/scripts"]],
   // scripts/build-desktop-artifact.ts reads the GNOME extension manifest.
   [/^apps\/desktop\/gnome-extension\//, ["@t3tools/scripts"]],
   [/^native\/browser-secret\//, ["@t3tools/desktop"]],

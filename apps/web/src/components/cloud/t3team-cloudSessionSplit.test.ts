@@ -94,10 +94,9 @@ describe("runOnCloudSessions", () => {
     expect(result.map((item) => item.sessionId)).toEqual(["ready1", "prep1", "queued1"]);
   });
 
-  it("surfaces the newest session when it failed, until it is dismissed", () => {
+  it("surfaces the newest session when it failed, so it can be retried in place", () => {
     const sessions = [session("failed1", "failed"), session("stop1", "stopped")];
     expect(runOnCloudSessions(sessions).map((item) => item.sessionId)).toEqual(["failed1"]);
-    expect(runOnCloudSessions(sessions, new Set(["failed1"]))).toEqual([]);
   });
 
   it("never surfaces what the user ended: a cancel or a normal stop", () => {

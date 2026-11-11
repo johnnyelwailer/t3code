@@ -26,7 +26,7 @@ vi.mock("~/state/environments", () => ({
 
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
-    selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
+    selector ? selector({ t3team: { activityLabels: settingsState.activityLabelsEnabled } }) : {},
 }));
 vi.mock("~/t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
 

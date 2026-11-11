@@ -90,6 +90,15 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  NEXI_WELCOME_SETUP: {
+    group: "UI & rendering",
+    label: "Nexi welcome setup",
+    description:
+      "Single-page Nexi Work first-run setup on /welcome (account, agents, Jira, GitHub, cloud). Off: the upstream multi-step WelcomeWizard.",
+    defaultEnabled: false,
+    requiresRestart: false,
+    addedOn: "2026-11-10",
+  },
   CLOUD_SESSIONS: {
     group: "Cloud & machines",
     subgroup: "Cloud sessions",
@@ -99,6 +108,15 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
     addedOn: "2026-09-14",
+  },
+  CLOUD_SESSION_STOP_DELETE: {
+    group: "Cloud & machines",
+    subgroup: "Cloud sessions",
+    label: "Stop and delete cloud sessions",
+    description:
+      "Stop and delete a cloud machine from its row and the thread's machine menu. Stop keeps the workspace; delete saves unpushed work to a wip/ branch, then removes the machine's snapshots and resume branch. Off: sessions end only by their own time.",
+    defaultEnabled: false,
+    requiresRestart: false,
   },
   CLOUD_THREAD_HANDOFF: {
     group: "Cloud & machines",

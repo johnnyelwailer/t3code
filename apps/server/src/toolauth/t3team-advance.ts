@@ -36,10 +36,10 @@ export function advance(prev: AuthState, chunk: string, adapter: ToolAuthAdapter
   // explicitly ("login failed", "invalid code") and do not contain a success
   // phrase.
   if (m.success.test(chunk)) {
-    return { ...next, phase: "connected", message: undefined };
+    return { ...next, phase: "connected", message: undefined, reason: undefined };
   }
   if (m.failure?.test(chunk)) {
-    return { ...next, phase: "failed", message: firstLine(chunk) };
+    return { ...next, phase: "failed", reason: "signInFailed", message: firstLine(chunk) };
   }
 
   const url = chunk.match(m.url)?.[1];

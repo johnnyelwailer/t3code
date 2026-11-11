@@ -102,6 +102,21 @@ export function logCloudProjectWaitCancelled(
   );
 }
 
+/**
+ * The long-wait diagnostic, written once per distinct line: the card keeps it out of its visible
+ * copy and behind a disclosure, so the console is where a field report finds it without clicking.
+ */
+export function logCloudProjectWaitDiagnostic(
+  diagnostic: string,
+  sink: (line: string) => void = (line) => console.info("[t3-cloud] project-wait", line),
+): boolean {
+  if (written.has(diagnostic)) return false;
+  if (written.size >= WRITTEN_LIMIT) written.clear();
+  written.add(diagnostic);
+  sink(diagnostic);
+  return true;
+}
+
 /** Forgets what was written (tests). */
 export function resetCloudProjectWaitLog(): void {
   written.clear();

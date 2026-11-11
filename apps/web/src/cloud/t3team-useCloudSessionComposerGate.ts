@@ -6,17 +6,18 @@
  */
 import type { ScopedProjectRef } from "@t3tools/contracts";
 import { CloudIcon } from "lucide-react";
-import { createElement, Fragment, useCallback, useMemo } from "react";
+import { createElement, useCallback, useMemo } from "react";
 
 import type { ComposerBannerStackItem } from "~/components/chat/ComposerBannerStack";
-import { Button } from "~/components/ui/button";
-import { useEnvironments } from "~/state/environments";
+import { useComposerDraftStore } from "~/composerDraftStore";
+import { CloudQueuedSendBannerActions } from "./t3team-CloudQueuedSendBannerActions";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   cancelDraftCloudQueuedSend,
   retryDraftCloudQueuedSend,
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
+import { restartDraftCloudQueuedSendWait } from "./t3team-cloudQueuedSendWaitRestart";
 import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
 import { logCloudProjectWaitCancelled } from "./t3team-cloudProjectWaitLog";
 import { cloudProjectNotResolvedActions } from "./t3team-cloudProjectNotResolvedActions";
@@ -25,6 +26,7 @@ import {
   useCloudQueuedSendEnvironmentFacts,
 } from "./t3team-useCloudQueuedSendEnvironmentFacts";
 import { useCloudQueuedSendProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
+import { useCloudQueuedSendStepFacts } from "./t3team-useCloudQueuedSendStepFacts";
 import { useCloudSessionController } from "./t3team-useCloudSessionController";
 import {
   useCloudSessionProjectFollow,
@@ -34,17 +36,11 @@ import {
   queueCloudSessionSendIfNeeded,
   type CloudQueuedTurn,
 } from "./t3team-cloudSessionQueueSend";
-import { useComposerDraftStore } from "~/composerDraftStore";
-import { useClientSettings } from "~/hooks/useSettings";
-import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
-import { useProjects } from "~/state/entities";
-import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
 import type { CloudSetupSessionSource } from "./t3team-useCloudSessionSetupCard";
 import {
   currentCloudProjectWait,
   presentCloudQueuedSendProgress,
-  type CloudQueuedSendStepFacts,
 } from "./t3team-cloudQueuedSendSteps";
 
 export function useCloudSessionComposerGate(input: {
@@ -52,7 +48,7 @@ export function useCloudSessionComposerGate(input: {
   readonly draftId: string | null;
   /** Composer/draft/thread key the Run-on preference belongs to. */
   readonly scopeKey: string | null;
-  /** The composer's project: a cloud session set up for another one stops being the target. */
+  /** The composer's project: stamped onto the queued send when the first message confirms it. */
   readonly projectRef: ScopedProjectRef | null;
 }): {
   readonly tryQueueSend: (turn: CloudQueuedTurn) => CloudQueuedSend | null;
@@ -67,44 +63,42 @@ export function useCloudSessionComposerGate(input: {
   const cloud = useCloudSessionController({ scopeKey: input.scopeKey });
   const { draftId } = input;
   const projectKey = useCloudSessionProjectKey(input.projectRef);
-  useCloudSessionProjectFollow({ scopeKey: input.scopeKey, projectKey });
+  useCloudSessionProjectFollow({
+    scopeKey: input.scopeKey,
+    draftId,
+    projectKey,
+    projectRef: input.projectRef,
+    sessions: cloud.sessions,
+  });
 
   const queued = useDraftCloudQueuedSend(draftId);
   const flushing = useCloudQueuedSendDispatching(queued?.messageId ?? null);
 
   const tryQueueSend = useCallback(
     (turn: CloudQueuedTurn) =>
-      queueCloudSessionSendIfNeeded({ draftId, turn, sessions: cloud.sessions }),
-    [cloud.sessions, draftId],
+      queueCloudSessionSendIfNeeded({ draftId, turn, sessions: cloud.sessions, projectKey }),
+    [cloud.sessions, draftId, projectKey],
   );
   const retryQueuedSend = useCallback(() => {
     if (draftId !== null) retryDraftCloudQueuedSend(draftId);
+  }, [draftId]);
+  const restartQueuedWait = useCallback(() => {
+    if (draftId !== null) restartDraftCloudQueuedSendWait(draftId);
   }, [draftId]);
 
   const draft = useComposerDraftStore((state) =>
     draftId === null ? undefined : state.draftThreadsByThreadKey[draftId],
   );
-  const { environments } = useEnvironments();
-  const projects = useProjects();
-  const settings = useClientSettings();
   const machineFacts = useCloudQueuedSendEnvironmentFacts(
     queuedSendEnvironmentIds(queued === null ? [] : [queued], cloud.sessions),
   );
-  // The same facts the app-level flusher acts on; the card and the banner both render them.
-  const stepFacts = useMemo<CloudQueuedSendStepFacts | null>(() => {
-    if (queued === null || draft === undefined) return null;
-    const facts = resolveCloudQueuedSendFacts({
-      queued,
-      draft,
-      sessions: cloud.sessions,
-      environments,
-      projects,
-      threadShells: [],
-      groupingSettings: selectProjectGroupingSettings(settings),
-      bootstrapProjectIdOf: machineFacts.bootstrapProjectIdOf,
-    });
-    return { ...facts, queued, projectReady: facts.project !== null, flushing };
-  }, [cloud.sessions, draft, environments, flushing, machineFacts, projects, queued, settings]);
+  const stepFacts = useCloudQueuedSendStepFacts({
+    queued,
+    draft,
+    sessions: cloud.sessions,
+    machineFacts,
+    flushing,
+  });
   const cancelQueuedSend = useCallback(() => {
     if (draftId === null) return;
     const waitingOnProject = stepFacts !== null && currentCloudProjectWait(stepFacts) !== null;
@@ -134,8 +128,9 @@ export function useCloudSessionComposerGate(input: {
   const bannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (stepFacts === null) return null;
     const view = presentCloudQueuedSendProgress(stepFacts, projectWaitNow);
-    const action = (label: string, onClick: () => void) =>
-      createElement(Button, { key: label, size: "xs", variant: "ghost", onClick }, label);
+    const notice = view.projectWait;
+    const restart =
+      notice !== null && notice.level === "slow" && !notice.blocking ? restartQueuedWait : null;
     return {
       id: `cloud-session-bind:${stepFacts.queued.messageId}`,
       variant: view.failed ? "error" : "info",
@@ -145,24 +140,23 @@ export function useCloudSessionComposerGate(input: {
         "aria-hidden": true,
       }),
       title: view.title,
-      description:
-        stepFacts.queued.failureMessage ?? view.projectWait?.text ?? stepFacts.queued.sessionLabel,
-      actions: createElement(
-        Fragment,
-        null,
-        canRetry ? action("Retry", retryQueuedSend) : null,
-        ...recoveryActions.map((item) => action(item.label, item.onClick)),
-        // In flight the turn is already starting: it is delivered, not cancellable.
-        stepFacts.flushing
-          ? createElement(
-              Button,
-              { key: "sending", size: "xs", variant: "ghost", disabled: true },
-              "Sending…",
-            )
-          : action("Cancel", cancelQueuedSend),
-      ),
+      description: stepFacts.queued.failureMessage ?? notice?.text ?? stepFacts.queued.sessionLabel,
+      actions: createElement(CloudQueuedSendBannerActions, {
+        onRetry: canRetry ? retryQueuedSend : restart,
+        recoveryActions,
+        onCancel: cancelQueuedSend,
+        flushing: stepFacts.flushing,
+      }),
     };
-  }, [canRetry, cancelQueuedSend, projectWaitNow, recoveryActions, retryQueuedSend, stepFacts]);
+  }, [
+    canRetry,
+    cancelQueuedSend,
+    projectWaitNow,
+    recoveryActions,
+    restartQueuedWait,
+    retryQueuedSend,
+    stepFacts,
+  ]);
 
   return {
     tryQueueSend,
@@ -185,6 +179,7 @@ export function useCloudSessionComposerGate(input: {
             facts: stepFacts,
             onCancel: cancelQueuedSend,
             onRetry: canRetry ? retryQueuedSend : null,
+            onRestartWait: restartQueuedWait,
             recoveryActions,
           },
   };

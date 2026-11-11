@@ -1,6 +1,7 @@
 /**
  * Sidebar environment filter: the production pills, fed by the shared `resolveEnvironmentFilter`.
- * Live: click a pill, "All" resets. Light/dark via the toolbar `theme` global.
+ * Live: click a pill, "All" resets, +N opens the full list when the row cannot fit them all.
+ * Light/dark via the toolbar `theme` global.
  * With only this computer listed the control is hidden, as in the app.
  */
 import { resolveEnvironmentFilter } from "@t3tools/client-runtime/t3team-environmentFilter";
@@ -28,6 +29,16 @@ const MANY: ReadonlyArray<Env> = [
   { id: "env-nas", label: "NAS" },
   { id: "env-cloud-91bc", label: "Cloud session" },
   { id: "env-staging", label: "Staging VM (eu-west)" },
+];
+
+const GERMAN: ReadonlyArray<Env> = [
+  { id: "env-local", label: "Dieser Computer", isPrimary: true },
+  { id: "env-gm17", label: "NX-GM17GBWE" },
+  { id: "env-mn94", label: "NX-MN94KQCLWQ" },
+  { id: "env-cloud-2c41", label: "Cloud-Sitzung" },
+  { id: "env-cloud-a9e0", label: "Cloud-Sitzung" },
+  { id: "env-zrh", label: "Build-Server Zürich (Staging, Nachtbuild mit sehr langem Namen)" },
+  { id: "env-vm", label: "Entwicklungs-VM Hamburg" },
 ];
 
 function Row(props: {
@@ -97,10 +108,23 @@ export const Selected: Story = {
 };
 
 export const ManyEnvironments: Story = {
-  name: "many environments wrap, same-label cloud sessions told apart",
+  name: "many environments fold into +N, same-label cloud sessions told apart",
   render: () => (
     <Frame>
       <Row width={300} environments={MANY} initialSelectedId="env-nas" />
+    </Frame>
+  ),
+};
+
+export const RealisticVariety: Story = {
+  name: "German labels, long names, many pills: All and one machine selected",
+  render: () => (
+    <Frame>
+      <div className="flex flex-wrap items-start gap-6">
+        <Row width={300} environments={GERMAN} />
+        <Row width={300} environments={GERMAN} initialSelectedId="env-mn94" />
+        <Row width={220} environments={GERMAN} initialSelectedId="env-zrh" />
+      </div>
     </Frame>
   ),
 };

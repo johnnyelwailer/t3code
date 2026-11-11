@@ -136,7 +136,9 @@ export function retryDraftCloudQueuedSend(
   options?: { readonly sendInMachineProject?: boolean },
 ): void {
   const current = getDraftCloudQueuedSend(draftId);
-  if (current === null) return;
+  // Only a parked send is retried, so a second click on Retry cannot restart the steps of one
+  // that is already on its way again.
+  if (current === null || current.failureMessage === undefined) return;
   const {
     failureMessage: _failure,
     retryable: _retryable,

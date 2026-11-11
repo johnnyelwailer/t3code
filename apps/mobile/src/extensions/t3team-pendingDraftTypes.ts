@@ -1,11 +1,19 @@
 import type { ComponentType } from "react";
 
+import type { FirstTurnContext } from "../state/t3team-firstTurnContext";
+
+export type { FirstTurnContext };
+
 /**
  * The project a pending draft is for, before the environment that will host it exists in the
  * catalog. The app turns it into the placeholder project the draft screen renders with.
  */
 export interface PendingDraftProject {
-  /** The environment the draft will be sent to (also stamped on the draft). */
+  /**
+   * The environment the draft will be sent to (also stamped on the draft). While it is a placeholder
+   * it must be unique to this draft and never a connectable environment: tasks queued on it wait
+   * there, undelivered, until `retargetPendingDraft` moves them.
+   */
   readonly environmentId: string;
   /** The project's id on that environment (also stamped on the draft). */
   readonly id: string;
@@ -26,12 +34,18 @@ export interface PendingDraft {
   readonly sendBlockedReason: string | null;
   /** Status card above the composer controls; it explains why Send is blocked, so it is required. */
   readonly Card: ComponentType<{ readonly draftKey: string }>;
+  /**
+   * Facts for the agent, attached as a context chip to the turn the draft sends to `project` (or
+   * passed to `retargetPendingDraft` for a turn already queued on the placeholder).
+   */
+  readonly firstTurnContext?: FirstTurnContext;
 }
 
 /**
  * Drafts that wait for an environment not in the catalog yet, by draft key; the hook must not
- * throw. Keep a draft in the map until the catalog lists its project, or it returns to the picker.
- * To swap in a real project call `retargetPendingDraft`, then drop the map entry.
+ * throw. Keep a draft in the map while it is pending; the app shows its hold for the draft as long
+ * as the entry exists, so it survives the user choosing another project on the draft before the
+ * first send. To swap in a real project call `retargetPendingDraft`, then drop the map entry.
  */
 export interface PendingDraftSlot {
   readonly usePendingDrafts: () => ReadonlyMap<string, PendingDraft>;

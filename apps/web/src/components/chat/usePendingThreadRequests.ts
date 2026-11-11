@@ -1,6 +1,5 @@
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import {
-  AuthOrchestrationOperateScope,
   type EnvironmentId,
   type ProviderApprovalDecision,
   type RuntimeRequestId,
@@ -47,10 +46,15 @@ import {
   derivePendingUserInputs,
   type PendingUserInput,
 } from "../../session-logic";
-import { readEnvironmentScope } from "../../state/session";
+import { environmentSession } from "../../state/session";
+import { appAtomRegistry } from "../../rpc/atomRegistry";
+import {
+  PENDING_ANSWER_INCOMPLETE_MESSAGE,
+  pendingResponseGate,
+  pendingResponseInterruptedMessage,
+} from "./t3team-pendingRequestResponseGate";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { toastManager } from "../ui/toast";
 
 import type { ChatComposerHandle } from "./ChatComposer";
@@ -135,10 +139,11 @@ export function usePendingThreadRequests(input: {
     composerRef,
     setThreadError,
   } = input;
-  const respondToThreadApproval = useOrchestrationCommand(threadEnvironment.respondToApproval, {
+  // t3team: plain commands — `pendingResponseGate` decides, the server enforces the scope.
+  const respondToThreadApproval = useAtomCommand(threadEnvironment.respondToApproval, {
     reportFailure: false,
   });
-  const respondToThreadUserInput = useOrchestrationCommand(threadEnvironment.respondToUserInput, {
+  const respondToThreadUserInput = useAtomCommand(threadEnvironment.respondToUserInput, {
     reportFailure: false,
   });
   const dismissThreadUserInput = useAtomCommand(threadEnvironment.dismissUserInput, {
@@ -264,18 +269,35 @@ export function usePendingThreadRequests(input: {
     : false;
   const activePendingApproval = pendingApprovals[0] ?? null;
 
+  // t3team: a blocked Approve / Submit answer always says why — on the thread when one is open,
+  // and as a toast either way, since the thread error banner can sit off screen.
+  const reportBlockedResponse = (message: string) => {
+    if (activeThreadId) setThreadError(activeThreadId, message);
+    toastManager.add({
+      type: "error",
+      title: "Not sent",
+      description: message,
+      data: { threadRef: activeThreadId ? { environmentId, threadId: activeThreadId } : null },
+    });
+  };
+
   const onRespondToApproval = async (
     requestId: RuntimeRequestId,
     decision: ProviderApprovalDecision,
     feedback?: string,
   ) => {
-    if (!activeThreadId || !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope))
+    // t3team: never drop the click silently; every block says why.
+    const approval = pendingApprovals.find((entry) => entry.requestId === requestId);
+    const gate = pendingResponseGate({
+      kind: "approval",
+      hasThread: activeThreadId !== null,
+      session: appAtomRegistry.get(environmentSession.sessionStateAtom(environmentId)),
+      request: !approval ? "missing" : approval.responseCapability === "live" ? "live" : "ended",
+    });
+    if (!gate.ok || !activeThreadId) {
+      if (!gate.ok) reportBlockedResponse(gate.message);
       return;
-    if (
-      pendingApprovals.find((approval) => approval.requestId === requestId)?.responseCapability !==
-      "live"
-    )
-      return;
+    }
 
     setRespondingRequestIds((existing) =>
       existing.includes(requestId) ? existing : [...existing, requestId],
@@ -295,6 +317,8 @@ export function usePendingThreadRequests(input: {
         activeThreadId,
         error instanceof Error ? error.message : "Failed to submit approval decision.",
       );
+    } else if (result._tag === "Failure") {
+      reportBlockedResponse(pendingResponseInterruptedMessage("approval"));
     }
     setRespondingRequestIds((existing) => existing.filter((id) => id !== requestId));
     return result;
@@ -305,10 +329,22 @@ export function usePendingThreadRequests(input: {
     requestId: RuntimeRequestId,
     answers: Record<string, unknown>,
   ) => {
-    if (!activeThreadId || !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope))
-      return;
+    // t3team: never drop the click silently; every block says why.
     const pendingInput = pendingUserInputs.find((input) => input.requestId === requestId);
-    if (!pendingInput || pendingInput.responseCapability === "not_resumable") return;
+    const gate = pendingResponseGate({
+      kind: "answer",
+      hasThread: activeThreadId !== null,
+      session: appAtomRegistry.get(environmentSession.sessionStateAtom(environmentId)),
+      request: !pendingInput
+        ? "missing"
+        : pendingInput.responseCapability === "not_resumable"
+          ? "ended"
+          : "live",
+    });
+    if (!gate.ok || !activeThreadId || !pendingInput) {
+      if (!gate.ok) reportBlockedResponse(gate.message);
+      return;
+    }
     const responseKey = JSON.stringify([environmentId, activeThreadId, requestId]);
     if (userInputResponsesInFlight.current.has(responseKey)) return;
     const attachmentsByQuestionId = new Map<string, UserInputAttachments[string]>();
@@ -320,7 +356,10 @@ export function usePendingThreadRequests(input: {
         requestId,
         question.id,
       );
-      if ((useQuestionAttachmentPreparation.getState().counts[target] ?? 0) > 0) return;
+      if ((useQuestionAttachmentPreparation.getState().counts[target] ?? 0) > 0) {
+        reportBlockedResponse("Wait for the attachments to finish preparing, then submit again.");
+        return;
+      }
       const draft = useComposerDraftStore.getState().getComposerDraft(target);
       providerAnswers[question.id] = projectPendingUserInputAnswer(
         answers[question.id],
@@ -366,6 +405,8 @@ export function usePendingThreadRequests(input: {
         activeThreadId,
         error instanceof Error ? error.message : "Failed to submit user input.",
       );
+    } else if (result._tag === "Failure") {
+      reportBlockedResponse(pendingResponseInterruptedMessage("answer"));
     }
     // t3team: an accepted machine-source proposal is saved on the user's own environment.
     if (result._tag === "Success") void saveMachineSource?.();
@@ -489,9 +530,15 @@ export function usePendingThreadRequests(input: {
       return;
     }
     if (activePendingProgress.isLastQuestion) {
-      if (activePendingResolvedAnswers) {
-        void onRespondToUserInput(activePendingUserInput.requestId, activePendingResolvedAnswers);
+      // t3team: an incomplete or throwing submit says so instead of doing nothing.
+      if (!activePendingResolvedAnswers) {
+        reportBlockedResponse(PENDING_ANSWER_INCOMPLETE_MESSAGE);
+        return;
       }
+      onRespondToUserInput(activePendingUserInput.requestId, activePendingResolvedAnswers).catch(
+        (error: unknown) =>
+          reportBlockedResponse(error instanceof Error ? error.message : String(error)),
+      );
       return;
     }
     if (!activePendingProgress.canAdvance) return;

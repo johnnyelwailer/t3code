@@ -1,6 +1,7 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { useMemo } from "react";
 
+import { getComposerDraftSnapshot } from "../state/use-composer-drafts";
 import { mobileExtensions } from "./t3team-extensions";
 import {
   NO_PENDING_DRAFTS,
@@ -18,6 +19,19 @@ export function usePendingDrafts(): ReadonlyMap<string, PendingDraft> {
 export function usePendingDraft(draftKey: string | null): PendingDraft | null {
   const drafts = usePendingDrafts();
   return draftKey === null ? null : (drafts.get(draftKey) ?? null);
+}
+
+/**
+ * The project the draft is stamped to, as plain ids, or null when it has none: choosing a project
+ * on the draft retargets the stamp, so it is the draft's selection at any moment, before the
+ * first send. A distribution binds its pending drafts to it when their environment reports ready.
+ */
+export function draftProjectStamp(
+  draftKey: string,
+): { readonly environmentId: string; readonly projectId: string } | null {
+  const stamp = getComposerDraftSnapshot(draftKey).project;
+  if (stamp === undefined) return null;
+  return { environmentId: String(stamp.environmentId), projectId: String(stamp.projectId) };
 }
 
 /**

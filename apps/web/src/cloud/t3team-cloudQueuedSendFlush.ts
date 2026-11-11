@@ -6,7 +6,7 @@ import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts"
 
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
-import { cloudProjectWaitDetail } from "./t3team-cloudProjectWaitPresentation";
+import { cloudProjectWaitParkedMessage } from "./t3team-cloudProjectWaitPresentation";
 import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
@@ -44,11 +44,6 @@ export interface CloudQueuedSendFailure {
   readonly environmentId: string | null;
 }
 
-/** The words of a send that gave up waiting for its project; the message is kept. */
-function cloudProjectNotResolvedMessage(wait: CloudProjectWait): string {
-  return `The project did not appear on the cloud machine in time. ${cloudProjectWaitDetail(wait)}. Your message is kept: retry, send it in the machine's own project, start a plain session, or cancel to edit it.`;
-}
-
 export function decideCloudQueuedSendFlush(input: {
   readonly queued: CloudQueuedSend;
   /** The in-memory Run-on target of this draft, when this window still has it. */
@@ -69,6 +64,11 @@ export function decideCloudQueuedSendFlush(input: {
   readonly projectWaitExpired?: boolean;
   /** The machine's connection is parked because its session no longer exists. */
   readonly environmentSessionEnded?: boolean;
+  /**
+   * After project checkout: composer-selected provider is ready on the machine. Omit or true to
+   * keep older callers dispatching; the flusher passes false until install/sign-in finishes.
+   */
+  readonly providerReady?: boolean;
 }): CloudQueuedSendFlushAction {
   const { queued, session } = input;
   if (isCloudQueuedSendFailed(queued)) return { kind: "wait" };
@@ -88,15 +88,18 @@ export function decideCloudQueuedSendFlush(input: {
   if (environmentId !== undefined && input.machineConnected && input.threadExists) {
     return { kind: "delivered", environmentId };
   }
-  // The list is a bounded, polled history; the attach's `session_ended` can say so sooner.
-  if (
-    isTerminalCloudSessionPhase(session.phase) ||
-    (input.environmentSessionEnded === true && !input.machineConnected)
-  ) {
+  // The list is a bounded, polled history; the attach's `session_ended` can say so sooner. A
+  // ready record outranks that flag though: the flag belongs to the session the connection is
+  // still registered to, and the connect below rebinds it to this one.
+  const parkedOnEndedSession =
+    input.environmentSessionEnded === true && !input.machineConnected && session.phase !== "ready";
+  if (isTerminalCloudSessionPhase(session.phase) || parkedOnEndedSession) {
     return {
       kind: "fail",
       message: session.failureReason ?? CLOUD_QUEUED_SEND_ENDED_MESSAGE,
-      retryable: false,
+      // The message is kept either way: a parked connection can come back, and a session that
+      // really ended is resumed on the one the user picks next.
+      retryable: parkedOnEndedSession,
       failure: { kind: "session_ended", reason: null, environmentId: environmentId ?? null },
     };
   }
@@ -118,10 +121,11 @@ export function decideCloudQueuedSendFlush(input: {
     // A project that has not appeared by the bound is a typed, kept failure, not a wait.
     return {
       kind: "fail",
-      message: cloudProjectNotResolvedMessage(wait),
+      message: cloudProjectWaitParkedMessage(wait),
       retryable: true,
       failure: { kind: "project_not_resolved", reason: wait.reason, environmentId },
     };
   }
+  if (input.providerReady === false) return { kind: "wait" };
   return { kind: "dispatch", environmentId, projectId: input.projectId };
 }

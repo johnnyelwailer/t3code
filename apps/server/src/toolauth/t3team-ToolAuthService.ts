@@ -71,6 +71,12 @@ export class ToolAuthService extends Context.Service<
     ) => Effect.Effect<AuthState, ToolAuthNotAwaitingCodeError | ToolAuthNoActiveSessionError>;
     /** Kills any active session for `tool` and re-probes its connection status. */
     readonly cancel: (tool: string) => Effect.Effect<AuthState>;
+    /**
+     * Broadcasts one state to the stream's subscribers without touching the session map. For a
+     * refusal decided before any flow starts (the `INTEGRATIONS_TOOL_AUTH` gate), which must reach
+     * every surface yet stay non-terminal so a retry still spawns.
+     */
+    readonly publish: (state: AuthState) => Effect.Effect<void>;
     /** Emits a full snapshot, then live per-tool updates; returns an unsubscribe function. */
     readonly attachStream: (
       listener: (event: ToolAuthServiceStreamEvent) => Effect.Effect<void>,
@@ -221,7 +227,15 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
       };
     });
 
-  return ToolAuthService.of({ list, start, install, submitCode, cancel, attachStream });
+  return ToolAuthService.of({
+    list,
+    start,
+    install,
+    submitCode,
+    cancel,
+    publish: notifyUpdate,
+    attachStream,
+  });
 });
 
 export const layer = Layer.effect(

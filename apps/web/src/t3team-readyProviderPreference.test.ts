@@ -33,10 +33,20 @@ const entries = [codexMissing, nexplore];
 const id = (value: string) => ProviderInstanceId.make(value);
 
 describe("resolveReadyProviderOverride", () => {
-  it("replaces a requested provider that cannot start with the first ready one", () => {
+  it("replaces a requested provider that cannot start with Nexplore AI", () => {
     expect(
       resolveReadyProviderOverride({ entries, candidateInstanceIds: [id("codex")] })?.instanceId,
     ).toBe(id("nexplore"));
+  });
+
+  it("will not hand the thread to whatever else happens to be ready", () => {
+    // Pre-fix this returned Gemini, so a Codex thread silently ran somewhere the user never chose.
+    expect(
+      resolveReadyProviderOverride({
+        entries: [codexMissing, entry("gemini")],
+        candidateInstanceIds: [id("codex")],
+      }),
+    ).toBeUndefined();
   });
 
   it("keeps a requested provider that is ready, or still being probed", () => {
@@ -61,6 +71,19 @@ describe("resolveReadyProviderOverride", () => {
     ).toBeUndefined();
   });
 
+  it("keeps Claude when it reports an error, including an empty cloud auth slot", () => {
+    const claude = entry("claudeAgent", {
+      status: "error",
+      auth: { status: "unauthenticated" },
+    });
+    expect(
+      resolveReadyProviderOverride({
+        entries: [claude, nexplore],
+        candidateInstanceIds: [id("claudeAgent")],
+      }),
+    ).toBeUndefined();
+  });
+
   it("ignores a disabled or unavailable requested provider (the usual fallback handles it)", () => {
     const disabled = entry("codex", { status: "error", enabled: false });
     expect(
@@ -80,11 +103,18 @@ describe("resolveComposerProviderSelection with preferReadyProvider", () => {
     lockedInstanceId: null,
   };
 
-  it("lands a new thread on the ready provider instead of the one with the error banner", () => {
-    expect(
-      resolveComposerProviderSelection({ ...base, preferReadyProvider: true }).selectedProviderEntry
-        ?.instanceId,
-    ).toBe(id("nexplore"));
+  it("lands a new thread on Nexplore AI instead of the one with the error banner, and says so", () => {
+    const selection = resolveComposerProviderSelection({ ...base, preferReadyProvider: true });
+    expect(selection.selectedProviderEntry?.instanceId).toBe(id("nexplore"));
+    // The swap is allowed only because the composer is handed something to label it with.
+    expect(selection.providerFallback).toMatchObject({
+      requestedInstanceId: id("codex"),
+      fallbackInstanceId: id("nexplore"),
+    });
+  });
+
+  it("reports no fallback when the requested provider keeps the thread", () => {
+    expect(resolveComposerProviderSelection(base).providerFallback).toBeNull();
   });
 
   it("leaves upstream behaviour when the flag is off: the requested provider stays", () => {
@@ -95,6 +125,38 @@ describe("resolveComposerProviderSelection with preferReadyProvider", () => {
       resolveComposerProviderSelection({ ...base, preferReadyProvider: false })
         .selectedProviderEntry?.instanceId,
     ).toBe(id("codex"));
+  });
+
+  it("uses the machine's one Claude instance when the picked Claude id is not on it", () => {
+    const claude = entry("claudeAgent", {
+      status: "error",
+      auth: { status: "unauthenticated" },
+    });
+    expect(
+      resolveComposerProviderSelection({
+        entries: [nexplore, claude],
+        candidateInstanceIds: [id("claudeAgent2")],
+        lockedProvider: null,
+        lockedInstanceId: null,
+        preferReadyProvider: true,
+      }).selectedProviderEntry?.instanceId,
+    ).toBe(id("claudeAgent"));
+  });
+
+  it("keeps a Claude thread when prefer-ready would otherwise move it", () => {
+    const claude = entry("claudeAgent", {
+      status: "error",
+      auth: { status: "unauthenticated" },
+    });
+    expect(
+      resolveComposerProviderSelection({
+        entries: [claude, nexplore],
+        candidateInstanceIds: [id("claudeAgent")],
+        lockedProvider: null,
+        lockedInstanceId: null,
+        preferReadyProvider: true,
+      }).selectedProviderEntry?.instanceId,
+    ).toBe(id("claudeAgent"));
   });
 
   it("never moves a thread locked to its provider", () => {

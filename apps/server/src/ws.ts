@@ -2866,6 +2866,8 @@ export const layerWsRpc = (
         [WS_METHODS.cloudSessionList]: (_input) => cloudSessions.list,
         [WS_METHODS.cloudSessionCreate]: (input) => cloudSessions.create(input),
         [WS_METHODS.cloudSessionCancel]: (input) => cloudSessions.cancel(input),
+        [WS_METHODS.cloudSessionDelete]: (input) => cloudSessions.delete(input),
+        [WS_METHODS.cloudSessionDeleteInfo]: (input) => cloudSessions.deleteInfo(input),
         [WS_METHODS.projectMachineDiscover]: (input) => projectMachines.discover(input.projectId),
         [WS_METHODS.projectMachineSetSource]: (input) =>
           projectMachines.setSource(input.projectId, input.source),
@@ -3351,6 +3353,7 @@ export const layerWsRpc = (
           whenToolAuthFlowEnabled(
             input.tool,
             toolAuth.start(input.tool, { hostname: input.hostname }),
+            { publish: toolAuth.publish },
           ).pipe(Effect.map(toToolAuthWireState)),
         // One-click "install this CLI", chained into the real sign-in flow
         // server-side (see `ToolAuthService.install`). The immediate
@@ -3358,9 +3361,9 @@ export const layerWsRpc = (
         // arrives over the client's existing `subscribeToolAuth`
         // subscription — there is no separate progress stream to wire up.
         [WS_METHODS.toolAuthInstall]: (input) =>
-          whenToolAuthFlowEnabled(input.tool, toolAuth.install(input.tool)).pipe(
-            Effect.map(toToolAuthWireState),
-          ),
+          whenToolAuthFlowEnabled(input.tool, toolAuth.install(input.tool), {
+            publish: toolAuth.publish,
+          }).pipe(Effect.map(toToolAuthWireState)),
         [WS_METHODS.toolAuthSubmitCode]: (input) =>
           toolAuth.submitCode(input.tool, input.code).pipe(Effect.map(toToolAuthWireState)),
         [WS_METHODS.toolAuthCancel]: (input) =>

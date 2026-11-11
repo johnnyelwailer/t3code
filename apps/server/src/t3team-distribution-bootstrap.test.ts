@@ -107,6 +107,15 @@ vi.mock("@t3code/distribution", () => ({
     brand: { mark: "assets/mark.svg" },
     colors: { light: {}, dark: {} },
   },
+  distributionAlternateThemes: [
+    {
+      schemaVersion: 1,
+      id: "nexplore-orange",
+      name: "Nexplore Orange",
+      brand: { mark: "assets/mark.svg" },
+      colors: { light: { primary: "#f05a0a" }, dark: { primary: "#f05a0a" } },
+    },
+  ],
   distributionBranding: undefined,
   distributionPersistence: [],
 }));
@@ -169,6 +178,10 @@ describe("compiled-in distribution bootstrap", () => {
     const appearance = getPackAppearanceOverlay();
     expect(appearance?.themeId).toBe("nexplore");
     expect(appearance?.brand?.mark).toBe("data:image/svg+xml;base64,QU9B");
+    expect(appearance?.alternates?.map((alternate) => alternate.themeId)).toEqual([
+      "nexplore-orange",
+    ]);
+    expect(appearance?.alternates?.[0]?.colors.light.primary).toBe("#f05a0a");
   });
 
   it("rejects when the entry resolves an asset that was not inlined", async () => {

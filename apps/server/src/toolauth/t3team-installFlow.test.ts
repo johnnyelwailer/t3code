@@ -98,6 +98,7 @@ describe("timedOutInstallState", () => {
     expect(state).toEqual({
       tool: "claude",
       phase: "failed",
+      reason: "installTimedOut",
       message: "Install timed out after 5 minutes.",
     });
   });
