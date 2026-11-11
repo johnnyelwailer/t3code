@@ -17,7 +17,7 @@ Common base with the fork: `7cf653bca6`. Fetch a stack head with `git fetch http
 | `#28844` | voice dictation | **Restyles main's existing dictation only** (upstream main already ships dictation; the stack PR adds the `ComposerSpeechButton` chrome/UX, not the feature). Main contract: `packages/contracts/src/speech.ts` — incl. **cloud dictation** `CloudSpeechProvider` (`openai` \| `xai` \| `openrouter`), `CloudSpeechKeys` (upstream #31769), plus the native path: `apps/server/src/speech`, `POST /api/voice/transcribe`, `packages/client-runtime/src/voice-input/controller.ts`, Settings › Voice. No TTS. |
 | `#28845` | workspace panes | `apps/web/src/layout/` — `layoutModel.ts` (workspaces → columns → panes → tabs; re-based 2026-11-09: `LayoutTab.ghostOf` ghost tabs — `isLayoutGhostTab`/`keepLayoutTab`/`openLayoutKeptTab`/`ghostLoneLayoutChats`/`openLayoutGhostChat`; `LAYOUT_STORAGE_VERSION` 3; `LayoutNewTabRequest` gains `{ ghostOf }` and `requestNewTab` returns a `LayoutNewTabTicket` — `newTabRequest` holds a ticket), `layoutStore.ts` (zustand, localStorage `t3code:layout-state:v2`), `useLayoutRouteSync.ts` (route sync wraps commits in `followLayoutCompanions`), `surfaceSync.ts` (bridges `rightPanelStore`; also owns the exported `layoutSurfaceDestination`/`layoutSurfacePlacement` helpers, moved out of `openRules`); **deletes** `chat/RightPanelSurfaceContent.tsx`; **rewrites** `RightPanelTabs.tsx` and `ChatView.tsx` |
 
-Reference copies of the #28845 files live at `D:\worktrees\upstream-redesign-notes\up\` (layoutModel.ts, layoutStore.ts, openRules.ts, surfaceSync.ts, useLayoutRouteSync.ts); the 207 fork files that overlap the stack are in `D:\worktrees\upstream-redesign-notes\both.txt`, per-PR file lists in `up\files-<PR>.tsv`. **2026-11-09: the stack was re-based** (heads #28839-#28845: 759da79/4ae0e72/5d2ec73/fe5730f/caeaf0c/8673be9, all DO NOT MERGE) — those `up/` copies pre-date the re-base; for the layout files use `up/28845v2` (`git show up/28845v2:apps/web/src/layout/<file>` in any worktree): ghost tabs (`ghostOf`), `LAYOUT_STORAGE_VERSION` 3, `LayoutNewTabTicket`, `layoutSurfaceDestination`/`layoutSurfacePlacement` now exported from `surfaceSync` (not `openRules`), `followLayoutCompanions` around route-sync commits.
+**2026-11-11 heads** (all still DO NOT MERGE, no maintainer review; #28839 dirty against main): #28840 `cb2ce53`, #28841 `2bf46a7`, #28842 `ae02238`, #28844 `86afff3`, #28845 `2c7c7a4`. The stack restacks often; fetch a head before reading a shape from it. Upstream #33140 (voice UI on current main, not stacked) restyles Settings › Voice and the dictation capsules; it complements #28844.
 
 ## Hot files — what a fork PR may and may not do
 
@@ -32,6 +32,7 @@ Warning-only enforcement: `scripts/t3team-hot-file-check.mjs` (local) and the PR
 | `apps/web/src/rightPanelStore.ts` (~1.4k) | fork surface kinds are registered data, not inline branches | surface registry `apps/web/src/t3team/layout/*`; PR view state `components/pullRequest/t3team-prDetailViewState.logic.ts` |
 | `apps/web/src/components/Sidebar.tsx` (~3.4k) | slots/hooks only; row chrome and rosters stay upstream-shaped | `~/t3team/components/t3team-InboxSlots.tsx`, `~/t3team/hooks/*`, `~/t3team/t3team-threadNavigationOverride.ts`, `~/t3team/t3team-childThreadRelationsStore.ts`, voice row `~/t3team/voice/*` |
 | `apps/web/src/components/chat/MessagesTimeline.tsx` + `.logic.ts` (~4.6k total) | timeline entries join through the artifact hook, never inline | `~/t3team/chat/*` (`t3team-useTimelineArtifacts.ts`) |
+| `apps/web/src/components/chat/ChatComposer.tsx` | no new composer chrome; extras are tray items | `~/t3team/composer/*`, `components/cloud/t3team-*` (mount into the #28840 tray) |
 | `apps/web/src/components/pullRequest/PullRequestCodeTab.tsx` (~1.9k) | PR detail state stays in its t3team logic file | `components/pullRequest/t3team-prDetailViewState.logic.ts` |
 | `apps/web/src/components/sidebar/SidebarChrome.tsx`, `SidebarThreadRow.tsx` | no new forks in row chrome | `~/t3team/t3team-threadStatusPillTypes.ts`, `~/t3team/t3team-threadIconPicker.tsx` |
 | `apps/web/src/index.css` (~3.4k) | no new rules in the hot stylesheet | the per-feature `~/t3team/t3team-index-*.css` files |
@@ -40,6 +41,19 @@ Warning-only enforcement: `scripts/t3team-hot-file-check.mjs` (local) and the PR
 | `packages/client-runtime/src/voice-input/controller.ts` | voice is upstream #28844's shape; no fork parallel | owned by the voice-seams thread (T2); reference only |
 
 Line counts drift; treat the list as the contract and the numbers as a snapshot.
+
+## Panel decisions (Phil, 2026-11-11)
+
+Seams now; the real migration starts only once the stack loses DO NOT MERGE. No new shells, wizards or chrome in hot files.
+
+| Area | Decision | Seam |
+|---|---|---|
+| My Work | A surface tab through the surface registry (#829). This is the fork's only surface seam. | `apps/web/src/t3team/layout/*`; no new kinds in `rightPanelStore` |
+| Labs / Features and every new flag | Settings registry only (#827 pattern) | `~/t3team/settings/t3team-settingsRegistry.tsx`, `t3team-settingsForkRows.tsx`, keys under `t3team.` |
+| Cloud Run-on, session picker, composer extras (recipes, kickoff) | Stay in `t3team-*` files, built to mount into the #28840 composer tray | `components/cloud/t3team-*`, `t3team/composer/*`; never a revived branch toolbar |
+| Voice overlay | Stays floating custom chrome; no pane or tab | `t3team/voice/**` |
+| 3D Nexi stage art | Hidden by default; opt-in Settings toggle; assets kept | settings registry row |
+| Upstream sync | #800 closed in favour of the live sync #895 | — |
 
 ## Upstream target shapes we mirror
 
@@ -52,7 +66,7 @@ Upstream models the workspace as `workspaces → columns → panes → tabs`. Ta
 - `pull-requests` / `settings` / `usage` — page content
 - `surface` — `{ threadRef, surfaceId }` for diff, files, file, browser, terminal, pull request, device; the surface's content lives in `rightPanelStore` and `surfaceSync.ts` keeps tabs and store in step.
 
-The fork registers **our** surfaces in a `t3team` namespace so they survive the rewrite as data, not as branches: a serializable `{ kind, id, params }` where `kind` is `t3team.<surface>` — e.g. `t3team.context-chat` (My Work context chat pane), `t3team.thread` (side chat / peer thread surface). Registration lives in `apps/web/src/t3team/layout/*`; the registry is the single source of truth for what fork surfaces exist, their params schema, and which component renders them. When #28845 lands, `surfaceSync` maps `t3team.*` kinds onto upstream surface tabs and our components render unchanged.
+The fork registers **our** surfaces in a `t3team` namespace so they survive the rewrite as data, not as branches: a serializable `{ kind, id, params }` where `kind` is `t3team.<surface>`. Registered today: `t3team.my-work` (My Work's shared aside) and `t3team.pull-request-view` (PR detail view state). Registration lives in `apps/web/src/t3team/layout/*` (#829); the registry is the single source of truth for which fork surfaces exist and their params schema. **Every fork surface maps onto upstream's one `surface` tab kind** (`tabKind: "surface"`); the fork adds no tab kinds of its own. When #28845 lands, a `surfaceSync` adapter maps `t3team.*` kinds onto upstream surface tabs and our components render unchanged.
 
 ### Voice (#28844 contract, reference only)
 
@@ -65,15 +79,15 @@ Settings sections and rows are registry entries `{ section, key, label, componen
 ## Checklist for fork PRs touching these areas
 
 1. Is a hot file in the diff? If so: ≤ 30 added lines, one-line hooks only, logic in a `t3team-*` file. Run `node scripts/t3team-hot-file-check.mjs` and read the output.
-2. New right-panel surface or tab? Register it in `apps/web/src/t3team/layout/*` with a `t3team.*` kind and serializable params — never a new inline branch in `rightPanelStore` / `RightPanelTabs` / `ChatView`.
-3. New setting? Register it through the settings registry with a `t3team.` key; never a new inline row in the settings hot files.
+2. New right-panel surface or tab? Register it in `apps/web/src/t3team/layout/*` with a `t3team.*` kind, serializable params and `tabKind: "surface"` — never a new kind or inline branch in `rightPanelStore` / `RightPanelTabs` / `ChatView`.
+3. New setting, Labs entry or feature flag? Register it through the settings registry with a `t3team.` key; never a new inline row in the settings hot files.
 4. New CSS? Per-feature `t3team-index-*.css`, not `index.css`.
 5. Does the change assume an upstream file shape that #28839–#28845 are about to rewrite? Re-read this doc's stack table; if the shape will move, build on the seam, not the shape.
 6. Before pushing: `git merge origin/main` (other threads touch these files too — voice composer fixes, sidebar device pills) and keep both intents.
 
 ## Hardest conflicts and seams proposed by the shadow-rebase report
 
-Source: shadow merge rehearsal of the full stack (base `7cf653bca6`, stack head `up/28845`) into fork main — 124 conflicted files, 361 hunks, ~12,000 conflict lines, plus 111 auto-merged-but-risky files. Full 124-file table and per-file seams: `D:/worktrees/upstream-redesign-notes/shadow-merge-report-20261104.md`. The ten strategic conflicts, with the seam this alignment work builds:
+Source: shadow merge rehearsal of the full stack (base `7cf653bca6`, stack head `up/28845`) into fork main — 124 conflicted files, 361 hunks, ~12,000 conflict lines, plus 111 auto-merged-but-risky files. These counts are from 04 Nov and are stale; re-run the rehearsal before using them as a budget. The ten strategic conflicts, with the seam this alignment work builds:
 
 1. **`ChatView.tsx` (15 hunks).** Every fork touch sits inside regions upstream rewrote. Seam: shrink the fork diff to one-line calls — a `useT3TeamChatViewProps(thread)` hook returning the whole `t3team` prop bag, a `t3team-providerStatusGate` predicate, and one `focusChat` interception (shell-route override, else upstream).
 2. **`Sidebar.tsx` (14).** Seam: one `useT3TeamThreadNavigation(threadRef)` hook owning the shell-route override with upstream fallback; InboxHeader/project-scope chrome into `t3team-SidebarChromeExtensions` rendered through upstream's `SidebarChromeHeader` extension point; menu items via `withT3TeamThreadMenuItems(items)`.
