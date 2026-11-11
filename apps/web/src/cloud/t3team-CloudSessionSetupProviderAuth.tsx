@@ -1,7 +1,7 @@
 /**
- * Inline Claude/Codex ToolAuth card on the setup card's Provider step. The flusher's Ensure
- * auto-starts install/connect; this surface shows the live phases (installing, device code, …)
- * so the user can finish sign-in without leaving the thread.
+ * Inline Claude/Codex ToolAuth card on the setup card's Provider step. Nothing starts on its own:
+ * the user clicks Install and connect here, and the card then shows the live phases (installing,
+ * device code, …) so sign-in finishes without leaving the thread.
  */
 import { ProviderDriverKind, type EnvironmentId, type ToolAuthToolId } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
@@ -11,11 +11,15 @@ import {
   toolAuthMetaForTool,
   toolAuthToolForDriverKind,
 } from "~/components/settings/t3team-toolAuthTools";
+import { ToolAuthUnavailableNotice } from "~/components/settings/t3team-ToolAuthUnavailableNotice";
 import { useEnvironmentProviders } from "~/state/environments";
 import { useToolAuthActions, useToolAuthStates } from "~/state/t3team-toolauth";
+import { useToolAuthEnvironmentAvailability } from "~/t3team/t3team-useToolAuthEnvironmentFlag";
 
-import { useSignInDescriptionForEnvironment } from "./t3team-cloudMachineSignIn";
-import type { CloudQueuedSendProviderGate } from "./t3team-cloudQueuedSendProviderGate";
+import {
+  useSignInDescriptionForEnvironment,
+  useToolAuthMachineLabel,
+} from "./t3team-cloudMachineSignIn";
 import {
   getCloudQueuedSendProviderGate,
   subscribeCloudQueuedSendProviderReady,
@@ -39,10 +43,15 @@ export function CloudSessionSetupProviderAuth(props: {
       ? undefined
       : toolAuthToolForDriverKind(ProviderDriverKind.make(provider.driver));
   const toolFromGate =
-    gate?.kind === "needsInstall" || gate?.kind === "needsAuth" ? gate.tool : undefined;
+    gate?.kind === "needsInstall" || gate?.kind === "needsAuth" || gate?.kind === "failed"
+      ? gate.tool
+      : undefined;
   const tool = toolFromGate ?? toolFromProvider;
   if (gate?.kind === "ready" || tool === undefined) return null;
-  if (gate?.kind === "failed") {
+  // A sign-in failure belongs on the tool's own card, which maps the reason to plain words and
+  // offers Retry. Only a failure with no tool behind it (a provider disabled for this project)
+  // has nothing to retry and stays a sentence.
+  if (gate?.kind === "failed" && gate.tool === undefined) {
     return (
       <p
         data-cloud-setup-provider-auth="failed"
@@ -52,33 +61,47 @@ export function CloudSessionSetupProviderAuth(props: {
       </p>
     );
   }
-  return <ProviderAuthCard environmentId={environmentId} tool={tool} gate={gate} />;
+  return (
+    <ProviderAuthCard
+      environmentId={environmentId}
+      tool={tool}
+      needsInstall={gate?.kind === "needsInstall" || provider?.installed === false}
+    />
+  );
 }
 
 function ProviderAuthCard(props: {
   readonly environmentId: EnvironmentId;
   readonly tool: ToolAuthToolId;
-  readonly gate: CloudQueuedSendProviderGate | null;
+  /** One click installs and signs in; a plain Connect cannot succeed against a missing binary. */
+  readonly needsInstall: boolean;
 }) {
-  const { environmentId, tool, gate } = props;
+  const { environmentId, tool, needsInstall } = props;
   const meta = toolAuthMetaForTool(tool);
   const states = useToolAuthStates(environmentId);
   const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
   const signInDescription = useSignInDescriptionForEnvironment(environmentId);
+  const machineLabel = useToolAuthMachineLabel(environmentId);
+  const availability = useToolAuthEnvironmentAvailability(environmentId);
   return (
     <div
       data-cloud-setup-provider-auth={tool}
       className="mt-3.5 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm/4"
     >
-      <ToolAuthCard
-        meta={meta}
-        state={states.get(tool)}
-        signInDescription={signInDescription}
-        onConnect={onConnect}
-        onInstall={gate?.kind === "needsInstall" ? onInstall : undefined}
-        onSubmitCode={onSubmitCode}
-        onCancel={onCancel}
-      />
+      {availability === "disabled" ? (
+        <ToolAuthUnavailableNotice meta={meta} machineLabel={machineLabel} />
+      ) : (
+        <ToolAuthCard
+          meta={meta}
+          state={states.get(tool)}
+          signInDescription={signInDescription}
+          machineLabel={machineLabel}
+          onConnect={onConnect}
+          onInstall={needsInstall ? onInstall : undefined}
+          onSubmitCode={onSubmitCode}
+          onCancel={onCancel}
+        />
+      )}
     </div>
   );
 }

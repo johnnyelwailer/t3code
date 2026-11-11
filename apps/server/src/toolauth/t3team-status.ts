@@ -56,7 +56,12 @@ export interface ToolAuthStatusOptions {
 function applyExpiry(state: AuthState, now: number): AuthState {
   if (state.phase !== "connected" || state.expiresAt === undefined) return state;
   if (state.expiresAt <= now) {
-    return { ...state, phase: "expired", message: state.message ?? "Credential has expired." };
+    return {
+      ...state,
+      phase: "expired",
+      reason: "credentialExpired",
+      message: state.message ?? "Credential has expired.",
+    };
   }
   if (state.expiresAt - now <= EXPIRY_WARNING_MS) {
     const days = Math.max(1, Math.ceil((state.expiresAt - now) / (24 * 60 * 60 * 1000)));

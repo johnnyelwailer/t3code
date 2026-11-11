@@ -199,24 +199,48 @@ describe("ToolAuthCard", () => {
     expect(markup).not.toContain("· ·");
   });
 
-  it("failed: shows the CLI's own message, not a generic error, plus Retry", () => {
+  it("failed: shows the reason in plain words with a next step, never the CLI's raw text, plus Retry", () => {
     const markup = renderCard({
       tool: "claude",
       phase: "failed",
+      reason: "signInFailed",
       message: "Authentication failed: invalid code",
     });
-    expect(markup).toContain("Authentication failed: invalid code");
+    expect(markup).toContain(`${CLAUDE_META.label} did not accept the sign-in.`);
+    expect(markup).toContain("approve it in the browser");
+    expect(markup).not.toContain("Authentication failed: invalid code");
     expect(markup).toContain("Retry");
   });
 
-  it("expired: shows an Expired badge, the credential message, and a Reconnect action", () => {
+  it("failed on a cloud machine with the switch off: names the machine and does not say Retry works", () => {
+    const markup = renderToStaticMarkup(
+      <ToolAuthCard
+        meta={CLAUDE_META}
+        state={{
+          tool: "claude",
+          phase: "failed",
+          reason: "featureDisabled",
+          message: "CLI tool sign-in is turned off on this host (Settings → Features).",
+        }}
+        machineLabel="this cloud machine"
+        onConnect={noop}
+        onInstall={noop}
+        onSubmitCode={noop}
+        onCancel={noop}
+      />,
+    );
+    expect(markup).toContain("enabled on this cloud machine yet");
+    expect(markup).not.toContain("Settings → Features");
+  });
+
+  it("expired: shows an Expired badge, the expiry in plain words, and a Reconnect action", () => {
     const markup = renderCard({
       tool: "claude",
       phase: "expired",
       message: "Credential has expired.",
     });
     expect(markup).toContain("Expired");
-    expect(markup).toContain("Credential has expired.");
+    expect(markup).toContain("s sign-in on this machine has expired.");
     expect(markup).toContain("Reconnect");
   });
 });

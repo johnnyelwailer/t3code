@@ -31,6 +31,10 @@
       "types": "./src/t3team-manualContinuation.ts",
       "import": "./src/t3team-manualContinuation.ts"
     },
+    "./t3team-selectionContrast": {
+      "types": "./src/t3team-selectionContrast.ts",
+      "import": "./src/t3team-selectionContrast.ts"
+    },
     "./t3team-packThemeColors": {
       "types": "./src/t3team-packThemeColors.ts",
       "import": "./src/t3team-packThemeColors.ts"

@@ -75,16 +75,28 @@ describe("what ends the wait", () => {
     expect(getDraftCloudQueuedSend("d1")!.failureKind).toBeUndefined();
   });
 
-  it("the attach's session_ended stops it before the polled list has caught up", () => {
+  it("a ready record outranks a connection parked on the session that ended", () => {
     queueDraft("d1");
     const f = flusher();
     f.tick("d1", T0);
-    // The list still says ready (it is polled); the connection is parked on session_ended.
-    // On main this asks to connect again, for as long as the list is stale.
     expect(f.tick("d1", T0 + 10_000, { connected: false }).kind).toBe("connect");
-    const action = f.tick("d1", T0 + 20_000, { connected: false, envEnded: true });
+    // The parked flag belongs to the session the environment is still registered to; connecting
+    // rebinds it to this one, so the send keeps going rather than dead-ending on a stale flag.
+    expect(f.tick("d1", T0 + 20_000, { connected: false, envEnded: true }).kind).toBe("connect");
+    expect(f.lines).toEqual([]);
+    // The list catching up is what ends it.
+    const action = f.tick("d1", T0 + 30_000, { connected: false, phase: "stopped" });
     expect(action).toMatchObject({ kind: "fail", retryable: false });
-    expect(f.lines).toEqual([expect.objectContaining({ outcome: "ended", elapsedSeconds: 20 })]);
+    expect(f.lines).toEqual([expect.objectContaining({ outcome: "ended", elapsedSeconds: 30 })]);
+  });
+
+  it("keeps a send parked on a not-yet-ready session retryable, so it can resume", () => {
+    queueDraft("d1");
+    const f = flusher();
+    f.tick("d1", T0);
+    expect(
+      f.tick("d1", T0 + 10_000, { connected: false, envEnded: true, phase: "preparing" }),
+    ).toMatchObject({ kind: "fail", retryable: true });
   });
 
   it("a No-project draft is unaffected: it still opens the scratch project, however long", () => {

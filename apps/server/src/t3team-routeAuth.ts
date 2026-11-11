@@ -13,7 +13,7 @@
  * capability: the cloud broker (relay scopes), the account sign-in routes
  * (`credentialRoute`: environment scopes plus a same-origin check) and the
  * Atlassian sign-in callback (the one-time `state`, finished in a browser with
- * no session). The Atlassian media proxy that `<img>` tags load is NOT one of
+ * no session), and `GET /api/auth/clients` (access:read, t3team-authClientsRoute.ts). The Atlassian media proxy that `<img>` tags load is NOT one of
  * them: the web client's `<img>` carries its session cookie, and the desktop
  * renderer, which has no cookie on this origin, gets its bearer attached by the
  * main process (apps/desktop t3team-atlassianAssetBearer.ts).

@@ -27,7 +27,7 @@ import { sessionWorkspaceName, standbyPoolKey } from "./t3team-cloudSessionMachi
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
-import { makeSessionTag } from "./t3team-cloudSessionName.ts";
+import { isAppStartedSessionRun, makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 import { offerPlainOnMachineFailure } from "./t3team-cloudSessionMachineOffer.ts";
@@ -132,8 +132,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
     const login = yield* gh.resolveLogin({ allowReserve: false });
     const runs = yield* gh.listRunsFor(login, { allowReserve: false });
     const nowMs = yield* Clock.currentTimeMillis;
+    // CI, e2e and flag-verification runs are dispatched under the same login but are not
+    // machines the user can work in, and they would otherwise also spend the display budget.
+    const appRuns = runs.filter((run) => isAppStartedSessionRun(run.name));
     const projected = yield* Effect.forEach(
-      runs.slice(0, SESSION_DISPLAY_LIMIT),
+      appRuns.slice(0, SESSION_DISPLAY_LIMIT),
       (run) =>
         projectCloudSession(
           run,

@@ -1,5 +1,5 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import { CheckIcon, CircleAlertIcon } from "lucide-react";
+import { CheckIcon, CircleAlertIcon, ClockIcon } from "lucide-react";
 
 import { SetupActions } from "./t3team-CloudSessionSetupActions";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
@@ -27,6 +27,8 @@ export interface CloudSessionSetupCardProps {
   readonly onCancel?: (() => void) | undefined;
   /** Retry a first message that could not be delivered. */
   readonly onRetry?: (() => void) | null | undefined;
+  /** Start the "Project ready" wait over while the message is still waiting for it. */
+  readonly onRestartWait?: (() => void) | undefined;
   /** More ways out of a message that gave up waiting for its project (Retry and Cancel stay). */
   readonly recoveryActions?: ReadonlyArray<CloudQueuedSendRecoveryAction> | undefined;
   /** Start a fresh session after this one failed. */
@@ -48,6 +50,7 @@ export function CloudSessionSetupCard({
   facts,
   onCancel,
   onRetry,
+  onRestartWait,
   recoveryActions,
   onTryAgain,
   sending = false,
@@ -89,9 +92,12 @@ export function CloudSessionSetupCard({
     <section
       aria-label="Cloud session setup"
       data-cloud-setup-card=""
+      data-cloud-setup-session={session?.sessionId ?? ""}
+      data-cloud-setup-environment={session?.environmentId ?? ""}
       data-state={model.stage}
       data-slow={slow ? "true" : "false"}
       data-not-seen={model.notSeen ? "true" : "false"}
+      data-calm={model.keptWaiting ? "true" : "false"}
       data-motion={motionMode}
       data-cloud-setup-step-current={model.currentStep.id}
       className="t3team-setup-card mt-1 mb-2 overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-4 text-card-foreground shadow-xs/5"
@@ -104,6 +110,8 @@ export function CloudSessionSetupCard({
           <div className="t3team-setup-orb" aria-hidden data-cloud-setup-status-icon="">
             {model.stage === "ready" ? (
               <CheckIcon className="size-5 stroke-2" />
+            ) : model.keptWaiting ? (
+              <ClockIcon className="size-5" data-cloud-setup-calm="" />
             ) : (
               <CircleAlertIcon className="size-5" />
             )}
@@ -132,7 +140,7 @@ export function CloudSessionSetupCard({
       )}
 
       {projectWait === null ? null : (
-        <CloudProjectWaitNote notice={projectWait} className="mt-3.5" />
+        <CloudProjectWaitNote notice={projectWait} onRetry={onRestartWait} className="mt-3.5" />
       )}
       {model.currentStep.id === "provider" &&
       session?.environmentId !== undefined &&

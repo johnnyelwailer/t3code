@@ -2,12 +2,17 @@
 
 import type { EnvironmentId, ToolAuthToolId } from "@t3tools/contracts";
 
-import { useSignInDescriptionForEnvironment } from "../../cloud/t3team-cloudMachineSignIn";
+import {
+  useSignInDescriptionForEnvironment,
+  useToolAuthMachineLabel,
+} from "../../cloud/t3team-cloudMachineSignIn";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
 import { resolveToolAuthEnvironmentId } from "../../state/t3team-toolauthActions";
+import { useToolAuthEnvironmentAvailability } from "../../t3team/t3team-useToolAuthEnvironmentFlag";
 import { ToolAuthCard } from "../settings/t3team-ToolAuthCard";
+import { ToolAuthUnavailableNotice } from "../settings/t3team-ToolAuthUnavailableNotice";
 import { toolAuthMetaForTool } from "../settings/t3team-toolAuthTools";
 import { ModelPickerSignInRefreshNotice } from "./t3team-ModelPickerSignInRefreshNotice";
 import { useProviderRefreshAfterSignIn } from "./t3team-useProviderRefreshAfterSignIn";
@@ -50,6 +55,8 @@ export function ModelPickerProviderConnectPanel({
   const states = useToolAuthStates(environmentId);
   const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
   const signInDescription = useSignInDescriptionForEnvironment(environmentId);
+  const machineLabel = useToolAuthMachineLabel(environmentId);
+  const availability = useToolAuthEnvironmentAvailability(environmentId);
   // The provider list is probed on an interval, so once the CLI is signed in the machine is asked
   // to re-check this instance; the picker then swaps this panel for the model list by itself.
   const refreshAfterSignIn = useProviderRefreshAfterSignIn({
@@ -57,15 +64,7 @@ export function ModelPickerProviderConnectPanel({
     instanceId: entry.instanceId,
     signedIn: states.get(meta.tool)?.phase === "connected",
   });
-  const missingEnvironment = environmentId === null;
-  const state =
-    missingEnvironment && readiness === "needsInstall"
-      ? {
-          tool: meta.tool,
-          phase: "failed" as const,
-          message: "No cloud session environment is available to install on yet.",
-        }
-      : states.get(meta.tool);
+  const missingEnvironment = environmentId === null && readiness === "needsInstall";
 
   // Top-aligned, not centred: the card is short and the picker's list area is
   // tall, so centring left a big dead gap above it that read as a broken panel.
@@ -80,15 +79,21 @@ export function ModelPickerProviderConnectPanel({
           the same `useToolAuthStates` subscription. So there is no separate
           "installed, now connect" step to render, and no second button.
         */}
-        <ToolAuthCard
-          meta={meta}
-          state={state}
-          signInDescription={signInDescription}
-          onConnect={onConnect}
-          onInstall={readiness === "needsInstall" ? onInstall : undefined}
-          onSubmitCode={onSubmitCode}
-          onCancel={onCancel}
-        />
+        {availability === "disabled" ? (
+          <ToolAuthUnavailableNotice meta={meta} machineLabel={machineLabel} />
+        ) : (
+          <ToolAuthCard
+            meta={meta}
+            state={states.get(meta.tool)}
+            signInDescription={signInDescription}
+            machineLabel={machineLabel}
+            failure={missingEnvironment ? "noEnvironment" : undefined}
+            onConnect={onConnect}
+            onInstall={readiness === "needsInstall" ? onInstall : undefined}
+            onSubmitCode={onSubmitCode}
+            onCancel={onCancel}
+          />
+        )}
         <ModelPickerSignInRefreshNotice
           displayName={entry.displayName}
           status={refreshAfterSignIn.status}
