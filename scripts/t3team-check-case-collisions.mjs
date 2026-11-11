@@ -2,8 +2,8 @@
 // Case-insensitive path / stem / relative-import collisions. No deps. Exit 0/1/2.
 // Keep in sync: fork scripts/t3team-check-case-collisions*.mjs and hive/nx-nexi dev/scripts/check-case-collisions*.mjs
 
-import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeURL from "node:url";
 import {
   findCaseCollisions,
   findCaseMismatchedImports,
@@ -111,7 +111,7 @@ function main(argv, { cwd, log, read }) {
   if (opts.allowFile) {
     try {
       allow = parseAllowlist(
-        readFileSync(
+        NodeFS.readFileSync(
           opts.allowFile.startsWith("/") ? opts.allowFile : `${cwd}/${opts.allowFile}`,
           "utf8",
         ),
@@ -144,9 +144,9 @@ export function run(argv, options = {}) {
     ...options,
     cwd,
     log: options.log ?? console,
-    read: options.read ?? ((path) => readFileSync(`${cwd}/${path}`, "utf8")),
+    read: options.read ?? ((path) => NodeFS.readFileSync(`${cwd}/${path}`, "utf8")),
   });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+if (process.argv[1] && import.meta.url === NodeURL.pathToFileURL(process.argv[1]).href)
   process.exitCode = run(process.argv.slice(2));

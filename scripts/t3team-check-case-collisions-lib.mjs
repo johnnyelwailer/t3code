@@ -1,7 +1,7 @@
 // Shared helpers for the case-collision check. Keep in sync with hive/nx-nexi dev/scripts/check-case-collisions-lib.mjs.
 
-import { spawnSync } from "node:child_process";
-import { dirname, posix } from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodePath from "node:path";
 
 const MODULE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"]);
 const RESOLVE_EXT = [...MODULE_EXT, ".json"];
@@ -10,13 +10,14 @@ const IMPORT_RE =
 
 export const fold = (path) => path.normalize("NFC").toLowerCase();
 const extname = (path) => {
-  const i = posix.basename(path).lastIndexOf(".");
-  return i <= 0 ? "" : posix.basename(path).slice(i);
+  const i = NodePath.posix.basename(path).lastIndexOf(".");
+  return i <= 0 ? "" : NodePath.posix.basename(path).slice(i);
 };
 const stemPath = (path) =>
-  posix.join(
-    posix.dirname(path),
-    posix.basename(path).slice(0, -extname(path).length || undefined) || posix.basename(path),
+  NodePath.posix.join(
+    NodePath.posix.dirname(path),
+    NodePath.posix.basename(path).slice(0, -extname(path).length || undefined) ||
+      NodePath.posix.basename(path),
   );
 const skipped = (path) => path.split("/").some((p) => p === ".repos" || p === "node_modules");
 
@@ -45,13 +46,18 @@ export function findStemCollisions(paths) {
 
 export function resolveRelativeSpecifier(fromPath, specifier, byFold) {
   const raw = specifier.split(/[?#]/, 1)[0];
-  const baseDir = dirname(fromPath).replaceAll("\\", "/");
-  const resolved = posix.normalize(posix.join(baseDir === "." ? "" : baseDir, raw));
+  const baseDir = NodePath.dirname(fromPath).replaceAll("\\", "/");
+  const resolved = NodePath.posix.normalize(
+    NodePath.posix.join(baseDir === "." ? "" : baseDir, raw),
+  );
   const candidates = extname(raw)
     ? [resolved]
     : [
         resolved,
-        ...RESOLVE_EXT.flatMap((ext) => [resolved + ext, posix.join(resolved, "index" + ext)]),
+        ...RESOLVE_EXT.flatMap((ext) => [
+          resolved + ext,
+          NodePath.posix.join(resolved, "index" + ext),
+        ]),
       ];
   const matches = new Map();
   for (const candidate of candidates) {
@@ -139,7 +145,11 @@ export function parseArgs(argv) {
 }
 
 function runGit(args, cwd) {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const result = NodeChildProcess.spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
   if (result.status !== 0) {
     throw new Error(
       (result.stderr || result.stdout || `git ${args.join(" ")} exited ${result.status}`).trim(),
