@@ -351,7 +351,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
       yield* Effect.yieldNow;
 
       expect(yield* Deferred.isDone(first.closed)).toBe(false);
-      expect(h.counts()).toEqual({ httpLoads: 1, diskLoads: 1, opened: 1, active: 1 });
+      expect(h.counts()).toEqual({ httpLoads: 0, diskLoads: 1, opened: 1, active: 1 });
 
       remount();
       yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1));
@@ -424,7 +424,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
 
       // Retained, so no second subscription and no reload: opened stays 1.
       expect(yield* Deferred.isDone(first.closed)).toBe(false);
-      expect(h.counts()).toEqual({ httpLoads: 1, diskLoads: 1, opened: 1, active: 1 });
+      expect(h.counts()).toEqual({ httpLoads: 0, diskLoads: 1, opened: 1, active: 1 });
 
       remount();
       yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
@@ -448,7 +448,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
 
       const remount = h.registry.mount(h.stateAtom);
       const next = yield* Queue.take(h.subscriptions);
-      expect(h.counts()).toEqual({ httpLoads: 1, diskLoads: 1, opened: 2, active: 1 });
+      expect(h.counts()).toEqual({ httpLoads: 0, diskLoads: 1, opened: 2, active: 1 });
 
       remount();
       yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
@@ -473,7 +473,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
 
       const remount = h.registry.mount(h.stateAtom);
       const next = yield* Queue.take(h.subscriptions);
-      expect(h.counts()).toEqual({ httpLoads: 2, diskLoads: 2, opened: 2, active: 1 });
+      expect(h.counts()).toEqual({ httpLoads: 0, diskLoads: 2, opened: 2, active: 1 });
 
       remount();
       yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
@@ -671,13 +671,21 @@ describe("thread resume cursor identity", () => {
         snapshot: { ...SNAPSHOT, snapshotEventId: EventId.make("cached-event-7") },
       });
       const unmount = h.registry.mount(h.stateAtom);
+      // A cold open takes the bounded socket snapshot, which names its cursor.
+      const cold = yield* Queue.take(h.subscriptions);
+      expect(cold.afterSequence).toBeUndefined();
+      yield* Queue.offer(cold.events, { kind: "synchronized" });
+      yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+      unmount();
+      yield* Deferred.await(cold.closed);
+      const warm = h.registry.mount(h.stateAtom);
       const first = yield* Queue.take(h.subscriptions);
       expect(first.afterSequence).toBe(7);
       expect(first.afterEventId).toBe("cached-event-7");
       yield* Queue.offer(first.events, messageEvent(8, "applied"));
       yield* Queue.offer(first.events, { kind: "synchronized" });
       yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
-      unmount();
+      warm();
       yield* Deferred.await(first.closed);
       const remount = h.registry.mount(h.stateAtom);
       const next = yield* Queue.take(h.subscriptions);
@@ -759,6 +767,13 @@ describe("thread resume cursor identity", () => {
           },
         });
         const unmount = h.registry.mount(h.stateAtom);
+        const cold = yield* Queue.take(h.subscriptions);
+        expect(cold.afterSequence).toBeUndefined();
+        yield* Queue.offer(cold.events, { kind: "synchronized" });
+        yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+        unmount();
+        yield* Deferred.await(cold.closed);
+        const warm = h.registry.mount(h.stateAtom);
         const first = yield* Queue.take(h.subscriptions);
         expect(first.afterSequence).toBe(50);
         expect(first.afterEventId).toBe("old-timeline-50");
@@ -789,7 +804,7 @@ describe("thread resume cursor identity", () => {
           h.stateAtom,
           (state) => Option.getOrNull(state.data)?.messages[0]?.text === "after the reset",
         );
-        unmount();
+        warm();
         yield* Deferred.await(first.closed);
         const remount = h.registry.mount(h.stateAtom);
         const next = yield* Queue.take(h.subscriptions);

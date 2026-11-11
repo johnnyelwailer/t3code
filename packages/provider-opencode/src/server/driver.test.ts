@@ -74,7 +74,8 @@ const create = (config: Partial<OpenCodeSettings>, http: HttpClient.HttpClient) 
   OpenCodeDriver.create({
     instanceId: ProviderInstanceId.make("opencode-test"),
     displayName: undefined,
-    environment: [],
+    // Inline empty auth keeps the Go usage probe from reading the host's own OpenCode login.
+    environment: [{ name: "OPENCODE_AUTH_CONTENT", sensitive: true, value: "{}" }],
     enabled: true,
     config: { ...OpenCodeDriver.defaultConfig(), ...config },
   }).pipe(Effect.provideService(HttpClient.HttpClient, http));

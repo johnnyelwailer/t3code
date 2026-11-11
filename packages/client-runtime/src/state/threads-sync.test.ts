@@ -446,7 +446,11 @@ describe("EnvironmentThreads", () => {
           schemaVersion: ORCHESTRATION_THREAD_CACHE_SCHEMA_VERSION,
           environmentId: TARGET.environmentId,
           threadId: THREAD_ID,
-          snapshot: { snapshotSequence: CACHED_SNAPSHOT_SEQUENCE, projection },
+          snapshot: {
+            snapshotSequence: CACHED_SNAPSHOT_SEQUENCE,
+            snapshotEventId: EventId.make("cached-event-7"),
+            projection,
+          },
         });
         const stored = yield* Schema.decodeEffect(schema)(encoded);
         const h = yield* makeHarness({
@@ -462,6 +466,7 @@ describe("EnvironmentThreads", () => {
                       status: "live",
                     },
                     sequence: CACHED_SNAPSHOT_SEQUENCE,
+                    eventId: EventId.make("cached-event-7"),
                     persisted: true,
                   },
                 },
