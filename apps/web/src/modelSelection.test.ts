@@ -1237,7 +1237,7 @@ describe("composer fallback to another instance of the same driver", () => {
     });
   });
 
-  it("does not carry options to another driver", () => {
+  it("keeps the picked provider instead of switching to another driver", () => {
     const codexOnly: ReadonlyArray<ServerProvider> = [
       {
         ...provider({ provider: claude, instanceId: disabled }),
@@ -1251,7 +1251,7 @@ describe("composer fallback to another instance of the same driver", () => {
       threadModelSelection: picked,
     });
 
-    expect(selectedInstanceId).toBe(ProviderInstanceId.make("codex"));
-    expect(state.modelOptions?.[selectedInstanceId]).toBeUndefined();
+    expect(selectedInstanceId).toBe(disabled);
+    expect(state.modelOptions?.[ProviderInstanceId.make("codex")]).toBeUndefined();
   });
 });

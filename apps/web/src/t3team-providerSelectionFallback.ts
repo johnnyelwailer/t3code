@@ -41,7 +41,12 @@ export function applyProviderSelectionFallbackRule(input: {
   if (requestedEntry === undefined || resolvedEntry === undefined) {
     return { entry: resolvedEntry, fallback: null };
   }
-  if (resolvedEntry.instanceId === requestedEntry.instanceId) {
+  // Another instance of the same driver (a team account for a disabled personal one) keeps the
+  // provider and model the user picked, so it is not a switch.
+  if (
+    resolvedEntry.instanceId === requestedEntry.instanceId ||
+    resolvedEntry.driverKind === requestedEntry.driverKind
+  ) {
     return { entry: resolvedEntry, fallback: null };
   }
   if (!isNexploreProviderEntry(resolvedEntry)) {
