@@ -69,6 +69,8 @@ import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as MacPermissions from "../permissions/MacPermissions.ts";
 import * as PreviewManager from "../preview/Manager.ts";
+import * as DesktopVoiceHotkey from "../voice/t3team-DesktopVoiceHotkey.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 
 it.effect.each([false, true])(
   "stops backends together before flushing history and cancels Linux registration, stop defect=%s",
@@ -224,7 +226,9 @@ it.effect.each([false, true])(
             Layer.mock(DesktopSshPasswordPrompts.DesktopSshPasswordPrompts, {}),
             Layer.mock(DesktopTelemetryPublisher.DesktopTelemetryPublisher, {}),
             Layer.mock(DesktopWebLinks.DesktopWebLinks, {}),
+            Layer.mock(DesktopVoiceHotkey.DesktopVoiceHotkey, { initialize: Effect.void }),
             Layer.mock(DesktopWslEnvironment.DesktopWslEnvironment, {}),
+            Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor, {}),
             Layer.mock(ElectronMenu.ElectronMenu, {}),
             Layer.mock(ElectronShell.ElectronShell, {}),
             Layer.mock(ElectronTheme.ElectronTheme, {}),

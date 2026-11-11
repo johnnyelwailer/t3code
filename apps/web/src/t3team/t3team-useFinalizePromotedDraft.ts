@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 
-import { threadShellHasStarted } from "~/components/ChatView.logic";
-import { finalizePromotedDraftThreadByRef } from "~/composerDraftStore";
+import {
+  finalizePromotedDraftThreadByRef,
+  resolveDraftPromotionNavigationTarget,
+} from "~/composerDraftStore";
 import { useThreadRefs, useThreadShell } from "~/state/entities";
 
 /**
@@ -24,7 +26,12 @@ export function useFinalizePromotedDraft(threadId: string | null): void {
     ? (threadRefs.find((candidate) => candidate.threadId === threadId) ?? null)
     : null;
   const serverThread = useThreadShell(threadRef);
-  const serverThreadStarted = threadShellHasStarted(serverThread);
+  const serverThreadStarted =
+    resolveDraftPromotionNavigationTarget({
+      serverThreadRef: threadRef,
+      serverThread,
+      backgroundSubmissionPending: false,
+    }) !== null;
 
   useEffect(() => {
     if (!threadRef || !serverThreadStarted) {

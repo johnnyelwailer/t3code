@@ -5,6 +5,7 @@ import {
   DESKTOP_ROUTE_QUESTION_HEADER,
   DESKTOP_ROUTE_SESSION_LABEL,
   ProviderDriverKind,
+  EnvironmentId,
   ProviderInstanceId,
   desktopRouteCardFrom,
   desktopRouteQuestionLine,
@@ -42,7 +43,13 @@ it("renders the provider status message as Markdown", async () => {
     slashCommands: [],
     skills: [],
   };
-  await using screen = await render(<ProviderStatusBanner status={status} onDismiss={() => {}} />);
+  await using screen = await render(
+    <ProviderStatusBanner
+      environmentId={EnvironmentId.make("environment-local")}
+      status={status}
+      onDismiss={() => {}}
+    />,
+  );
   expectRendered(screen.container);
 });
 

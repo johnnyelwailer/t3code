@@ -29,10 +29,10 @@ describe("environment request failures, as the offline outbox classifies them", 
     ).toBe(true);
     expect(
       transient(
-        new RemoteEnvironmentAuthTimeoutError(
-          "https://x/api/t3team/thread/workflow/resolve-input",
-          15_000,
-        ),
+        new RemoteEnvironmentAuthTimeoutError({
+          requestUrl: "https://x/api/t3team/thread/workflow/resolve-input",
+          timeoutMs: 15_000,
+        }),
       ),
     ).toBe(true);
   });
@@ -51,7 +51,12 @@ describe("environment request failures, as the offline outbox classifies them", 
       ),
     ).toBe(false);
     expect(
-      transient(new RemoteEnvironmentAuthUndeclaredStatusError("https://x/api/t3team/y", 502)),
+      transient(
+        new RemoteEnvironmentAuthUndeclaredStatusError({
+          requestUrl: "https://x/api/t3team/y",
+          status: 502,
+        }),
+      ),
     ).toBe(false);
   });
 });

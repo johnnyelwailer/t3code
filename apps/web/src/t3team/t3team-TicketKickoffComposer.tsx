@@ -185,7 +185,6 @@ export const TicketKickoffComposer = forwardRef<
               providerPickerDisabled={providerPickerDisabled}
               providerStatusMessage={providerStatusMessage}
               showInteractionModeToggle={showInteractionModeToggle}
-              text={text}
               canSend={canSend}
               selectModel={selectModel}
               setInteractionMode={setInteractionMode}

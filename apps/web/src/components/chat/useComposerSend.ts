@@ -268,7 +268,6 @@ interface ComposerSendInput {
 
 interface ComposerSendT3TeamInput {
   readonly cloudSessionComposerGate: ReturnType<typeof useCloudSessionComposerGate>;
-  readonly interactionMode: ProviderInteractionMode;
   readonly enqueueOfflineTurnStart: ChatViewT3TeamExtensionProps["enqueueOfflineTurnStart"];
   readonly composerContextAttachments: ReadonlyArray<T3TeamContextAttachment>;
   readonly prepareComposerContextAttachments: () => Promise<ReadonlyArray<T3TeamContextAttachment>>;
@@ -358,7 +357,6 @@ export function useComposerSend(input: ComposerSendInput) {
   const linkedEnvironments = useLinkedEnvironments(environmentId);
   const {
     cloudSessionComposerGate,
-    interactionMode,
     enqueueOfflineTurnStart,
     composerContextAttachments,
     prepareComposerContextAttachments,
@@ -495,7 +493,7 @@ export function useComposerSend(input: ComposerSendInput) {
               queueCtx.selectedModelSelection.options,
             ),
             runtimeMode,
-            interactionMode: queueCtx.interactionMode,
+            interactionMode: DEFAULT_INTERACTION_MODE,
           })
         : null;
       if (queued) {
@@ -524,7 +522,7 @@ export function useComposerSend(input: ComposerSendInput) {
           modelSelection: offlineSendCtx?.selectedModelSelection ?? null,
           titleSeed: truncate(promptRef.current.trim()),
           runtimeMode,
-          interactionMode,
+          interactionMode: DEFAULT_INTERACTION_MODE,
           createdAt: new Date().toISOString(),
           hasAttachments: false,
         });
@@ -1383,7 +1381,7 @@ export function useComposerSend(input: ComposerSendInput) {
           modelSelection: ctxSelectedModelSelection,
           titleSeed: title,
           runtimeMode,
-          interactionMode: sendInteractionMode,
+          interactionMode: DEFAULT_INTERACTION_MODE,
           createdAt: messageCreatedAt,
           hasAttachments:
             turnAttachmentsResult.value.length > 0 || contextAttachmentsResult.value.length > 0,

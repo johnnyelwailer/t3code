@@ -724,6 +724,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
 
     const explicitT3Home = explicitBackendHome({
       isolatedInstance: environment.isolatedInstance,
+      // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork: an isolated build must not adopt the live home
       envHome: process.env.T3CODE_HOME,
     });
     // An explicit T3CODE_HOME is an operator decision and is never migrated.
@@ -781,6 +782,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         ELECTRON_RUN_AS_NODE: "1",
         // Secure corporate-CA fallback. Unlike NODE_TLS_REJECT_UNAUTHORIZED=0,
         // this keeps certificate verification enabled and adds the OS trust store.
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork: honors a host-exported value
         NODE_USE_SYSTEM_CA: process.env.NODE_USE_SYSTEM_CA?.trim() || "1",
         ...(hasBundledPacks && packsDir !== null ? { T3TEAM_PACKS_DIR: packsDir } : {}),
         ...atlassianEnv,

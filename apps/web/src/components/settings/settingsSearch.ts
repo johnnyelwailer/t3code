@@ -890,11 +890,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["logs traces processes resource history failures spans cpu memory"],
   },
   {
-    id: "open-source-licenses",
-    title: "Open source licenses",
-    to: "/settings/about",
-  },
-  {
     id: "keybindings",
     title: "Keybindings",
     to: "/settings/keybindings",

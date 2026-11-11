@@ -5,13 +5,14 @@
  */
 import type { ServerProvider } from "@t3tools/contracts";
 
-import type { ComposerSlashCommand, ComposerTrigger } from "~/composer-logic";
+import type { ComposerTrigger } from "~/composer-logic";
 import type { ComposerCommandItem } from "~/components/chat/ComposerCommandMenu";
+import type { T3TeamSlashCommand } from "~/t3team/composer/t3team-composerMenuItems";
 import { useT3TeamComposerRecipeCatalog } from "~/t3team/composer/t3team-composerRecipeCatalogStore";
 import { buildT3TeamRecipeSlashItems } from "~/t3team/composer/t3team-composerRecipeSlashItems";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 
-const HOST_SLASH_COMMANDS: ReadonlyArray<ComposerSlashCommand> = [
+const HOST_SLASH_COMMANDS: ReadonlyArray<T3TeamSlashCommand> = [
   "model",
   "plan",
   "default",

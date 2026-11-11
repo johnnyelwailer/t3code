@@ -161,7 +161,6 @@ function RecipeKickoffTimelinePreview(props: { readonly width: number }) {
               createdAt: message.createdAt,
               message,
               showAssistantMeta: false,
-              showAssistantTimestamp: false,
               showAssistantCopyButton: false,
               assistantCopyStreaming: false,
             }}

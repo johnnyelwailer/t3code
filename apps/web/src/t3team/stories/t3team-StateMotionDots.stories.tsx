@@ -83,6 +83,7 @@ function RealWorkingRow({
         onOpenAgent,
         threadActivityState: threadState === "settled" ? null : threadState,
         backgroundWorktreeSetup: null,
+        liveAnswerPreview: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />

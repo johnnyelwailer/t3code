@@ -556,9 +556,6 @@ export const ClientSettingsSchema = Schema.Struct({
   sidebarThreadSortOrder: SidebarThreadSortOrder.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_SORT_ORDER)),
   ),
-  // `sidebarV2Enabled` / `sidebarV2ConfiguredByUser` are gone upstream — the v2 sidebar is now the
-  // default and `legacySidebarEnabled` (above) is the inverted switch that replaced them. The fork's
-  // sidebar lens follows whichever switch upstream owns; see `t3team-sidebarLens.ts`.
   // t3team fork fields; legacy flat keys decode into these, see `t3team-settings.ts`.
   t3team: T3TeamClientSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   timestampFormat: TimestampFormat.pipe(

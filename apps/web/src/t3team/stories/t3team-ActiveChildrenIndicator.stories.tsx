@@ -161,6 +161,7 @@ function RealWorkingRow({
           backgroundJobs: [],
           onOpenAgents,
           backgroundWorktreeSetup: null,
+          liveAnswerPreview: null,
         }}
       >
         <WorkingTimelineRow row={WORKING_ROW} />

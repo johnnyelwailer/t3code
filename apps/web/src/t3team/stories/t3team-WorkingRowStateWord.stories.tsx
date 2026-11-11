@@ -55,6 +55,7 @@ function Row({
         onOpenAgents: () => {},
         threadActivityState,
         backgroundWorktreeSetup: null,
+        liveAnswerPreview: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />

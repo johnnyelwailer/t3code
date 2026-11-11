@@ -630,9 +630,14 @@ export function setThreadChangeRequestSnapshot(
   });
 }
 
+// t3team: the sidebar row reads only the branch ref (upstream's light query), so `pr` and
+// `sourceControlProvider` are optional here; full status callers still pass them.
+type ThreadGitStatus = Pick<VcsStatusResult, "refName"> &
+  Partial<Pick<VcsStatusResult, "pr" | "sourceControlProvider">>;
+
 export function nextThreadChangeRequestSnapshot(input: {
   threadBranch: string | null;
-  gitStatus: VcsStatusResult | null;
+  gitStatus: ThreadGitStatus | null;
   snapshot: ThreadChangeRequestSnapshot | null | undefined;
   retainTerminalOnBranchMismatch: boolean;
   linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;
@@ -695,7 +700,7 @@ export function nextThreadChangeRequestSnapshot(input: {
 // (as upstream callers do), both resolvers behave exactly like upstream's.
 export function resolveDisplayedThreadPr(input: {
   threadBranch: string | null;
-  gitStatus: VcsStatusResult | null;
+  gitStatus: ThreadGitStatus | null;
   snapshot?: ThreadChangeRequestSnapshot | null | undefined;
   retainTerminalOnBranchMismatch?: boolean | undefined;
   linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;
@@ -750,7 +755,7 @@ export function resolveDisplayedThreadPr(input: {
 
 export function resolveDisplayedThreadPrProvider(input: {
   threadBranch: string | null;
-  gitStatus: VcsStatusResult | null;
+  gitStatus: ThreadGitStatus | null;
   snapshot?: ThreadChangeRequestSnapshot | null | undefined;
   retainTerminalOnBranchMismatch?: boolean | undefined;
   linkedPullRequest?: ThreadLinkedPullRequest | null | undefined;

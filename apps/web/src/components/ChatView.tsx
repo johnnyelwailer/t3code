@@ -3182,7 +3182,6 @@ export default function ChatView(props: ChatViewProps) {
     persistThreadSettingsForNextTurn,
     t3team: {
       cloudSessionComposerGate,
-      interactionMode,
       enqueueOfflineTurnStart,
       composerContextAttachments,
       prepareComposerContextAttachments,

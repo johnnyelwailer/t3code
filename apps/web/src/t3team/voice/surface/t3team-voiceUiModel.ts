@@ -70,6 +70,7 @@ function reducePhase(
             startedAtMs: action.now,
           };
     case "transcribing":
+    case "post-processing":
       return { ...snapshot, state: "transcribing", endedAtMs: snapshot.endedAtMs ?? action.now };
     case "error":
       return {

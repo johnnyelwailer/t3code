@@ -4,19 +4,17 @@ import {
   AuthRelayWriteScope,
   type EnvironmentConnectSignInStatus,
 } from "@t3tools/contracts";
-import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
+import { createRuntimeCommand } from "@t3tools/client-runtime/state/runtime";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
-import { HttpClient } from "effect/http";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 
-import { runtime } from "../lib/runtime";
+import { connectionAtomRuntime } from "../connection/runtime";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { usePrimaryEnvironment } from "../state/environments";
 import { useEnvironmentScope } from "../state/session";
-import type { CloudEnvironmentLinkError, CloudLinkTarget } from "./linkEnvironment";
+import { useAtomCommand } from "../state/use-atom-command";
+import type { CloudLinkTarget } from "./linkEnvironment";
 import { hasCloudPublicConfig } from "./publicConfig";
 import {
   readPrimaryConnectSignInStatus,
@@ -29,18 +27,14 @@ import {
   subscribeConnectSignInNoticeDismissal,
 } from "./t3team-connectSignInNotice.logic";
 
-const connectSignInAtomRuntime = Atom.runtime(
-  Layer.effect(
-    HttpClient.HttpClient,
-    runtime.contextEffect.pipe(
-      Effect.map((context) => Context.get(context, HttpClient.HttpClient)),
-    ),
-  ),
-);
+const startConnectSignIn = createRuntimeCommand(connectionAtomRuntime, {
+  label: "web:cloud:start-connect-sign-in",
+  execute: (input: { readonly target: CloudLinkTarget }) => startPrimaryConnectSignIn(input),
+});
 
 const connectSignInStatusAtom = Atom.family((key: string) => {
   const target = JSON.parse(key) as CloudLinkTarget;
-  return connectSignInAtomRuntime
+  return connectionAtomRuntime
     .atom(readPrimaryConnectSignInStatus({ target }))
     .pipe(
       Atom.swr({ staleTime: 5_000, revalidateOnMount: true }),
@@ -64,25 +58,21 @@ export function useConnectSignIn() {
   const target = useMemo<CloudLinkTarget | null>(
     () =>
       primary?.entry.target._tag === "PrimaryConnectionTarget"
-        ? {
-            environmentId: primary.environmentId,
-            label: primary.label,
-            httpBaseUrl: primary.entry.target.httpBaseUrl,
-            wsBaseUrl: primary.entry.target.wsBaseUrl,
-          }
+        ? { environmentId: primary.environmentId }
         : null,
     [primary],
   );
   const key = target && hasCloudPublicConfig() && canRead ? JSON.stringify(target) : null;
-  const atom: Atom.Atom<
-    AsyncResult.AsyncResult<EnvironmentConnectSignInStatus | null, CloudEnvironmentLinkError>
-  > = key ? connectSignInStatusAtom(key) : EMPTY_STATUS_ATOM;
+  const atom: Atom.Atom<AsyncResult.AsyncResult<EnvironmentConnectSignInStatus | null, unknown>> =
+    key ? connectSignInStatusAtom(key) : EMPTY_STATUS_ATOM;
   const result = useAtomValue(atom);
   const status = result._tag === "Failure" ? null : Option.getOrNull(AsyncResult.value(result));
   const dismissed = useSyncExternalStore(
     subscribeConnectSignInNoticeDismissal,
     isConnectSignInNoticeDismissedForSession,
   );
+
+  const runStart = useAtomCommand(startConnectSignIn, { reportFailure: false });
 
   const refresh = useCallback(() => {
     if (key) appAtomRegistry.refresh(connectSignInStatusAtom(key));
@@ -101,9 +91,9 @@ export function useConnectSignIn() {
 
   const start = useCallback(async () => {
     if (!target || !canStart) return;
-    await runtime.runPromise(startPrimaryConnectSignIn({ target }));
+    await runStart({ target });
     refresh();
-  }, [canStart, refresh, target]);
+  }, [canStart, refresh, runStart, target]);
 
   return { status, dismissed, canStart, start, dismiss: dismissConnectSignInNoticeForSession };
 }

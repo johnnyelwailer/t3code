@@ -101,6 +101,16 @@ function layerEnvironment(
   );
 }
 
+const restoreEnv = (name: string, value: string | undefined) => {
+  if (value === undefined) {
+    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
+    delete process.env[name];
+  } else {
+    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
+    process.env[name] = value;
+  }
+};
+
 const withHarness = <A, E, R>(
   effect: Effect.Effect<
     A,
@@ -247,7 +257,9 @@ describe("DesktopBackendConfiguration", () => {
         // The live app's home, inherited from a terminal inside it (T3CODE_HOME, which
         // apps/server/src/cli/config.ts ranks above bootstrap.t3Home) and through ~/.t3.
         const liveHome = path.join(baseDir, "Library", "Application Support", "nexi-work");
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         const previous = process.env.T3CODE_HOME;
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         process.env.T3CODE_HOME = liveHome;
         yield* Effect.addFinalizer(() => Effect.sync(() => restoreEnv("T3CODE_HOME", previous)));
         const isolatedHome = path.join(
@@ -294,7 +306,7 @@ describe("DesktopBackendConfiguration", () => {
           yield* fileSystem.exists(path.join(isolatedHome, "userdata", "statev2.sqlite")),
         );
         assert.isFalse(yield* fileSystem.exists(path.join(isolatedHome, "userdata.empty-")));
-      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("a build that is not isolated leaves the home environment to the operator", () =>
@@ -468,7 +480,7 @@ describe("DesktopBackendConfiguration", () => {
         "t3code",
       );
       assert.equal(config.bootstrap.t3Home, expectedBrandedDir);
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect(
@@ -487,9 +499,13 @@ describe("DesktopBackendConfiguration", () => {
         // setup) would break the packaged-certs and default-flag assertions
         // below, so isolate both for the test's duration and restore on
         // scope close.
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         const previousExtraCaCerts = process.env.NODE_EXTRA_CA_CERTS;
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         const previousUseSystemCa = process.env.NODE_USE_SYSTEM_CA;
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         delete process.env.NODE_EXTRA_CA_CERTS;
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         delete process.env.NODE_USE_SYSTEM_CA;
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
@@ -547,7 +563,7 @@ describe("DesktopBackendConfiguration", () => {
         assert.equal(config.env.NODE_USE_SYSTEM_CA, "1");
         assert.equal(config.env.T3WORK_ATLASSIAN_CLIENT_ID, "test-client-id");
         assert.equal(config.env.T3WORK_ATLASSIAN_CLIENT_SECRET, "test-client-secret");
-      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect(
@@ -556,6 +572,7 @@ describe("DesktopBackendConfiguration", () => {
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         const previousNexiStateDir = process.env.NEXI_FF_NEXI_STATE_DIR;
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
@@ -602,6 +619,7 @@ describe("DesktopBackendConfiguration", () => {
             );
           });
 
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         delete process.env.NEXI_FF_NEXI_STATE_DIR;
         const packDefault = yield* resolvePrimary({ isPackaged: true, withPacksDir: true });
         assert.isFalse(Object.hasOwn(packDefault.env, "NEXI_FF_NEXI_STATE_DIR"));
@@ -611,12 +629,13 @@ describe("DesktopBackendConfiguration", () => {
         assert.isFalse(Object.hasOwn(vanilla.env, "NEXI_FF_NEXI_STATE_DIR"));
         assert.isUndefined({ ...process.env, ...vanilla.env }.NEXI_FF_NEXI_STATE_DIR);
 
+        // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
         process.env.NEXI_FF_NEXI_STATE_DIR = "0";
         const packExplicit = yield* resolvePrimary({ isPackaged: true, withPacksDir: true });
         assert.equal(packExplicit.extendEnv, true);
         assert.isFalse(Object.hasOwn(packExplicit.env, "NEXI_FF_NEXI_STATE_DIR"));
         assert.equal({ ...process.env, ...packExplicit.env }.NEXI_FF_NEXI_STATE_DIR, "0");
-      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
   );
 
   it.effect("resolveWsl pins a default-tracking run to the concrete default distro", () =>
