@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { applyT3TeamPackFavicon, pickT3TeamPackBrandAsset } from "./t3team-packBrand";
 import { packPrimaryActionCss } from "./t3team-packPrimaryAction";
 import { t3teamPackThemeId } from "./t3team-packThemeDefinition";
+import { solidSelectedPillCss } from "./t3team-packSelectedPill";
 import { installT3TeamPackTheme } from "./t3team-packThemeInstall";
 import {
   T3TEAM_PACK_DERIVED_OVERRIDE_TOKENS,
@@ -65,7 +66,8 @@ function themeColorRules(theme: Pick<EnvironmentAppearance, "themeId" | "colors"
   return `html${selector}{${declarations(light)}}
     html:not(.dark)${selector}{${overrideDeclarations(light)}}
     html.dark${selector}{${darkColors}}
-    ${packPrimaryActionCss(theme.colors, selector)}`;
+    ${packPrimaryActionCss(theme.colors, selector)}
+    ${solidSelectedPillCss(theme.colors, selector)}`;
 }
 
 function themeCss(appearance: EnvironmentAppearance): string {
