@@ -18,7 +18,12 @@
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 
 import { readThemePreference, writeThemePreference } from "~/hooks/useTheme";
-import { getCustomThemes, installCustomTheme, updateCustomTheme } from "~/themePalette";
+import {
+  getCustomThemes,
+  installCustomTheme,
+  updateCustomTheme,
+  type ThemeDefinition,
+} from "~/themePalette";
 
 import {
   isT3TeamPackThemeId,
@@ -56,23 +61,7 @@ function writeAppliedMarker(marker: string): void {
   }
 }
 
-/**
- * Register (or refresh) the pack theme and, on first sight of this palette, select it.
- * Safe to call on every appearance change: installation is idempotent and selection is markered.
- */
-export function installT3TeamPackTheme(appearance: EnvironmentAppearance | undefined): void {
-  if (typeof window === "undefined" || !appearance) return;
-
-  const definition = t3teamPackThemeDefinition({
-    themeId: appearance.themeId,
-    name: appearance.name,
-    defaultMode: appearance.defaultMode,
-    colors: appearance.colors,
-  });
-
-  // Keep the library entry current even when the selection marker says "already applied" — a
-  // redeployed pack with tweaked colors should refresh the stored palette, not strand an old one.
-  //
+function installLibraryTheme(definition: ThemeDefinition): void {
   // Deliberately UNCONDITIONAL. Skipping the write when the palette looks unchanged is tempting
   // (this runs on every server-config emission, and each write is a stringify + localStorage set +
   // broadcast), but the only cheap "has it changed?" source is `getCustomThemes()`, which returns
@@ -86,6 +75,29 @@ export function installT3TeamPackTheme(appearance: EnvironmentAppearance | undef
     else installCustomTheme(definition);
   } catch {
     // Storage full or unavailable — fall through to painting, which needs no persistence.
+  }
+}
+
+/**
+ * Register (or refresh) the pack themes and, on first sight of the default palette, select it.
+ * The alternates join the library so the user can switch to them; they are never selected here.
+ * Safe to call on every appearance change: installation is idempotent and selection is markered.
+ */
+export function installT3TeamPackTheme(appearance: EnvironmentAppearance | undefined): void {
+  if (typeof window === "undefined" || !appearance) return;
+
+  const definition = t3teamPackThemeDefinition({
+    themeId: appearance.themeId,
+    name: appearance.name,
+    defaultMode: appearance.defaultMode,
+    colors: appearance.colors,
+  });
+
+  // Keep the library entries current even when the selection marker says "already applied" — a
+  // redeployed pack with tweaked colors should refresh the stored palette, not strand an old one.
+  installLibraryTheme(definition);
+  for (const alternate of appearance.alternates ?? []) {
+    installLibraryTheme(t3teamPackThemeDefinition(alternate));
   }
 
   const marker = t3teamPackThemeMarker(appearance);

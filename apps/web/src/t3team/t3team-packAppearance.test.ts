@@ -245,4 +245,55 @@ describe("pack appearance", () => {
     expect(original.isConnected).toBe(true);
     original.remove();
   });
+
+  it("installs alternate themes beside the default and selects only the default", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore-orange",
+      name: "Nexplore Orange",
+      colors: { light: { primary: "#f05a0a" }, dark: { primary: "#f05a0a" } },
+      alternates: [
+        {
+          themeId: "nexplore",
+          name: "Nexplore",
+          colors: { light: { primary: "#4c3cf6" }, dark: { primary: "#4c3cf6" } },
+        },
+      ],
+    });
+    const ids = getCustomThemes().map((theme) => theme.id);
+    expect(ids).toContain(t3teamPackThemeId("nexplore-orange"));
+    expect(ids).toContain(t3teamPackThemeId("nexplore"));
+    expect(readThemePreference()).toBe(t3teamPackThemeId("nexplore-orange"));
+    expect(document.getElementById("t3team-pack-theme")?.textContent).toContain(
+      `[data-theme-id="${t3teamPackThemeId("nexplore")}"]`,
+    );
+  });
+
+  it("turns the selected pill solid only where the accent is too pale for a tint", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore-lila",
+      name: "Nexplore Lila",
+      colors: {
+        light: { primary: "#e5e0ff", background: "#faf9fb", card: "#ffffff" },
+        dark: { primary: "#e5e0ff", background: "#17181c", card: "#1e2024" },
+      },
+      alternates: [
+        {
+          themeId: "nexplore",
+          name: "Nexplore",
+          colors: {
+            light: { primary: "#4c3cf6", background: "#faf9fb", card: "#ffffff" },
+            dark: { primary: "#4c3cf6", background: "#17181c", card: "#1e2024" },
+          },
+        },
+      ],
+    });
+    const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
+    const lila = `[data-theme-id="${t3teamPackThemeId("nexplore-lila")}"]`;
+    const signalblau = `[data-theme-id="${t3teamPackThemeId("nexplore")}"]`;
+    expect(css).toContain(
+      `html:not(.dark)${lila} [data-t3team-pill-selected]{background-color:var(--primary)`,
+    );
+    expect(css).not.toContain(`html.dark${lila} [data-t3team-pill-selected]`);
+    expect(css).not.toContain(`${signalblau} [data-t3team-pill-selected]`);
+  });
 });
