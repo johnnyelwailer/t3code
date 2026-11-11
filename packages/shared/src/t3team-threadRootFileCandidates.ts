@@ -76,7 +76,11 @@ export async function findThreadRootFileMatch(input: {
   readonly emittingRoot?: string | null;
   readonly stat: StatPaths;
 }): Promise<string | null> {
-  const candidates = threadRootFileCandidates(input.relativePath, input);
+  const candidates = threadRootFileCandidates(input.relativePath, {
+    roots: input.roots,
+    ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+    ...(input.emittingRoot !== undefined ? { emittingRoot: input.emittingRoot } : {}),
+  });
   if (candidates.length === 0) return null;
   const own = input.cwd ? threadRootFileCandidates(input.relativePath, { roots: [input.cwd] }) : [];
   const kinds = await input.stat([...own, ...candidates]);
