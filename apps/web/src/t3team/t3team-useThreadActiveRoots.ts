@@ -13,12 +13,35 @@ import {
   threadFollowRoot,
   threadRootCandidates,
   type ThreadActiveRoot,
+  type ThreadRootShell,
 } from "@t3tools/shared/t3team-threadActiveRoots";
+import * as DateTime from "effect/DateTime";
 
 import { useProjects, useThreadRelationshipShells } from "../state/entities";
 import { filesystemEnvironment } from "../state/filesystem";
 import { useEnvironmentQuery } from "../state/query";
 import { useEnvironmentScope } from "../state/session";
+
+function toThreadRootShell(
+  shell: ReturnType<typeof useThreadRelationshipShells>[number],
+): ThreadRootShell {
+  const pullRequests = shell.pullRequests?.map((link) => ({
+    snapshot:
+      link.snapshot !== null && link.snapshot !== undefined
+        ? { state: link.snapshot.state, headBranch: link.snapshot.headBranch }
+        : null,
+  }));
+  return {
+    id: shell.id,
+    branch: shell.branch,
+    worktreePath: shell.worktreePath,
+    title: shell.title,
+    lineage: { parentThreadId: shell.lineage.parentThreadId },
+    activeRunId: shell.activeRunId,
+    updatedAt: { epochMillis: DateTime.toEpochMillis(shell.updatedAt) },
+    ...(pullRequests !== undefined ? { pullRequests } : {}),
+  };
+}
 
 export interface ThreadActiveRoots {
   readonly roots: ReadonlyArray<ThreadActiveRoot>;
@@ -41,7 +64,11 @@ export function useThreadActiveRoots(
         project.environmentId === threadRef.environmentId && project.id === thread?.projectId,
     )?.workspaceRoot ?? null;
   const unchecked = selectThreadActiveRoots(
-    threadRootCandidates({ threadId: threadRef.threadId, shells, primaryRoot }),
+    threadRootCandidates({
+      threadId: threadRef.threadId,
+      shells: shells.map(toThreadRootShell),
+      primaryRoot,
+    }),
   );
   const canRead = useEnvironmentScope(threadRef.environmentId, AuthFilesystemReadScope);
   // Servers stat what they are asked about; never send a network path (NTLM leak).
