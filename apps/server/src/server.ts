@@ -258,6 +258,7 @@ import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
 import { startHostServices, withHostServices } from "./t3team-hostServices.ts";
 import { hostServiceRoutes } from "./t3team-hostServiceRoutes.ts";
+import { authClientsRouteLayer } from "./auth/t3team-authClientsRoute.ts";
 import { t3teamAccountRouteLayer } from "./t3team-account-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
@@ -1170,6 +1171,7 @@ const layerMakeRoutes = Layer.mergeAll(
     t3teamCloudBrokerRouteLayer,
     hostServiceRoutes,
     t3teamAccountRouteLayer,
+    authClientsRouteLayer,
   ),
   // Every other t3team route requires a session, like upstream's raw routes (t3team-routeAuth.ts).
   Layer.mergeAll(
