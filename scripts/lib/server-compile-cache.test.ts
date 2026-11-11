@@ -148,6 +148,53 @@ it("rejects ambiguous bundled server entries before importing them", async () =>
   }
 });
 
+it("uses the server entry the CLI imports when a re-export facade sits beside it", async () => {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cache-facade-"));
+  try {
+    const resources = NodePath.join(root, "Resources");
+    const dist = NodePath.join(resources, "app.asar/apps/server/dist");
+    NodeFS.mkdirSync(dist, { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(dist, "binCli-fixture.mjs"),
+      'export const load = () => import("./server-facade.mjs");',
+    );
+    NodeFS.writeFileSync(
+      NodePath.join(dist, "server-facade.mjs"),
+      'export { run } from "./server-real.mjs";',
+    );
+    NodeFS.writeFileSync(NodePath.join(dist, "server-real.mjs"), "export const run = () => 1;");
+    const { spawnSync } = await import("node:child_process");
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import {generatePreparedServerCache} from ${JSON.stringify(new URL("./server-compile-cache.ts", import.meta.url).href)}; await generatePreparedServerCache(${JSON.stringify(resources)});`,
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          NODE_COMPILE_CACHE: undefined,
+          NODE_DISABLE_COMPILE_CACHE: undefined,
+        },
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const manifest = JSON.parse(
+      NodeFS.readFileSync(NodePath.join(resources, "server-compile-cache/manifest.json"), "utf8"),
+    );
+    expect(manifest.entries.map((entry: { module: string }) => entry.module)).toEqual(
+      expect.arrayContaining([
+        "app.asar/apps/server/dist/binCli-fixture.mjs",
+        "app.asar/apps/server/dist/server-facade.mjs",
+      ]),
+    );
+  } finally {
+    NodeFS.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 it("reclaims only AppImage cache directories linked to gone mounts", async () => {
   const { spawnSync } = await import("node:child_process");
   const root = NodeFS.realpathSync(

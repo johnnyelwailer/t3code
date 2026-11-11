@@ -155,7 +155,12 @@ export async function generatePreparedServerCache(resourcesInput: string): Promi
   const files = NodeFS.readdirSync(dist);
   const cli = files.find((file) => /^binCli-.*\.mjs$/.test(file));
   if (!cli) throw new Error("Missing bundled server CLI");
-  const servers = files.filter((file) => /^server-.*\.mjs$/.test(file));
+  const allServers = files.filter((file) => /^server-.*\.mjs$/.test(file));
+  // t3team: a fork entry importing from the server module adds a re-export facade chunk; the CLI's
+  // own import names the entry.
+  const cliSource = NodeFS.readFileSync(NodePath.join(dist, cli), "utf8");
+  const cliServers = allServers.filter((file) => cliSource.includes(`"./${file}"`));
+  const servers = allServers.length > 1 && cliServers.length === 1 ? cliServers : allServers;
   if (servers.length > 1) throw new Error("Ambiguous bundled server entry");
   const server = servers[0];
   if (!server) throw new Error("Missing bundled server entry");

@@ -1,5 +1,7 @@
 {
   "allowedModifiedFiles": [
+    "scripts/lib/server-compile-cache.ts",
+    "scripts/lib/server-compile-cache.test.ts",
     "apps/server/src/orchestration-v2/ProjectionRecovery.test.ts",
     "apps/web/src/components/Sidebar.browser.test.tsx",
     "apps/web/src/components/Sidebar.shortcuts.browser.test.tsx",
