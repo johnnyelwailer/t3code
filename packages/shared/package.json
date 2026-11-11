@@ -47,6 +47,10 @@
       "types": "./src/t3team-threadActiveRoots.ts",
       "import": "./src/t3team-threadActiveRoots.ts"
     },
+    "./t3team-threadRootFileCandidates": {
+      "types": "./src/t3team-threadRootFileCandidates.ts",
+      "import": "./src/t3team-threadRootFileCandidates.ts"
+    },
     "./t3team-richChoicePayload": {
       "types": "./src/t3team-richChoicePayload.ts",
       "import": "./src/t3team-richChoicePayload.ts"
