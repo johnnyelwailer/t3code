@@ -22,4 +22,9 @@ describe("welcome page regression guard", () => {
     expect(source).not.toMatch(/Welcome to T3 Code/);
     expect(source).not.toMatch(/"T3 Code collects/);
   });
+
+  it("keeps the pack's brand mark and the cloud sign-in row", () => {
+    expect(source).toMatch(/\{identity \?/);
+    expect(source).toMatch(/<WelcomeCloudSignInOption/);
+  });
 });

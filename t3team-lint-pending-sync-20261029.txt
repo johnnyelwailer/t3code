@@ -871,7 +871,6 @@ apps/web/src/components/cloud/t3team-useRunOnCloudSessionProps.ts
 apps/web/src/components/composerDraftAnswerState.ts
 apps/web/src/components/files/FileBrowserPanel.tsx
 apps/web/src/components/onboarding/t3team-WelcomeCloudSessions.tsx
-apps/web/src/components/onboarding/t3team-onboardingComputerSelection.ts
 apps/web/src/components/preview/PreviewPanelShell.tsx
 apps/web/src/components/pullRequest/PullRequestCodeTab.tsx
 apps/web/src/components/pullRequest/PullRequestDetailPanel.tsx

@@ -8,16 +8,18 @@ import { Button } from "../ui/button";
 import { WelcomeCloudSessions } from "./t3team-WelcomeCloudSessions";
 
 /**
- * The welcome wizard's cloud row. With the Nexi broker configured, cloud sessions sign in with the
- * account the broker authenticates with — so the row offers that instead of T3 Connect. Without a
- * broker it renders `fallback`, the T3 Connect row, unchanged.
+ * The Welcome page's cloud row. With the Nexi broker configured, cloud sessions sign in with the
+ * account the broker authenticates with; `section` wraps the row in the page's section layout.
+ * Without a broker there is no row (upstream's Phone section covers T3 Connect).
  */
-export function WelcomeCloudSignInOption({ fallback }: { readonly fallback: ReactNode }) {
+export function WelcomeCloudSignInOption({
+  section,
+}: {
+  readonly section: (row: ReactNode) => ReactNode;
+}) {
   const broker = useCloudBrokerStatus();
   const auth = useAccount(broker?.enabled ? broker.accountId : null);
-  if (broker === null) return null; // one quick status read; avoids flashing the wrong row
-  if (!broker.enabled) return <>{fallback}</>;
-  if (auth.account === null) return null;
+  if (broker === null || !broker.enabled || auth.account === null) return null;
   const { account } = auth;
   const state = account.auth;
 
@@ -32,7 +34,7 @@ export function WelcomeCloudSignInOption({ fallback }: { readonly fallback: Reac
           ? "Starting…"
           : "Sign in";
 
-  return (
+  return section(
     <div className="rounded-lg border border-border bg-background">
       <Button
         variant="ghost"
@@ -58,6 +60,6 @@ export function WelcomeCloudSignInOption({ fallback }: { readonly fallback: Reac
         <p className="px-3 pb-3 text-destructive text-xs">{auth.error ?? account.lastError}</p>
       ) : null}
       {state._tag === "SignedIn" ? <WelcomeCloudSessions /> : null}
-    </div>
+    </div>,
   );
 }

@@ -114,6 +114,7 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
+import { WelcomeCloudSignInOption } from "./t3team-WelcomeCloudSignInOption";
 
 const AGENT_ONBOARDING_THREAD_ID = ThreadId.make("onboarding-agent-setup");
 const SCAN_LIMIT_MESSAGE = "Scan limit reached. Some projects or conversations may be missing.";
@@ -129,7 +130,7 @@ export function WelcomePage({
   readonly environmentId: EnvironmentId;
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
-  const { productName } = useWelcomeWizardBrand();
+  const { productName, identity } = useWelcomeWizardBrand();
   const { environments } = useEnvironments();
   const label =
     environments.find((environment) => environment.environmentId === environmentId)?.label ??
@@ -272,6 +273,7 @@ export function WelcomePage({
         {isElectron ? <WorkspacePageHeader electron /> : null}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
+            {identity ? <div className="mb-6">{identity}</div> : null}
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Welcome to {productName}
             </h1>
@@ -284,6 +286,9 @@ export function WelcomePage({
                 label={label}
                 isPrimary={isPrimary}
                 onImportSourceEnabled={() => scans[0]?.refresh()}
+              />
+              <WelcomeCloudSignInOption
+                section={(row) => <WelcomeSection title="Cloud">{row}</WelcomeSection>}
               />
               <ProjectsSection
                 scan={scans[0]}

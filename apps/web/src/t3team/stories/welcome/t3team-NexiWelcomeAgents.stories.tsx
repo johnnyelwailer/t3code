@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { AgentsBlock, SectionFrame } from "./t3team-NexiWelcomeScenario.fixtures";
 
 /**
- * Agents section — reuses OnboardingReadyAgents and ModelPickerProviderConnectPanel
+ * Agents section — reuses ModelPickerProviderConnectPanel
  * (see T3Team/Providers/Model Picker Connect) inside the welcome band.
  */
 const meta = {
