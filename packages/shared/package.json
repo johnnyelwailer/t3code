@@ -43,6 +43,10 @@
       "types": "./src/t3team-cloudSessionFit.ts",
       "import": "./src/t3team-cloudSessionFit.ts"
     },
+    "./t3team-codeWorkspace": {
+      "types": "./src/t3team-codeWorkspace.ts",
+      "import": "./src/t3team-codeWorkspace.ts"
+    },
     "./t3team-threadActiveRoots": {
       "types": "./src/t3team-threadActiveRoots.ts",
       "import": "./src/t3team-threadActiveRoots.ts"

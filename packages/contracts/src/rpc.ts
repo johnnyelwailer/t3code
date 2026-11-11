@@ -230,6 +230,10 @@ import {
 } from "./t3team-projectMachine.ts";
 import { ProjectMachineSourceSetInput } from "./t3team-projectMachineSource.ts";
 import {
+  T3TeamSyncCodeWorkspaceInput,
+  T3TeamSyncCodeWorkspaceResult,
+} from "./t3team-codeWorkspace.ts";
+import {
   RelayClientInstallFailedError,
   RelayClientInstallProgressEventSchema,
   RelayClientStatusSchema,
@@ -496,6 +500,8 @@ export const WS_METHODS = {
   projectsCreateFromThread: "projects.createFromThread",
 
   shellOpenInEditor: "shell.openInEditor",
+  /** t3team: the multi-root editor workspace behind Open in (see `t3team-codeWorkspace`). */
+  t3teamSyncCodeWorkspace: "t3team.codeWorkspace.sync",
 
   filesystemBrowse: "filesystem.browse",
   filesystemGetMetadata: "filesystem.getMetadata",
@@ -1555,6 +1561,12 @@ const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
 });
 
+const WsT3TeamSyncCodeWorkspaceRpc = Rpc.make(WS_METHODS.t3teamSyncCodeWorkspace, {
+  payload: T3TeamSyncCodeWorkspaceInput,
+  success: T3TeamSyncCodeWorkspaceResult,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsFilesystemGetMetadataRpc = Rpc.make(WS_METHODS.filesystemGetMetadata, {
   payload: FilesystemGetMetadataInput,
   success: FilesystemGetMetadataResult,
@@ -2439,6 +2451,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,
+  WsT3TeamSyncCodeWorkspaceRpc,
   WsFilesystemBrowseRpc,
   WsFilesystemGetMetadataRpc,
   WsAgentSessionsScanRpc,
