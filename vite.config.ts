@@ -44,7 +44,7 @@ const TEST_EXCLUDE = [
   "**/worktrees/**",
   "**/.worktrees/**",
   // A node:test file: t3team-case-collisions.yml runs it with `node --test`; vitest finds no suite in it.
-  "scripts/t3team-check-case-collisions.test.mjs",
+  "**/t3team-check-case-collisions.test.mjs",
 ];
 
 // Directories whose tests belong to a package's own test config. desktop also
