@@ -1,5 +1,5 @@
 import type { EnvironmentId } from "@t3tools/contracts";
-import { CheckIcon, CircleAlertIcon } from "lucide-react";
+import { CheckIcon, CircleAlertIcon, ClockIcon } from "lucide-react";
 
 import { SetupActions } from "./t3team-CloudSessionSetupActions";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
@@ -109,6 +109,8 @@ export function CloudSessionSetupCard({
           <div className="t3team-setup-orb" aria-hidden data-cloud-setup-status-icon="">
             {model.stage === "ready" ? (
               <CheckIcon className="size-5 stroke-2" />
+            ) : model.keptWaiting ? (
+              <ClockIcon className="size-5" data-cloud-setup-calm="" />
             ) : (
               <CircleAlertIcon className="size-5" />
             )}

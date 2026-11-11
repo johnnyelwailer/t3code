@@ -133,6 +133,11 @@ describe("CloudSessionSetupCard project wait", () => {
     );
     expect(note.textContent).not.toContain("=");
     expect(note.textContent).not.toContain("Not yet true");
+    // The line under the title must not promise "now" while the note says it is still connecting.
+    expect(screen.container.textContent).not.toContain("will send now");
+    expect(screen.container.textContent).toContain(
+      "Your message sends as soon as the machine is ready.",
+    );
     expect(screen.container.querySelector("[data-cloud-project-wait-diagnostic]")).toBeNull();
     await page.getByRole("button", { name: "Details" }).click();
     await expect
@@ -178,6 +183,8 @@ describe("CloudSessionSetupCard project wait", () => {
     );
     const card = screen.container.querySelector("[data-cloud-setup-card]")!;
     expect(card.querySelector("h3")?.textContent).toBe("Still setting up");
+    // Not alarming: a kept message that only ran out of waiting gets a calm icon, not the alert.
+    expect(card.querySelector("[data-cloud-setup-calm]")).not.toBeNull();
     expect(card.textContent).toContain("Your message is saved.");
     expect(card.textContent).not.toContain("did not appear");
     const primary = card.querySelectorAll("[data-cloud-setup-action='primary']");

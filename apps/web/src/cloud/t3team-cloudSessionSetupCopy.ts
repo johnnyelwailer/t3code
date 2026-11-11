@@ -28,9 +28,12 @@ export function cloudSetupAnnouncement(model: CloudSetupModel): string {
 export function cloudSetupReadyNote(model: CloudSetupModel): string {
   if (model.delivery === "sending") return "Your message is sending.";
   if (model.delivery === "queued") {
-    return model.session?.phase === "ready"
+    if (model.session?.phase !== "ready")
+      return "Your message will send when the session is ready.";
+    // The machine is up but still connecting: "now" would contradict the wait note below.
+    return model.projectWait === null
       ? "Your message will send now."
-      : "Your message will send when the session is ready.";
+      : "Your message sends as soon as the machine is ready.";
   }
   return model.machineConnected
     ? "Everything is in place. Send your first message to start."

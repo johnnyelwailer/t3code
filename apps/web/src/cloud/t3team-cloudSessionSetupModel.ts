@@ -59,6 +59,8 @@ export interface CloudSetupModel {
   readonly failureReason: string | null;
   readonly detailsUrl: string | null;
   readonly title: string;
+  /** A kept message that only ran out of waiting: shown calmly, not as a broken setup. */
+  readonly keptWaiting: boolean;
 }
 
 export const CLOUD_SETUP_NOT_SEEN_NOTE =
@@ -127,6 +129,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
       : stage === "ready"
         ? "Your cloud session is ready"
         : "Setting up your cloud session",
+    keptWaiting: failed && keptWaiting,
   };
 }
 
