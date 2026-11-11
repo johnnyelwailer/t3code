@@ -15,7 +15,7 @@ import {
 } from "../t3team-environmentReconnectBanner";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { environmentCatalog } from "../../connection/catalog";
-import { ConnectionDiagnosisHeadline } from "../settings/ConnectionDiagnosisDetails";
+import { T3TeamConnectionDiagnosisHeadline } from "~/t3team/t3team-ConnectionDiagnosisHeadline";
 import { isDesktopLocalConnectionTarget } from "../../connection/desktopLocal";
 import {
   useEnvironmentDisconnectDelay,
@@ -210,7 +210,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
         title: unavailableCopy.title,
         description:
           activeEnvironment && !unavailableCopy.quiet ? (
-            <ConnectionDiagnosisHeadline environment={activeEnvironment} />
+            <T3TeamConnectionDiagnosisHeadline environment={activeEnvironment} />
           ) : undefined,
         actions: (
           <>

@@ -13,8 +13,6 @@ import { ChevronRightIcon } from "lucide-react";
 
 import { APP_VERSION } from "~/branding";
 import { environmentCatalog } from "~/connection/catalog";
-import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
-import { brandUpstreamProductName } from "~/t3team/t3team-brandUpstreamProductName";
 import { type EnvironmentPresentation, useRelayEnvironmentDiscovery } from "~/state/environments";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDeadlinePassed } from "../../hooks/useDeadline";
@@ -29,7 +27,6 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
  * the headline do not re-render on every attempt.
  */
 export function useConnectionDiagnosis(environment: EnvironmentPresentation) {
-  const productName = useT3TeamAppBaseName();
   const environmentId = environment.environmentId;
   const state = AsyncResult.getOrElse(
     useAtomValue(environmentCatalog.stateAtom(environmentId)),
@@ -51,15 +48,7 @@ export function useConnectionDiagnosis(environment: EnvironmentPresentation) {
           serverVersion: environment.serverConfig?.environment.serverVersion,
         })
       : null;
-  const branded =
-    diagnosis === null
-      ? null
-      : {
-          ...diagnosis,
-          headline: brandUpstreamProductName(diagnosis.headline, productName),
-          steps: diagnosis.steps.map((step) => brandUpstreamProductName(step, productName)),
-        };
-  return { diagnosis: branded, state, relayOnly };
+  return { diagnosis, state, relayOnly };
 }
 
 /** The failure headline alone, for banners outside Settings. */
