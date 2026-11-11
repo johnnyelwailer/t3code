@@ -25,6 +25,7 @@ const CLOUD_QUEUED_SEND_STEP_IDS = [
   "server",
   "connect",
   "project",
+  "provider",
   "sent",
 ] as const;
 export type CloudQueuedSendStepId = (typeof CLOUD_QUEUED_SEND_STEP_IDS)[number];
@@ -35,6 +36,7 @@ const STEP_LABELS: Record<CloudQueuedSendStepId, string> = {
   server: "Server start",
   connect: "Connect",
   project: "Project ready",
+  provider: "Provider",
   sent: "Sent",
 };
 
@@ -43,6 +45,11 @@ export interface CloudQueuedSendStepFacts {
   readonly session: CloudSession | null;
   readonly machineConnected: boolean;
   readonly projectReady: boolean;
+  /**
+   * After project checkout: the composer-selected provider is installed and signed in on the
+   * machine. Defaults to true when the caller has not started the provider gate yet.
+   */
+  readonly providerReady?: boolean;
   /** What the project is waiting on while it is not ready; names the "Project ready" step. */
   readonly projectWait?: CloudProjectWait | null | undefined;
   /** A flusher in this window is dispatching the message right now. */
@@ -96,6 +103,9 @@ export function resolveCloudQueuedSendStepId(facts: CloudSessionStepFacts): Clou
   if (session.phase === "starting") return "server";
   if (!facts.machineConnected) return "connect";
   if (!facts.projectReady) return "project";
+  // Machine may provision early; project checkout waits for the queued first message; only then
+  // install/sign-in the composer-selected provider before dispatch.
+  if (facts.providerReady === false) return "provider";
   return "sent";
 }
 
@@ -116,6 +126,8 @@ function stepTitle(
     case "project":
       if (projectWait === null) return "Syncing project on cloud session…";
       return projectWait.blocking ? projectWait.detail : `${projectWait.detail}…`;
+    case "provider":
+      return "Setting up the selected provider…";
     case "sent":
       return "Sending to cloud session…";
   }

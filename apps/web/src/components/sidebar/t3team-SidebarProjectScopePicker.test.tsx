@@ -34,6 +34,7 @@ const widthFor = (capacity: number) => 28 + 124 + 20 * capacity;
 let root: Root | null = null;
 let container: HTMLDivElement;
 let rowWidth = 0;
+const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,6 +49,13 @@ beforeEach(() => {
     disconnect() {}
   }
   vi.stubGlobal("ResizeObserver", ResizeObserver);
+  // useSidebarPillRowWidth reads clientWidth, not the ResizeObserver entry; jsdom reports 0.
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get() {
+      return rowWidth;
+    },
+  });
   // jsdom has no Web Animations; Base UI's popup and scroll area ask for running animations.
   Element.prototype.getAnimations ??= () => [];
   container = document.createElement("div");
@@ -59,6 +67,11 @@ afterEach(() => {
   root = null;
   container.remove();
   vi.unstubAllGlobals();
+  if (clientWidthDescriptor) {
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", clientWidthDescriptor);
+  } else {
+    delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+  }
 });
 
 async function renderRow(

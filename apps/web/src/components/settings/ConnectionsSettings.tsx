@@ -1676,6 +1676,9 @@ function ConnectionsSettingsContent({
               onCreate={cloudSessions.onCreate}
               onSessionAction={cloudSessions.onSessionAction}
               onSessionSecondaryAction={cloudSessions.onSessionSecondaryAction}
+              onSessionDeleteAction={
+                cloudSessions.stopDeleteEnabled ? cloudSessions.onSessionDeleteAction : undefined
+              }
               pendingSessionId={cloudSessions.pendingSessionId}
               pendingKind={cloudSessions.pendingKind}
               pendingLabel={cloudSessions.pendingLabel}

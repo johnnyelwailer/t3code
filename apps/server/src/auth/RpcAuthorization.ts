@@ -158,6 +158,10 @@ export const RPC_REQUIRED_SCOPES = {
   // so they sit behind the write scope alongside relay-client installation.
   [WS_METHODS.cloudSessionCreate]: AuthRelayWriteScope,
   [WS_METHODS.cloudSessionCancel]: AuthRelayWriteScope,
+  // Deleting a machine spends real compute (a wip push) and removes persistent state: the write
+  // scope; its info read answers the confirmation dialog, like the session list does.
+  [WS_METHODS.cloudSessionDelete]: AuthRelayWriteScope,
+  [WS_METHODS.cloudSessionDeleteInfo]: AuthRelayReadScope,
   // Reads committed files in the project's own checkouts, like the other project reads.
   [WS_METHODS.projectMachineDiscover]: AuthOrchestrationReadScope,
   [WS_METHODS.projectMachineSetSource]: AuthSettingsWriteScope,

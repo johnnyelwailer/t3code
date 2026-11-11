@@ -393,6 +393,7 @@
     "apps/web/src/components/ChatView.logic.test.ts",
     "apps/web/src/components/ChatView.logic.ts",
     "apps/web/src/components/ChatView.tsx",
+    "apps/web/src/components/chat/useComposerProviderModel.ts",
     "apps/web/src/components/chat/useComposerSend.ts",
     "apps/web/src/components/CommandPalette.composition.browser.test.tsx",
     "apps/web/src/components/CommandPalette.tsx",
@@ -814,6 +815,7 @@
     "scripts/test-cached.ts",
     "apps/web/src/components/settings/ProjectSettingsPanel.browser.test.tsx",
     "apps/server/src/orchestration-v2/SubagentProjection.test.ts",
+    "apps/server/src/peer/PeerForwarding.test.ts",
     "apps/server/src/peer/RemoteDelegation.test.ts",
     "apps/server/src/provider/agentContextBudget.json",
     "apps/web/src/components/chat/MessagesTimeline.browser.test.tsx",
@@ -843,7 +845,10 @@
     "packages/shared/src/mcpApp.test.ts",
     "packages/shared/src/mcpApp.ts",
     "packages/shared/src/toolOutput.test.ts",
-    "apps/web/src/components/settings/LabsSettingsPanel.tsx"
+    "apps/web/src/components/settings/LabsSettingsPanel.tsx",
+    "apps/web/scripts/verify-built-boot.ts",
+    "packages/contracts/src/providerPolicy.ts",
+    "packages/shared/src/projectSettings.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

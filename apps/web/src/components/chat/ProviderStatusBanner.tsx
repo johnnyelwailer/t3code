@@ -14,6 +14,7 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { RefreshIcon } from "../ui/refresh-icon";
 import { classifyT3TeamProviderStatusSeverity } from "~/t3team/chat/t3team-providerStatusSeverity";
+import { T3TeamAgentText } from "./t3team-AgentText";
 
 function getIncompatibleVersion(status: ServerProvider) {
   const compatibility = status.compatibilityAdvisory;
@@ -161,7 +162,10 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
         <AlertDescription>
           <div className="flex flex-col gap-2">
             <Tooltip>
-              <TooltipTrigger render={<div className="line-clamp-3" />}>{message}</TooltipTrigger>
+              {/* t3team: status messages carry `code`; render them as Markdown. */}
+              <TooltipTrigger render={<div className="line-clamp-3" />}>
+                <T3TeamAgentText text={message} />
+              </TooltipTrigger>
               <TooltipPopup side="top" className="whitespace-pre-wrap">
                 {message}
               </TooltipPopup>

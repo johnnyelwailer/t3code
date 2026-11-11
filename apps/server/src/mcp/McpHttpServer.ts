@@ -59,6 +59,13 @@ import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import * as OrchestratorHandlers from "./toolkits/orchestrator/handlers.ts";
 import { OrchestratorToolkit } from "./toolkits/orchestrator/tools.ts";
+import {
+  CloudSessionDeleteToolkit,
+  cloudSessionDeleteHandlers,
+} from "./toolkits/orchestrator/t3team-cloudSessionDelete.ts";
+import { layer as CloudSessionServiceLayer } from "../cloud/t3team-CloudSessionService.ts";
+import { layer as CloudSessionMachinesLayer } from "../cloud/t3team-CloudSessionMachine.ts";
+import { layer as ProjectMachineDiscoveryLayer } from "../project/t3team-ProjectMachineDiscovery.ts";
 import * as PreviewHandlers from "./toolkits/preview/handlers.ts";
 import {
   PreviewSnapshotTool,
@@ -81,7 +88,10 @@ import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolki
 import { T3TeamToolkitHandlersLive } from "./toolkits/t3team/handlers.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./toolkits/t3team/t3team-mcpToolAliases.ts";
 import { withToolNameAliases } from "./toolkits/t3team/t3team-mcpToolAliasProtocol.ts";
-import { withFeatureGatedToolList } from "./toolkits/t3team/t3team-mcpToolFeatureGate.ts";
+import {
+  isMcpToolEnabled,
+  withFeatureGatedToolList,
+} from "./toolkits/t3team/t3team-mcpToolFeatureGate.ts";
 import { advertiseToolDocs } from "./toolkits/t3team/t3team-toolDocs.ts";
 import { withThreadScopedToolList } from "./toolkits/t3team/t3team-mcpToolThreadList.ts";
 import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
@@ -1275,7 +1285,11 @@ export const layerMcpTransport = <RA, RE, RR>(registrations: Layer.Layer<RA, RE,
     registrations,
   }).pipe(Layer.provide(layerMcpAuthMiddleware));
 
-/** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
+/**
+ * Every tool the default MCP server advertises. AgentContextBudget.test.ts measures this set.
+ * `cloud_session_delete` is not in it: that tool joins `layer` only while
+ * CLOUD_SESSION_STOP_DELETE is on, so the measured budget stays the flag-off surface.
+ */
 export const layerTools = Layer.mergeAll(
   layerPreviewToolkit,
   layerOrchestratorToolkit,
@@ -1291,4 +1305,21 @@ export const layerTools = Layer.mergeAll(
   layerHtmlToolkit,
 );
 
-export const layer = layerMcpTransport(layerTools);
+const layerCloudSessionDeleteToolkit = toolkitRegistration(
+  CloudSessionDeleteToolkit,
+  cloudSessionDeleteHandlers,
+).pipe(
+  Layer.provide(CloudSessionServiceLayer),
+  Layer.provide(CloudSessionMachinesLayer.pipe(Layer.provide(ProjectMachineDiscoveryLayer))),
+);
+
+/** The wire server. The delete tool is absent unless its flag is already on. */
+export const layer = Layer.unwrap(
+  Effect.sync(() =>
+    layerMcpTransport(
+      isMcpToolEnabled("cloud_session_delete")
+        ? Layer.mergeAll(layerTools, layerCloudSessionDeleteToolkit)
+        : layerTools,
+    ),
+  ),
+);

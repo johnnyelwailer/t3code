@@ -63,6 +63,7 @@ import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionCompo
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
+import { CloudSessionSetupFooter } from "~/cloud/t3team-cloudSessionSetupFooter";
 import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
 import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
@@ -1810,6 +1811,9 @@ export default function ChatView(props: ChatViewProps) {
     !shouldSuppressT3TeamProviderStatus({
       status: activeProviderStatus,
       isTurnInProgress: isWorking,
+      onRemoteEnvironment:
+        providerEnvironmentId !== undefined &&
+        providerEnvironmentId !== primaryEnvironment?.environmentId,
       ...(activeRuntime?.providerInstanceId
         ? { activeTurnInstanceId: activeRuntime.providerInstanceId }
         : {}),
@@ -1961,7 +1965,11 @@ export default function ChatView(props: ChatViewProps) {
     projectRef: activeProjectRef,
     gate: cloudSessionComposerGate,
   });
-  const cloudSetupElement = cloudSetupCard ? <CloudSessionSetupHost {...cloudSetupCard} /> : null;
+  const cloudSetupElement = cloudSetupCard ? (
+    <CloudSessionSetupFooter>
+      <CloudSessionSetupHost {...cloudSetupCard} />
+    </CloudSessionSetupFooter>
+  ) : null;
   useCloudQueuedSendOptimisticMessage({ draftId: draftId ?? null, setOptimisticUserMessages });
   const canInterruptRunningThread =
     (canOperateThread &&
@@ -2798,8 +2806,12 @@ export default function ChatView(props: ChatViewProps) {
     const extensionStatusItems = extensionStatusBanner === null ? [] : [extensionStatusBanner];
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
+    // The setup card already owns this send's progress; a second strip above the composer
+    // repeats "Sending to cloud session…" while the card is on screen.
     const cloudBindItems =
-      cloudSessionComposerGate.bannerItem === null ? [] : [cloudSessionComposerGate.bannerItem];
+      cloudSetupCard !== null || cloudSessionComposerGate.bannerItem === null
+        ? []
+        : [cloudSessionComposerGate.bannerItem];
     // An approval's feedback goes to that approval; the armed session waits for the next message.
     const freshSessionItems =
       freshSessionAvailable && freshSessionArmed && activePendingApproval === null

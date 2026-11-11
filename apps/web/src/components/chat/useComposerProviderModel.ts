@@ -48,6 +48,7 @@ export function useComposerProviderModel(
     candidateInstanceIds,
     lockedProvider,
     lockedInstanceId,
+    preferReadyProvider,
   } = input;
   const draftModelState = useComposerDraftModelState(threadRef);
   const providerInstanceEntries: ReadonlyArray<ProviderInstanceEntry> = providerInstanceEntriesFor(
@@ -60,6 +61,8 @@ export function useComposerProviderModel(
     candidateInstanceIds,
     lockedProvider,
     lockedInstanceId,
+    // exactOptionalPropertyTypes rejects an explicit undefined on this optional flag.
+    ...(preferReadyProvider === undefined ? {} : { preferReadyProvider }),
   });
   const selectedInstanceId =
     selection.selectedProviderEntry?.instanceId ?? NO_PROVIDER_MODEL_SELECTION.instanceId;

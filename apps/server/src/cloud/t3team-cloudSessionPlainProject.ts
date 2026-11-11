@@ -13,6 +13,7 @@
  *
  * @module t3team-cloudSessionPlainProject
  */
+import { sessionRepositoryInput } from "./t3team-CloudSessionDelete.ts";
 import type { CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
 
 export type CloudSessionPlainProject =
@@ -29,6 +30,7 @@ export function plainProjectDispatchInputs(
     ? {
         project_repository: project.checkout.repository.url,
         project_commit: project.checkout.commit,
+        session_repository: sessionRepositoryInput(project.checkout.repository),
       }
     : { project_name: project.folder };
 }

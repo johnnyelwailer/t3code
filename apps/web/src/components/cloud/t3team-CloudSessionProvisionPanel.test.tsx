@@ -234,6 +234,56 @@ describe("CloudSessionProvisionPanel", () => {
     expect(onSessionForget).toHaveBeenCalledWith(ready);
   });
 
+  it("offers Delete beside Stop, and shows its progress on the row", () => {
+    const onSessionDeleteAction = vi.fn();
+    const ready = session({ sessionId: "a-ready", phase: "ready", environmentId: "env-cloud" });
+    const node = render(
+      <CloudSessionProvisionPanel
+        sessions={[
+          ready,
+          session({ sessionId: "b-ready", phase: "ready", environmentId: "env-cloud-2" }),
+        ]}
+        onCreate={() => {}}
+        onSessionAction={() => {}}
+        onSessionDeleteAction={onSessionDeleteAction}
+        pendingSessionId="b-ready"
+        pendingKind="delete"
+        pendingLabel="Deleting…"
+      />,
+    );
+    const deletes = Array.from(node.querySelectorAll("button")).filter(
+      (button) => button.textContent === "Delete",
+    );
+    // Row b is pending, so its button reads "Deleting…"; only row a offers Delete.
+    expect(deletes).toHaveLength(1);
+    act(() => {
+      deletes[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onSessionDeleteAction).toHaveBeenCalledWith(ready);
+    // The pending session's row shows its progress; the other row keeps its verb.
+    expect(node.textContent).toContain("Deleting…");
+    expect(
+      Array.from(node.querySelectorAll("button")).filter(
+        (button) => button.textContent === "Delete",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("offers no Delete when the stop/delete feature is off", () => {
+    const node = render(
+      <CloudSessionProvisionPanel
+        sessions={[session({ sessionId: "a-ready", phase: "ready" })]}
+        onCreate={() => {}}
+        onSessionAction={() => {}}
+      />,
+    );
+    expect(
+      Array.from(node.querySelectorAll("button")).filter((button) =>
+        button.textContent?.includes("Delete"),
+      ),
+    ).toHaveLength(0);
+  });
+
   it("offers no Forget when the ready machine is not saved on this device", () => {
     const node = render(
       <CloudSessionProvisionPanel

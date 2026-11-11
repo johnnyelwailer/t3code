@@ -34,6 +34,19 @@ describe("resolveSendEnvMode", () => {
 });
 
 describe("resolveProjectSettings", () => {
+  it("defaults a new environment to Auto and keeps an explicit override", () => {
+    expect(DEFAULT_SERVER_SETTINGS.defaultRuntimeMode).toBe("auto");
+    expect(
+      resolveProjectSettings(DEFAULT_SERVER_SETTINGS, projectId).settings.defaultRuntimeMode,
+    ).toBe("auto");
+    const overridden = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      defaultRuntimeMode: "full-access",
+    });
+    expect(resolveProjectSettings(overridden, projectId).settings.defaultRuntimeMode).toBe(
+      "full-access",
+    );
+  });
+
   it("ignores an override left undefined by a forward-compatible decode", () => {
     const resolved = resolveProjectSettings(
       {

@@ -1031,7 +1031,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
             {connectPanelTarget ? (
               <ModelPickerProviderConnectPanel
-                {...(props.environmentId ? { environmentId: props.environmentId } : {})}
+                environmentId={props.environmentId}
                 entry={connectPanelTarget.entry}
                 tool={connectPanelTarget.tool}
                 readiness={connectPanelTarget.readiness}

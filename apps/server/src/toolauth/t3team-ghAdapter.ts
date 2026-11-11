@@ -41,7 +41,7 @@ export function ghAdapter(hostname: string): ToolAuthAdapter {
     label: "GitHub",
     hostname,
     forHost: ghAdapter,
-    description: `Log in to your ${hostname} account so git work in this sandbox uses your own identity.`,
+    description: `Log in to your ${hostname} account so git work on this machine uses your own identity.`,
     // VERIFIED against gh 2.96.0 on nexplore.ghe.com (captured live in an
     // 80x30 pty): `--hostname` + `--web` skip the host and auth-method
     // prompts, `--git-protocol` skips the per-host protocol question —

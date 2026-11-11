@@ -30,6 +30,12 @@ export function RunOnCloudRow(props: {
   readonly onDismiss: ((session: CloudSession) => void) | undefined;
   /** Why this machine cannot be chosen here; null when it can. */
   readonly blockedReason?: string | null | undefined;
+  /** t3team: stop the machine (reversible); the row shows it while in flight. */
+  readonly onStop?: ((session: CloudSession) => void) | undefined;
+  /** t3team: delete the machine's persistent state; the confirm happens in the handler. */
+  readonly onDelete?: ((session: CloudSession) => void) | undefined;
+  readonly stopPending?: boolean;
+  readonly deletePending?: boolean;
 }) {
   const { row, selected } = props;
   const { session } = row;
@@ -46,13 +52,36 @@ export function RunOnCloudRow(props: {
     );
   }
   if (row.environment !== null && props.selectable) {
+    // The machine this thread runs on: pickable like any machine, with its verbs beside it.
+    const hasActions = props.onStop !== undefined || props.onDelete !== undefined;
+    if (!hasActions) {
+      return (
+        <SelectItem value={row.environment.environmentId}>
+          <span className="flex min-w-0 items-start gap-1.5">
+            <EnvironmentMachineIcon kind="cloud" className="mt-1 size-3 shrink-0" />
+            <RowText title={row.name} detail={rowDetail(session)} />
+          </span>
+        </SelectItem>
+      );
+    }
     return (
-      <SelectItem value={row.environment.environmentId}>
-        <span className="flex min-w-0 items-start gap-1.5">
+      <div className={cn(ROW_CLASS, "bg-muted/60")}>
+        <button
+          type="button"
+          onClick={() => props.onSelect(session)}
+          className="-mx-2 flex min-w-0 flex-1 cursor-pointer items-start gap-1.5 rounded-sm px-2 py-1.5 hover:bg-muted/40"
+        >
           <EnvironmentMachineIcon kind="cloud" className="mt-1 size-3 shrink-0" />
-          <RowText title={row.name} detail={rowDetail(session)} />
-        </span>
-      </SelectItem>
+          <RowText title={row.name} detail={`Selected · ${rowDetail(session)}`} />
+        </button>
+        <RowMachineActions
+          session={session}
+          onStop={props.onStop}
+          onDelete={props.onDelete}
+          stopPending={props.stopPending === true}
+          deletePending={props.deletePending === true}
+        />
+      </div>
     );
   }
   // Ready or still coming up: selectable preference (connect waits for first send).
@@ -64,22 +93,32 @@ export function RunOnCloudRow(props: {
       : row.unavailable
         ? `${rowDetail(session)} · project syncs on send`
         : rowDetail(session);
+    const hasActions = props.onStop !== undefined || props.onDelete !== undefined;
     return (
-      <button
-        type="button"
-        onClick={() => props.onSelect(session)}
-        className={cn(
-          ROW_CLASS,
-          "cursor-pointer text-foreground hover:bg-muted",
-          selected && "bg-muted/60",
-        )}
-      >
-        <EnvironmentMachineIcon
-          kind="cloud"
-          className={cn("mt-1 size-3 shrink-0", working && "animate-pulse")}
-        />
-        <RowText title={row.name} detail={detail} />
-      </button>
+      <div className={cn(ROW_CLASS, selected && "bg-muted/60")}>
+        <button
+          type="button"
+          onClick={() => props.onSelect(session)}
+          className={cn(
+            "-mx-2 flex min-w-0 flex-1 cursor-pointer items-start gap-1.5 rounded-sm px-2 py-1.5 hover:bg-muted/40",
+          )}
+        >
+          <EnvironmentMachineIcon
+            kind="cloud"
+            className={cn("mt-1 size-3 shrink-0", working && "animate-pulse")}
+          />
+          <RowText title={row.name} detail={detail} />
+        </button>
+        {hasActions ? (
+          <RowMachineActions
+            session={session}
+            onStop={props.onStop}
+            onDelete={props.onDelete}
+            stopPending={props.stopPending === true}
+            deletePending={props.deletePending === true}
+          />
+        ) : null}
+      </div>
     );
   }
   return (
@@ -96,7 +135,73 @@ export function RunOnCloudRow(props: {
           <XIcon className="size-3" aria-hidden="true" />
         </button>
       ) : null}
+      {/* An ended machine still owns its workspace: it can be deleted, just not stopped. */}
+      {session.phase === "failed" ||
+      session.phase === "stopped" ||
+      session.phase === "cancelled" ? (
+        props.onDelete !== undefined ? (
+          <RowMachineActions
+            session={session}
+            onStop={undefined}
+            onDelete={props.onDelete}
+            stopPending={false}
+            deletePending={props.deletePending === true}
+          />
+        ) : null
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * The machine verbs beside a Run-on row: clearly labelled Stop and Delete. Stop is
+ * reversible (the workspace is kept); Delete asks once in its handler. Both stop the row's
+ * select click, so a delete can never ride along as an optimistic target.
+ */
+function RowMachineActions({
+  session,
+  onStop,
+  onDelete,
+  stopPending,
+  deletePending,
+}: {
+  readonly session: CloudSession;
+  readonly onStop?: ((session: CloudSession) => void) | undefined;
+  readonly onDelete?: ((session: CloudSession) => void) | undefined;
+  readonly stopPending: boolean;
+  readonly deletePending: boolean;
+}) {
+  const className =
+    "shrink-0 cursor-pointer rounded-sm border bg-background px-1.5 py-0.5 text-xs hover:bg-muted";
+  return (
+    <span className="ml-1 flex shrink-0 items-center gap-1">
+      {onStop !== undefined ? (
+        <button
+          type="button"
+          className={className}
+          disabled={stopPending || deletePending}
+          onClick={(event) => {
+            event.stopPropagation();
+            onStop(session);
+          }}
+        >
+          {stopPending ? "Stopping…" : "Stop"}
+        </button>
+      ) : null}
+      {onDelete !== undefined ? (
+        <button
+          type="button"
+          className={cn(className, "text-destructive hover:text-destructive")}
+          disabled={stopPending || deletePending}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(session);
+          }}
+        >
+          {deletePending ? "Deleting…" : "Delete"}
+        </button>
+      ) : null}
+    </span>
   );
 }
 

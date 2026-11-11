@@ -146,6 +146,7 @@ import {
   useEnvironmentMachines,
   usePrimaryEnvironmentId,
 } from "../state/environments";
+import { useCloudAdoptedProjects } from "../cloud/t3team-useCloudAdoptedProjects";
 import {
   readThreadShell,
   useAllEnvironmentProjectSnapshotsReady,
@@ -832,7 +833,8 @@ function isOptimisticDropReleased(input: {
 
 // Build maps in a hook so the compiler can prove they are frozen and cache them.
 function useSidebarLookups() {
-  const projects = useProjects();
+  // Adopted checkouts keep the selected project's identity (title, icon, favicon) in thread rows.
+  const projects = useCloudAdoptedProjects(useProjects());
   const environments = useEnvironmentIdentities();
   const serverConfigs = useServerConfigs();
   const providerEntriesByEnvironment = useAtomValue(sidebarProviderEntriesAtom);

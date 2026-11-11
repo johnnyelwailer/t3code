@@ -3016,6 +3016,8 @@ export const layerWsRpc = (
         [WS_METHODS.cloudSessionList]: (_input) => cloudSessions.list,
         [WS_METHODS.cloudSessionCreate]: (input) => cloudSessions.create(input),
         [WS_METHODS.cloudSessionCancel]: (input) => cloudSessions.cancel(input),
+        [WS_METHODS.cloudSessionDelete]: (input) => cloudSessions.delete(input),
+        [WS_METHODS.cloudSessionDeleteInfo]: (input) => cloudSessions.deleteInfo(input),
         [WS_METHODS.projectMachineDiscover]: (input) => projectMachines.discover(input.projectId),
         [WS_METHODS.projectMachineSetSource]: (input) =>
           projectMachines.setSource(input.projectId, input.source),
