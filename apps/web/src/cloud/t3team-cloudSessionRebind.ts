@@ -1,10 +1,7 @@
 /**
- * What picking a session under "Run on" has to rebind beside the menu label.
- *
- * An environment's connection stays registered to whatever session it last served, so a machine
- * whose previous session ended is parked as "session ended" even once a new session serves the
- * same environment id. The draft, meanwhile, still names the project's old machine — which is
- * what provider status, the provider install target and the send all read.
+ * What picking a session under "Run on" rebinds beside the menu label: a connection still
+ * registered to an ended session on the same environment id, and an unsent draft that still
+ * names the project's old machine (provider status, install target and send read it).
  */
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {

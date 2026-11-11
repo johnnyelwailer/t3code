@@ -138,10 +138,6 @@ describe("resuming a send whose session ended", () => {
       "msg-1",
       "Cloud session ended before it could connect.",
       true,
-      {
-        kind: "session_ended",
-        reason: null,
-      },
     );
     resume();
     const record = getDraftCloudQueuedSend(draftId)!;
