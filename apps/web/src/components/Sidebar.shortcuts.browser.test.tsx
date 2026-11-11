@@ -14,6 +14,7 @@ import { getRouter } from "~/router";
 import {
   ENVIRONMENT_ID,
   installFakeEnvironment,
+  PROJECT_ID,
   threadWithHistory,
   type FakeDriver,
 } from "../../test/fakeEnvironment";
@@ -63,10 +64,15 @@ it("leaves thread shortcuts and their hints to the preview when their rules excl
     router: false,
   });
   await expect.element(page.getByText(`Thread ${second.id}`).first()).toBeVisible();
+  // t3team: the Team shell owns primary-environment threads; the cold-load redirect fires before the shells sync.
+  const threadPath = (id: string) => `/t3team/projects/${PROJECT_ID}/threads/${id}`;
+  await act(() => router.navigate({ to: threadPath(first.id) }));
 
   const previewChrome = document.createElement("div");
   previewChrome.dataset.previewPanelMode = "browser";
   previewChrome.innerHTML = '<button type="button">Reload</button>';
+  // t3team: the fork's full-height sidebar footer covers the end of the page.
+  previewChrome.style.cssText = "position:fixed;top:0;right:0;z-index:2147483647";
   document.body.append(previewChrome);
   using _chrome = { [Symbol.dispose]: () => previewChrome.remove() };
 
@@ -81,7 +87,7 @@ it("leaves thread shortcuts and their hints to the preview when their rules excl
     await vi.waitFor(assertJumpHints);
     await userEvent.keyboard("{/Control}");
   };
-  const firstPath = `/${ENVIRONMENT_ID}/${first.id}`;
+  const firstPath = threadPath(first.id);
 
   await userEvent.click(page.getByRole("button", { name: "Reload" }));
   await press();
@@ -96,8 +102,6 @@ it("leaves thread shortcuts and their hints to the preview when their rules excl
 
   await act(() => useRightPanelStore.getState().close(firstRef));
   await press();
-  await vi.waitFor(() =>
-    expect(router.history.location.pathname).toBe(`/${ENVIRONMENT_ID}/${second.id}`),
-  );
+  await vi.waitFor(() => expect(router.history.location.pathname).toBe(threadPath(second.id)));
   await whileHoldingControl(() => expect(jumpHint()).not.toBeNull());
 });

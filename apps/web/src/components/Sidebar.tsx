@@ -3102,7 +3102,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : false,
   );
   const routePreviewOpen = useRightPanelStore(
-    (state) => selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview",
+    (state) => selectActiveRightPanel(state.byThreadKey, effectiveRouteThreadRef) === "preview",
   );
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to window keydown for thread navigation shortcuts using the current thread list
   useEffect(() => {

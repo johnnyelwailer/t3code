@@ -37,9 +37,10 @@ function project(id: string): Project {
 }
 
 describe("sidebar header new thread", () => {
+  // t3team: the fork's New thread always starts in the current project; no picker detour.
   it.each([
-    { mode: "normal", count: 2, shift: false, picker: true },
-    { mode: "boring", count: 2, shift: false, picker: true },
+    { mode: "normal", count: 2, shift: false, picker: false },
+    { mode: "boring", count: 2, shift: false, picker: false },
     { mode: "boring", count: 2, shift: true, picker: false },
     { mode: "boring", count: 1, shift: false, picker: false },
   ] as const)("$mode sidebar, $count projects, shift=$shift: picker=$picker", async (scenario) => {
