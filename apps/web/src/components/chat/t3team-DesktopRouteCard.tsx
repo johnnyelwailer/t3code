@@ -3,6 +3,7 @@ import type { DesktopRouteCard } from "@t3tools/contracts";
 import { Button } from "../ui/button";
 import { T3TeamPendingQuestionMarkdown } from "./t3team-pendingQuestionMarkdown";
 import { T3TeamDesktopRouteActions } from "./t3team-DesktopRouteActions";
+import { DESKTOP_ROUTE_EXPIRED_MESSAGE } from "./t3team-desktopRouteRequestExpired";
 
 /**
  * "Let this cloud session reach HOST through your computer?": session, host, the agent's reason as
@@ -14,9 +15,11 @@ export function T3TeamDesktopRouteCard(props: {
   /** The cloud session's name, or null when the thread runs on this computer. */
   readonly sessionLabel: string | null;
   readonly disabled?: boolean;
+  /** The cloud (or agent) session has ended: no Approve or Deny, and a plain-words reason. */
+  readonly expired?: boolean;
   readonly onAnswer: (label: string) => void;
 }) {
-  const { card, sessionLabel, disabled = false, onAnswer } = props;
+  const { card, sessionLabel, disabled = false, expired = false, onAnswer } = props;
   const local = sessionLabel === null;
   const { decline } = card.actions;
   return (
@@ -62,7 +65,11 @@ export function T3TeamDesktopRouteCard(props: {
           )}
         </dd>
       </dl>
-      {local ? (
+      {expired ? (
+        <p className="text-sm" data-desktop-route-expired>
+          {DESKTOP_ROUTE_EXPIRED_MESSAGE}
+        </p>
+      ) : local ? (
         decline === null ? null : (
           <div>
             <Button

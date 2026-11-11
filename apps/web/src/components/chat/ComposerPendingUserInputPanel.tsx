@@ -56,7 +56,8 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
         card={routeCard}
         questionId={onlyQuestion.id}
         threadRef={threadRef}
-        disabled={disabled || activePrompt.responseCapability === "not_resumable"}
+        disabled={disabled}
+        agentSessionEnded={activePrompt.responseCapability === "not_resumable"}
         responding={respondingRequestIds.includes(activePrompt.requestId)}
         onToggleOption={onToggleOption}
         onAdvance={onAdvance}

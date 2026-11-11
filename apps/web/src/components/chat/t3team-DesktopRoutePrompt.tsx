@@ -1,8 +1,10 @@
 import type { DesktopRouteCard, ScopedThreadRef } from "@t3tools/contracts";
 import { useEffect, useRef, useState } from "react";
 
+import { useEnvironmentLiveState } from "~/cloud/t3team-useEnvironmentLiveState";
 import { usePrimaryEnvironmentId, useCloudSessions } from "../../state/t3team-cloudSessions";
 import { T3TeamDesktopRouteCard } from "./t3team-DesktopRouteCard";
+import { desktopRouteRequestExpired } from "./t3team-desktopRouteRequestExpired";
 import { desktopRouteSessionLabel } from "./t3team-desktopRouteSessionLabel";
 
 /** Matches the pending panel's own pause between picking an answer and submitting it. */
@@ -20,11 +22,23 @@ export function T3TeamDesktopRoutePrompt(props: {
   readonly threadRef: ScopedThreadRef;
   readonly disabled: boolean;
   readonly responding: boolean;
+  /** The agent session that asked is no longer resumable. */
+  readonly agentSessionEnded?: boolean;
   readonly onToggleOption: (questionId: string, optionValue: string) => void;
   readonly onAdvance: () => void;
 }) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const { sessions } = useCloudSessions(props.threadRef.environmentId !== primaryEnvironmentId);
+  const isLocal = props.threadRef.environmentId === primaryEnvironmentId;
+  const { sessions } = useCloudSessions(!isLocal);
+  const liveState = useEnvironmentLiveState(isLocal ? null : props.threadRef.environmentId);
+  const expired =
+    props.agentSessionEnded === true ||
+    desktopRouteRequestExpired({
+      isLocal,
+      liveState,
+      environmentId: props.threadRef.environmentId,
+      sessions,
+    });
   const [answered, setAnswered] = useState(false);
   const [sawResponding, setSawResponding] = useState(false);
   const timer = useRef<number | null>(null);
@@ -48,7 +62,8 @@ export function T3TeamDesktopRoutePrompt(props: {
         primaryEnvironmentId,
         sessions,
       )}
-      disabled={props.disabled || props.responding || answered}
+      expired={expired}
+      disabled={props.disabled || props.responding || answered || liveState === "offline"}
       onAnswer={(label) => {
         setAnswered(true);
         props.onToggleOption(props.questionId, label);
