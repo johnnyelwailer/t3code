@@ -43,6 +43,8 @@ const TEST_EXCLUDE = [
   // own, and the run reports hundreds of failed FILES beside a green test count.
   "**/worktrees/**",
   "**/.worktrees/**",
+  // A node:test file: t3team-case-collisions.yml runs it with `node --test`; vitest finds no suite in it.
+  "scripts/t3team-check-case-collisions.test.mjs",
 ];
 
 // Directories whose tests belong to a package's own test config. desktop also
