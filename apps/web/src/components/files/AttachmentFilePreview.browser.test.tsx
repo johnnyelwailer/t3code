@@ -2517,6 +2517,8 @@ function pdfScroll(screen: Screen) {
   return { region, canvas, offset, scrollTo };
 }
 
+// Five reloads, each re-rendering the PDF pages: about 9s on an idle machine and
+// over the 15s default when the whole browser suite shares the CI runner.
 it("keeps workspace PDF scroll and zoom after reloads", async () => {
   using fixture = await workspacePdfPreview();
   const { preview, urls } = fixture;
@@ -2576,7 +2578,7 @@ it("keeps workspace PDF scroll and zoom after reloads", async () => {
     expect(region().scrollTop).toBe(0);
     expect(region().scrollLeft).toBe(0);
   });
-});
+}, 45_000);
 
 it("clamps workspace PDF scroll when pages shrink or disappear", async () => {
   using fixture = await workspacePdfPreview();
