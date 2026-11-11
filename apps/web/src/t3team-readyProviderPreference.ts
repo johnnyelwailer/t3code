@@ -7,8 +7,11 @@
  * has to switch by hand. That is right for a machine whose owner installs Codex, and wrong on a
  * cloud session VM where the Nexplore AI provider is the only one that can run.
  *
- * Only a provider that reports `error` loses its place, and only to a provider that is ready: a
- * provider still being probed (`warning`) or a request with no ready alternative is untouched.
+ * Only a provider that reports `error` loses its place, and only to Nexplore AI: swapping in
+ * whatever happened to be first and ready replaced a deliberate choice with an arbitrary one, and
+ * the user only found out from the transcript. A provider still being probed (`warning`), or a
+ * request with no ready Nexplore AI instance to move to, is untouched. The swap is reported to the
+ * composer (`applyProviderSelectionFallbackRule`) and shown there; it is never silent.
  *
  * Claude is the exception (#656). A cloud session has one Claude store slot, and an empty slot
  * makes the provider report `error` / unauthenticated. Replacing that selection would start the
@@ -19,6 +22,7 @@
 import type { ProviderInstanceId } from "@t3tools/contracts";
 
 import { isProviderInstancePickerReady, type ProviderInstanceEntry } from "./providerInstances";
+import { isNexploreProviderEntry } from "./t3team-providerSelectionFallback";
 
 /** Built-in Claude instance ids. They share one cloud auth slot; this does not assign each its own. */
 const CLAUDE_INSTANCE_ID = /^claudeAgent(?:[1-9]\d?)?$/;
@@ -41,5 +45,7 @@ export function resolveReadyProviderOverride(input: {
   if (requested.driverKind === "claudeAgent" || isClaudeAuthSlotInstance(requested.instanceId)) {
     return undefined;
   }
-  return input.entries.find(isProviderInstancePickerReady);
+  return input.entries.find(
+    (entry) => isNexploreProviderEntry(entry) && isProviderInstancePickerReady(entry),
+  );
 }

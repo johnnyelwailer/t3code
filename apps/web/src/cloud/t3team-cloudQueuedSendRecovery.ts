@@ -77,7 +77,7 @@ export function startPlainSessionForQueuedSend(input: {
     plain: true,
     onCreated: (session) => {
       plainStarts.delete(messageId);
-      moveParkedSendToSession({ draftId, messageId, scopeKey, projectKey, session });
+      resumeParkedSendOnSession({ draftId, messageId, scopeKey, projectKey, session });
     },
     onFailed: () => plainStarts.delete(messageId),
   });
@@ -86,10 +86,12 @@ export function startPlainSessionForQueuedSend(input: {
 }
 
 /**
- * Only a send still parked on this failure moves: one the user retried, cancelled or sent in the
- * meantime is left alone, and the new session is just a session.
+ * Moves a parked send onto `session` and selects it, so the message resumes there instead of
+ * dead-ending on the session it was queued for. Only a send still parked on a failure moves: one
+ * the user retried, cancelled or sent in the meantime is left alone, and the new session is just
+ * a session.
  */
-function moveParkedSendToSession(input: {
+export function resumeParkedSendOnSession(input: {
   readonly draftId: string;
   readonly messageId: string;
   readonly scopeKey: string;
@@ -100,7 +102,8 @@ function moveParkedSendToSession(input: {
   if (
     current === null ||
     current.messageId !== input.messageId ||
-    !isProjectNotResolved(current) ||
+    !isCloudQueuedSendFailed(current) ||
+    current.sessionId === input.session.sessionId ||
     isCloudQueuedSendDispatching(current.messageId)
   ) {
     return;

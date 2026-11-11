@@ -14,7 +14,13 @@ export type CloudQueuedSendProviderGate =
   | { readonly kind: "ready" }
   | { readonly kind: "needsInstall"; readonly tool: ToolAuthToolId }
   | { readonly kind: "needsAuth"; readonly tool: ToolAuthToolId }
-  | { readonly kind: "failed"; readonly message: string };
+  /** `tool` is set when the failure came from that tool's sign-in, so the surface can offer its
+   * card (with the mapped reason and Retry) rather than a dead sentence. */
+  | {
+      readonly kind: "failed";
+      readonly message: string;
+      readonly tool?: ToolAuthToolId | undefined;
+    };
 
 type ProviderSnapshot = Pick<
   ServerProvider,
@@ -35,6 +41,8 @@ export function resolveCloudQueuedSendProviderGate(input: {
   readonly providers: ReadonlyArray<ProviderSnapshot> | null;
   readonly toolAuthPhase?: ToolAuthState["phase"] | undefined;
   readonly toolAuthMessage?: string | undefined;
+  /** The tool the phase above belongs to, so a failure can be shown on that tool's card. */
+  readonly toolAuthTool?: ToolAuthToolId | undefined;
 }): CloudQueuedSendProviderGate {
   const phase = input.toolAuthPhase;
   if (phase !== undefined && ACTIVE_TOOL_AUTH_PHASES.has(phase)) return { kind: "wait" };
@@ -42,6 +50,7 @@ export function resolveCloudQueuedSendProviderGate(input: {
     return {
       kind: "failed",
       message: input.toolAuthMessage?.trim() || "Sign-in failed. Retry from the setup card.",
+      ...(input.toolAuthTool === undefined ? {} : { tool: input.toolAuthTool }),
     };
   }
   if (input.providers === null) return { kind: "wait" };

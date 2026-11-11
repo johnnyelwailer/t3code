@@ -85,6 +85,10 @@ vi.mock("../../state/environments", () => ({
 }));
 vi.mock("../../cloud/t3team-cloudMachineSignIn", () => ({
   useSignInDescriptionForEnvironment: () => null,
+  useToolAuthMachineLabel: () => "the cloud machine",
+}));
+vi.mock("../../t3team/t3team-useToolAuthEnvironmentFlag", () => ({
+  useToolAuthEnvironmentAvailability: () => "enabled",
 }));
 vi.mock("../../state/server", () => ({ serverEnvironment: { refreshProviders: "refresh" } }));
 vi.mock("../../state/use-atom-command", () => ({
@@ -147,9 +151,7 @@ describe("model picker install on a cloud session", () => {
       { router: false },
     );
     expect(
-      screen.getByText("No cloud session environment is available to install on yet.", {
-        exact: false,
-      }),
+      screen.getByText("The cloud machine isn't ready to run this yet.", { exact: false }),
     ).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(harness.state.installCalls).toEqual([]);

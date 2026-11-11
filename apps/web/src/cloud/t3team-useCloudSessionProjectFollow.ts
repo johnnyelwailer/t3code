@@ -1,8 +1,11 @@
 import { EnvironmentId, type CloudSession, type ScopedProjectRef } from "@t3tools/contracts";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 
-import { openAddProjectToMachine } from "~/components/AddProjectToMachineDialog";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import {
+  clearCloudProjectCloneSuggestion,
+  suggestCloudProjectClone,
+} from "./t3team-cloudProjectCloneSuggestion";
 import { useClientSettings } from "~/hooks/useSettings";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -25,6 +28,21 @@ export function useCloudSessionProjectKey(projectRef: ScopedProjectRef | null): 
         ? null
         : deriveLogicalProjectKeyFromSettings(project, selectProjectGroupingSettings(settings)),
     [project, settings],
+  );
+}
+
+/** Every project this client can see, tagged with the machine it sits on and its logical key. */
+export function useCloudSessionMachineProjects() {
+  const projects = useProjects();
+  const grouping = selectProjectGroupingSettings(useClientSettings());
+  return useMemo(
+    () =>
+      projects.map((project) => ({
+        environmentId: String(project.environmentId),
+        projectId: project.id,
+        logicalKey: deriveLogicalProjectKeyFromSettings(project, grouping),
+      })),
+    [projects, grouping],
   );
 }
 
@@ -56,8 +74,9 @@ function machineHasComposerProject(input: {
 
 /**
  * When the composer project changes during pending cloud setup, keep the same machine
- * and move the waiting thread and queued message to the new project. If that project is
- * missing on the machine, add it with the existing add-project-to-machine path.
+ * and move the waiting thread and queued message to the new project. A project missing on
+ * that machine is offered as a clone suggestion, which the user opens the add-project dialog
+ * from; this path never opens it by itself.
  */
 export function useCloudSessionProjectFollow(input: {
   readonly scopeKey: string | null;
@@ -67,19 +86,7 @@ export function useCloudSessionProjectFollow(input: {
   readonly sessions: readonly CloudSession[];
 }): void {
   const { scopeKey, draftId, projectKey, projectRef, sessions } = input;
-  const settings = useClientSettings();
-  const projects = useProjects();
-  const grouping = selectProjectGroupingSettings(settings);
-  const projectsOnMachines = useMemo(
-    () =>
-      projects.map((project) => ({
-        environmentId: String(project.environmentId),
-        logicalKey: deriveLogicalProjectKeyFromSettings(project, grouping),
-      })),
-    [projects, grouping],
-  );
-  const addedFor = useRef<string | null>(null);
-
+  const projectsOnMachines = useCloudSessionMachineProjects();
   useEffect(() => {
     if (scopeKey === null) return;
     const target = getCloudSessionTarget(scopeKey);
@@ -93,14 +100,12 @@ export function useCloudSessionProjectFollow(input: {
             sessions,
             projects: projectsOnMachines,
           });
-    const openAdd = (addSessionId: string) => {
+    const suggestClone = (addSessionId: string) => {
       if (projectRef === null) return;
       const environmentId = sessionEnvironmentId(sessions, addSessionId);
       if (environmentId === undefined) return;
-      const addKey = `${scopeKey}:${projectKey}:${addSessionId}`;
-      if (addedFor.current === addKey) return;
-      addedFor.current = addKey;
-      openAddProjectToMachine({
+      suggestCloudProjectClone({
+        scopeKey,
         projectRef,
         targetEnvironmentId: EnvironmentId.make(environmentId),
       });
@@ -121,16 +126,17 @@ export function useCloudSessionProjectFollow(input: {
         });
       },
       addProjectToMachine: ({ sessionId: addSessionId }) => {
-        openAdd(addSessionId);
+        suggestClone(addSessionId);
       },
     });
-    // If the stamp already matches, still add once the machine environment is known.
-    if (
-      (result.kind === "retargeted" && result.addedProject) ||
-      hasProject !== false ||
-      sessionId === undefined
-    )
+    // The machine has the project (or cannot be known yet): any earlier suggestion is moot.
+    if (hasProject !== false || sessionId === undefined) {
+      if (result.kind !== "retargeted" || !result.addedProject) {
+        clearCloudProjectCloneSuggestion(scopeKey);
+      }
       return;
-    openAdd(sessionId);
+    }
+    // If the stamp already matches, still suggest once the machine environment is known.
+    if (result.kind !== "retargeted" || !result.addedProject) suggestClone(sessionId);
   }, [scopeKey, draftId, projectKey, projectRef, sessions, projectsOnMachines]);
 }

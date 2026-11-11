@@ -158,5 +158,7 @@ export function cloudSetupRecovery(input: {
 }): { readonly retry: boolean; readonly tryAgain: boolean } {
   const dead =
     input.lost || (input.session !== null && isTerminalCloudSessionPhase(input.session.phase));
-  return { retry: input.canRetry && !dead, tryAgain: !input.hasQueued && dead };
+  // A dead session always offers a fresh one, queued message or not: without it the card's only
+  // action is "Cancel message", which throws away work the new session could still carry.
+  return { retry: input.canRetry && !dead, tryAgain: dead };
 }

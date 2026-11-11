@@ -26,3 +26,19 @@ export function useSignInDescriptionForEnvironment(
     ? undefined
     : signInDescriptionForEnvironment(sessions, environmentId);
 }
+
+/** How a failure sentence names the machine a sign-in runs on. Mid-sentence, so lower case. */
+function toolAuthMachineLabel(
+  sessions: readonly CloudSession[],
+  environmentId: EnvironmentId | null,
+): string {
+  if (environmentId === null) return "the cloud machine";
+  return liveCloudSessionForEnvironment(sessions, environmentId) === null
+    ? "this machine"
+    : "this cloud machine";
+}
+
+export function useToolAuthMachineLabel(environmentId: EnvironmentId | null): string {
+  const { sessions } = useCloudSessionsOfMachine(environmentId);
+  return toolAuthMachineLabel(sessions, environmentId);
+}
