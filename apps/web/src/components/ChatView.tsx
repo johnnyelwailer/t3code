@@ -67,6 +67,7 @@ import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueu
 import { CloudSessionSetupFooter } from "~/cloud/t3team-cloudSessionSetupFooter";
 import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
 import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
+import { useCloudProjectCloneBanner } from "~/cloud/t3team-useCloudProjectCloneBanner";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
@@ -1964,6 +1965,8 @@ export default function ChatView(props: ChatViewProps) {
     scopeKey: draftId ?? routeThreadKey,
     projectRef: activeProjectRef,
   });
+  // t3team: the project is missing on the cloud machine — offered inline, never auto-opened.
+  const cloudProjectCloneBannerItem = useCloudProjectCloneBanner(draftId ?? routeThreadKey);
   const cloudSetupCard = useCloudSessionSetupCard({
     draftId: draftId ?? null,
     scopeKey: draftId ?? routeThreadKey,
@@ -2809,7 +2812,9 @@ export default function ChatView(props: ChatViewProps) {
         : [];
     const limitRecoveryItems = [limitRecoveryBanner, providerRetryBanner].filter((i) => i !== null);
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
-    const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
+    const projectCloneItems = [projectCloneBannerItem, cloudProjectCloneBannerItem].filter(
+      (item) => item !== null,
+    );
     // The setup card already owns this send's progress; a second strip above the composer
     // repeats "Sending to cloud session…" while the card is on screen.
     const cloudBindItems =
