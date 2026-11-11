@@ -93,15 +93,18 @@ export function decideCloudQueuedSendFlush(input: {
   if (environmentId !== undefined && input.machineConnected && input.threadExists) {
     return { kind: "delivered", environmentId };
   }
-  // The list is a bounded, polled history; the attach's `session_ended` can say so sooner.
-  if (
-    isTerminalCloudSessionPhase(session.phase) ||
-    (input.environmentSessionEnded === true && !input.machineConnected)
-  ) {
+  // The list is a bounded, polled history; the attach's `session_ended` can say so sooner. A
+  // ready record outranks that flag though: the flag belongs to the session the connection is
+  // still registered to, and the connect below rebinds it to this one.
+  const parkedOnEndedSession =
+    input.environmentSessionEnded === true && !input.machineConnected && session.phase !== "ready";
+  if (isTerminalCloudSessionPhase(session.phase) || parkedOnEndedSession) {
     return {
       kind: "fail",
       message: session.failureReason ?? CLOUD_QUEUED_SEND_ENDED_MESSAGE,
-      retryable: false,
+      // The message is kept either way: a parked connection can come back, and a session that
+      // really ended is resumed on the one the user picks next.
+      retryable: parkedOnEndedSession,
       failure: { kind: "session_ended", reason: null, environmentId: environmentId ?? null },
     };
   }

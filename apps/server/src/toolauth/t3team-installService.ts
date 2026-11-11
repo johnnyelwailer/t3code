@@ -92,7 +92,11 @@ export function makeToolAuthInstallFlow(deps: ToolAuthInstallFlowDeps) {
     }
 
     const message = extractInstallErrorMessage(installState.installLog) ?? fallbackMessage;
-    yield* applySessionUpdate(tool, { tool, phase: "failed", message }, installState);
+    yield* applySessionUpdate(
+      tool,
+      { tool, phase: "failed", reason: "installFailed", message },
+      installState,
+    );
   });
 
   const spawnInstallProcess = Effect.fn("toolauth.spawnInstallProcess")(function* (

@@ -1,6 +1,7 @@
 /**
- * Selecting Claude on a cloud session auto-installs, shows the inline sign-in card, raises zero
- * error toasts, then the flush becomes dispatch once the provider is ready.
+ * Selecting Claude on a cloud session shows the inline sign-in card and waits for the user: no
+ * install starts on its own. Clicking it installs, raises zero error toasts, and the flush becomes
+ * dispatch once the provider is ready.
  */
 import {
   EnvironmentId,
@@ -12,6 +13,7 @@ import {
 } from "@t3tools/contracts";
 import { useSyncExternalStore } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { userEvent } from "vite-plus/test/browser";
 
 import { act, render } from "../../test/render";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
@@ -25,8 +27,16 @@ import { CloudSessionSetupCard } from "./t3team-CloudSessionSetupCard";
 
 const harness = vi.hoisted(() => {
   const toastAdd = vi.fn();
-  const install = vi.fn(async () => ({ _tag: "Success" as const, value: undefined }));
-  const start = vi.fn(async () => ({ _tag: "Success" as const, value: undefined }));
+  // The real actions answer with a `ToolAuthActionOutcome`; `started` is what keeps the card's
+  // pending state up until the status stream reports the first phase.
+  const install = vi.fn(async () => ({
+    kind: "started" as const,
+    state: { tool: "claude" as const, phase: "installing" as const },
+  }));
+  const start = vi.fn(async () => ({
+    kind: "started" as const,
+    state: { tool: "claude" as const, phase: "starting" as const },
+  }));
   type Listener = () => void;
   const listeners = new Set<Listener>();
   const state = {
@@ -60,8 +70,8 @@ vi.mock("~/state/t3team-toolauth", () => ({
       () => harness.state.current,
     ),
   useToolAuthActions: () => ({
-    onConnect: () => {},
-    onInstall: () => {},
+    onConnect: harness.state.start,
+    onInstall: harness.state.install,
     onSubmitCode: () => {},
     onCancel: () => {},
   }),
@@ -97,6 +107,10 @@ vi.mock("~/state/environments", () => ({
 }));
 vi.mock("./t3team-cloudMachineSignIn", () => ({
   useSignInDescriptionForEnvironment: () => null,
+  useToolAuthMachineLabel: () => "this cloud machine",
+}));
+vi.mock("~/t3team/t3team-useToolAuthEnvironmentFlag", () => ({
+  useToolAuthEnvironmentAvailability: () => "enabled",
 }));
 
 const noRouter: { readonly router: false } = { router: false };
@@ -121,7 +135,7 @@ function phase(next: Partial<ToolAuthState> & Pick<ToolAuthState, "phase">) {
 }
 
 describe("cloud Claude provider gate", () => {
-  it("installs, shows the sign-in card, raises no error toasts, then dispatches when ready", async () => {
+  it("waits for a click, installs, raises no error toasts, then dispatches when ready", async () => {
     harness.state.toastAdd.mockReset();
     harness.state.install.mockClear();
     harness.state.start.mockClear();
@@ -156,7 +170,16 @@ describe("cloud Claude provider gate", () => {
       noRouter,
     );
 
-    await vi.waitFor(() => expect(harness.state.install).toHaveBeenCalledTimes(1));
+    // No action without user input: the gate publishes needsInstall and stops there.
+    await expect
+      .element(screen.getByTestId("toolauth-primary-action"))
+      .toHaveTextContent("Install and connect");
+    expect(harness.state.install).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByTestId("toolauth-primary-action"));
+    expect(harness.state.install).toHaveBeenCalledTimes(1);
+    // The click is visible straight away, before the machine reports anything.
+    await expect.element(screen.getByTestId("toolauth-pending")).toBeInTheDocument();
     expect(harness.state.toastAdd).not.toHaveBeenCalled();
     expect(
       decideCloudQueuedSendFlush({

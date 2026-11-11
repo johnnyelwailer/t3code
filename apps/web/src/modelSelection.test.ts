@@ -1049,16 +1049,22 @@ describe("composer fallback to another instance of the same driver", () => {
       modelOptions: state.modelOptions?.[selectedInstanceId],
       planModeEnabled: false,
     });
-    return { selectedInstanceId, state, traits };
+    return { selectedInstanceId, state, traits, providerFallback: selection.providerFallback };
   }
 
   it("keeps the requested instance's effort on the fallback instance", () => {
-    const { selectedInstanceId, state, traits } = composerFor({
+    const { selectedInstanceId, state, traits, providerFallback } = composerFor({
       providers,
       threadModelSelection: picked,
     });
 
     expect(selectedInstanceId).toBe(fallback);
+    // Same provider and model, but another account: the composer is told so.
+    expect(providerFallback).toMatchObject({
+      kind: "sameDriver",
+      requestedInstanceId: disabled,
+      fallbackInstanceId: fallback,
+    });
     expect(state.selectedModel).toBe("claude-opus-5-5");
     expect(traits.promptEffort).toBe("xhigh");
     expect(
@@ -1237,7 +1243,7 @@ describe("composer fallback to another instance of the same driver", () => {
     });
   });
 
-  it("does not carry options to another driver", () => {
+  it("keeps the picked provider instead of switching to another driver", () => {
     const codexOnly: ReadonlyArray<ServerProvider> = [
       {
         ...provider({ provider: claude, instanceId: disabled }),
@@ -1251,7 +1257,10 @@ describe("composer fallback to another instance of the same driver", () => {
       threadModelSelection: picked,
     });
 
-    expect(selectedInstanceId).toBe(ProviderInstanceId.make("codex"));
-    expect(state.modelOptions?.[selectedInstanceId]).toBeUndefined();
+    expect(selectedInstanceId).toBe(disabled);
+    expect(state.modelOptions?.[ProviderInstanceId.make("codex")]).toBeUndefined();
+    expect(
+      composerFor({ providers: codexOnly, threadModelSelection: picked }).providerFallback,
+    ).toBeNull();
   });
 });
