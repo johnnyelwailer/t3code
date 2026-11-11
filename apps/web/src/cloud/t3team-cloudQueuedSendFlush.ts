@@ -6,7 +6,7 @@ import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts"
 
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
-import { cloudProjectWaitDetail } from "./t3team-cloudProjectWaitPresentation";
+import { cloudProjectWaitParkedMessage } from "./t3team-cloudProjectWaitPresentation";
 import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
@@ -42,11 +42,6 @@ export interface CloudQueuedSendFailure {
   /** The classifier's reason (`CloudProjectWaitReason`) for `project_not_resolved`. */
   readonly reason: string | null;
   readonly environmentId: string | null;
-}
-
-/** The words of a send that gave up waiting for its project; the message is kept. */
-function cloudProjectNotResolvedMessage(wait: CloudProjectWait): string {
-  return `The project did not appear on the cloud machine in time. ${cloudProjectWaitDetail(wait)}. Your message is kept: retry, send it in the machine's own project, start a plain session, or cancel to edit it.`;
 }
 
 export function decideCloudQueuedSendFlush(input: {
@@ -126,7 +121,7 @@ export function decideCloudQueuedSendFlush(input: {
     // A project that has not appeared by the bound is a typed, kept failure, not a wait.
     return {
       kind: "fail",
-      message: cloudProjectNotResolvedMessage(wait),
+      message: cloudProjectWaitParkedMessage(wait),
       retryable: true,
       failure: { kind: "project_not_resolved", reason: wait.reason, environmentId },
     };

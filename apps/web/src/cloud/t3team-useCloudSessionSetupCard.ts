@@ -17,6 +17,7 @@ import type { CloudSessionSetupCardProps } from "./t3team-CloudSessionSetupCard"
 import { cloudSessionNotSeenYet, cloudSetupRecovery } from "./t3team-cloudSessionSetupProgress";
 import { resolveCloudSetupSessionId } from "./t3team-cloudSetupSessionChoice";
 import { resumeParkedSendOnSession } from "./t3team-cloudQueuedSendRecovery";
+import { getCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
 import { beginCloudSessionCreate, useCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
 import type { useCloudSessionController } from "./t3team-useCloudSessionController";
@@ -75,14 +76,21 @@ export function useCloudSessionSetupCard(input: {
   // "Try again" after a dead session keeps the queued message: this create's own answer moves it
   // onto the new session, so the card carries on there instead of offering only Cancel.
   const tryAgain = () =>
-    beginCloudSessionCreate({ scopeKey, projectKey }, undefined, () =>
-      onCreate(projectId, {
-        onCreated: (session) => {
-          const messageId = gate.card?.facts.queued.messageId;
-          if (draftId === null || scopeKey === null || messageId === undefined) return;
-          resumeParkedSendOnSession({ draftId, messageId, scopeKey, projectKey, session });
-        },
-      }),
+    beginCloudSessionCreate(
+      {
+        scopeKey,
+        projectKey,
+        staleLocalSessionId: getCloudSessionLocal()?.session.sessionId ?? null,
+      },
+      undefined,
+      () =>
+        onCreate(projectId, {
+          onCreated: (session) => {
+            const messageId = gate.card?.facts.queued.messageId;
+            if (draftId === null || scopeKey === null || messageId === undefined) return;
+            resumeParkedSendOnSession({ draftId, messageId, scopeKey, projectKey, session });
+          },
+        }),
     );
   const queued = draftId === null ? null : gate.card;
   const sessionId =
@@ -142,6 +150,7 @@ export function useCloudSessionSetupCard(input: {
     },
     onCancel: queued?.onCancel,
     onRetry: recovery.retry ? (queued?.onRetry ?? null) : null,
+    ...(queued?.onRestartWait === undefined ? {} : { onRestartWait: queued.onRestartWait }),
     recoveryActions: queued?.recoveryActions ?? [],
     onTryAgain: recovery.tryAgain ? tryAgain : null,
     sending: queued?.facts.flushing ?? false,

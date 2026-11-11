@@ -6,17 +6,18 @@
  */
 import type { ScopedProjectRef } from "@t3tools/contracts";
 import { CloudIcon } from "lucide-react";
-import { createElement, Fragment, useCallback, useMemo } from "react";
+import { createElement, useCallback, useMemo } from "react";
 
 import type { ComposerBannerStackItem } from "~/components/chat/ComposerBannerStack";
-import { Button } from "~/components/ui/button";
 import { useComposerDraftStore } from "~/composerDraftStore";
+import { CloudQueuedSendBannerActions } from "./t3team-CloudQueuedSendBannerActions";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   cancelDraftCloudQueuedSend,
   retryDraftCloudQueuedSend,
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
+import { restartDraftCloudQueuedSendWait } from "./t3team-cloudQueuedSendWaitRestart";
 import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
 import { logCloudProjectWaitCancelled } from "./t3team-cloudProjectWaitLog";
 import { cloudProjectNotResolvedActions } from "./t3team-cloudProjectNotResolvedActions";
@@ -81,6 +82,9 @@ export function useCloudSessionComposerGate(input: {
   const retryQueuedSend = useCallback(() => {
     if (draftId !== null) retryDraftCloudQueuedSend(draftId);
   }, [draftId]);
+  const restartQueuedWait = useCallback(() => {
+    if (draftId !== null) restartDraftCloudQueuedSendWait(draftId);
+  }, [draftId]);
 
   const draft = useComposerDraftStore((state) =>
     draftId === null ? undefined : state.draftThreadsByThreadKey[draftId],
@@ -124,8 +128,9 @@ export function useCloudSessionComposerGate(input: {
   const bannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (stepFacts === null) return null;
     const view = presentCloudQueuedSendProgress(stepFacts, projectWaitNow);
-    const action = (label: string, onClick: () => void) =>
-      createElement(Button, { key: label, size: "xs", variant: "ghost", onClick }, label);
+    const notice = view.projectWait;
+    const restart =
+      notice !== null && notice.level === "slow" && !notice.blocking ? restartQueuedWait : null;
     return {
       id: `cloud-session-bind:${stepFacts.queued.messageId}`,
       variant: view.failed ? "error" : "info",
@@ -135,24 +140,23 @@ export function useCloudSessionComposerGate(input: {
         "aria-hidden": true,
       }),
       title: view.title,
-      description:
-        stepFacts.queued.failureMessage ?? view.projectWait?.text ?? stepFacts.queued.sessionLabel,
-      actions: createElement(
-        Fragment,
-        null,
-        canRetry ? action("Retry", retryQueuedSend) : null,
-        ...recoveryActions.map((item) => action(item.label, item.onClick)),
-        // In flight the turn is already starting: it is delivered, not cancellable.
-        stepFacts.flushing
-          ? createElement(
-              Button,
-              { key: "sending", size: "xs", variant: "ghost", disabled: true },
-              "Sending…",
-            )
-          : action("Cancel", cancelQueuedSend),
-      ),
+      description: stepFacts.queued.failureMessage ?? notice?.text ?? stepFacts.queued.sessionLabel,
+      actions: createElement(CloudQueuedSendBannerActions, {
+        onRetry: canRetry ? retryQueuedSend : restart,
+        recoveryActions,
+        onCancel: cancelQueuedSend,
+        flushing: stepFacts.flushing,
+      }),
     };
-  }, [canRetry, cancelQueuedSend, projectWaitNow, recoveryActions, retryQueuedSend, stepFacts]);
+  }, [
+    canRetry,
+    cancelQueuedSend,
+    projectWaitNow,
+    recoveryActions,
+    restartQueuedWait,
+    retryQueuedSend,
+    stepFacts,
+  ]);
 
   return {
     tryQueueSend,
@@ -175,6 +179,7 @@ export function useCloudSessionComposerGate(input: {
             facts: stepFacts,
             onCancel: cancelQueuedSend,
             onRetry: canRetry ? retryQueuedSend : null,
+            onRestartWait: restartQueuedWait,
             recoveryActions,
           },
   };

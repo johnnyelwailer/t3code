@@ -129,9 +129,9 @@ describe("cloud queued send steps", () => {
       );
     const early = onProject(115);
     expect(early.currentStepId).toBe("project");
-    expect(early.title).toBe("Waiting for the cloud machine to send its project list…");
+    expect(early.title).toBe("Connecting to the cloud machine…");
     expect(early.steps.find((step) => step.id === "project")?.detail).toBe(
-      "Waiting for the cloud machine to send its project list",
+      "Connecting to the cloud machine",
     );
     expect(early.projectWait?.level).toBe("waiting");
     expect(onProject(140).projectWait?.level).toBe("expected");
