@@ -6,7 +6,7 @@
 # Standalone, no install, no artifacts. A slow or broken ci.yml run cannot mask this.
 # Locally:
 #   node scripts/t3team-check-case-collisions.mjs --imports
-#   node --test scripts/t3team-check-case-collisions.test.mjs
+#   node --test scripts/t3team-check-case-collisions.node-test.mjs
 name: Case collisions
 
 on:
@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 1
 
       - name: Prove the check fails on a synthetic collision
-        run: node --test scripts/t3team-check-case-collisions.test.mjs
+        run: node --test scripts/t3team-check-case-collisions.node-test.mjs
 
       - name: Check this tree
         run: node scripts/t3team-check-case-collisions.mjs --imports
