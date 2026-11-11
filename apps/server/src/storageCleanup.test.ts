@@ -2015,6 +2015,8 @@ describe("storage cleanup reports and local file policies", () => {
               ),
             ),
           );
+          yield* Effect.yieldNow;
+          yield* TestClock.adjust(HOUSEKEEPING_STARTUP_GRACE);
           yield* fixture.service.reports.pipe(
             Stream.filter((report) => report !== null),
             Stream.take(1),

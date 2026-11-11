@@ -305,7 +305,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
         yield* Effect.gen(function* () {
           const service = yield* ThreadPullRequestService.make;
           yield* service.start();
-          yield* Deferred.succeed(activation, undefined);
+          yield* activateAndSkipStartupGrace(activation);
           yield* Deferred.await(followUpQueued);
           yield* service.drain;
         }).pipe(Effect.provide(dependencies));
@@ -436,7 +436,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
           yield* Effect.gen(function* () {
             const service = yield* ThreadPullRequestService.make;
             yield* service.start();
-            yield* Deferred.succeed(activation, undefined);
+            yield* activateAndSkipStartupGrace(activation);
             yield* Deferred.await(sweepStarted);
             yield* service.drain;
           }).pipe(Effect.provide(dependencies));

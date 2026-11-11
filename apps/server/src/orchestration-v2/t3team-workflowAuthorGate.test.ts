@@ -148,6 +148,12 @@ const runScenario = (threadId: string, makeEvents: (ids: Ids) => ProviderAdapter
         Layer.mergeAll(
           Layer.mock(CheckpointService.CheckpointServiceV2)({ captureBaseline: () => Effect.void }),
           Layer.mock(EventSink.EventSinkV2)({
+            consumeProviderEvents: (source, process, after) =>
+              source.pipe(
+                Stream.mapEffect((event) => process(event).pipe(Effect.andThen(after))),
+                Stream.takeUntil(Boolean),
+                Stream.runDrain,
+              ),
             write: () => Effect.succeed([]),
             writeWithEffects: () => Effect.succeed([]),
             writeIfRunCurrent: () => Effect.succeed({ committed: true, storedEvents: [] }),

@@ -3798,6 +3798,7 @@ it.effect(
       const settings = yield* ServerSettings.ServerSettingsService.pipe(
         Effect.provide(ServerSettings.layerTest()),
       );
+      yield* settings.updateSettings({ linkedEnvironmentsEnabled: false });
       const effect = Effect.gen(function* () {
         const eventSink = yield* EventSink.EventSinkV2;
         const idAllocator = yield* IdAllocator.IdAllocatorV2;
@@ -4377,6 +4378,7 @@ it.effect(
       const settings = yield* ServerSettings.ServerSettingsService.pipe(
         Effect.provide(ServerSettings.layerTest()),
       );
+      yield* settings.updateSettings({ linkedEnvironmentsEnabled: false });
       const effect = Effect.gen(function* () {
         const eventSink = yield* EventSink.EventSinkV2;
         const idAllocator = yield* IdAllocator.IdAllocatorV2;

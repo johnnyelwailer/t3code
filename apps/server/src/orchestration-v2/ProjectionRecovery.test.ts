@@ -533,6 +533,9 @@ it.effect("maintains delegated candidate indexes across legacy rows and payload 
       SELECT payload_json FROM orchestration_v2_projection_threads WHERE thread_id = ${child}
     `;
     const original = JSON.parse(rows[0]!.payload_json);
+    // The fork's lineage-parent expression index (t3team-069) has no json_valid guard, so it
+    // rejects the malformed payloads this case writes on purpose.
+    yield* sql`DROP INDEX idx_t3team_v2_threads_lineage_parent`;
     for (const payload of [
       "{broken",
       JSON.stringify({
