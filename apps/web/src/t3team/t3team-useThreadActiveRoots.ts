@@ -67,3 +67,27 @@ export function useThreadActiveRoots(
   const roots = unchecked.filter((root) => existing.has(root.path));
   return { roots, followRoot: threadFollowRoot(roots, cwd) };
 }
+
+// Surfaces without a thread (previews, docs) read an empty relationship list.
+const NO_THREAD = { environmentId: "", threadId: "" } as unknown as ScopedThreadRef;
+
+/**
+ * The active root paths, unchecked: for callers that stat their own candidates anyway (file
+ * links), so no extra metadata read per message.
+ */
+export function useThreadActiveRootPaths(
+  threadRef: ScopedThreadRef | undefined,
+): ReadonlyArray<string> {
+  const shells = useThreadRelationshipShells(threadRef ?? NO_THREAD);
+  const projects = useProjects();
+  if (threadRef === undefined) return [];
+  const thread = shells.find((shell) => shell.id === threadRef.threadId);
+  const primaryRoot =
+    projects.find(
+      (project) =>
+        project.environmentId === threadRef.environmentId && project.id === thread?.projectId,
+    )?.workspaceRoot ?? null;
+  return selectThreadActiveRoots(
+    threadRootCandidates({ threadId: threadRef.threadId, shells, primaryRoot }),
+  ).map((root) => root.path);
+}

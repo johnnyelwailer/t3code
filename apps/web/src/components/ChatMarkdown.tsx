@@ -165,6 +165,8 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { projectEnvironment } from "../state/projects";
 import { filesystemEnvironment } from "../state/filesystem";
+import { findThreadRootFileMatch } from "@t3tools/shared/t3team-threadRootFileCandidates";
+import { useThreadActiveRootPaths } from "../t3team/t3team-useThreadActiveRoots";
 import {
   claimWorkspaceBasenameLookup,
   needsWorkspaceBasenameLookup,
@@ -550,6 +552,8 @@ function useChatMarkdownState({
     reportFailure: false,
     refresh: true,
   });
+  // t3team: relative links also resolve in the thread's other active roots (child worktrees).
+  const threadRootPaths = useThreadActiveRootPaths(threadRef);
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
@@ -795,6 +799,23 @@ function useChatMarkdownState({
     });
     return metadata._tag === "Success" && metadata.value.entries[0] === null ? match : null;
   };
+  const findFileMatch = async (fileLinkMeta: MarkdownFileLinkMeta) => {
+    const match = await findWorkspaceFileMatch(fileLinkMeta);
+    const relativePath = fileLinkMeta.workspaceLookupPath;
+    if (match !== null || relativePath === null || environmentId === null) return match;
+    if (!readEnvironmentScope(environmentId, AuthFilesystemReadScope)) return null;
+    return findThreadRootFileMatch({
+      relativePath,
+      roots: threadRootPaths,
+      cwd,
+      stat: async (paths) => {
+        const result = await getFilesystemMetadata({ environmentId, input: { paths } });
+        return result._tag === "Success"
+          ? result.value.entries.map((entry) => entry?.kind ?? null)
+          : null;
+      },
+    });
+  };
   const openFileInPanel = (fileLinkMeta: MarkdownFileLinkMeta, panelPath: string) => {
     if (!threadRef) return;
     // Every open supersedes pending lookups, including synchronous opens.
@@ -825,7 +846,7 @@ function useChatMarkdownState({
       resolveMarkdownFileHostPath({
         meta: fileLinkMeta,
         cwd,
-        findWorkspaceMatch: () => findWorkspaceFileMatch(fileLinkMeta),
+        findWorkspaceMatch: () => findFileMatch(fileLinkMeta),
       });
     const mediaPath = mediaSource ?? fileLinkMeta.filePath;
     const canPreviewMedia =
