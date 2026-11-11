@@ -27,6 +27,7 @@ import {
 } from "~/cloud/t3team-useCloudSessionProjectFollow";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { isTerminalCloudSessionPhase, runOnCloudSessions } from "./t3team-cloudSessionSplit";
+import { resolveCloudSessionCreateProject } from "./t3team-cloudSessionCreateProject";
 
 const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
 const DISMISSED_FAILURES_LIMIT = 20;
@@ -129,14 +130,20 @@ export function useT3TeamRunOnCloudSessionProps(
   );
   const projectEnvironmentId = projectRef?.environmentId ?? null;
   const projectId = projectRef?.projectId ?? null;
+  const machineProjects = useCloudSessionMachineProjects();
+  // This computer's server resolves the project to clone; a cloud copy maps to its local twin.
   const cloudSessionProject = useMemo(
     () =>
-      projectId !== null &&
-      projectEnvironmentId !== null &&
-      projectEnvironmentId === primaryEnvironmentId
-        ? { environmentId: projectEnvironmentId, projectId }
-        : undefined,
-    [primaryEnvironmentId, projectEnvironmentId, projectId],
+      resolveCloudSessionCreateProject({
+        projectRef:
+          projectId !== null && projectEnvironmentId !== null
+            ? { environmentId: projectEnvironmentId, projectId }
+            : null,
+        primaryEnvironmentId,
+        projectKey,
+        projects: machineProjects,
+      }),
+    [machineProjects, primaryEnvironmentId, projectEnvironmentId, projectId, projectKey],
   );
 
   // Create answered: replace the creating sentinel with the real session id/label.
