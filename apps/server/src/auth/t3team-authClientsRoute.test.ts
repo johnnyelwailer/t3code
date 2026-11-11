@@ -1,8 +1,6 @@
 /**
- * GET /api/auth/clients: the client list the cloud session's idle check polls
- * (hive session.yml "Hold the session until the handoff window"). It needs the
- * access:read scope and answers a bare array whose entries carry `connected`,
- * `current` and `lastConnectedAt`, the fields that check reads.
+ * GET /api/auth/clients as the cloud session's idle check reads it: access:read, a bare array,
+ * and `connected` / `current` / `lastConnectedAt` on each entry.
  */
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";

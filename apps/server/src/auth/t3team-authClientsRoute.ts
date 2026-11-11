@@ -1,13 +1,6 @@
 /**
- * `GET /api/auth/clients`: every client session of this server with its live `connected` flag.
- *
- * A cloud session's idle check (hive session.yml, "Hold the session until the handoff window")
- * polls it with an access:read token and releases the session once no other client has been
- * connected for the idle window. Without the route the request reached the static handler, the
- * check never saw an idle machine, and every idle session ran to its full hold time.
- *
- * Authenticated like upstream's raw routes (cookie or bearer), then the access:read scope. The
- * answer is a bare array of `AuthClientSession`; the caller's own entry is `current: true`.
+ * `GET /api/auth/clients`: client sessions with their live `connected` flag, for the cloud session's
+ * idle check (session.yml). Raw-route auth (cookie or bearer), then access:read; a bare array.
  * @module t3team-authClientsRoute
  */
 import { AuthAccessReadScope, AuthClientSession } from "@t3tools/contracts";
