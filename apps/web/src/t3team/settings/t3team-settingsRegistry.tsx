@@ -1,13 +1,15 @@
 /**
  * The fork's settings surface as registered data: the one section it adds to the settings nav
  * (Connected Tools; the Features page is upstream's Labs, labelled Features there) and the rows
- * it places on the panels (`t3team-settingsForkRows.tsx`). The hot files render from these
+ * it places on the panels (`t3team-settingsForkRows.tsx`), Labs/Features and every new flag
+ * included. The hot files render from these
  * registrations; search picks the items up through `useT3TeamSettingsSearchItems`.
  */
 import type { ComponentType } from "react";
 import { Link2Icon } from "lucide-react";
 import type { SettingsPath, SettingsSearchItem } from "../../components/settings/settingsSearch";
 import { SETTINGS_NAV_GROUPS } from "../../components/settings/settingsSearch";
+import { t3teamCompanionSettingVisible } from "../../components/settings/t3team-CompanionSetting";
 import { useConnectedToolsSettingsVisible } from "../../components/settings/t3team-connectedToolsSettingsVisible";
 import { useFeatureFlag } from "../t3team-useFeatureFlag";
 import {
@@ -137,7 +139,7 @@ const VOICE_SEARCH_ITEMS: ReadonlyArray<SettingsSearchItem> = [
   },
 ];
 
-/** Section-level fork items; the Features page anchors into upstream's Labs page. */
+/** Section-level fork items. */
 const SECTION_SEARCH_ITEMS: ReadonlyArray<SettingsSearchItem> = [
   {
     id: "connected-tools",
@@ -145,13 +147,6 @@ const SECTION_SEARCH_ITEMS: ReadonlyArray<SettingsSearchItem> = [
     to: "/settings/connected-tools" as SettingsPath,
     sectionLabel: "Connected Tools",
     searchTerms: ["jira atlassian tool auth sign in connections integrations"],
-  },
-  {
-    id: "nexi-feature-switches",
-    title: "Nexi feature switches",
-    to: "/settings/labs",
-    targetId: "features-nexi",
-    searchTerms: ["feature flag switch nexi work toggles overrides preset"],
   },
 ];
 
@@ -164,6 +159,7 @@ export const T3TEAM_SETTINGS_SEARCH_ITEMS: ReadonlyArray<SettingsSearchItem> = [
     id: row.anchorId,
     title: row.label,
     to: row.to,
+    ...(row.targetId !== undefined ? { targetId: row.targetId } : {}),
     ...(row.searchTerms.length > 0 ? { searchTerms: row.searchTerms } : {}),
   })),
   ...VOICE_SEARCH_ITEMS,
@@ -173,10 +169,14 @@ export const T3TEAM_SETTINGS_SEARCH_ITEMS: ReadonlyArray<SettingsSearchItem> = [
 /** The fork items whose availability a hook decides (flag-gated sections). */
 export function useT3TeamSettingsSearchItems(): ReadonlyArray<SettingsSearchItem> {
   const featuresPageEnabled = useFeatureFlag("SETTINGS_FEATURES_PAGE");
+  const digestVariantsEnabled = useFeatureFlag("MYWORK_DIGEST_VARIANTS");
   const connectedToolsVisible = useConnectedToolsSettingsVisible();
+  const companionVisible = t3teamCompanionSettingVisible();
   return T3TEAM_SETTINGS_SEARCH_ITEMS.filter((item) => {
     if (item.id === "connected-tools") return connectedToolsVisible;
     if (item.id === "nexi-feature-switches") return featuresPageEnabled;
+    if (item.id === "mywork-digest-beta") return digestVariantsEnabled;
+    if (item.id === "t3team-companion") return companionVisible;
     return true;
   });
 }

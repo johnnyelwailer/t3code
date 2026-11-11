@@ -36,8 +36,7 @@ import { AdvancedSettings } from "./AdvancedSettings";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 import { TypographySection } from "./TypographySettings";
 import { ThreadDetailsItemsRow } from "./ThreadDetailsItemsRow";
-import { T3TeamBetaSettings } from "./t3team-BetaSettings";
-import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
+import { t3teamSettingsRows } from "~/t3team/settings/t3team-settingsRegistry";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
   artwork: "Artwork",
@@ -166,8 +165,7 @@ export function AppearanceSettingsPanel() {
 
       <SettingsSection id="appearance-interface" title="Interface">
         {/* T3Team settings insertion seam: keep this mount stable to minimize merge conflicts. */}
-        <T3TeamProjectSetupSetting />
-        <T3TeamBetaSettings />
+        {t3teamSettingsRows("interface")}
 
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast")}

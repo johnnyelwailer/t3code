@@ -20,6 +20,10 @@ describe("t3team settings registry", () => {
       ["voice", "voice", "voice-model"],
       ["display", "t3team.activityLabels", "live-activity-labels"],
       ["display", "t3team.projectScopePills", "project-scope-pills"],
+      ["interface", "projectSetup", "project-workspace"],
+      ["interface", "t3team:beta-flags", "mywork-digest-beta"],
+      ["interface", "t3team:companion-enabled", "t3team-companion"],
+      ["labs", "featureFlags", "nexi-feature-switches"],
       ["legal", "openSourceLicenses", "open-source-licenses"],
     ]);
   });
@@ -67,6 +71,18 @@ describe("t3team settings registry", () => {
     expect(byId.get("nexi-feature-switches")).toEqual(
       expect.objectContaining({ to: "/settings/labs", targetId: "features-nexi" }),
     );
+    expect(byId.get("project-workspace")).toEqual(
+      expect.objectContaining({ to: "/settings/appearance", targetId: "appearance-interface" }),
+    );
+    expect(byId.get("t3team-companion")).toEqual(
+      expect.objectContaining({ to: "/settings/appearance", title: "Animated companion" }),
+    );
+    expect(byId.get("t3team-companion")).not.toHaveProperty("targetId");
+  });
+
+  it("keeps every fork search id unique", () => {
+    const ids = T3TEAM_SETTINGS_SEARCH_ITEMS.map((item) => item.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("keeps searchableSetting resolvable for every anchored fork row", () => {
@@ -95,6 +111,9 @@ describe("t3team settings registry", () => {
     );
     expect(searchSettings("personality", items).map((item) => item.id)).toContain(
       "agent-personality",
+    );
+    expect(searchSettings("companion", items).map((item) => item.id)).toContain(
+      "t3team-companion",
     );
   });
 

@@ -15,6 +15,7 @@ import { Button } from "../../components/ui/button";
 import { Switch } from "../../components/ui/switch";
 import type { ScopedSettingsPatch } from "../../components/settings/scopedSettings";
 import { T3TeamAboutLicensesDescription } from "../t3team-AboutLicensesDescription";
+import { T3TEAM_INTERFACE_AND_LABS_ROWS } from "./t3team-settingsInterfaceRows";
 
 /** What a fork row needs from its host panel: the merged settings and the scoped writer. */
 export interface T3TeamSettingsRowProps {
@@ -22,16 +23,18 @@ export interface T3TeamSettingsRowProps {
   readonly updateSettings: (patch: ScopedSettingsPatch) => void;
 }
 /** Where a fork row renders inside its host panel. */
-export type T3TeamSettingsRowSlot = "agent" | "voice" | "display" | "legal";
+export type T3TeamSettingsRowSlot = "agent" | "voice" | "display" | "interface" | "labs" | "legal";
 
 export interface T3TeamSettingsRow {
   readonly slot: T3TeamSettingsRowSlot;
   /** The settings key the row writes, for the registry's documentation. */
   readonly key: string;
-  /** The row's DOM anchor and settings-search id. */
+  /** The row's settings-search id; also its DOM anchor unless `targetId` names another. */
   readonly anchorId: string;
+  /** The DOM anchor search scrolls to when the row has no anchor of its own. */
+  readonly targetId?: string;
   /** The page the row lives on, as a settings-search target. */
-  readonly to: "/settings/general" | "/settings/about";
+  readonly to: "/settings/general" | "/settings/appearance" | "/settings/labs" | "/settings/about";
   readonly label: string;
   readonly searchTerms: readonly string[];
   readonly component: ComponentType<T3TeamSettingsRowProps>;
@@ -156,6 +159,7 @@ export const T3TEAM_SETTINGS_ROWS: readonly T3TeamSettingsRow[] = [
     searchTerms: ["sidebar recent projects filter pull requests scope experimental"],
     component: ProjectScopePillsRow,
   },
+  ...T3TEAM_INTERFACE_AND_LABS_ROWS,
   {
     slot: "legal",
     key: "openSourceLicenses",

@@ -6,9 +6,14 @@ import {
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
 import { Switch } from "../ui/switch";
 
+/** True when a pack registers a companion; without one the switch has nothing to show. */
+export function t3teamCompanionSettingVisible(): boolean {
+  return appViewRegistry().list("surface.companion").length > 0;
+}
+
 /** Hidden when no pack registers a companion: the switch would have nothing to show. */
 export function T3TeamCompanionSetting() {
-  return appViewRegistry().list("surface.companion").length > 0 ? <CompanionSettingRow /> : null;
+  return t3teamCompanionSettingVisible() ? <CompanionSettingRow /> : null;
 }
 
 function CompanionSettingRow() {
