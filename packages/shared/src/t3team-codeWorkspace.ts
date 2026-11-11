@@ -1,8 +1,7 @@
 /**
- * A multi-root editor workspace (`.code-workspace`) for a thread with several active roots
- * (`t3team-threadActiveRoots`): the main checkout plus each child worktree, named by the child or
- * branch. Opening the thread in a VS Code family editor opens this workspace; one root opens the
- * plain folder. The file is written to the server's state directory, never into a repository.
+ * A `.code-workspace` for a thread with several active roots: the main checkout plus each child
+ * worktree. VS Code-family editors open this file; one root opens the plain folder. Written to
+ * the server's state directory, never into a repository.
  */
 import { normalizeProjectPathForComparison } from "./path.ts";
 import type { ThreadActiveRoot } from "./t3team-threadActiveRoots.ts";

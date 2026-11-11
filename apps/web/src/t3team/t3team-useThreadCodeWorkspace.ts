@@ -1,10 +1,6 @@
 /**
- * Keeps the multi-root editor workspace of the thread's Open in target current on its server
- * (`t3team.codeWorkspace.sync`): two or more confirmed active roots write the workspace, fewer
- * remove it, so a VS Code family Open in opens all of the thread's worktrees at once and a single
- * root opens the plain folder. No picker and no new control: the existing Open in does it.
- *
- * Fire-and-forget: a failed sync leaves Open in on the folder; it never blocks the panel.
+ * Syncs a multi-root `.code-workspace` for Open in when the thread has two or more confirmed
+ * roots; fewer roots remove it. Fire-and-forget: a failed sync leaves Open in on the folder.
  */
 import { AuthOrchestrationOperateScope, type EnvironmentId, WS_METHODS } from "@t3tools/contracts";
 import { createEnvironmentRpcCommand, runAtomCommand } from "@t3tools/client-runtime/state/runtime";
