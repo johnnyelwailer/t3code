@@ -19,7 +19,7 @@ export interface CloudSessionCreateOptions {
    * Called when this create failed, before the failure toast. Return true to skip the toast
    * (the setup card will show the reason instead).
    */
-  readonly onFailed?: (result?: { readonly cause: Cause.Cause<unknown> }) => boolean | void;
+  readonly onFailed?: (result: { readonly cause: Cause.Cause<unknown> }) => boolean | void;
 }
 
 /**

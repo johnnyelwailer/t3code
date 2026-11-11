@@ -6,6 +6,7 @@
  */
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ProjectId, ThreadId, type CloudSession } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
@@ -195,7 +196,7 @@ describe("Start a plain session", () => {
   it("(d) a failed create leaves the parked send untouched and the action available again", () => {
     const c = create();
     start(c);
-    c.last().onFailed?.();
+    c.last().onFailed?.({ cause: Cause.fail("create-failed") });
     expect(getDraftCloudQueuedSend(draftId)).toMatchObject({
       sessionId: OLD,
       failureKind: "project_not_resolved",
