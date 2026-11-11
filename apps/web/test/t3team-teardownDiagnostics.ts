@@ -42,7 +42,27 @@ function processTable(): string[] {
   }
 }
 
-function dump(reason: string, finished: ReadonlyArray<string>, inFlight: ReadonlyArray<string>) {
+function unfinishedFiles(vitest: unknown): string[] {
+  const state: unknown = Reflect.get(Object(vitest), "state");
+  const read: unknown = Reflect.get(Object(state), "getFiles");
+  const files: unknown = typeof read === "function" ? Reflect.apply(read, state, []) : [];
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((file: unknown) => {
+      const result: unknown = Reflect.get(Object(file), "result");
+      const status: unknown = Reflect.get(Object(result), "state");
+      return { path: String(Reflect.get(Object(file), "filepath")), status: String(status) };
+    })
+    .filter(({ status }) => status !== "pass" && status !== "fail" && status !== "skip")
+    .map(({ path, status }) => `${path} [${status}]`);
+}
+
+function dump(
+  reason: string,
+  finished: ReadonlyArray<string>,
+  inFlight: ReadonlyArray<string>,
+  unfinished: ReadonlyArray<string>,
+) {
   const counts = new Map<string, number>();
   for (const handle of activeHandles()) {
     const label = describeHandle(handle);
@@ -50,6 +70,7 @@ function dump(reason: string, finished: ReadonlyArray<string>, inFlight: Readonl
   }
   log(`DUMP (${reason}); last file finished: ${finished.at(-1) ?? "none"}`);
   log(`in flight (started, not finished): ${inFlight.length === 0 ? "none" : inFlight.join(", ")}`);
+  log(`unfinished per vitest state: ${unfinished.length === 0 ? "none" : unfinished.join(", ")}`);
   log(`active resources: ${JSON.stringify(process.getActiveResourcesInfo())}`);
   for (const [label, count] of counts) log(`handle x${count}: ${label}`);
   for (const line of processTable()) log(`ps: ${line}`);
@@ -62,8 +83,10 @@ export default class TeardownDiagnostics {
   private lastFinishedAt = Date.now();
   private runEndedAt: number | null = null;
   private lastDumpAt = 0;
+  private vitest: unknown = null;
 
-  onInit() {
+  onInit(vitest: unknown) {
+    this.vitest = vitest;
     process.once("exit", (code) => log(`process exit event, code ${String(code)}`));
     setInterval(() => this.tick(), DUMP_EVERY_MS).unref();
   }
@@ -91,11 +114,16 @@ export default class TeardownDiagnostics {
     const idle = this.runEndedAt === null && now - this.lastFinishedAt > IDLE_DUMP_AFTER_MS;
     if ((afterRun || idle) && now - this.lastDumpAt >= DUMP_EVERY_MS) {
       this.lastDumpAt = now;
-      dump(
-        afterRun ? "process still alive after the run ended" : "no file finished for 3 minutes",
-        this.finished,
-        [...this.inFlight],
-      );
+      try {
+        dump(
+          afterRun ? "process still alive after the run ended" : "no file finished for 3 minutes",
+          this.finished,
+          [...this.inFlight],
+          unfinishedFiles(this.vitest),
+        );
+      } catch (error) {
+        log(`dump failed: ${String(error)}`);
+      }
     }
   }
 }
