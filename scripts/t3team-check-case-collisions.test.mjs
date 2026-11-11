@@ -3,7 +3,6 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import * as NodeTest from "node:test";
 import {
   findCaseCollisions,
   findStemCollisions,
@@ -14,6 +13,9 @@ import {
   rejectAllowed,
   run,
 } from "./t3team-check-case-collisions.mjs";
+
+// Runs under `node --test` (the Case collisions workflow) and under the scripts vitest run.
+const NodeTest = process.env.VITEST ? await import("vitest") : await import("node:test");
 
 NodeTest.describe("findCaseCollisions", () => {
   NodeTest.it("returns nothing for a clean tree", () => {
