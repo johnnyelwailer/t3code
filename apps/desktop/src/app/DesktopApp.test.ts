@@ -72,6 +72,13 @@ import * as PreviewManager from "../preview/Manager.ts";
 import * as DesktopVoiceHotkey from "../voice/t3team-DesktopVoiceHotkey.ts";
 import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 
+vi.mock("./t3team-DesktopStorageFlush.ts", () => ({
+  registerDesktopStorageFlush: () => Effect.void,
+}));
+vi.mock("./t3team-atlassianAssetBearer.ts", () => ({
+  registerAtlassianAssetBearer: () => Effect.void,
+}));
+
 it.effect.each([false, true])(
   "stops backends together before flushing history and cancels Linux registration, stop defect=%s",
   (stopDefect) =>
@@ -108,6 +115,7 @@ it.effect.each([false, true])(
           Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
             platform: "linux",
             isDevelopment: false,
+            logDir: "/isolated/logs",
             isPackaged: true,
             configuredBackendPort: Option.some(3773),
             defaultDesktopSettings: { serverExposureMode: "local-only" },

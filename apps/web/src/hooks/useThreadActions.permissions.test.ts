@@ -493,7 +493,7 @@ describe("threads of an unreachable environment (ended cloud session)", () => {
         input: { threadId: target.threadId, override: "removed" },
       },
     ]);
-    expect(state.localEffects).toContain("clear-draft");
+    expect(state.localEffects).toContain("clear-draft:thread");
     expect(state.toasts).toEqual([]);
   });
 
