@@ -1,9 +1,6 @@
 /**
- * The multi-root editor workspace behind Open in (`@t3tools/shared/t3team-codeWorkspace`).
- * `syncCodeWorkspace` keeps one `.code-workspace` file per Open in target in the server's state
- * directory, written when the client reports two or more active roots and removed otherwise.
- * `codeWorkspaceLaunchInput` swaps a VS Code family open of that target for the workspace file.
- * Never writes into a repository; a failure leaves Open in on the plain folder.
+ * Keeps one `.code-workspace` per Open in target in the server's state directory.
+ * Two or more roots write the file; fewer remove it. A failure leaves Open in on the folder.
  *
  * @module t3team-codeWorkspace
  */

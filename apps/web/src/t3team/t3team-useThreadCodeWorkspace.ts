@@ -33,6 +33,7 @@ export function useThreadCodeWorkspace(input: {
     canOperate && input.confirmed && input.cwd !== null
       ? JSON.stringify([input.environmentId, input.cwd, codeWorkspaceFolders(input.roots)])
       : null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes or removes the server-side .code-workspace when the thread's confirmed roots change; Open in reads that file
   useEffect(() => {
     if (request === null) return;
     const [environmentId, cwd, folders] = JSON.parse(request) as [
