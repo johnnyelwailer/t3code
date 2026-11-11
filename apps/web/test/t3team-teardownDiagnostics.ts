@@ -42,13 +42,14 @@ function processTable(): string[] {
   }
 }
 
-function dump(reason: string, finished: ReadonlyArray<string>) {
+function dump(reason: string, finished: ReadonlyArray<string>, inFlight: ReadonlyArray<string>) {
   const counts = new Map<string, number>();
   for (const handle of activeHandles()) {
     const label = describeHandle(handle);
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   log(`DUMP (${reason}); last file finished: ${finished.at(-1) ?? "none"}`);
+  log(`in flight (started, not finished): ${inFlight.length === 0 ? "none" : inFlight.join(", ")}`);
   log(`active resources: ${JSON.stringify(process.getActiveResourcesInfo())}`);
   for (const [label, count] of counts) log(`handle x${count}: ${label}`);
   for (const line of processTable()) log(`ps: ${line}`);
@@ -57,6 +58,7 @@ function dump(reason: string, finished: ReadonlyArray<string>) {
 /** CI-only: says what keeps the vitest process alive when the run stops after the last test file. */
 export default class TeardownDiagnostics {
   private readonly finished: string[] = [];
+  private readonly inFlight = new Set<string>();
   private lastFinishedAt = Date.now();
   private runEndedAt: number | null = null;
   private lastDumpAt = 0;
@@ -66,7 +68,12 @@ export default class TeardownDiagnostics {
     setInterval(() => this.tick(), DUMP_EVERY_MS).unref();
   }
 
+  onTestModuleStart(testModule: { readonly moduleId: string }) {
+    this.inFlight.add(testModule.moduleId);
+  }
+
   onTestModuleEnd(testModule: { readonly moduleId: string }) {
+    this.inFlight.delete(testModule.moduleId);
     this.finished.push(testModule.moduleId);
     this.lastFinishedAt = Date.now();
   }
@@ -87,6 +94,7 @@ export default class TeardownDiagnostics {
       dump(
         afterRun ? "process still alive after the run ended" : "no file finished for 3 minutes",
         this.finished,
+        [...this.inFlight],
       );
     }
   }
