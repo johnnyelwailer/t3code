@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { act, render } from "../../test/render";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
 import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
-import { CloudQueuedSendProviderEnsure } from "./t3team-CloudQueuedSendProviderEnsure";
+import { CloudQueuedSendProviderEnsure } from "./t3team-CloudQueuedSendProviderEnsureGate";
 import {
   resetCloudQueuedSendProviderReadyStore,
   setCloudQueuedSendProviderReady,
