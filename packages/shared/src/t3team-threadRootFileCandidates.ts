@@ -1,12 +1,7 @@
 /**
- * Where else a relative file reference from a thread may live: the same path joined onto each of
- * the thread's other roots (child worktrees, linked or meta-repo checkouts). Upstream's thread
- * evidence (`threadFilePaths`) only finds files the agent visibly touched; a child worktree under
- * a gitignored folder is invisible to the file index, so the roots fill that gap.
- *
- * These are unverified suggestions in priority order: the emitting agent's own root first, then
- * the rest in roots order. The caller verifies each one (the file must exist) and takes the first
- * hit; the ordinary root-joined target always wins when it exists, so `cwd` is left out here.
+ * Other-root candidates for a relative file: the same path on each of the thread's other roots,
+ * agent's own root first. The caller verifies existence and takes the first hit; cwd is omitted
+ * because the ordinary root-joined target already covers it.
  */
 import {
   isAbsolutePath,
