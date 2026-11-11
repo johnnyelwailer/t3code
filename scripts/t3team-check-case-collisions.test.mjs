@@ -68,10 +68,7 @@ describe("findStemCollisions", () => {
   });
 
   it("does not group files in different directories", () => {
-    assert.deepEqual(
-      findStemCollisions(["src/Foo.ts", "lib/foo.ts"]),
-      [],
-    );
+    assert.deepEqual(findStemCollisions(["src/Foo.ts", "lib/foo.ts"]), []);
   });
 
   it("ignores a .tsx next to a .css of the same stem", () => {
@@ -177,7 +174,10 @@ describe("run() against a real git tree", () => {
       git(dir, ["add", "."]);
       git(dir, ["commit", "-m", "clean"]);
       const lines = [];
-      const code = run(["--imports"], { cwd: dir, log: { log: (s) => lines.push(s), error: (s) => lines.push(s) } });
+      const code = run(["--imports"], {
+        cwd: dir,
+        log: { log: (s) => lines.push(s), error: (s) => lines.push(s) },
+      });
       assert.equal(code, 0, lines.join("\n"));
       assert.match(lines.join("\n"), /no case-insensitive collisions/);
     } finally {
@@ -267,7 +267,10 @@ describe("allowlist", () => {
     ];
     const allow = parseAllowlist(`# comment\n${known[0]}\n${known[1]}\n`);
     assert.deepEqual(rejectAllowed([known], allow), []);
-    const wider = [...known, "vendor/t3code/apps/web/src/t3team/t3team-PROJECTDashboardKanbanCollapse.test.mts"];
+    const wider = [
+      ...known,
+      "vendor/t3code/apps/web/src/t3team/t3team-PROJECTDashboardKanbanCollapse.test.mts",
+    ];
     assert.deepEqual(rejectAllowed([wider], allow), [wider]);
   });
 });
