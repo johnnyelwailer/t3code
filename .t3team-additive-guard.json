@@ -1,5 +1,9 @@
 {
   "allowedModifiedFiles": [
+    "apps/desktop/src/app/DesktopApp.test.ts",
+    "apps/server/src/preview/ServerBrowserPage.ts",
+    "packages/provider-opencode/src/server/driver.test.ts",
+    "tsconfig.effect.json",
     "apps/server/src/resourceTelemetry/HostResources.ts",
     "apps/server/src/storageCleanup.test.ts",
     "apps/web/src/environments/primary/auth.ts",
