@@ -4,6 +4,7 @@
  * access over a fake enabled broker. A placed child's turn must reach the broker's `attach`; with no
  * cloud-session access in the server's context, the turn must fail with that reason.
  */
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import { CloudSessionFailedError, EnvironmentId, ProviderSessionId } from "@t3tools/contracts";
@@ -91,7 +92,7 @@ const registryDependencies = Layer.mergeAll(
       getEnvironmentId: Effect.succeed(EnvironmentId.make("00000000-0000-4000-8000-000000000001")),
     }),
   ),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 const fakeBroker = (attached: Deferred.Deferred<string>) =>

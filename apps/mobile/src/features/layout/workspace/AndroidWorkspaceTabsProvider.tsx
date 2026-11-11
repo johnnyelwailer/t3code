@@ -1,8 +1,8 @@
 import type { NavigationState } from "@react-navigation/native";
 import { createContext, use, type ReactNode } from "react";
 import { Platform } from "react-native";
-import { launchesOnExtraTab } from "../../extensions/t3team-workspaceExtraTab";
-import { useWorkspaceExtraTab } from "../../extensions/t3team-useWorkspaceExtraTab";
+import { launchesOnExtraTab } from "../../../extensions/t3team-workspaceExtraTab";
+import { useWorkspaceExtraTab } from "../../../extensions/t3team-useWorkspaceExtraTab";
 import { androidWorkspaceSettingsOpen } from "./android-workspace-tabs";
 import { WorkspaceTabsProvider } from "./WorkspaceTabsContext";
 

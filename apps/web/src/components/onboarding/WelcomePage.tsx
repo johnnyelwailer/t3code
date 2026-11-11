@@ -287,9 +287,7 @@ export function WelcomePage({
                 isPrimary={isPrimary}
                 onImportSourceEnabled={() => scans[0]?.refresh()}
               />
-              <WelcomeCloudSignInOption
-                section={(row) => <WelcomeSection title="Cloud">{row}</WelcomeSection>}
-              />
+              <WelcomeCloudSignInOption Section={WelcomeSection} />
               <ProjectsSection
                 scan={scans[0]}
                 projectImport={projectImport}

@@ -1213,13 +1213,14 @@ it.effect("projects pack provider instances on every client-facing settings path
             {},
             yield* ServerBrowser.ServerBrowser,
             () => Effect.void,
+            { secretReferences: true },
           ).pipe(
             Layer.provide(
               Layer.mergeAll(
                 layerConfigRpcBaseServices,
                 Layer.mock(ExternalLauncher.ExternalLauncher)({
                   resolveAvailableEditors: () => Effect.succeed([]),
-                  resolveFileManagerRevealKind: () => Effect.succeed(undefined),
+                  resolveFileManagerRevealKind: () => Effect.undefined,
                 }),
               ),
             ),

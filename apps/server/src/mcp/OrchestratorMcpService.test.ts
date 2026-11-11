@@ -3687,6 +3687,7 @@ describe("provider usage echo", () => {
   ) =>
     Layer.mergeAll(
       NodeServices.layer,
+      NodeCrypto.layer,
       ServerSettings.layerTest(),
       Layer.mock(ThreadManagementService.ThreadManagementService)({
         hasReceipt: () => Effect.succeed(false),

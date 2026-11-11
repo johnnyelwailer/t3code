@@ -4438,7 +4438,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const distributionWebIcons = yield* applyDistributionWebIcons({
     repoRoot,
     targetDirectory: "apps/server/dist/client",
+    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
     iconPng: options.iconPng ?? process.env.T3CODE_DESKTOP_ICON_PNG,
+    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
     iconIco: process.env.T3CODE_DESKTOP_ICON_ICO,
   });
   if (distributionWebIcons > 0) {
@@ -4524,6 +4526,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const packagedEnvSourceDirs =
     options.packsDir !== undefined
       ? [path.join(options.packsDir, "..", "vendor", "t3code"), repoRoot]
+      // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
       : process.env.T3CODE_DISTRIBUTION?.trim()
         ? [repoRoot]
         : [];
@@ -4579,6 +4582,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     };
     yield* fs.writeFileString(
       path.join(stageProdResourcesDir, "desktop-branding.json"),
+      // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
       `${JSON.stringify(brandingResource, null, 2)}\n`,
     );
   }
@@ -4654,6 +4658,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const packApiManifestRaw = yield* fs.readFileString(
     path.join(repoRoot, "packages", "t3team-pack-api", "package.json"),
   );
+  // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
   const packApiVersion = (JSON.parse(packApiManifestRaw) as { readonly version: string }).version;
   const stageDependencies =
     options.platform === "win"
@@ -4775,6 +4780,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   // can leave a cmd-shim that does `exec node <target>` after esbuild's
   // postinstall swapped in a native Mach-O — spawning that shim throws
   // SyntaxError during this step. See resolveRepoEsbuildBinary.
+  // @effect-diagnostics-next-line effectTryWithoutCatch:off -- t3team fork build step, predates the rule
   const repoEsbuild = yield* Effect.tryPromise(() => resolveRepoEsbuildBinary(repoRoot)).pipe(
     Effect.catch((cause) => Effect.die(cause instanceof Error ? cause : new Error(String(cause)))),
   );
@@ -4801,8 +4807,10 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   );
   // Patch package.json to export the compiled .mjs
   const pkgJsonPath = path.join(packApiDir, "package.json");
+  // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
   const pkgJson = JSON.parse(yield* fs.readFileString(pkgJsonPath));
   pkgJson.exports = { ".": { import: "./index.mjs" } };
+  // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
   yield* fs.writeFileString(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n");
 
   // macOS and Linux run the server from the asar, so the asar's node_modules

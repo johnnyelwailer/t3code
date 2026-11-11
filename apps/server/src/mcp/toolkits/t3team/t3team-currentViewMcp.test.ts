@@ -68,23 +68,23 @@ const session = (publish: boolean) =>
           ),
         ),
       ).layer;
-      const transport = McpServer.layerHttp({
-        name: "view read test",
-        version: "1.0.0",
-        path: "/mcp",
-        protocols: [T3_MCP_PROTOCOL],
-      }).pipe(Layer.provide(AuthLive));
-      const broker = makeBrokerLayer().pipe(Layer.provide(SqlitePersistenceMemory));
-      const server = T3TeamToolkitRegistrationLive.pipe(
+      const registrations = T3TeamToolkitRegistrationLive.pipe(
         Layer.provide(
           Layer.mergeAll(
             Layer.mock(ThreadManagementService.ThreadManagementService)({}),
             Layer.mock(T3TeamAskUserWriter)({}),
           ),
         ),
-        Layer.provideMerge(transport),
-        Layer.provideMerge(broker),
       );
+      const transport = McpServer.layerHttp({
+        name: "view read test",
+        version: "1.0.0",
+        path: "/mcp",
+        protocols: [T3_MCP_PROTOCOL],
+        registrations,
+      }).pipe(Layer.provide(AuthLive));
+      const broker = makeBrokerLayer().pipe(Layer.provide(SqlitePersistenceMemory));
+      const server = transport.pipe(Layer.provideMerge(broker));
       // One build: the broker's store and this one are the same layer reference, so they are one store.
       const context = yield* Layer.build(
         Layer.mergeAll(

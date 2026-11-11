@@ -549,15 +549,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     Effect.gen(function* () {
       for (const version of ["0.1.0", "0.1.1-nightly.20261019.1"]) {
         for (const signed of [false, true]) {
-          const config = yield* createBuildConfig(
-            "mac",
-            "dmg",
+          const config = yield* createBuildConfig({
+            platform: "mac",
+            target: "dmg",
             version,
             signed,
-            false,
-            undefined,
-            undefined,
-          );
+            mockUpdates: false,
+          });
           const mac = config.mac as { extendInfo: Record<string, unknown> };
           for (const key of [
             "NSCalendarsUsageDescription",

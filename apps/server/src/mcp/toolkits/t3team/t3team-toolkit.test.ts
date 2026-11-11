@@ -8,7 +8,7 @@ import { McpSchema, McpServer } from "effect/ai";
 
 import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
-import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
+import { T3TeamToolkitRegistrationLive, layerInProcessMcpServer } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import {
   T3TEAM_MCP_CANONICAL_TOOL_MAP,
@@ -106,7 +106,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provide(t3TeamRegistrationServices),
-    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(layerInProcessMcpServer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
   );
 
@@ -156,7 +156,7 @@ it.effect("refuses a flag-switched tool while its flag is off, without dispatchi
   };
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provide(t3TeamRegistrationServices),
-    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(layerInProcessMcpServer),
     Layer.provideMerge(
       Layer.succeed(
         T3TeamToolBroker,
@@ -226,7 +226,7 @@ it.effect("routes t3_recipe_list through the bound broker callTool dispatch", ()
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provide(t3TeamRegistrationServices),
-    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(layerInProcessMcpServer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
   );
 
@@ -265,7 +265,7 @@ it.effect("refuses the work item draft tools to a read-only client before the br
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provide(t3TeamRegistrationServices),
-    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(layerInProcessMcpServer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
   );
   const readOnly: McpInvocationContext.McpInvocationScope = {
@@ -317,7 +317,7 @@ it.effect("routes t3_recipe_validate through the bound broker callTool dispatch"
   });
   const TestLayer = T3TeamToolkitRegistrationLive.pipe(
     Layer.provide(t3TeamRegistrationServices),
-    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(layerInProcessMcpServer),
     Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
   );
 
@@ -357,7 +357,7 @@ it.effect(
     });
     const TestLayer = T3TeamToolkitRegistrationLive.pipe(
       Layer.provide(t3TeamRegistrationServices),
-      Layer.provideMerge(McpServer.McpServer.layer),
+      Layer.provideMerge(layerInProcessMcpServer),
       Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
     );
 
@@ -423,7 +423,7 @@ const skillMetadataCall = Effect.fn("T3TeamToolkitTest.skillMetadataCall")(funct
 
 const emptySkillMetadataLayer = T3TeamToolkitRegistrationLive.pipe(
   Layer.provide(t3TeamRegistrationServices),
-  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provideMerge(layerInProcessMcpServer),
   Layer.provideMerge(
     Layer.succeed(
       T3TeamToolBroker,

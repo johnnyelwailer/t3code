@@ -34,6 +34,7 @@ const unsupportedTextGeneration = (driver: ProviderDriverKind): TextGeneration["
     generateBranchName: () => fail("generateBranchName"),
     generateThreadTitle: () => fail("generateThreadTitle"),
     generateReviewGuide: () => fail("generateReviewGuide"),
+    generateTranscriptionPostProcessing: () => fail("generateTranscriptionPostProcessing"),
   };
 };
 
@@ -65,6 +66,8 @@ export const bridgePackTextGeneration = (
     generateThreadTitle: (input) =>
       attempt("generateThreadTitle", () => service.generateThreadTitle(input)),
     generateReviewGuide: () => unsupportedOperation(driver, "generateReviewGuide"),
+    generateTranscriptionPostProcessing: () =>
+      unsupportedOperation(driver, "generateTranscriptionPostProcessing"),
     ...(service.generateActivityLabel
       ? {
           generateActivityLabel: (input) =>

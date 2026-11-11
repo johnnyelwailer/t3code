@@ -1364,6 +1364,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
               execute,
               fileSystem,
               path,
+              random,
               timeoutMs: CHECKPOINT_INDEX_TIMEOUT_MS,
               addPrefixArgs: [...indexConfig, ...durableWrite, ...longPaths],
               addFlags: sparseCheckout ? ["--sparse"] : [],

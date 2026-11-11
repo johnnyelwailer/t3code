@@ -130,6 +130,46 @@
               "packages/provider-testing/**/*"
             ],
             "options": { "diagnosticSeverity": { "effectFnOpportunity": "off" } }
+          },
+          {
+            // t3team: upstream added these rules as "error" in the 2026-11-10 sync; fork-owned code
+            // predates them and stays at "suggestion" until a follow-up fixes the sites.
+            "include": [
+              "**/t3team-*",
+              "**/t3team/**/*",
+              "packages/runbook-*/**/*",
+              "packages/integrations-*/**/*",
+              "packages/project-*/**/*",
+              "packages/agent-runner/**/*"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "processEnvInEffect": "suggestion",
+                "effectTryWithoutCatch": "suggestion",
+                "preferSchemaTaggedError": "suggestion",
+                "effectSucceedWithUndefined": "suggestion",
+                "globalJsonInEffect": "suggestion",
+                "extendsNativeError": "suggestion",
+                "unnecessaryTypeofType": "suggestion",
+                "effectSleepZeroToYieldNow": "suggestion",
+                "catchRefailToTapError": "suggestion",
+                "syncToSucceed": "suggestion",
+                "flatMapToTap": "suggestion",
+                "matchBooleanToIsSuccess": "suggestion",
+                "mapConstToAs": "suggestion"
+              }
+            }
+          },
+          {
+            // t3team: runbook packages typecheck with the Effect rules since the effect-tsgo switch.
+            "include": ["packages/runbook-*/**/*"],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "suggestion",
+                "globalDate": "suggestion",
+                "globalRandom": "suggestion"
+              }
+            }
           }
         ]
       }

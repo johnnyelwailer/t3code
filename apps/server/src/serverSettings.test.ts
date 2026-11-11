@@ -1487,9 +1487,15 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         [defaultId]: { driver, configurationSource: "pack" },
       };
       const base = DEFAULT_SERVER_SETTINGS;
-      const unprojected = ServerSettingsModule.redactServerSettingsForClient(base);
+      const unprojected = ServerSettingsModule.redactServerSettingsForClient(base, {
+        secretReferences: true,
+      });
       assert.isFalse(resolveProjectProviderInstanceEnabled(unprojected, null, enabledId));
-      const client = ServerSettingsModule.projectServerSettingsForClient(base, overlay);
+      const client = ServerSettingsModule.projectServerSettingsForClient(
+        base,
+        { secretReferences: true },
+        overlay,
+      );
       assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, enabledId));
       assert.isFalse(resolveProjectProviderInstanceEnabled(client, null, disabledId));
       assert.isTrue(resolveProjectProviderInstanceEnabled(client, null, defaultId));
@@ -1513,7 +1519,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         ...DEFAULT_SERVER_SETTINGS,
         providerInstances: { [nexploreId]: { driver, enabled: false } },
       };
-      const client = ServerSettingsModule.projectServerSettingsForClient(persisted, overlay);
+      const client = ServerSettingsModule.projectServerSettingsForClient(
+        persisted,
+        { secretReferences: true },
+        overlay,
+      );
       assert.deepEqual(client.providerInstances[nexploreId], { driver, enabled: false });
       assert.isFalse(resolveProjectProviderInstanceEnabled(client, null, nexploreId));
     }),
@@ -1586,7 +1596,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         assert.deepEqual(yield* persistedInstance(), { driver, enabled: false });
         assert.isFalse(
           resolveProjectProviderInstanceEnabled(
-            ServerSettingsModule.projectServerSettingsForClient(yield* service.getSettings),
+            ServerSettingsModule.projectServerSettingsForClient(yield* service.getSettings, {
+              secretReferences: true,
+            }),
             null,
             nexploreId,
           ),
@@ -1597,7 +1609,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
         yield* service.updateSettings({ defaultAutoPull: false });
         assert.deepEqual(yield* persistedInstance(), customized);
 
-        const client = ServerSettingsModule.projectServerSettingsForClient(DEFAULT_SERVER_SETTINGS);
+        const client = ServerSettingsModule.projectServerSettingsForClient(
+          DEFAULT_SERVER_SETTINGS,
+          { secretReferences: true },
+        );
         assert.deepEqual(client.providerInstances[nexploreId], {
           driver,
           enabled: true,

@@ -94,7 +94,7 @@ const verifyCompiledInDistribution = Effect.fn("verifyCompiledInDistribution")(f
 ) {
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
-  const distributionDir = process.env.T3CODE_DISTRIBUTION?.trim();
+  const distributionDir = (yield* HostProcess.Environment).T3CODE_DISTRIBUTION?.trim();
   if (distributionDir === undefined || distributionDir === "") return;
 
   const markers: string[] = [];

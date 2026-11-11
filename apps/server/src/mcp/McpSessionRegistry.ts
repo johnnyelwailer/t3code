@@ -239,9 +239,7 @@ export const layer = Layer.effect(McpSessionRegistry, make);
 export const issueActiveMcpCredential = (
   request: McpCredentialRequest,
 ): Effect.Effect<McpIssuedCredential | undefined> =>
-  activeMcpSessionRegistry
-    ? activeMcpSessionRegistry.issue(request)
-    : Effect.sync((): McpIssuedCredential | undefined => undefined);
+  activeMcpSessionRegistry ? activeMcpSessionRegistry.issue(request) : Effect.undefined;
 
 export const touchActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId) : Effect.void;

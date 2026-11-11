@@ -737,9 +737,9 @@ function makeManager(input?: {
       phase: () => undefined,
       awaitSettled: () => Effect.void,
       withManifestLock: (effect) => effect,
-      startStateMigration: () => Effect.succeed(undefined),
+      startStateMigration: () => Effect.undefined,
       resumeStateMigration: () => Effect.void,
-      stateMigrationStatus: () => Effect.succeed(undefined),
+      stateMigrationStatus: () => Effect.undefined,
     }),
   );
 

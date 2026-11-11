@@ -79,18 +79,18 @@ export const toOperationError = (
   // Classify it as control-interrupted so the caller gets actionable guidance
   // (reopen/resnapshot) instead of a bare execution-error message.
   if (isTargetClosedCause(cause)) {
-    return new ServerBrowserOperationError(
-      "PreviewAutomationControlInterruptedError",
-      "This browser tab is closed. Call preview_open.",
-      "closed",
-    );
+    return new ServerBrowserOperationError({
+      tag: "PreviewAutomationControlInterruptedError",
+      message: "This browser tab is closed. Call preview_open.",
+      detail: "closed",
+    });
   }
   if (isAbortedCause(cause)) {
-    return new ServerBrowserOperationError(
-      "PreviewAutomationControlInterruptedError",
-      "Browser control changed. Refresh the snapshot before trying again.",
-      "interrupted",
-    );
+    return new ServerBrowserOperationError({
+      tag: "PreviewAutomationControlInterruptedError",
+      message: "Browser control changed. Refresh the snapshot before trying again.",
+      detail: "interrupted",
+    });
   }
   if (
     /while parsing selector|Unknown engine|Unexpected token|strict mode violation/i.test(message)

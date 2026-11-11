@@ -5781,9 +5781,16 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       notification: false,
       expectedClass: "usage_limit",
     },
-    // Business members hit a credit cap that only the account read reports.
+    // Business and Enterprise members hit a credit cap that only the account read reports.
     {
-      name: "business-credit-cap",
+      name: "member-credit-cap",
+      code: "usageLimitExceeded",
+      notification: false,
+      expectedClass: "usage_limit",
+    },
+    // A cap cached from an earlier cycle has a reset in the past, so the account is read again.
+    {
+      name: "stale-reset",
       code: "usageLimitExceeded",
       notification: false,
       expectedClass: "usage_limit",
@@ -5908,7 +5915,8 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         const readsReset =
           scenario.name === "first-request-reset" ||
           scenario.name === "newer-reset-during-read" ||
-          scenario.name === "business-credit-cap";
+          scenario.name === "member-credit-cap" ||
+          scenario.name === "stale-reset";
         // Usage limits with no known reset read the account before publishing their terminal.
         const readsAccount =
           scenario.expectedClass === "usage_limit" &&
@@ -5963,7 +5971,9 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 ]
               : []),
             ...(readsReset ? [premium] : []),
-            ...(scenario.name === "deferred-reset" ? [snapshot] : []),
+            ...(scenario.name === "deferred-reset" || scenario.name === "stale-reset"
+              ? [snapshot]
+              : []),
             ...(scenario.name === "deferred-reset"
               ? [
                   {
@@ -6057,7 +6067,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                     frame: {
                       id: 4,
                       result:
-                        scenario.name === "business-credit-cap"
+                        scenario.name === "member-credit-cap"
                           ? {
                               rateLimits: {
                                 limitId: "codex",
@@ -6070,13 +6080,15 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                                   resetsAt: 2000100000,
                                 },
                                 spendControlReached: true,
-                                planType: "business",
+                                planType: "enterprise",
                               },
                             }
-                          : {
-                              ...premium.frame.params,
-                              rateLimitsByLimitId: { codex: snapshot.frame.params.rateLimits },
-                            },
+                          : scenario.name === "stale-reset"
+                            ? newerSnapshot.frame.params
+                            : {
+                                ...premium.frame.params,
+                                rateLimitsByLimitId: { codex: snapshot.frame.params.rateLimits },
+                              },
                     },
                   },
                 ]
@@ -6130,6 +6142,9 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               : []),
           ],
         });
+        // Between the cached reset (2033-05-19T07:20) and the one the read reports.
+        if (scenario.name === "stale-reset")
+          yield* TestClock.setTime(Date.parse("2033-05-19T12:00:00.000Z"));
         const resetReceipt = yield* Deferred.make<void>();
         const snapshotReceipt = yield* Deferred.make<void>();
         const terminalReceipt = yield* Deferred.make<void>();
@@ -6170,10 +6185,10 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         if (
           scenario.name === "deferred-reset" ||
           scenario.name === "first-request-reset" ||
-          scenario.name === "business-credit-cap"
+          scenario.name === "member-credit-cap"
         )
           assert.equal(terminal.failure.resetAt, resetAt);
-        if (scenario.name === "newer-reset-during-read")
+        if (scenario.name === "newer-reset-during-read" || scenario.name === "stale-reset")
           assert.equal(terminal.failure.resetAt, "2033-05-20T11:06:40.000Z");
         if (scenario.name === "matching-details")
           assert.equal(terminal.failure.message, "Detailed provider allowance explanation.");

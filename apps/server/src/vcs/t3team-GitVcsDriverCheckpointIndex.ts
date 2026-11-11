@@ -106,15 +106,17 @@ export const indexCheckpointPaths = (deps: {
   readonly execute: ExecuteGit;
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
+  readonly random: SecureRandom.SecureRandom["Service"];
   /** Deadline for the whole-worktree `git add` / `ls-files` enumeration steps. */
   readonly timeoutMs?: number;
   /** `-c key=value` config pairs the caller wants in front of every `git add` (upstream index/fsync config). */
   readonly addPrefixArgs?: readonly string[];
   /** Extra `git add` flags placed before `-A` (upstream passes `--sparse` for sparse checkouts). */
   readonly addFlags?: readonly string[];
-}): Effect.Effect<void, VcsError, SecureRandom.SecureRandom> =>
+}): Effect.Effect<void, VcsError> =>
   Effect.gen(function* () {
-    const { operation, cwd, gitCommonDir, env, execute, fileSystem, path, timeoutMs } = deps;
+    const { operation, cwd, gitCommonDir, env, execute, fileSystem, path, random, timeoutMs } =
+      deps;
     const addPrefixArgs = deps.addPrefixArgs ?? [];
     const addFlags = deps.addFlags ?? [];
     const run = (args: readonly string[]) =>
@@ -164,7 +166,7 @@ export const indexCheckpointPaths = (deps: {
       );
     }
 
-    const pathspecUuid = yield* (yield* SecureRandom.SecureRandom).uuidV4();
+    const pathspecUuid = yield* random.uuidV4();
     const pathspecPath = path.join(gitCommonDir, `t3-checkpoint-pathspec-${pathspecUuid}`);
     const cleanupPathspec = fileSystem.remove(pathspecPath, { force: true }).pipe(Effect.ignore);
 

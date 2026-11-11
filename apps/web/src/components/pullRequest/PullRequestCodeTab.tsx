@@ -1957,7 +1957,7 @@ function PullRequestCodeTab({
             />
             <DiffExplorerFileTree
               files={explorerFiles}
-              entries={diffFileTreeEntries(files)}
+              entries={fileTreeEntries}
               reviewControlsEnabled={enhancedTreeReview}
               selectedKey={activeKey}
               viewed={treeViewed}

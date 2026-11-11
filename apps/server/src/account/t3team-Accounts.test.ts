@@ -1,4 +1,5 @@
 // @effect-diagnostics preferSchemaOverJson:off - the fake issuer writes raw JSON bodies, as a real one does.
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
@@ -111,7 +112,7 @@ const accountsWith = (
   definitions: ReadonlyArray<AccountDefinition> = [ACME],
 ) =>
   layerFor(definitions).pipe(
-    Layer.provide(Layer.mergeAll(issuerLayer(fake), secrets.layer, launcher)),
+    Layer.provide(Layer.mergeAll(issuerLayer(fake), secrets.layer, launcher, NodeCrypto.layer)),
   );
 
 /** The account under test, with its operations bound to `acme`. */

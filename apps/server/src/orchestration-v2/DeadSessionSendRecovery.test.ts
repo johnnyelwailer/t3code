@@ -211,6 +211,7 @@ const layerLiveStaleSession = Layer.effect(
     releaseUnlessBusy: () => Effect.succeed(false),
     detach: () => Effect.void,
     otherWorkingThreads: () => Effect.succeed([]),
+    subscribePromptSuggestion: () => Stream.empty,
   }),
 );
 

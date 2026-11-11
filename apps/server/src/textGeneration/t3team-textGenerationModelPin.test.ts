@@ -17,6 +17,7 @@ import {
   setDistributionModelPolicy,
 } from "../t3team-configuredDefaultModelSelection.ts";
 import * as TextGeneration from "./TextGeneration.ts";
+import * as TextGenerators from "./TextGenerators.ts";
 
 type Call = readonly [op: string, instanceId: string, model: string];
 
@@ -52,6 +53,8 @@ const recordingInstance = (id: string, calls: Call[]): ProviderInstance => {
         record("label", input.modelSelection).pipe(Effect.as({ label: "l" })),
       generateReviewGuide: () =>
         Effect.die("generateReviewGuide stub not configured for this test"),
+      generateTranscriptionPostProcessing: () =>
+        Effect.die("generateTranscriptionPostProcessing stub not configured for this test"),
       generateStructured: (input) =>
         record("structured", input.modelSelection).pipe(Effect.as({ status: "ok" }) as never),
     }),
@@ -76,6 +79,7 @@ const makeRouter = (instances: ReadonlyArray<ProviderInstance>) => {
           resolveLink: () => Effect.die("titles in this test carry their linked context"),
         }),
         ServerSettings.layerTest(),
+        Layer.mock(TextGenerators.TextGenerators)({ runner: () => Effect.undefined }),
       ),
     ),
   );

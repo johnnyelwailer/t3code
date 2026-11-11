@@ -1175,9 +1175,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         // Config-mutating commands invalidate the config cache after they run, so the next
         // readConfigValue is fresh instead of the value held by the hit TTL.
         return input.writesSharedConfig
-          ? guarded.pipe(
-              Effect.flatMap((result) => invalidateConfigCacheValues().pipe(Effect.as(result))),
-            )
+          ? guarded.pipe(Effect.tap(() => invalidateConfigCacheValues()))
           : guarded;
       },
     );

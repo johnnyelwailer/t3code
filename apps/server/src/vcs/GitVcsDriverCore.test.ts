@@ -300,7 +300,11 @@ it.effect("readConfigValue probes git once per key and re-probes after a write",
     assert.equal(yield* Ref.get(configGetProbes), 3);
   }).pipe(
     Effect.scoped,
-    Effect.provide(layerServerConfig.pipe(Layer.provideMerge(NodeServices.layer))),
+    Effect.provide(
+      layerServerConfig.pipe(
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+      ),
+    ),
   ),
 );
 
@@ -365,7 +369,11 @@ it.effect(
       );
     }).pipe(
       Effect.scoped,
-      Effect.provide(layerServerConfig.pipe(Layer.provideMerge(NodeServices.layer))),
+      Effect.provide(
+        layerServerConfig.pipe(
+          Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+        ),
+      ),
     ),
 );
 

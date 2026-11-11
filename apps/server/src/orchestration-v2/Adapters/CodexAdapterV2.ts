@@ -976,7 +976,6 @@ function describeCodexGoal(goal: OrchestrationV2ProviderGoal): string {
 
 // Codex starts the next goal turn milliseconds after the last one completes.
 const CODEX_GOAL_CONTINUATION_GRACE = "5 seconds";
-const CODEX_USAGE_LIMIT_READ_TIMEOUT = "3 seconds";
 
 const providerTurnsForThread = (
   providerTurns: ReadonlyArray<OrchestrationV2ProviderTurn>,
@@ -4581,9 +4580,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             .request("account/rateLimits/read", null)
             .pipe(Effect.timeout("10 seconds"));
           const read = response.rateLimitsByLimitId?.codex ?? response.rateLimits;
-          // A notification that landed during the read is newer than it.
+          // A notification that landed during the read is newer than it. Otherwise the read is the
+          // whole account snapshot and replaces the cache, so a lifted member credit cap clears.
           yield* Ref.update(rateLimitSnapshot, (current) =>
-            current === sent ? mergeCodexRateLimits(current, read) : current,
+            current !== sent || (read.limitId && read.limitId !== "codex") ? current : read,
           );
         }).pipe(
           // The terminal waits on this read, so no failure may skip it; interruption ends both.
@@ -5943,6 +5943,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           },
         );
 
+        // A reset already in the past (a member credit cap cached from an earlier cycle) is unknown.
+        const upcomingResetAt = Effect.fnUntraced(function* (resetAt: string | null | undefined) {
+          if (resetAt == null) return null;
+          return Date.parse(resetAt) > DateTime.toEpochMillis(yield* DateTime.now) ? resetAt : null;
+        });
+
         const publishRootTerminal = Effect.fnUntraced(function* (
           context: ActiveCodexTurnContext,
           event: CodexRootTerminalEvent,
@@ -5954,8 +5960,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   failure: {
                     ...event.failure,
                     resetAt:
-                      event.failure.resetAt ??
-                      failureResetAt(event.failure, yield* Ref.get(rateLimitSnapshot)),
+                      (yield* upcomingResetAt(event.failure.resetAt)) ??
+                      (yield* upcomingResetAt(
+                        failureResetAt(event.failure, yield* Ref.get(rateLimitSnapshot)),
+                      )),
                   },
                 }
               : event;
@@ -5985,10 +5993,11 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           const awaitsReset =
             event.status === "failed" &&
             event.failure.class === "usage_limit" &&
-            event.failure.resetAt == null &&
+            (yield* upcomingResetAt(event.failure.resetAt)) === null &&
             // The account read only reports the ordinary allowance, never a sharing cap's reset.
             !classifyCodexManagedError(event.failure.code)?.usageLimit &&
-            codexUsageLimitResetAt(yield* Ref.get(rateLimitSnapshot)) === null;
+            (yield* upcomingResetAt(codexUsageLimitResetAt(yield* Ref.get(rateLimitSnapshot)))) ===
+              null;
           if (!awaitsReset) yield* publishRootTerminal(context, event);
           const continued = continuedRuns.get(context.providerTurnId) ?? [context];
           if (event.status !== "completed") {

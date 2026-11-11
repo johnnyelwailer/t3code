@@ -450,7 +450,7 @@ describe("V2 environment commands", () => {
 
       expect(result).toEqual({ sequence: 0 });
       expect(commands).toEqual([]);
-    }).pipe(Effect.provide(layerTestCrypto)),
+    }).pipe(Effect.provide(layerTestRandom)),
   );
 
   it.effect(
