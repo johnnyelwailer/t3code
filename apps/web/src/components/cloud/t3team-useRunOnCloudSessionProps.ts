@@ -20,7 +20,12 @@ import {
   useCloudSessionTarget,
 } from "~/cloud/t3team-cloudSessionTargetStore";
 import { CLOUD_SESSION_CREATING_ID } from "~/cloud/t3team-cloudSessionTargetLogic";
-import { useCloudSessionProjectKey } from "~/cloud/t3team-useCloudSessionProjectFollow";
+import { planCloudSessionRebind } from "~/cloud/t3team-cloudSessionRebind";
+import {
+  useCloudSessionMachineProjects,
+  useCloudSessionProjectKey,
+} from "~/cloud/t3team-useCloudSessionProjectFollow";
+import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { isTerminalCloudSessionPhase, runOnCloudSessions } from "./t3team-cloudSessionSplit";
 
 const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
@@ -52,11 +57,13 @@ type CloudSelectorProps = Pick<
 
 /**
  * The "Run on" menu's cloud entries. `scopeKey` (draft id or thread key) owns the
- * optimistic cloud preference so create/pick flips the trigger immediately.
+ * optimistic cloud preference so create/pick flips the trigger immediately. `draftId` is the
+ * unsent draft a pick may retarget; a started thread passes none and is never moved.
  */
 export function useT3TeamRunOnCloudSessionProps(
   projectRef: ScopedProjectRef | null,
   scopeKey: string | null = null,
+  draftId: string | null = null,
 ): {
   readonly available: boolean;
   readonly selectorProps: CloudSelectorProps;
@@ -162,19 +169,6 @@ export function useT3TeamRunOnCloudSessionProps(
     [cloudSessionProject, onCreate, projectKey, scopeKey],
   );
 
-  const onSelectCloudSession = useCallback(
-    (session: CloudSession) => {
-      if (scopeKey === null) return;
-      selectCloudSessionTarget({
-        scopeKey,
-        sessionId: session.sessionId,
-        label: cloudSessionDisplayName(session),
-        projectKey,
-      });
-    },
-    [projectKey, scopeKey],
-  );
-
   const { environments } = useEnvironments();
   const connectedKey = environments
     .filter((environment) => environment.connection.phase === "connected")
@@ -195,6 +189,48 @@ export function useT3TeamRunOnCloudSessionProps(
   const onSetupCloudSessions = useCallback(() => {
     void navigate({ to: "/settings/connections" });
   }, [navigate]);
+
+  // Picking a ready session also rebinds what reads a machine: its environment is reconnected
+  // (the registration may still name the session that ended on it), and an unsent draft moves
+  // onto that machine's copy of the project, so provider status, install and send follow.
+  const machineProjects = useCloudSessionMachineProjects();
+  const onSelectCloudSession = useCallback(
+    (session: CloudSession) => {
+      if (scopeKey === null) return;
+      selectCloudSessionTarget({
+        scopeKey,
+        sessionId: session.sessionId,
+        label: cloudSessionDisplayName(session),
+        projectKey,
+      });
+      const store = useComposerDraftStore.getState();
+      const key = draftId === null ? null : DraftId.make(draftId);
+      const draft = key === null ? null : store.getDraftSession(key);
+      const plan = planCloudSessionRebind({
+        session,
+        connectedEnvironmentIds,
+        projectsOnMachines: machineProjects,
+        projectKey,
+        draftEnvironmentId: draft === null || draft.promotedTo ? null : draft.environmentId,
+      });
+      if (plan.connect) onConnectCloudSession(session);
+      if (plan.projectRef !== null && key !== null) {
+        store.setDraftThreadContext(key, {
+          projectRef: plan.projectRef,
+          environmentSelection: "manual",
+          loadBalancedEnvironmentId: null,
+        });
+      }
+    },
+    [
+      connectedEnvironmentIds,
+      draftId,
+      machineProjects,
+      onConnectCloudSession,
+      projectKey,
+      scopeKey,
+    ],
+  );
 
   // Prefer live session label when the list has caught up.
   const selectedCloudSession = useMemo(() => {
