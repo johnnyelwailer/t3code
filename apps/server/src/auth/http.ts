@@ -1,5 +1,6 @@
 import {
   authScopeRequiredResponse,
+  AuthAccessReadScope,
   AuthAccessWriteScope,
   AuthStandardClientScopes,
   AuthGrantScope,
@@ -479,6 +480,19 @@ export const layer = HttpApiBuilder.group(
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
             failEnvironmentInternal("pairing_link_revoke_failed", error),
+          ),
+        ),
+      )
+      .handle(
+        "listClients",
+        Effect.fn("environment.auth.listClients")(
+          function* (args) {
+            yield* annotateEnvironmentRequest(args.endpoint.name);
+            const session = yield* requireEnvironmentScope(AuthAccessReadScope);
+            return yield* serverAuth.listClientSessions(session.sessionId);
+          },
+          Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
+            failEnvironmentInternal("client_sessions_load_failed", error),
           ),
         ),
       )
