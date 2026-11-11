@@ -70,8 +70,6 @@ import {
 import { resolveProviderInstanceReadiness } from "../../t3team-providerInstanceReadiness";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 import { toolAuthToolForDriverKind } from "../settings/t3team-toolAuthTools";
-import { useFeatureFlag } from "../../t3team/t3team-useFeatureFlag";
-
 type ModelPickerItem = {
   slug: string;
   name: string;
@@ -579,14 +577,14 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
    * this is the actual moment the user hits the problem, not a settings page
    * they may never visit. Only for tools with a sign-in flow at all
    * (`toolAuthToolForDriverKind` returns `undefined` for cursor/grok/
-   * opencode/...), and only while `INTEGRATIONS_TOOL_AUTH` is on; the rest fall back to
-   * today's behaviour (an empty list).
+   * opencode/...); the rest fall back to today's behaviour (an empty list).
    * Suppressed while searching: search already flattens matches across every
    * *ready* instance regardless of which tab is selected, so the connect
    * panel would be showing the wrong instance's state.
+   * `INTEGRATIONS_TOOL_AUTH` is checked inside the panel, against the TARGET environment: reading
+   * it from the primary server put an Install button in front of a cloud machine that refuses it.
    */
-  const toolAuthEnabled = useFeatureFlag("INTEGRATIONS_TOOL_AUTH");
-  const connectPanelCandidate = useMemo(() => {
+  const connectPanelTarget = useMemo(() => {
     if (isSearching || selectedInstanceId === "favorites") {
       return null;
     }
@@ -604,7 +602,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     }
     return { entry, tool, readiness };
   }, [entryByInstanceId, isSearching, selectedInstanceId]);
-  const connectPanelTarget = toolAuthEnabled ? connectPanelCandidate : null;
 
   // Fit the tallest tab so switching tabs never resizes the popup and moves the rail under the cursor.
   const tallestTabUnits = (() => {

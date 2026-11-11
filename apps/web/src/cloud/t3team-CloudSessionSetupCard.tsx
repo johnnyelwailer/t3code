@@ -89,6 +89,8 @@ export function CloudSessionSetupCard({
     <section
       aria-label="Cloud session setup"
       data-cloud-setup-card=""
+      data-cloud-setup-session={session?.sessionId ?? ""}
+      data-cloud-setup-environment={session?.environmentId ?? ""}
       data-state={model.stage}
       data-slow={slow ? "true" : "false"}
       data-not-seen={model.notSeen ? "true" : "false"}

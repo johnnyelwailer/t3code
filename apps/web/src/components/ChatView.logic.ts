@@ -103,6 +103,7 @@ import {
   isClaudeAuthSlotInstance,
   resolveReadyProviderOverride,
 } from "../t3team-readyProviderPreference";
+import { applyProviderSelectionFallbackRule } from "../t3team-providerSelectionFallback";
 
 type ThreadProjection = EnvironmentThread["projection"];
 type ThreadStructureRow = ThreadStructure["visibleTurnItems"][number];
@@ -544,12 +545,17 @@ export function resolveComposerProviderSelection(input: {
   const claudeOnMachine = compatibleEntries.find(
     (entry) => entry.driverKind === "claudeAgent" && entry.enabled,
   );
-  const selectedProviderEntry =
+  const claudePinnedEntry =
     claudeRequested &&
     claudeOnMachine !== undefined &&
     resolvedProviderEntry?.driverKind !== "claudeAgent"
       ? claudeOnMachine
       : resolvedProviderEntry;
+  // Last word on the selection: a provider the user or the thread already chose is not replaced by
+  // a different one, and the allowed swaps (Nexplore AI, same-driver) go back to the composer to
+  // label. See t3team-providerSelectionFallback.ts.
+  const { entry: selectedProviderEntry, fallback: providerFallback } =
+    applyProviderSelectionFallbackRule({ requestedEntry, resolvedEntry: claudePinnedEntry });
   const unavailableProviderInstanceId = selectedProviderEntry
     ? undefined
     : input.lockedProvider
@@ -561,6 +567,7 @@ export function resolveComposerProviderSelection(input: {
     requestedDriverKind,
     lockedContinuationGroupKey,
     unavailableProviderInstanceId,
+    providerFallback,
   };
 }
 

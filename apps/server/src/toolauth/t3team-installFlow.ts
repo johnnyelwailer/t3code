@@ -81,6 +81,7 @@ export function timedOutInstallState(tool: string, formattedTimeout: string): Au
   return {
     tool,
     phase: "failed",
+    reason: "installTimedOut",
     message: `Install timed out after ${formattedTimeout}.`,
   };
 }

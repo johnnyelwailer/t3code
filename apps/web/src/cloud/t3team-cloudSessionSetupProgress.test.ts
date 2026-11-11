@@ -212,10 +212,11 @@ describe("recovery", () => {
     );
   });
 
-  it("offers a fresh session only to a card with no waiting message, once its session is dead", () => {
+  it("offers a fresh session once the card's session is dead, waiting message or not", () => {
     expect(recovery({ session: session("failed") }).tryAgain).toBe(true);
     expect(recovery({ lost: true }).tryAgain).toBe(true);
-    expect(recovery({ session: session("failed"), hasQueued: true }).tryAgain).toBe(false);
+    // A queued message used to leave "Cancel message" as the only way out of a dead session.
+    expect(recovery({ session: session("failed"), hasQueued: true }).tryAgain).toBe(true);
     expect(recovery({ session: session("preparing") }).tryAgain).toBe(false);
   });
 });

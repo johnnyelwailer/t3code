@@ -87,6 +87,7 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
       const missingState: AuthState = {
         tool,
         phase: "failed",
+        reason: "notInstalled",
         ...(adapter.hostname === undefined ? {} : { hostname: adapter.hostname }),
         message: `${shell} is not installed on this machine — install it on the host, then try again.`,
       };
