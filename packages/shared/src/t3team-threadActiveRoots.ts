@@ -118,10 +118,11 @@ export interface ThreadRootShell {
   readonly id: string;
   readonly branch: string | null;
   readonly worktreePath: string | null;
-  readonly title?: string;
+  readonly title?: string | null;
   readonly lineage: { readonly parentThreadId: string | null };
   readonly activeRunId: string | null;
-  readonly updatedAt?: { readonly epochMillis: number };
+  /** Effect DateTime-like; only `epochMillis` is read, and only when it is a number. */
+  readonly updatedAt?: { readonly epochMillis?: number } | null;
   readonly pullRequests?: ReadonlyArray<{
     readonly snapshot: { readonly state: string; readonly headBranch: string } | null;
   }>;
@@ -159,7 +160,9 @@ export function threadRootCandidates(input: {
       openPullRequest:
         openPullRequestBranches(child).size > 0 ||
         (child.branch !== null && parentPrBranches.has(child.branch)),
-      ...(child.updatedAt ? { updatedAtMs: child.updatedAt.epochMillis } : {}),
+      ...(typeof child.updatedAt?.epochMillis === "number"
+        ? { updatedAtMs: child.updatedAt.epochMillis }
+        : {}),
       ...(label ? { label } : {}),
     });
   }
