@@ -1,4 +1,5 @@
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type * as Cause from "effect/Cause";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { LocalCloudSession } from "~/components/cloud/t3team-cloudSessionSplit";
@@ -14,8 +15,11 @@ export interface CloudSessionCreateOptions {
   readonly plain?: boolean;
   /** Called with THIS create's own answer, once it succeeded (not a shared "last session"). */
   readonly onCreated?: (session: CloudSession) => void;
-  /** Called when this create failed, after the failure toast. */
-  readonly onFailed?: () => void;
+  /**
+   * Called when this create failed, before the failure toast. Return true to skip the toast
+   * (the setup card will show the reason instead).
+   */
+  readonly onFailed?: (result: { readonly cause: Cause.Cause<unknown> }) => boolean | void;
 }
 
 /**
@@ -72,12 +76,14 @@ export function useCloudSessionCreate(input: {
             refreshCloudSessionList();
             options?.onCreated?.(result.value);
           } else {
-            reportCloudSessionCreateFailure(
-              result,
-              () => latestRef.current(projectId, options),
-              () => latestRef.current(projectId, { ...options, plain: true }),
-            );
-            options?.onFailed?.();
+            const skipToast = options?.onFailed?.(result) === true;
+            if (!skipToast) {
+              reportCloudSessionCreateFailure(
+                result,
+                () => latestRef.current(projectId, options),
+                () => latestRef.current(projectId, { ...options, plain: true }),
+              );
+            }
           }
         })
         .finally(() => setPendingKind(null));

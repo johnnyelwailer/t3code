@@ -103,8 +103,17 @@ describe("reduceRunOnSelection", () => {
   });
 
   it("keeps the failed create selected instead of reverting to the old session", () => {
-    const state = run(CREATE, { kind: "createFailed" });
-    expect(state).toMatchObject({ sessionId: CLOUD_SESSION_CREATING_ID, createFailed: true });
+    const state = run(CREATE, {
+      kind: "createFailed",
+      message: "Sign in first: the account entry at the bottom of Settings.",
+      reason: "broker_sign_in_required",
+    });
+    expect(state).toMatchObject({
+      sessionId: CLOUD_SESSION_CREATING_ID,
+      createFailed: true,
+      createFailureMessage: "Sign in first: the account entry at the bottom of Settings.",
+      createFailureReason: "broker_sign_in_required",
+    });
     expect(state?.sessionId).not.toBe(OLD.sessionId);
   });
 

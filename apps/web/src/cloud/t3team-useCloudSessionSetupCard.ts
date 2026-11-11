@@ -18,6 +18,7 @@ import { cloudSessionNotSeenYet, cloudSetupRecovery } from "./t3team-cloudSessio
 import { resolveCloudSetupSessionId } from "./t3team-cloudSetupSessionChoice";
 import { resumeParkedSendOnSession } from "./t3team-cloudQueuedSendRecovery";
 import { getCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
+import { CLOUD_SESSION_CREATE_FAILED_TITLE } from "./t3team-cloudSessionFailure";
 import { beginCloudSessionCreate, useCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
 import type { useCloudSessionController } from "./t3team-useCloudSessionController";
@@ -145,7 +146,11 @@ export function useCloudSessionSetupCard(input: {
       projectWait: queued?.facts.projectWait ?? null,
       queued: queued?.facts.queued,
       delivery: queued === null ? "none" : queued.facts.flushing ? "sending" : "queued",
-      sendFailure: queued?.facts.queued.failureMessage ?? null,
+      sendFailure:
+        queued?.facts.queued.failureMessage ??
+        (queued !== null && target?.createFailed === true
+          ? (target.createFailureMessage ?? CLOUD_SESSION_CREATE_FAILED_TITLE)
+          : null),
       lost,
     },
     onCancel: queued?.onCancel,
