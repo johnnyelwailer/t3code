@@ -21,7 +21,7 @@ function isToolAuthFlowEnabled(tool: string, readEnv?: ReadFeatureFlagEnv): bool
 
 /** The state every surface renders when the host's switch is off. Not stored as a session: a
  * retry after the switch is turned back on must start a real flow. */
-export function toolAuthFeatureDisabledState(tool: string): AuthState {
+function toolAuthFeatureDisabledState(tool: string): AuthState {
   return {
     tool,
     phase: "failed",

@@ -28,7 +28,7 @@ export function useSignInDescriptionForEnvironment(
 }
 
 /** How a failure sentence names the machine a sign-in runs on. Mid-sentence, so lower case. */
-export function toolAuthMachineLabel(
+function toolAuthMachineLabel(
   sessions: readonly CloudSession[],
   environmentId: EnvironmentId | null,
 ): string {

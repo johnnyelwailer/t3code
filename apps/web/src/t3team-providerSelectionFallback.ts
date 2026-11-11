@@ -9,7 +9,7 @@ import type { ProviderInstanceId } from "@t3tools/contracts";
 import type { ProviderInstanceEntry } from "./providerInstances";
 
 /** The provider that may be fallen back to automatically. */
-export const NEXPLORE_DRIVER_KIND = "nexplore";
+const NEXPLORE_DRIVER_KIND = "nexplore";
 
 export function isNexploreProviderEntry(entry: ProviderInstanceEntry | undefined): boolean {
   return entry?.driverKind === NEXPLORE_DRIVER_KIND;
