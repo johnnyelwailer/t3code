@@ -5,7 +5,6 @@
  * `current` and `lastConnectedAt`, the fields that check reads.
  */
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EnvironmentHttpApi } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -14,8 +13,6 @@ import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
 import * as Etag from "effect/http/Etag";
 import * as HttpPlatform from "effect/http/HttpPlatform";
-import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
-import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpRouter from "effect/http/HttpRouter";
 
 import * as ServerConfig from "../config.ts";
@@ -24,10 +21,8 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
 import * as ServerSecretStore from "./ServerSecretStore.ts";
 import * as SessionStore from "./SessionStore.ts";
-import * as AuthHttp from "./http.ts";
+import { authClientsRouteLayer } from "./t3team-authClientsRoute.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
-
-class AuthTestApi extends HttpApi.make("environment").add(EnvironmentHttpApi.groups.auth) {}
 
 const layerConfig = ServerConfig.layerTest(process.cwd(), { prefix: "t3-auth-clients-test-" });
 const layerEnvironmentAuth = EnvironmentAuth.layer.pipe(
@@ -37,11 +32,8 @@ const layerEnvironmentAuth = EnvironmentAuth.layer.pipe(
   Layer.provide(ServerEnvironment.layerIdentity),
   Layer.provide(layerConfig),
 );
-const layerRoutes = HttpApiBuilder.layer(AuthTestApi).pipe(
-  Layer.provide(AuthHttp.layer),
-  Layer.provide(AuthHttp.layerAuthenticatedAuth),
+const layerRoutes = authClientsRouteLayer.pipe(
   Layer.provideMerge(layerEnvironmentAuth),
-  Layer.provide(layerConfig),
   Layer.provideMerge(
     HttpPlatform.layer.pipe(
       Layer.provideMerge(NodeServices.layer),
@@ -98,6 +90,10 @@ it.live("lists client sessions with their live connected flag, behind access:rea
 
     const probe = yield* auth.issueSession({ scopes: ["access:read"], label: "idle probe" });
     const desktop = yield* auth.issueSession({ scopes: ["orchestration:read"], label: "desktop" });
+
+    // Not signed in: refused before anything is listed.
+    const anonymous = yield* call("not-a-session-token");
+    expect(anonymous.status).toBe(401);
 
     // Without access:read: refused.
     const refused = yield* call(desktop.token);
