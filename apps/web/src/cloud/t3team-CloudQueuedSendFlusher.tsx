@@ -28,7 +28,7 @@ import {
 } from "./t3team-cloudProjectWaitBound";
 import { resolveCloudQueuedSendFacts } from "./t3team-cloudQueuedSendFacts";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
-import { CloudQueuedSendProviderEnsure } from "./t3team-CloudQueuedSendProviderEnsure";
+import { CloudQueuedSendProviderEnsure } from "./t3team-CloudQueuedSendProviderEnsureGate";
 import {
   getCloudQueuedSendProviderReady,
   subscribeCloudQueuedSendProviderReady,
