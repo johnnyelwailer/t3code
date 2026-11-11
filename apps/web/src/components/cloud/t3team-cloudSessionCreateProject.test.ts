@@ -1,7 +1,10 @@
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveCloudSessionCreateProject } from "./t3team-cloudSessionCreateProject";
+import {
+  resolveCloudSessionCreateProject,
+  resolveCloudSessionCreateProjectOutcome,
+} from "./t3team-cloudSessionCreateProject";
 
 const local = EnvironmentId.make("local");
 const cloud = EnvironmentId.make("cloud-0437");
@@ -64,5 +67,42 @@ describe("resolveCloudSessionCreateProject", () => {
         projects,
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("resolveCloudSessionCreateProjectOutcome", () => {
+  const outcome = (projectKey: string | null) =>
+    resolveCloudSessionCreateProjectOutcome({
+      projectRef: { environmentId: cloud, projectId: cloudProject },
+      primaryEnvironmentId: local,
+      projectKey,
+      projects,
+    });
+
+  it("reports the twin it found", () => {
+    expect(outcome("hive/pti-polassist")).toEqual({
+      kind: "project",
+      project: { environmentId: local, projectId: localProject },
+    });
+  });
+
+  // The hint the Run-on menu shows instead of starting a session with no project at all.
+  it("reports a project that lives only on cloud machines, so the menu can say so", () => {
+    expect(outcome("hive/missing")).toEqual({
+      kind: "elsewhere",
+      projectRef: { environmentId: cloud, projectId: cloudProject },
+    });
+  });
+
+  it("claims nothing about this computer when the copies cannot be matched", () => {
+    expect(outcome(null)).toEqual({ kind: "none" });
+    expect(
+      resolveCloudSessionCreateProjectOutcome({
+        projectRef: null,
+        primaryEnvironmentId: local,
+        projectKey: "hive/pti-polassist",
+        projects,
+      }),
+    ).toEqual({ kind: "none" });
   });
 });

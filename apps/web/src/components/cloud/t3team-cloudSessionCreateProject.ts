@@ -1,12 +1,7 @@
 /**
- * The project a new cloud session is created for, as this computer's server knows it.
- *
- * The desktop's own server dispatches the session and resolves the project from its own checkout
- * (repository and commit to clone, or the folder to start in). A project id from another machine
- * (a cloud session's copy of the same repository) means nothing to it, and a create without a
- * project starts a bare session whose machine never lists a project, so the queued message waits
- * forever. So the composer's project maps to its twin on this computer: the same logical project
- * key the machine list groups by. Pure.
+ * The project a new cloud session is created for, as this computer's server knows it: a project id
+ * from another machine means nothing to the server that dispatches the session, so the composer's
+ * project maps to its twin here by the logical key the machine list groups by. Pure.
  *
  * @module t3team-cloudSessionCreateProject
  */
@@ -17,7 +12,16 @@ export interface CloudSessionCreateProject {
   readonly projectId: ProjectId;
 }
 
-export function resolveCloudSessionCreateProject(input: {
+/**
+ * `elsewhere` is the project that exists only on other (cloud) machines: a create here would start
+ * a bare session whose machine never lists a project, and whose queued message then waits forever.
+ */
+export type CloudSessionCreateProjectOutcome =
+  | { readonly kind: "project"; readonly project: CloudSessionCreateProject }
+  | { readonly kind: "none" }
+  | { readonly kind: "elsewhere"; readonly projectRef: CloudSessionCreateProject };
+
+export function resolveCloudSessionCreateProjectOutcome(input: {
   readonly projectRef: CloudSessionCreateProject | null;
   readonly primaryEnvironmentId: EnvironmentId | null;
   /** The composer project's logical key (`useCloudSessionProjectKey`). */
@@ -27,16 +31,30 @@ export function resolveCloudSessionCreateProject(input: {
     readonly projectId: ProjectId;
     readonly logicalKey: string;
   }>;
-}): CloudSessionCreateProject | undefined {
+}): CloudSessionCreateProjectOutcome {
   const { projectRef, primaryEnvironmentId, projectKey } = input;
-  if (projectRef === null || primaryEnvironmentId === null) return undefined;
-  if (projectRef.environmentId === primaryEnvironmentId) return projectRef;
-  if (projectKey === null) return undefined;
+  if (projectRef === null || primaryEnvironmentId === null) return { kind: "none" };
+  if (projectRef.environmentId === primaryEnvironmentId) {
+    return { kind: "project", project: projectRef };
+  }
+  // Without a logical key the two copies cannot be matched at all, so neither a project nor a
+  // claim that this computer lacks one would be honest.
+  if (projectKey === null) return { kind: "none" };
   const twin = input.projects.find(
     (project) =>
       project.environmentId === String(primaryEnvironmentId) && project.logicalKey === projectKey,
   );
   return twin === undefined
-    ? undefined
-    : { environmentId: primaryEnvironmentId, projectId: twin.projectId };
+    ? { kind: "elsewhere", projectRef }
+    : {
+        kind: "project",
+        project: { environmentId: primaryEnvironmentId, projectId: twin.projectId },
+      };
+}
+
+export function resolveCloudSessionCreateProject(
+  input: Parameters<typeof resolveCloudSessionCreateProjectOutcome>[0],
+): CloudSessionCreateProject | undefined {
+  const outcome = resolveCloudSessionCreateProjectOutcome(input);
+  return outcome.kind === "project" ? outcome.project : undefined;
 }
