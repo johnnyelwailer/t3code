@@ -63,3 +63,31 @@ export function threadRootFileCandidates(
   }
   return candidates;
 }
+
+/** One batched stat: each path's kind, or `null` when it is missing; `null` overall on failure. */
+type StatPaths = (
+  paths: ReadonlyArray<string>,
+) => Promise<ReadonlyArray<"file" | "directory" | "other" | null> | null>;
+
+/**
+ * The first existing file among the thread's other roots for a relative reference, or `null`.
+ * The ordinary cwd-joined file always wins: when it exists this returns `null` so the caller
+ * keeps its normal target. Threads with no extra roots never stat anything.
+ */
+export async function findThreadRootFileMatch(input: {
+  readonly relativePath: string;
+  readonly roots: ReadonlyArray<string>;
+  readonly cwd: string | null | undefined;
+  readonly emittingRoot?: string | null;
+  readonly stat: StatPaths;
+}): Promise<string | null> {
+  const candidates = threadRootFileCandidates(input.relativePath, input);
+  if (candidates.length === 0) return null;
+  const own = input.cwd ? threadRootFileCandidates(input.relativePath, { roots: [input.cwd] }) : [];
+  const kinds = await input.stat([...own, ...candidates]);
+  if (kinds === null) return null;
+  if (own.length > 0 && kinds[0] === "file") return null;
+  const offset = own.length;
+  const index = candidates.findIndex((_, k) => kinds[offset + k] === "file");
+  return index === -1 ? null : candidates[index]!;
+}
