@@ -3,7 +3,7 @@ import type { CloudSession } from "@t3tools/contracts";
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
 import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotResolvedActions";
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
-import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { isProjectNotResolved, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   presentCloudQueuedSendProgress,
   type CloudQueuedSendStepFacts,
@@ -16,6 +16,8 @@ export interface CloudQueuedSendCardInput {
   readonly onCancel: () => void;
   /** Null when retrying cannot help (the session ended). */
   readonly onRetry: (() => void) | null;
+  /** Starts the "Project ready" wait over while the message is still waiting for it. */
+  readonly onRestartWait?: () => void;
   /** The extra ways out of a send that gave up waiting for its project; empty otherwise. */
   readonly recoveryActions?: ReadonlyArray<CloudQueuedSendRecoveryAction>;
 }
@@ -98,6 +100,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
   const currentStep =
     steps.find((step) => step.id === view.currentStepId) ?? steps.at(-1) ?? fallback;
   const terminal = session !== null && isTerminalCloudSessionPhase(session.phase);
+  const keptWaiting = facts.queued !== undefined && isProjectNotResolved(facts.queued);
   return {
     stage,
     session,
@@ -117,7 +120,10 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
       : null,
     detailsUrl: failed ? (session?.detailsUrl ?? null) : null,
     title: failed
-      ? "Setup didn't finish"
+      ? // A kept message that only ran out of waiting is not a broken setup; it can still go out.
+        keptWaiting
+        ? "Still setting up"
+        : "Setup didn't finish"
       : stage === "ready"
         ? "Your cloud session is ready"
         : "Setting up your cloud session",

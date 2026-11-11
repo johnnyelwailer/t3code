@@ -27,6 +27,8 @@ export interface CloudSessionSetupCardProps {
   readonly onCancel?: (() => void) | undefined;
   /** Retry a first message that could not be delivered. */
   readonly onRetry?: (() => void) | null | undefined;
+  /** Start the "Project ready" wait over while the message is still waiting for it. */
+  readonly onRestartWait?: (() => void) | undefined;
   /** More ways out of a message that gave up waiting for its project (Retry and Cancel stay). */
   readonly recoveryActions?: ReadonlyArray<CloudQueuedSendRecoveryAction> | undefined;
   /** Start a fresh session after this one failed. */
@@ -48,6 +50,7 @@ export function CloudSessionSetupCard({
   facts,
   onCancel,
   onRetry,
+  onRestartWait,
   recoveryActions,
   onTryAgain,
   sending = false,
@@ -134,7 +137,7 @@ export function CloudSessionSetupCard({
       )}
 
       {projectWait === null ? null : (
-        <CloudProjectWaitNote notice={projectWait} className="mt-3.5" />
+        <CloudProjectWaitNote notice={projectWait} onRetry={onRestartWait} className="mt-3.5" />
       )}
       {model.currentStep.id === "provider" &&
       session?.environmentId !== undefined &&

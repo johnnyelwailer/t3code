@@ -142,6 +142,7 @@ export function useCloudSessionSetupCard(input: {
     },
     onCancel: queued?.onCancel,
     onRetry: recovery.retry ? (queued?.onRetry ?? null) : null,
+    ...(queued?.onRestartWait === undefined ? {} : { onRestartWait: queued.onRestartWait }),
     recoveryActions: queued?.recoveryActions ?? [],
     onTryAgain: recovery.tryAgain ? tryAgain : null,
     sending: queued?.facts.flushing ?? false,
