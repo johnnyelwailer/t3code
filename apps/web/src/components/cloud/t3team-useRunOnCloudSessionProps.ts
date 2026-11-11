@@ -7,7 +7,6 @@ import { cloudSessionDisplayName } from "~/components/cloud/t3team-cloudSessionD
 import { useServerConfig } from "~/t3team/t3team-serverState";
 import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
-import { openAddProjectToMachine } from "~/components/AddProjectToMachineDialog";
 import { useEnvironments } from "~/state/environments";
 import { getCloudSessionLocal } from "~/cloud/t3team-cloudSessionLocalStore";
 import {
@@ -139,11 +138,14 @@ export function useT3TeamRunOnCloudSessionProps(
     if (createProject.kind !== "elsewhere" || primaryEnvironmentId === null) return null;
     const { projectRef: cloudCopy } = createProject;
     return {
+      // Loaded on the click: the dialog module is heavy and only this one action needs it.
       onClone: () =>
-        openAddProjectToMachine({
-          projectRef: cloudCopy,
-          targetEnvironmentId: primaryEnvironmentId,
-        }),
+        void import("~/components/AddProjectToMachineDialog").then(({ openAddProjectToMachine }) =>
+          openAddProjectToMachine({
+            projectRef: cloudCopy,
+            targetEnvironmentId: primaryEnvironmentId,
+          }),
+        ),
     };
   }, [createProject, primaryEnvironmentId]);
 
