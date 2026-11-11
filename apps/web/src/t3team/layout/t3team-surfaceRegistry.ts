@@ -30,15 +30,18 @@ export interface T3TeamForkSurface {
 /** A surface-kind entry: owns the id and the params schema. */
 export interface T3TeamSurfaceEntry {
   readonly kind: string;
-  /** The upstream tab kind the surface maps onto. */
-  readonly tabKind: "pull-requests" | "surface";
+  /**
+   * The upstream tab kind the surface maps onto. Every fork surface rides upstream's one
+   * generic `surface` tab: the fork adds no tab kinds of its own to the right-panel store.
+   */
+  readonly tabKind: "surface";
   readonly idOf: (params: T3TeamForkSurfaceParams) => string;
   readonly parseParams: (raw: unknown) => T3TeamForkSurfaceParams | null;
 }
 
 export const T3_TEAM_MY_WORK_PANEL: T3TeamSurfaceEntry = {
   kind: T3_TEAM_MY_WORK_PANEL_KIND,
-  tabKind: "pull-requests",
+  tabKind: "surface",
   idOf: () => T3_TEAM_MY_WORK_PANEL_ID,
   parseParams: t3TeamMyWorkPanelParams,
 };

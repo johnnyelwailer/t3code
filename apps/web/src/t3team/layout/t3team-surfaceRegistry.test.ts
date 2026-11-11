@@ -32,6 +32,10 @@ describe("t3team surface registry", () => {
     expect(findT3TeamSurfaceByKind("upstream.kind")).toBeNull();
   });
 
+  it("maps every fork surface, My Work included, onto upstream's one surface tab", () => {
+    expect(T3_TEAM_SURFACE_ENTRIES.map((entry) => entry.tabKind)).toEqual(["surface", "surface"]);
+  });
+
   it("gives the my-work panel its scoped key as its stable id", () => {
     expect(T3_TEAM_MY_WORK_PANEL_ID).toBe(
       `${MY_WORK_PANEL_REF.environmentId}:${MY_WORK_PANEL_REF.threadId}`,
