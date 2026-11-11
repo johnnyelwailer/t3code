@@ -19,6 +19,7 @@ export * from "./t3team-account.ts";
 export * from "./t3team-cloudBroker.ts";
 export * from "./t3team-projectMachine.ts";
 export * from "./t3team-projectMachineSource.ts";
+export * from "./t3team-codeWorkspace.ts";
 export * from "./t3team-desktopRoute.ts";
 export * from "./t3team-desktopRouteCard.ts";
 export * from "./t3team-desktopRouteInternal.ts";

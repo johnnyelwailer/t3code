@@ -119,6 +119,7 @@ import * as ServerConfig from "./config.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
+import { codeWorkspaceLaunchInput, syncCodeWorkspace } from "./t3team-codeWorkspace.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
@@ -3149,7 +3150,12 @@ export const layerWsRpc = (
                 }),
             ),
           ),
-        [WS_METHODS.shellOpenInEditor]: (input) => externalLauncher.launchEditor(input),
+        // t3team: a VS Code family open of a multi-root thread opens its workspace file.
+        [WS_METHODS.shellOpenInEditor]: (input) =>
+          codeWorkspaceLaunchInput(config.stateDir, input).pipe(
+            Effect.flatMap((launch) => externalLauncher.launchEditor(launch)),
+          ),
+        [WS_METHODS.t3teamSyncCodeWorkspace]: (input) => syncCodeWorkspace(config.stateDir, input),
         [WS_METHODS.filesystemGetMetadata]: (input) => workspaceFileSystem.getMetadata(input),
         [WS_METHODS.filesystemBrowse]: (input) =>
           workspaceEntries.browse(input).pipe(

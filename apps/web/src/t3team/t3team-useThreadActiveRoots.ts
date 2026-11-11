@@ -47,6 +47,8 @@ export interface ThreadActiveRoots {
   readonly roots: ReadonlyArray<ThreadActiveRoot>;
   /** Exactly one extra root that exists: Open in editor follows it. */
   readonly followRoot: string | null;
+  /** Every listed folder was confirmed to exist (or there was nothing to check). */
+  readonly confirmed: boolean;
 }
 
 export function useThreadActiveRoots(
@@ -82,11 +84,11 @@ export function useThreadActiveRoots(
         })
       : null,
   ).data;
-  if (paths.length <= 1) return { roots: unchecked, followRoot: null };
-  if (metadata === null) return { roots: unchecked, followRoot: null };
+  if (paths.length <= 1) return { roots: unchecked, followRoot: null, confirmed: true };
+  if (metadata === null) return { roots: unchecked, followRoot: null, confirmed: false };
   const existing = new Set(
     paths.filter((_, index) => metadata.entries[index]?.kind === "directory"),
   );
   const roots = unchecked.filter((root) => existing.has(root.path));
-  return { roots, followRoot: threadFollowRoot(roots, cwd) };
+  return { roots, followRoot: threadFollowRoot(roots, cwd), confirmed: true };
 }

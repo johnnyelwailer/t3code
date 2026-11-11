@@ -24,6 +24,7 @@ import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadOrchestrationPanel } from "../../t3team/components/t3team-ThreadOrchestrationPanel";
 import { useThreadActiveRoots } from "../../t3team/t3team-useThreadActiveRoots";
+import { useThreadCodeWorkspace } from "../../t3team/t3team-useThreadCodeWorkspace";
 import type { T3TeamActiveWorkflowDockItem } from "../../t3team/chat/t3team-activeWorkflowDock";
 import type { ChatViewT3TeamExtensionProps } from "../../t3team/t3team-chatViewExtensions";
 import type { ChatMessage } from "../../types";
@@ -108,8 +109,11 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
     props.activeProjectScripts && visible.scripts ? props.gitCwd : null,
   );
   const activeThreadRef = { environmentId: props.environmentId, threadId: props.threadId };
-  // t3team: a thread whose work lives in exactly one other worktree opens that one.
-  const { followRoot } = useThreadActiveRoots(activeThreadRef, props.gitCwd);
+  // t3team: a thread whose work lives in exactly one other worktree opens that one; with several
+  // roots a VS Code family editor opens them all as one workspace.
+  const activeRoots = useThreadActiveRoots(activeThreadRef, props.gitCwd);
+  const openInCwd = activeRoots.followRoot ?? props.gitCwd;
+  useThreadCodeWorkspace({ environmentId: props.environmentId, cwd: openInCwd, ...activeRoots });
   const branchToolbarProps = {
     showGitControls: props.isGitRepo,
     environmentId: props.environmentId,
@@ -206,7 +210,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                         keybindings={props.keybindings}
                         environmentId={props.environmentId}
                         availableEditors={props.availableEditors}
-                        openInCwd={followRoot ?? props.gitCwd}
+                        openInCwd={openInCwd}
                         enableShortcut={props.openInShortcutEnabled}
                         displayMode="panel"
                       />
