@@ -15,6 +15,7 @@ import { ToolAuthCard } from "../settings/t3team-ToolAuthCard";
 import { ToolAuthUnavailableNotice } from "../settings/t3team-ToolAuthUnavailableNotice";
 import { toolAuthMetaForTool } from "../settings/t3team-toolAuthTools";
 import { ModelPickerSignInRefreshNotice } from "./t3team-ModelPickerSignInRefreshNotice";
+import { reconcileToolAuthWithProvider } from "./t3team-reconcileToolAuthWithProvider";
 import { useProviderRefreshAfterSignIn } from "./t3team-useProviderRefreshAfterSignIn";
 
 export interface ModelPickerProviderConnectPanelProps {
@@ -57,12 +58,18 @@ export function ModelPickerProviderConnectPanel({
   const signInDescription = useSignInDescriptionForEnvironment(environmentId);
   const machineLabel = useToolAuthMachineLabel(environmentId);
   const availability = useToolAuthEnvironmentAvailability(environmentId);
+  // Same source as Settings: if the provider probe says unauthenticated, do not keep a stale
+  // "connected" tool-auth phase on the card (that is what made the menu say "Signed in").
+  const toolAuthState = reconcileToolAuthWithProvider(
+    states.get(meta.tool),
+    entry.snapshot.auth.status,
+  );
   // The provider list is probed on an interval, so once the CLI is signed in the machine is asked
   // to re-check this instance; the picker then swaps this panel for the model list by itself.
   const refreshAfterSignIn = useProviderRefreshAfterSignIn({
     environmentId,
     instanceId: entry.instanceId,
-    signedIn: states.get(meta.tool)?.phase === "connected",
+    signedIn: toolAuthState?.phase === "connected",
   });
   const missingEnvironment = environmentId === null && readiness === "needsInstall";
 
@@ -84,7 +91,7 @@ export function ModelPickerProviderConnectPanel({
         ) : (
           <ToolAuthCard
             meta={meta}
-            state={states.get(meta.tool)}
+            state={toolAuthState}
             signInDescription={signInDescription}
             machineLabel={machineLabel}
             failure={missingEnvironment ? "noEnvironment" : undefined}
@@ -99,6 +106,7 @@ export function ModelPickerProviderConnectPanel({
           status={refreshAfterSignIn.status}
           error={refreshAfterSignIn.error}
           onRetry={refreshAfterSignIn.retry}
+          onSignIn={onConnect}
         />
       </div>
     </div>
