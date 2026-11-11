@@ -77,7 +77,11 @@ export function useCloudSessionSetupCard(input: {
   // onto the new session, so the card carries on there instead of offering only Cancel.
   const tryAgain = () =>
     beginCloudSessionCreate(
-      { scopeKey, projectKey, staleLocalSessionId: getCloudSessionLocal()?.session.sessionId },
+      {
+        scopeKey,
+        projectKey,
+        staleLocalSessionId: getCloudSessionLocal()?.session.sessionId ?? null,
+      },
       undefined,
       () =>
         onCreate(projectId, {

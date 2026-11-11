@@ -161,7 +161,11 @@ export function useT3TeamRunOnCloudSessionProps(
   const onCreateCloudSession = useCallback(
     (options?: CloudSessionCreateOptions) =>
       beginCloudSessionCreate(
-        { scopeKey, projectKey, staleLocalSessionId: getCloudSessionLocal()?.session.sessionId },
+        {
+          scopeKey,
+          projectKey,
+          staleLocalSessionId: getCloudSessionLocal()?.session.sessionId ?? null,
+        },
         options,
         () =>
           onCreate(
@@ -183,7 +187,11 @@ export function useT3TeamRunOnCloudSessionProps(
   const onSetupProjectMachine = useCallback(
     (options?: CloudSessionCreateOptions) =>
       beginCloudSessionCreate(
-        { scopeKey, projectKey, staleLocalSessionId: getCloudSessionLocal()?.session.sessionId },
+        {
+          scopeKey,
+          projectKey,
+          staleLocalSessionId: getCloudSessionLocal()?.session.sessionId ?? null,
+        },
         options,
         () => onCreate(cloudSessionProject?.projectId, { machineSetup: true }),
       ),
