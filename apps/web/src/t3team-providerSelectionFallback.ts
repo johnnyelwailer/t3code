@@ -1,7 +1,7 @@
 /**
- * The one rule about replacing a provider the user or the thread already picked: don't. Nexplore
- * AI is the single exception and is never silent — the caller gets a `ProviderSelectionFallback`
- * to label it. A brand-new thread has no choice to protect, so its default is not covered here.
+ * The one rule about replacing a provider the user or the thread already picked: don't. Two
+ * exceptions, neither silent — the caller gets a `ProviderSelectionFallback` to label it: another
+ * instance of the same driver (same provider and model, other account) and Nexplore AI. A brand-new thread has no choice to protect, so its default is not covered here.
  * @module t3team/providerSelectionFallback
  */
 import type { ProviderInstanceId } from "@t3tools/contracts";
@@ -16,6 +16,8 @@ export function isNexploreProviderEntry(entry: ProviderInstanceEntry | undefined
 }
 
 export interface ProviderSelectionFallback {
+  /** `sameDriver`: another instance of the picked driver; the model stays. */
+  readonly kind: "nexplore" | "sameDriver";
   readonly requestedInstanceId: ProviderInstanceId;
   readonly requestedDisplayName: string;
   readonly fallbackInstanceId: ProviderInstanceId;
@@ -24,7 +26,7 @@ export interface ProviderSelectionFallback {
 
 export interface ProviderSelectionFallbackResult {
   readonly entry: ProviderInstanceEntry | undefined;
-  /** Non-null only for the allowed Nexplore AI swap, and only then must it be shown. */
+  /** Non-null whenever the entry is not the requested instance; the composer must show it. */
   readonly fallback: ProviderSelectionFallback | null;
 }
 
@@ -41,20 +43,19 @@ export function applyProviderSelectionFallbackRule(input: {
   if (requestedEntry === undefined || resolvedEntry === undefined) {
     return { entry: resolvedEntry, fallback: null };
   }
-  // Another instance of the same driver (a team account for a disabled personal one) keeps the
-  // provider and model the user picked, so it is not a switch.
-  if (
-    resolvedEntry.instanceId === requestedEntry.instanceId ||
-    resolvedEntry.driverKind === requestedEntry.driverKind
-  ) {
+  if (resolvedEntry.instanceId === requestedEntry.instanceId) {
     return { entry: resolvedEntry, fallback: null };
   }
-  if (!isNexploreProviderEntry(resolvedEntry)) {
+  // Another instance of the same driver (a team account for a disabled personal one) keeps the
+  // provider and model, but it is still another account, so it is shown too.
+  const sameDriver = resolvedEntry.driverKind === requestedEntry.driverKind;
+  if (!sameDriver && !isNexploreProviderEntry(resolvedEntry)) {
     return { entry: requestedEntry, fallback: null };
   }
   return {
     entry: resolvedEntry,
     fallback: {
+      kind: sameDriver ? "sameDriver" : "nexplore",
       requestedInstanceId: requestedEntry.instanceId,
       requestedDisplayName: requestedEntry.displayName,
       fallbackInstanceId: resolvedEntry.instanceId,

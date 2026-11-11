@@ -11,6 +11,7 @@ import { ComposerBannerStack } from "./ComposerBannerStack";
 import { providerFallbackBannerItem } from "./t3team-providerFallbackBanner";
 
 const FALLBACK = {
+  kind: "nexplore",
   requestedInstanceId: ProviderInstanceId.make("claudeAgent"),
   requestedDisplayName: "Claude Code",
   fallbackInstanceId: ProviderInstanceId.make("nexplore"),
@@ -40,5 +41,35 @@ describe("provider fallback indicator", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Dismiss Nexplore AI notice" }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("names another account of the same provider, with no switch-back button", async () => {
+    await using screen = await render(
+      <ComposerBannerStack
+        items={[
+          providerFallbackBannerItem({
+            fallback: {
+              kind: "sameDriver",
+              requestedInstanceId: ProviderInstanceId.make("claudeAgent"),
+              requestedDisplayName: "Claude Code",
+              fallbackInstanceId: ProviderInstanceId.make("claude_team"),
+              fallbackDisplayName: "Claude Team",
+            },
+            onUseRequested: vi.fn(),
+            onDismiss: vi.fn(),
+          }),
+        ]}
+        detached
+      />,
+      { router: false },
+    );
+
+    await expect.element(screen.getByText("Using Claude Team")).toBeInTheDocument();
+    await expect
+      .element(screen.getByText("Claude Code is off on this machine. Same model."))
+      .toBeInTheDocument();
+    expect(
+      screen.container.querySelector("[data-testid=provider-fallback-use-requested]"),
+    ).toBeNull();
   });
 });

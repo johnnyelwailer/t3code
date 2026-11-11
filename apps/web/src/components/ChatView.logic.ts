@@ -557,7 +557,7 @@ export function resolveComposerProviderSelection(input: {
       ? claudeOnMachine
       : resolvedProviderEntry;
   // Last word on the selection: a provider the user or the thread already chose is not replaced by
-  // a different one, and the single allowed swap (Nexplore AI) is handed back for the composer to
+  // a different one, and the allowed swaps (Nexplore AI, same-driver) go back to the composer to
   // label. See t3team-providerSelectionFallback.ts.
   const { entry: selectedProviderEntry, fallback: providerFallback } =
     applyProviderSelectionFallbackRule({ requestedEntry, resolvedEntry: claudePinnedEntry });

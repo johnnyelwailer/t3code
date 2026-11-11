@@ -2818,7 +2818,7 @@ export default function ChatView(props: ChatViewProps) {
             }),
           ]
         : [];
-    // The one allowed automatic provider swap, shown as such. Never silent: see
+    // The allowed automatic provider swaps, shown as such. Never silent: see
     // t3team-providerSelectionFallback.ts.
     const providerFallbackItems: ComposerBannerStackItem[] =
       providerFallback !== null &&

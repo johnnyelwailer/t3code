@@ -38,14 +38,23 @@ describe("applyProviderSelectionFallbackRule", () => {
     expect(result.fallback).toBeNull();
   });
 
-  it("lets another instance of the same driver stand in: same provider, same model", () => {
-    const claudeTeam = entry("claudeAgent", { instanceId: ProviderInstanceId.make("claude_team") });
+  it("lets another instance of the same driver stand in, and reports it: never silent", () => {
+    const claudeTeam = entry("claudeAgent", {
+      instanceId: ProviderInstanceId.make("claude_team"),
+      displayName: "Claude Team",
+    });
     const result = applyProviderSelectionFallbackRule({
       requestedEntry: claude,
       resolvedEntry: claudeTeam,
     });
     expect(result.entry?.instanceId).toBe(claudeTeam.instanceId);
-    expect(result.fallback).toBeNull();
+    expect(result.fallback).toEqual({
+      kind: "sameDriver",
+      requestedInstanceId: claude.instanceId,
+      requestedDisplayName: claude.displayName,
+      fallbackInstanceId: claudeTeam.instanceId,
+      fallbackDisplayName: "Claude Team",
+    });
   });
 
   it("allows the swap to Nexplore AI, and reports it so the composer can say so", () => {
@@ -55,6 +64,7 @@ describe("applyProviderSelectionFallbackRule", () => {
     });
     expect(result.entry?.instanceId).toBe(nexplore.instanceId);
     expect(result.fallback).toEqual({
+      kind: "nexplore",
       requestedInstanceId: claude.instanceId,
       requestedDisplayName: claude.displayName,
       fallbackInstanceId: nexplore.instanceId,

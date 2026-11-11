@@ -7,9 +7,9 @@ import { Button } from "../ui/button";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 
 /**
- * Says so when the composer is not on the provider that was asked for. The one automatic swap
- * left (Nexplore AI) is allowed precisely because it can be shown: this strip names both
- * providers and puts the original one click away.
+ * Says so when the composer is not on the instance that was asked for: Nexplore AI, or another
+ * account of the same provider. Both names are shown; for Nexplore AI the original is one click
+ * away (a same-driver stand-in only happens because the original is off, so it has no button).
  * @module components/chat/providerFallbackBanner
  */
 export function providerFallbackBannerItem({
@@ -26,17 +26,21 @@ export function providerFallbackBannerItem({
     variant: "warning",
     icon: <TriangleAlertIcon />,
     title: `Using ${fallback.fallbackDisplayName}`,
-    description: `${fallback.requestedDisplayName} can't start on this machine`,
-    actions: (
-      <Button
-        size="xs"
-        variant="ghost"
-        data-testid="provider-fallback-use-requested"
-        onClick={onUseRequested}
-      >
-        Use {fallback.requestedDisplayName}
-      </Button>
-    ),
+    description:
+      fallback.kind === "sameDriver"
+        ? `${fallback.requestedDisplayName} is off on this machine. Same model.`
+        : `${fallback.requestedDisplayName} can't start on this machine`,
+    actions:
+      fallback.kind === "sameDriver" ? undefined : (
+        <Button
+          size="xs"
+          variant="ghost"
+          data-testid="provider-fallback-use-requested"
+          onClick={onUseRequested}
+        >
+          Use {fallback.requestedDisplayName}
+        </Button>
+      ),
     dismissLabel: `Dismiss ${fallback.fallbackDisplayName} notice`,
     onDismiss,
   };
