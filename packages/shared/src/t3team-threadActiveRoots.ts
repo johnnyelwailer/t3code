@@ -1,20 +1,7 @@
 /**
- * The thread's active roots: the folders a thread's work really lives in (its own checkout plus
- * the worktrees its children use). Open in editor, file links and the file tree read this list;
- * a later multi-root editor workspace and per-worktree file tree sections build on it.
- *
- * Rule (owner decision 2026-11-11): a folder qualifies only when it exists AND it is
- *   1. the thread's current worktree or the project's primary checkout, or
- *   2. the cwd of a child that is still running, or
- *   3. dirty or holding unpushed commits, or
- *   4. the checkout of an open pull request linked on this thread.
- * "Recently touched" does not qualify: long threads would pull in dozens of settled worktrees.
- * Repo-wide worktree lists are never a source. Leftovers stay reachable later through an explicit
- * "add the rest" action, never a picker.
- *
- * Order: current, primary, running children (newest first), open-PR checkouts, dirty. Cap 8 by
- * default, never more than 12; the oldest clean entries drop first. Missing folders are skipped
- * quietly. Old threads with no children give just their own checkout.
+ * Active roots exist and are the current or primary checkout, a running child's cwd, dirty or
+ * unpushed, or an open-PR checkout. Cap 8, hard 12. Missing folders skip quietly. Recently
+ * touched or repo-wide worktree lists never qualify. Dirty/unpushed is not yet known on the client.
  */
 import { normalizeProjectPathForComparison } from "./path.ts";
 
