@@ -24,10 +24,8 @@ import {
 const GH = toolAuthMetaForTool("gh");
 
 /**
- * Signs the GitHub CLI in to the host a session action needed, then runs the action again.
- * Opens only when `request` is set by a user click (`acceptCloudSessionSignInOffer`); a
- * create failure records an offer and does not open this dialog (InvNoAutoDialog). Once
- * open, the gh device flow is the Connected tools one (`toolAuth.start` for `gh`).
+ * GitHub CLI device-flow dialog. Opens only from a user click (InvNoAutoDialog).
+ * A create failure records an offer and does not open this.
  */
 export function CloudSessionSignInDialogHost() {
   const request = useCloudSessionSignInStore((state) => state.request);

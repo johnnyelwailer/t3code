@@ -10,7 +10,6 @@ import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 import {
   acceptCloudSessionSignInOffer,
   clearCloudSessionSignIn,
-  offerCloudSessionSignIn,
   requestCloudSessionSignIn,
   toolAuthStateIsForHost,
   useCloudSessionSignInStore,

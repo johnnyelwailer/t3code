@@ -1,7 +1,6 @@
 /**
- * Gathers visible-status facts for the open thread and runs the reducer.
- * If the setup card is already on screen, banners stay down even when facts
- * are slightly behind (InvNoEndedAndSettingUp).
+ * Visible-status facts for the open thread, then the reducer.
+ * A live setup card keeps banners down if facts lag (InvNoEndedAndSettingUp).
  */
 import type { EnvironmentId } from "@t3tools/contracts";
 

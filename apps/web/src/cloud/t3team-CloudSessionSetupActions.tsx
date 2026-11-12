@@ -1,9 +1,6 @@
 /**
- * The setup card's one primary action and its "⋯". Retry leads whenever retrying is possible, a
- * fresh session leads when it is not, and a waiting message keeps Cancel; everything else — the
- * recovery actions, the way out, the provider's run log — sits in the overflow.
- * A click gets a visible pending label immediately (under 100 ms); a second click is ignored.
- * When GitHub sign-in is required, Sign in is the primary and the dialog opens only from that click.
+ * The setup card's one primary action and overflow, with an immediate pending label.
+ * GitHub Sign in is primary when offered; the dialog opens only from that click.
  */
 import { RotateCcwIcon, XIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";

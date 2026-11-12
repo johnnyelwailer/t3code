@@ -1,9 +1,8 @@
 /**
- * A visible reaction to a click within one frame (well under 100 ms), then
- * pending until the parent shows progress, or an inline error with one Retry.
- * A second click while pending is ignored (double-click / duplicate send).
+ * Visible click reaction in one frame, then pending, or an inline error with one Retry.
+ * A second click while pending is ignored.
  */
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 export interface CloudSessionOptimisticAction {
   readonly pending: boolean;
@@ -17,7 +16,7 @@ export function useCloudSessionOptimisticAction(): CloudSessionOptimisticAction 
   const [error, setError] = useState(false);
   const pendingRef = useRef(false);
 
-  const run = useCallback((fn: () => void | Promise<void>) => {
+  function run(fn: () => void | Promise<void>) {
     if (pendingRef.current) return;
     pendingRef.current = true;
     setError(false);
@@ -36,13 +35,13 @@ export function useCloudSessionOptimisticAction(): CloudSessionOptimisticAction 
       setError(true);
       setPending(false);
     }
-  }, []);
+  }
 
-  const clear = useCallback(() => {
+  function clear() {
     pendingRef.current = false;
     setPending(false);
     setError(false);
-  }, []);
+  }
 
   return { pending, error, run, clear };
 }

@@ -2,11 +2,8 @@ import type { ToolAuthState } from "@t3tools/contracts";
 import { create } from "zustand";
 
 /**
- * A cloud-session action that stopped because the GitHub CLI is not signed in
- * to a host it needs. The failure path records an *offer* (an inline Sign-in
- * button). The dialog (`CloudSessionSignInDialogHost`) opens only when the
- * user accepts that offer — never automatically (InvNoAutoDialog,
- * CloudSession.tla CreateNeedsGitHubSignIn is gated on ~ApplyFix).
+ * GitHub sign-in needed: record an offer, not an open dialog.
+ * The dialog opens only when the user accepts (InvNoAutoDialog).
  */
 export type CloudSessionSignInRequest = {
   readonly host?: string | undefined;

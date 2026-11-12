@@ -1,11 +1,4 @@
-/**
- * Filters composer banners so a thread shows one cloud-session status.
- * Matches CloudSession.tla ApplyFix = TRUE: no ended, clone, offline, or
- * bind banner while the setup card is up; no clone banner at all (folded
- * into the card); ended only when nothing is being set up and the user is
- * not already starting another session. Other banners (provider fallback,
- * usage limits, branch mismatch) are left alone.
- */
+/** Filter composer banners to one cloud-session status (CloudSession.tla, ApplyFix). Other banners stay. */
 import type { CloudSessionVisibleStatus } from "./t3team-cloudSessionVisibleStatus";
 
 /** When the live card is up, force one status so banners cannot race it. */

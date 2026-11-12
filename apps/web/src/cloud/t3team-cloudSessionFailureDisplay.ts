@@ -1,10 +1,4 @@
-/**
- * Display wording for a parked or failed queued send. A persisted failureMessage
- * may still carry the retired "#683" promise to "start a plain session" even when
- * that action is not on offer (the menu only includes it when projectId is
- * defined). Strip that clause so the card never promises a way out it does not
- * have.
- */
+/** Strip a persisted "start a plain session" clause when that action is not on offer. */
 
 const PLAIN_SESSION_PROMISE = /start a plain session/i;
 
