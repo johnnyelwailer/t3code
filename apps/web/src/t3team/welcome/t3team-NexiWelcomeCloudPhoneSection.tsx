@@ -1,4 +1,6 @@
-import { CloudIcon, SmartphoneIcon } from "lucide-react";
+import { CloudIcon, HourglassIcon, SmartphoneIcon } from "lucide-react";
+
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 import { NexiWelcomePhoneRow } from "./t3team-NexiWelcomePhoneRow";
 import { SecondaryAction, ServiceMark, StatusLabel, WelcomeItem } from "./t3team-welcomeLayout";
@@ -75,7 +77,19 @@ export function NexiWelcomeCloudPhoneSection({
     <WelcomeItem
       mark={cloudMark}
       title="Cloud sessions"
-      status={<StatusLabel status="pending" label="Setting up" />}
+      status={
+        <span className="inline-flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger
+              render={<span className="inline-flex text-muted-foreground" tabIndex={0} />}
+            >
+              <HourglassIcon className="size-3.5" aria-label="A cloud machine is warming up" />
+            </TooltipTrigger>
+            <TooltipPopup>A cloud machine is warming up</TooltipPopup>
+          </Tooltip>
+          <StatusLabel status="ready" label="Ready" />
+        </span>
+      }
     />
   ) : !cloudUsable ? (
     <WelcomeItem
