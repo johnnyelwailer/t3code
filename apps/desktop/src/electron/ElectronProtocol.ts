@@ -15,17 +15,26 @@ import * as Electron from "electron";
 export const DESKTOP_HOST = "app";
 const DESKTOP_PRODUCTION_SCHEME = "t3code";
 const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
+export const NEXI_WORK_SCHEME = "nexi-work";
 
-export function getDesktopScheme(isDevelopment: boolean): string {
+export type DesktopSchemeOptions = {
+  readonly isolatedInstance?: boolean;
+};
+
+export function getDesktopScheme(
+  isDevelopment: boolean,
+  options?: DesktopSchemeOptions,
+): string {
+  if (options?.isolatedInstance) return NEXI_WORK_SCHEME;
   return isDevelopment ? DESKTOP_DEVELOPMENT_SCHEME : DESKTOP_PRODUCTION_SCHEME;
 }
 
-function getDesktopOrigin(isDevelopment: boolean): string {
-  return `${getDesktopScheme(isDevelopment)}://${DESKTOP_HOST}`;
+function getDesktopOrigin(isDevelopment: boolean, options?: DesktopSchemeOptions): string {
+  return `${getDesktopScheme(isDevelopment, options)}://${DESKTOP_HOST}`;
 }
 
-export function getDesktopUrl(isDevelopment: boolean): string {
-  return `${getDesktopOrigin(isDevelopment)}/`;
+export function getDesktopUrl(isDevelopment: boolean, options?: DesktopSchemeOptions): string {
+  return `${getDesktopOrigin(isDevelopment, options)}/`;
 }
 
 export class ElectronProtocolRegistrationError extends Schema.TaggedError<ElectronProtocolRegistrationError>()(
@@ -109,27 +118,31 @@ function withContentSecurityPolicy(response: Response, policy: string): Response
 
 // Must run synchronously before Electron emits ready.
 function registerDesktopSchemePrivilegesSync(): void {
+  const privileged = {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true,
+  } as const;
   Electron.protocol.registerSchemesAsPrivileged([
     {
       scheme: DESKTOP_PRODUCTION_SCHEME,
       privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-        stream: true,
+        ...privileged,
         // Custom schemes must opt into V8 caching; dev URLs serve changing code.
         codeCache: true,
       },
     },
     {
       scheme: DESKTOP_DEVELOPMENT_SCHEME,
+      privileges: { ...privileged },
+    },
+    {
+      scheme: NEXI_WORK_SCHEME,
       privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-        stream: true,
+        ...privileged,
+        codeCache: true,
       },
     },
   ]);

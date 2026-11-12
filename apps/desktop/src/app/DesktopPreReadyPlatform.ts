@@ -130,7 +130,7 @@ export const make = Effect.gen(function* () {
               process.env.T3CODE_DESKTOP_LAUNCHER_PATH?.trim() ||
               process.env.APPIMAGE?.trim() ||
               process.execPath,
-            scheme: ElectronProtocol.getDesktopScheme(linux.isDevelopment),
+            scheme: ElectronProtocol.getDesktopScheme(linux.isDevelopment, { isolatedInstance: linux.isolatedInstance }),
             ...(iconPath === undefined ? {} : { iconPath }),
           }),
           "utf8",

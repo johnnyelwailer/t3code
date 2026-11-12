@@ -22,7 +22,7 @@ class MicrophoneSettingsUnavailableError extends Schema.TaggedError<MicrophoneSe
 const widgetService = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   return getVoiceWidgetService({
-    applicationUrl: getDesktopUrl(environment.isDevelopment),
+    applicationUrl: getDesktopUrl(environment.isDevelopment, { isolatedInstance: environment.isolatedInstance }),
     preloadPath: environment.preloadPath,
   });
 });

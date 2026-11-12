@@ -78,7 +78,7 @@ const make = Effect.gen(function* () {
     yield* Ref.set(markerPath, Option.some(marker));
     const directory = yield* findV1LocalStorage;
     if (directory === null) return yield* writeMarker;
-    const origin = ElectronProtocol.getDesktopUrl(false).replace(/\/$/, "");
+    const origin = ElectronProtocol.getDesktopUrl(false, { isolatedInstance: environment.isolatedInstance }).replace(/\/$/, "");
     const read = yield* readChromiumLocalStorage(directory, origin).pipe(
       Effect.provideService(FileSystem.FileSystem, fs),
       Effect.provideService(Path.Path, path),

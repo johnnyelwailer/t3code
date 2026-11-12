@@ -71,7 +71,7 @@ export const registerAtlassianAssetBearer = Effect.fn("desktop.t3team.atlassianA
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const pool = yield* DesktopBackendPool.DesktopBackendPool;
     const localAuth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
-    const applicationUrl = getDesktopUrl(environment.isDevelopment);
+    const applicationUrl = getDesktopUrl(environment.isDevelopment, { isolatedInstance: environment.isolatedInstance });
     const context = yield* Effect.context<never>();
     const bearerFor = Effect.fn("desktop.t3team.atlassianAssetBearer.bearerFor")(
       function* (requestUrl: string, pageUrl: string | undefined) {

@@ -187,3 +187,14 @@ describe("ElectronProtocol", () => {
     }).pipe(Effect.provide(layerProtocol)),
   );
 });
+
+describe("getDesktopScheme", () => {
+  it("uses nexi-work for an isolated instance and the upstream schemes otherwise", () => {
+    assert.equal(ElectronProtocol.getDesktopScheme(false), "t3code");
+    assert.equal(ElectronProtocol.getDesktopScheme(true), "t3code-dev");
+    assert.equal(ElectronProtocol.getDesktopScheme(false, { isolatedInstance: true }), "nexi-work");
+    assert.equal(ElectronProtocol.getDesktopScheme(true, { isolatedInstance: true }), "nexi-work");
+    assert.equal(ElectronProtocol.getDesktopUrl(false, { isolatedInstance: true }), "nexi-work://app/");
+    assert.equal(ElectronProtocol.getDesktopUrl(false), "t3code://app/");
+  });
+});

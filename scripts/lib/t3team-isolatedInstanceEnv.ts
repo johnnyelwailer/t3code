@@ -54,14 +54,27 @@ export function isIsolatedInstanceBuild(env: Env): boolean {
   return env.T3CODE_DESKTOP_ISOLATED_INSTANCE?.trim() === "1";
 }
 
-/** The `t3code://` URL scheme claim of a build. An isolated instance leaves it to the installed app. */
+export const NEXI_WORK_PROTOCOL_SCHEME = "nexi-work";
+export const LIVE_NEXI_APP_ID = "ch.nexplore.nexi.work";
+
+/**
+ * The OS URL-scheme claim of a build. An isolated live Nexi build claims
+ * `nexi-work://` and never `t3code://`. Other isolated flavors leave the
+ * scheme to live. A non-isolated build still claims the upstream schemes.
+ */
 export function t3codeProtocolClaims(env: Env): ReadonlyArray<{
   readonly name: string;
   readonly schemes: readonly string[];
 }> {
-  return isIsolatedInstanceBuild(env)
-    ? []
-    : [{ name: "T3 Code", schemes: ["t3code", "t3code-dev"] }];
+  if (!isIsolatedInstanceBuild(env)) {
+    return [{ name: "T3 Code", schemes: ["t3code", "t3code-dev"] }];
+  }
+  const scheme = env.T3CODE_DESKTOP_PROTOCOL_SCHEME?.trim();
+  const appId = env.T3CODE_DESKTOP_APP_ID?.trim();
+  if (scheme === NEXI_WORK_PROTOCOL_SCHEME || appId === LIVE_NEXI_APP_ID) {
+    return [{ name: "Nexi Work", schemes: [NEXI_WORK_PROTOCOL_SCHEME] }];
+  }
+  return [];
 }
 
 /** Extra `desktop-branding.json` fields for an isolated instance (none for a normal build). */

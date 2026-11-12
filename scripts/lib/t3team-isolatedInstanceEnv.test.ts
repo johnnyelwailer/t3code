@@ -66,11 +66,26 @@ describe("resolveAtlassianCallbackPorts", () => {
 });
 
 describe("isolated instance build output", () => {
-  it("writes isolatedInstance into the branding and drops the t3code:// claim only when asked", () => {
+  it("writes isolatedInstance into the branding and claims nexi-work:// only for live Nexi", () => {
     const on = { T3CODE_DESKTOP_ISOLATED_INSTANCE: "1" };
     assert.isTrue(isIsolatedInstanceBuild(on));
     assert.deepEqual(isolatedBrandingFields(on), { isolatedInstance: true });
     assert.deepEqual(t3codeProtocolClaims(on), []);
+    assert.deepEqual(
+      t3codeProtocolClaims({ ...on, T3CODE_DESKTOP_APP_ID: "ch.nexplore.nexi.work" }),
+      [{ name: "Nexi Work", schemes: ["nexi-work"] }],
+    );
+    assert.deepEqual(
+      t3codeProtocolClaims({ ...on, T3CODE_DESKTOP_PROTOCOL_SCHEME: "nexi-work" }),
+      [{ name: "Nexi Work", schemes: ["nexi-work"] }],
+    );
+    assert.deepEqual(
+      t3codeProtocolClaims({
+        ...on,
+        T3CODE_DESKTOP_APP_ID: "ch.nexplore.nexi.work.nightly",
+      }),
+      [],
+    );
 
     for (const off of [{}, { T3CODE_DESKTOP_ISOLATED_INSTANCE: "0" }]) {
       assert.isFalse(isIsolatedInstanceBuild(off));
