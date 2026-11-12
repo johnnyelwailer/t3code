@@ -48,7 +48,7 @@ describe("resolveCloudSessionVisibleStatus", () => {
   it("08:27 ended + still-setting-up: only the failed setup card, Try again (not the ended banner)", () => {
     const last = tlcTraces["phil-0827"].at(-1)!;
     const s = resolveCloudSessionVisibleStatus(last.facts);
-    expect(last.current.visible.sort()).toEqual(["ended", "setup"]);
+    expect([...last.current.visible].sort()).toEqual(["ended", "setup"]);
     expect(s.setupStage).toBe("failed");
     expect(s.visible).toEqual(["setup"]);
     expect(s.visible).toEqual(last.fixed.visible);
@@ -59,7 +59,7 @@ describe("resolveCloudSessionVisibleStatus", () => {
   it("08:32 ended + setting up + Add to machine: only the working setup card, no banners", () => {
     const last = tlcTraces["phil-0832"].at(-1)!;
     const s = resolveCloudSessionVisibleStatus(last.facts);
-    expect(last.current.visible.sort()).toEqual(["clone", "ended", "setup"]);
+    expect([...last.current.visible].sort()).toEqual(["clone", "ended", "setup"]);
     expect(s.setupStage).toBe("working");
     expect(s.visible).toEqual(["setup"]);
     expect(s.visible).toEqual(last.fixed.visible);

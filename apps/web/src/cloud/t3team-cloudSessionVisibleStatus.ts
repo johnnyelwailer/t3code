@@ -47,7 +47,7 @@ export interface CloudSessionVisibleStatus {
 }
 
 /** SetupCard. Branches follow the TLA operator in order. */
-export function cloudSessionSetupStage(
+function cloudSessionSetupStage(
   facts: CloudSessionVisibleFacts,
 ): CloudSessionSetupStage {
   const { queued, phase, endedSticky } = facts;
