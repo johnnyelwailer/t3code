@@ -39,12 +39,7 @@ export function CloudSessionEndedActionsView({
   const action = resolveEndedSessionAction({ sessions, environmentId, createPending });
   if (action.kind === "starting" || optimistic.pending) {
     return (
-      <Button
-        data-cloud-session-ended=""
-        size="xs"
-        variant="ghost"
-        disabled
-      >
+      <Button data-cloud-session-ended="" size="xs" variant="ghost" disabled>
         {ENDED_SESSION_BANNER_COPY.starting}
       </Button>
     );
@@ -57,7 +52,11 @@ export function CloudSessionEndedActionsView({
         variant="ghost"
         onClick={() => optimistic.run(() => onConnect(action.session))}
       >
-        {optimisticActionLabel(false, ENDED_SESSION_BANNER_COPY.connect, ENDED_SESSION_BANNER_COPY.starting)}
+        {optimisticActionLabel(
+          false,
+          ENDED_SESSION_BANNER_COPY.connect,
+          ENDED_SESSION_BANNER_COPY.starting,
+        )}
       </Button>
     );
   }

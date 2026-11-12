@@ -12,15 +12,13 @@ describe("displayCloudQueuedFailureMessage", () => {
   });
 
   it("keeps the promise when Start a plain session is actually on offer", () => {
-    expect(
-      displayCloudQueuedFailureMessage(LEGACY_683, [{ id: "plain-session" }]),
-    ).toBe(LEGACY_683);
+    expect(displayCloudQueuedFailureMessage(LEGACY_683, [{ id: "plain-session" }])).toBe(
+      LEGACY_683,
+    );
   });
 
   it("strips the stale 08:27 promise when that action is not on offer", () => {
-    const shown = displayCloudQueuedFailureMessage(LEGACY_683, [
-      { id: "machine-project" },
-    ]);
+    const shown = displayCloudQueuedFailureMessage(LEGACY_683, [{ id: "machine-project" }]);
     expect(shown.toLowerCase()).not.toContain("start a plain session");
     expect(shown).toContain("Your message is kept");
     expect(shown).toContain("retry");

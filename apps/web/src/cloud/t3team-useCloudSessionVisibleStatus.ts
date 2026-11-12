@@ -31,9 +31,7 @@ function connFromEnvironmentPhase(
   return "live";
 }
 
-function queuedRecordFromSetup(
-  card: CloudSessionSetupCardProps | null,
-): CloudSessionQueuedRecord {
+function queuedRecordFromSetup(card: CloudSessionSetupCardProps | null): CloudSessionQueuedRecord {
   if (card === null) return "none";
   if (card.facts.delivery === "sending") return "sending";
   const queued = card.facts.queued;
@@ -59,9 +57,7 @@ export function useCloudSessionVisibleStatus(input: {
     endedSticky,
     startingAnother,
     queued: queuedRecordFromSetup(input.setupCard),
-    failureKind: input.setupCard?.facts.queued?.failureMessage !== undefined
-      ? "other"
-      : "none",
+    failureKind: input.setupCard?.facts.queued?.failureMessage !== undefined ? "other" : "none",
     machineConnected: input.setupCard?.facts.machineConnected ?? false,
     projectReady: input.setupCard?.facts.projectReady ?? false,
     providerReady: input.setupCard?.facts.providerReady ?? false,

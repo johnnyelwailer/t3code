@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyCloudSessionBannerPolicy, withLiveSetupCard } from "./t3team-cloudSessionBannerPolicy";
+import {
+  applyCloudSessionBannerPolicy,
+  withLiveSetupCard,
+} from "./t3team-cloudSessionBannerPolicy";
 import { resolveCloudSessionVisibleStatus } from "./t3team-cloudSessionVisibleStatus";
 import { tlcTraces } from "./t3team-cloudSessionVisibleStatus.fixtures";
 
@@ -112,7 +115,11 @@ export const RENDERED_STATE = {
           "Your message is kept: retry, send it in the machine's own project, start a plain session, or cancel to edit it.",
       },
       banners: [
-        { id: "cloud-session-ended:*", title: "This cloud session has ended", action: "Start another cloud session" },
+        {
+          id: "cloud-session-ended:*",
+          title: "This cloud session has ended",
+          action: "Start another cloud session",
+        },
       ],
     },
     after: {
@@ -135,7 +142,11 @@ export const RENDERED_STATE = {
       },
       banners: [
         { id: "cloud-session-ended:*", title: "This cloud session has ended", action: "Starting…" },
-        { id: "cloud-project-clone:*", title: "<project> is not on Cloud session yet", action: "Add to machine" },
+        {
+          id: "cloud-project-clone:*",
+          title: "<project> is not on Cloud session yet",
+          action: "Add to machine",
+        },
       ],
     },
     after: {

@@ -2780,7 +2780,7 @@ export default function ChatView(props: ChatViewProps) {
     threadId: activeThreadId,
     projection: serverProjection,
   });
-  const composerBannerItems = applyCloudSessionBannerPolicy((() => {
+  const rawComposerBannerItems = (() => {
     const fallbackSelection = draftFallback?.selection;
     const defaultSelection =
       draftDefaultModelSelection ??
@@ -2890,7 +2890,11 @@ export default function ChatView(props: ChatViewProps) {
         },
       }),
     ];
-  })(), cloudVisibleStatus) as ComposerBannerStackItem[];
+  })() as ComposerBannerStackItem[];
+  const composerBannerItems = applyCloudSessionBannerPolicy(
+    rawComposerBannerItems,
+    cloudVisibleStatus,
+  );
 
   if (
     terminalUiLaunchContext !== null &&

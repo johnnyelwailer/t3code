@@ -62,8 +62,7 @@ export function SetupActions({
   ];
   const primary: (() => void) | null = onRetry ?? tryAgain;
   if (offer === null && primary === null && !cancelIsPrimary && items.length === 0) return null;
-  const signInLabel =
-    offer?.host === undefined ? "Sign in to GitHub" : `Sign in to ${offer.host}`;
+  const signInLabel = offer?.host === undefined ? "Sign in to GitHub" : `Sign in to ${offer.host}`;
   const primaryLabel = onRetry ? "Retry" : "Try again";
   const pendingLabel = onRetry ? "Retrying…" : "Starting…";
   return (
@@ -76,7 +75,11 @@ export function SetupActions({
           data-cloud-setup-action="primary"
           data-cloud-setup-signin=""
           disabled={optimistic.pending}
-          onClick={() => optimistic.run(() => { acceptCloudSessionSignInOffer(); })}
+          onClick={() =>
+            optimistic.run(() => {
+              acceptCloudSessionSignInOffer();
+            })
+          }
         >
           {optimisticActionLabel(optimistic.pending, signInLabel, "Starting…")}
         </Button>
@@ -99,7 +102,12 @@ export function SetupActions({
           size="xs"
           variant="ghost"
           data-cloud-setup-action="retry-error"
-          onClick={() => optimistic.run(() => { if (offer !== null) acceptCloudSessionSignInOffer(); else primary?.(); })}
+          onClick={() =>
+            optimistic.run(() => {
+              if (offer !== null) acceptCloudSessionSignInOffer();
+              else primary?.();
+            })
+          }
         >
           Retry
         </Button>
