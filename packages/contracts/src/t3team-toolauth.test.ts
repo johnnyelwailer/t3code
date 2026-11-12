@@ -101,3 +101,12 @@ describe("ToolAuthStartInput.hostname — the host becomes a CLI argument", () =
     }
   });
 });
+
+describe("ToolAuthStartInput.instanceId — the account whose binary and config dir to use", () => {
+  it("accepts an instance id, and none at all", () => {
+    expect(decodeToolAuthStartInput({ tool: "claude" })).toEqual({ tool: "claude" });
+    expect(
+      decodeToolAuthStartInput({ tool: "claude", instanceId: "claudeAgent2" }).instanceId,
+    ).toBe("claudeAgent2");
+  });
+});

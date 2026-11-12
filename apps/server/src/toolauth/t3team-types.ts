@@ -57,6 +57,8 @@ export interface AuthState {
   organization?: string | undefined;
   /** The host this state is about, for a CLI that signs in per host (`gh`). */
   hostname?: string | undefined;
+  /** The provider instance this state is about, when sign-in is per-account. */
+  instanceId?: string | undefined;
   /** Epoch milliseconds. Only set when the credential store reports one. */
   expiresAt?: number | undefined;
   /**

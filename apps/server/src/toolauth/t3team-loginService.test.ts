@@ -1,4 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it, it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -88,5 +90,120 @@ effectIt.layer(NodeServices.layer)("ToolAuth login spawn on Windows", (it) => {
             : undefined,
         ),
       ),
+  );
+});
+
+function writeExecutable(filePath: string): void {
+  NodeFS.mkdirSync(NodePath.dirname(filePath), { recursive: true });
+  NodeFS.writeFileSync(filePath, "#!/bin/sh\nexit 0\n");
+  NodeFS.chmodSync(filePath, 0o755);
+}
+
+effectIt.layer(NodeServices.layer)("ToolAuth login uses the account's configured binary", (it) => {
+  it.effect("start() uses a configured path and CLAUDE_CONFIG_DIR for that account", () =>
+    Effect.gen(function* () {
+      const homeDir = makeTempHome();
+      const monBin = NodePath.join(homeDir, "bin", "claude-mon");
+      const monHome = NodePath.join(homeDir, "mon-home");
+      writeExecutable(monBin);
+      try {
+        const { service, ptyAdapter } = yield* makeService(
+          homeDir,
+          { tools: ["claude"] },
+          stubProbeRunner('{"loggedIn":true}'),
+        );
+        const state = yield* service.start("claude", {
+          instanceId: "mon",
+          account: { instanceId: "mon", binaryPath: monBin, homePath: monHome },
+        });
+        expect(state.phase).toBe("starting");
+        expect(state.instanceId).toBe("mon");
+        expect(ptyAdapter.spawnInputs).toHaveLength(1);
+        expect(ptyAdapter.spawnInputs[0]?.shell).toBe(monBin);
+        expect(ptyAdapter.spawnInputs[0]?.args).toEqual(CLAUDE.command.slice(1));
+        expect(ptyAdapter.spawnInputs[0]?.env?.CLAUDE_CONFIG_DIR).toBe(monHome);
+      } finally {
+        removeTempHome(homeDir);
+      }
+    }),
+  );
+
+  it.effect("two accounts with different binaries each spawn their own path and config dir", () =>
+    Effect.gen(function* () {
+      const homeDir = makeTempHome();
+      const monBin = NodePath.join(homeDir, "bin", "claude-mon");
+      const wedBin = NodePath.join(homeDir, "bin", "claude-wed");
+      const monHome = NodePath.join(homeDir, "mon-home");
+      const wedHome = NodePath.join(homeDir, "wed-home");
+      writeExecutable(monBin);
+      writeExecutable(wedBin);
+      try {
+        const { service, ptyAdapter } = yield* makeService(
+          homeDir,
+          { tools: ["claude"] },
+          stubProbeRunner('{"loggedIn":false,"authMethod":"none"}'),
+        );
+        yield* service.start("claude", {
+          instanceId: "mon",
+          account: { instanceId: "mon", binaryPath: monBin, homePath: monHome },
+        });
+        yield* service.start("claude", {
+          instanceId: "wed",
+          account: { instanceId: "wed", binaryPath: wedBin, homePath: wedHome },
+        });
+        expect(ptyAdapter.spawnInputs).toHaveLength(2);
+        expect(ptyAdapter.spawnInputs[0]?.shell).toBe(monBin);
+        expect(ptyAdapter.spawnInputs[0]?.env?.CLAUDE_CONFIG_DIR).toBe(monHome);
+        expect(ptyAdapter.spawnInputs[1]?.shell).toBe(wedBin);
+        expect(ptyAdapter.spawnInputs[1]?.env?.CLAUDE_CONFIG_DIR).toBe(wedHome);
+      } finally {
+        removeTempHome(homeDir);
+      }
+    }),
+  );
+
+  it.effect(
+    "a missing or invalid configured binary is a plain failed state with Retry, and does not spawn",
+    () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        const missing = NodePath.join(homeDir, "no-such", "claude-mon");
+        const notAFile = NodePath.join(homeDir, "not-a-binary");
+        NodeFS.mkdirSync(notAFile);
+        try {
+          const { service, ptyAdapter } = yield* makeService(
+            homeDir,
+            { tools: ["claude"] },
+            stubProbeRunner('{"loggedIn":false}'),
+          );
+          const missingState = yield* service.start("claude", {
+            instanceId: "mon",
+            account: {
+              instanceId: "mon",
+              binaryPath: missing,
+              homePath: NodePath.join(homeDir, "mon"),
+            },
+          });
+          expect(missingState.phase).toBe("failed");
+          expect(missingState.reason).toBe("configuredBinaryMissing");
+          expect(missingState.message).toContain(missing);
+          expect(missingState.message).toContain("try again");
+          expect(ptyAdapter.spawnInputs).toHaveLength(0);
+
+          const invalidState = yield* service.start("claude", {
+            instanceId: "wed",
+            account: {
+              instanceId: "wed",
+              binaryPath: notAFile,
+              homePath: NodePath.join(homeDir, "wed"),
+            },
+          });
+          expect(invalidState.phase).toBe("failed");
+          expect(invalidState.reason).toBe("configuredBinaryMissing");
+          expect(ptyAdapter.spawnInputs).toHaveLength(0);
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
   );
 });

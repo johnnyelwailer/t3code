@@ -13,19 +13,22 @@ import { ToolAuthSpawnError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
-import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
-import { resolveSpawnCommand, type ResolvedSpawnCommand } from "@t3tools/shared/shell";
 import { adapterForHost, getAdapter } from "./t3team-adapters.ts";
+import { beginLoginSpawn, type LoginAccountSettings } from "./t3team-loginAccount.ts";
+import { resolveLoginAccount } from "./t3team-loginAccountSettings.ts";
 import { wireLoginProcess } from "./t3team-loginProcessWiring.ts";
 import { killSessionProcess, makeToolAuthSessionControl } from "./t3team-loginSessionControl.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { ToolSingleFlight } from "./t3team-singleFlight.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
-/** `hostname`: sign in to this host instead of the adapter's default (per-host CLIs only). */
+/** `hostname`: per-host CLIs only. `instanceId`: the provider instance whose binary and config dir to use. */
 export interface ToolAuthStartOptions {
   readonly hostname?: string | undefined;
+  readonly instanceId?: string | undefined;
+  /** Test seam: skip the settings lookup. */
+  readonly account?: LoginAccountSettings | undefined;
 }
 
 export interface ToolAuthLoginFlowDeps {
@@ -55,28 +58,6 @@ export interface ToolAuthLoginFlowDeps {
 }
 
 /**
- * Map a `resolveSpawnCommand` result onto node-pty's `(file, args)` spawn.
- *
- * node-pty's Windows `get_shell_path` looks up the exact filename on PATH and
- * does not apply PATHEXT, so a bare `claude` misses `claude.exe` and throws
- * `File not found: ` (empty path). Resolving to the absolute `.exe` first,
- * and wrapping `.cmd`/`.bat` in `cmd.exe /d /s /c`, is what the rest of the
- * server already does for non-PTY child processes.
- */
-export function ptyCommandForResolved(
-  resolved: ResolvedSpawnCommand,
-  platform: NodeJS.Platform,
-): { readonly shell: string; readonly args: ReadonlyArray<string> } {
-  if (!resolved.shell) {
-    return { shell: resolved.command, args: resolved.args };
-  }
-  if (platform === "win32") {
-    return { shell: "cmd.exe", args: ["/d", "/s", "/c", resolved.command] };
-  }
-  return { shell: "/bin/sh", args: ["-c", resolved.command] };
-}
-
-/**
  * Builds the login flow's public surface (`start`, `submitCode`, `cancel`)
  * plus `spawnLoginProcess` itself — the install flow's successful re-probe
  * chains straight into that same primitive, so it is exposed here rather than
@@ -99,68 +80,29 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
   const spawnLoginProcess = Effect.fn("toolauth.spawnLoginProcess")(function* (
     tool: string,
     adapter: ToolAuthAdapter,
+    account?: LoginAccountSettings,
   ) {
-    const [shell, ...args] = adapter.command;
-
-    // A missing binary must say so plainly, on the card: register a failed
-    // state (no process — terminal states need none) instead of letting the
-    // spawn die with an ENOENT the caller only ever sees as a generic toast.
-    // `install()` already re-checks this after a successful install, so this
-    // only ever reports a binary that genuinely is not there yet.
-    if (!(yield* checkBinaryAvailable(shell!))) {
-      const missingState: AuthState = {
-        tool,
-        phase: "failed",
-        reason: "notInstalled",
-        ...(adapter.hostname === undefined ? {} : { hostname: adapter.hostname }),
-        message: `${shell} is not installed on this machine — install it on the host, then try again.`,
-      };
-      yield* SynchronizedRef.update(sessionsRef, (sessions) => {
-        const next = new Map(sessions);
-        next.set(tool, { adapter, state: missingState });
-        return next;
-      });
-      yield* notifyUpdate(missingState);
-      return missingState;
-    }
-
-    const initialState: AuthState = {
+    const result = yield* beginLoginSpawn({
       tool,
-      phase: "starting",
-      ...(adapter.hostname === undefined ? {} : { hostname: adapter.hostname }),
-    };
-
-    // Adapter-specific variables (gh's GH_NO_BROWSER) win over the
-    // service env: they exist precisely to change host behaviour.
-    const spawnEnv = { ...env, ...adapter.spawnEnv };
-    const platform = yield* HostProcess.Platform;
-    const resolved = yield* resolveSpawnCommand(shell!, args, { env: spawnEnv });
-    const ptyCommand = ptyCommandForResolved(resolved, platform);
-
-    const process = yield* ptyAdapter
-      .spawn({
-        shell: ptyCommand.shell,
-        args: [...ptyCommand.args],
-        cwd: homeDir,
-        cols: 80,
-        rows: 30,
-        env: spawnEnv,
-      })
-      .pipe(Effect.mapError((cause) => new ToolAuthSpawnError({ tool, cause })));
-
-    yield* SynchronizedRef.update(sessionsRef, (sessions) => {
-      const next = new Map(sessions);
-      next.set(tool, { adapter, process, state: initialState });
-      return next;
+      adapter,
+      account,
+      env,
+      homeDir,
+      ptyAdapter,
+      checkBinaryAvailable,
+      sessionsRef,
+      notifyUpdate,
     });
-    yield* notifyUpdate(initialState);
-
-    // Data/exit wiring (read assembly, auto-Enter answer, exit settlement)
-    // lives in `t3team-loginProcessWiring.ts`; it guards stale processes by
-    // identity against the session map this spawn just wrote.
-    wireLoginProcess({ process, tool, adapter, sessionsRef, applySessionUpdate, probe });
-
-    return initialState;
+    if (result.kind === "failed") return result.state;
+    wireLoginProcess({
+      process: result.process,
+      tool,
+      adapter: result.adapter,
+      sessionsRef,
+      applySessionUpdate,
+      probe,
+    });
+    return result.state;
   });
 
   const start = Effect.fn("toolauth.start")(function* (
@@ -191,7 +133,7 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     }
     singleFlight.claim(tool);
     return yield* Effect.ensuring(
-      startClaimed(tool, adapter),
+      startClaimed(tool, adapter, options),
       Effect.sync(() => {
         singleFlight.release(tool);
       }),
@@ -201,7 +143,9 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
   const startClaimed = Effect.fn("toolauth.startClaimed")(function* (
     tool: string,
     adapter: ToolAuthAdapter,
+    options?: ToolAuthStartOptions,
   ) {
+    const account = options?.account ?? (yield* resolveLoginAccount(tool, options?.instanceId));
     const existing = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
     // A session sitting in a TERMINAL phase (connected/failed) is history, not
     // an active flow — Retry/Reconnect must be able to start a fresh one.
@@ -210,19 +154,23 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     // `install()`-driven install is running for the same tool joins it rather
     // than racing a second flow).
     if (existing && existing.state.phase !== "connected" && existing.state.phase !== "failed") {
-      // A sign-in to ANOTHER host is not this one: joining it would hand back a flow that signs
-      // the wrong host in. It is abandoned for the host asked for now.
-      const otherHost =
+      // A sign-in to ANOTHER host, or for another provider instance, is not
+      // this one: joining it would hand back a flow that signs the wrong
+      // account in. It is abandoned for the one asked for now.
+      const otherTarget =
         existing.process !== undefined &&
         existing.state.phase !== "installing" &&
-        existing.state.hostname !== undefined &&
-        adapter.hostname !== undefined &&
-        existing.state.hostname !== adapter.hostname;
-      if (!otherHost) return existing.state;
+        ((existing.state.hostname !== undefined &&
+          adapter.hostname !== undefined &&
+          existing.state.hostname !== adapter.hostname) ||
+          (existing.state.instanceId !== undefined &&
+            account?.instanceId !== undefined &&
+            existing.state.instanceId !== account.instanceId));
+      if (!otherTarget) return existing.state;
       yield* killSessionProcess(existing.process);
     }
 
-    return yield* spawnLoginProcess(tool, adapter);
+    return yield* spawnLoginProcess(tool, adapter, account);
   });
 
   const { submitCode, cancel } = makeToolAuthSessionControl({
@@ -234,3 +182,6 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
 
   return { spawnLoginProcess, start, submitCode, cancel };
 }
+
+// Re-export so existing test imports keep working.
+export { ptyCommandForResolved } from "./t3team-loginPtyCommand.ts";
