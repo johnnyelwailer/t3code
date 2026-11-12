@@ -22,22 +22,22 @@ export type LinkedRepositoriesDialogViewProps = {
   readonly projectTitle: string;
   readonly linkedUrls: ReadonlyArray<string>;
   readonly mainRepositoryUrl: string | null;
-  readonly adoptedWorkspace?: boolean;
+  readonly adoptedWorkspace?: boolean | undefined;
   readonly onMakeMain: (url: string) => void;
-  readonly onUnlink?: (url: string) => void;
-  readonly onClose?: () => void;
-  readonly onSave?: () => void;
-  readonly saving?: boolean;
-  readonly saved?: boolean;
-  readonly dirty?: boolean;
+  readonly onUnlink?: ((url: string) => void) | undefined;
+  readonly onClose?: (() => void) | undefined;
+  readonly onSave?: (() => void) | undefined;
+  readonly saving?: boolean | undefined;
+  readonly saved?: boolean | undefined;
+  readonly dirty?: boolean | undefined;
   readonly saveError?: unknown;
-  readonly pendingMainUrl?: string | null;
-  readonly mainPending?: boolean;
-  readonly mainError?: { readonly url: string | null; readonly message: string } | null;
-  readonly onRetryMain?: () => void;
+  readonly pendingMainUrl?: string | null | undefined;
+  readonly mainPending?: boolean | undefined;
+  readonly mainError?: { readonly url: string | null; readonly message: string } | null | undefined;
+  readonly onRetryMain?: (() => void) | undefined;
   readonly children?: ReactNode;
   /** When false, hide main-repository help, banner and markers. */
-  readonly showMainRepository?: boolean;
+  readonly showMainRepository?: boolean | undefined;
 };
 
 export function LinkedRepositoriesDialogView({
@@ -77,7 +77,13 @@ export function LinkedRepositoriesDialogView({
           {showMainRepository ? <LinkedRepositoriesHelp /> : null}
         </div>
         {onClose ? (
-          <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close dialog" disabled={saving || mainPending}>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={onClose}
+            aria-label="Close dialog"
+            disabled={saving || mainPending}
+          >
             <X className="size-4" />
           </Button>
         ) : null}
@@ -145,7 +151,11 @@ export function LinkedRepositoriesDialogView({
       <footer className="flex items-center justify-between gap-2 border-t border-border bg-card px-5 py-3.5">
         <span className="text-xs text-muted-foreground">
           {linkedUrls.length} linked
-          {saved && !dirty ? " · saved, repositories sync when needed" : dirty ? " · unsaved changes" : ""}
+          {saved && !dirty
+            ? " · saved, repositories sync when needed"
+            : dirty
+              ? " · unsaved changes"
+              : ""}
         </span>
         <div className="flex items-center gap-2">
           {onClose ? (
@@ -177,11 +187,11 @@ export function LinkedRepositoryRows({
   readonly linkedUrls: ReadonlyArray<string>;
   readonly mainRepositoryUrl: string | null;
   readonly onMakeMain: (url: string) => void;
-  readonly onUnlink?: (url: string) => void;
-  readonly disabled?: boolean;
-  readonly pendingMainUrl?: string | null;
-  readonly mainError?: { readonly url: string | null; readonly message: string } | null;
-  readonly onRetryMain?: () => void;
+  readonly onUnlink?: ((url: string) => void) | undefined;
+  readonly disabled?: boolean | undefined;
+  readonly pendingMainUrl?: string | null | undefined;
+  readonly mainError?: { readonly url: string | null; readonly message: string } | null | undefined;
+  readonly onRetryMain?: (() => void) | undefined;
 }) {
   if (linkedUrls.length === 0) {
     return (

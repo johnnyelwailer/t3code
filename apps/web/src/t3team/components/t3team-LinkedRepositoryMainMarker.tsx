@@ -1,9 +1,7 @@
 /**
- * Per-row marker and action for the project's main repository. The main row shows a clear
- * "Main" badge; any other linked row has a "Make main" action so the user can switch with
- * one click. The control lives outside the row's link-toggle so it does not unlink the
- * repository. A click shows the new Main badge at once, then a pending "Saving…" on that
- * row; a failure shows a plain inline error with Retry and the previous main is restored.
+ * Per-row "Main" badge or "Make main" action, outside the row's link-toggle so a click
+ * does not unlink. The new Main badge shows at once, then "Saving…"; a failure shows
+ * an inline error with Retry and restores the previous main.
  */
 
 export function LinkedRepositoryMainMarker({
@@ -17,28 +15,27 @@ export function LinkedRepositoryMainMarker({
 }: {
   readonly isMain: boolean;
   readonly onMakeMain: () => void;
-  readonly disabled?: boolean;
-  readonly pending?: boolean;
-  readonly error?: string | null;
-  readonly onRetry?: () => void;
+  readonly disabled?: boolean | undefined;
+  readonly pending?: boolean | undefined;
+  readonly error?: string | null | undefined;
+  readonly onRetry?: (() => void) | undefined;
   readonly repositoryLabel: string;
 }) {
-  const errorLine =
-    error ? (
-      <span className="inline-flex items-center gap-1 text-xs text-destructive" role="alert">
-        {error}
-        {onRetry ? (
-          <button
-            type="button"
-            className="font-medium text-primary underline"
-            onClick={onRetry}
-            disabled={disabled || pending}
-          >
-            Retry
-          </button>
-        ) : null}
-      </span>
-    ) : null;
+  const errorLine = error ? (
+    <span className="inline-flex items-center gap-1 text-xs text-destructive" role="alert">
+      {error}
+      {onRetry ? (
+        <button
+          type="button"
+          className="font-medium text-primary underline"
+          onClick={onRetry}
+          disabled={disabled || pending}
+        >
+          Retry
+        </button>
+      ) : null}
+    </span>
+  ) : null;
 
   if (isMain) {
     return (

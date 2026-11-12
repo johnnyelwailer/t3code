@@ -1,3 +1,6 @@
+/* oxlint-disable t3code/no-dom-test-environment -- Click, pending, and retry checks need a DOM; this stays a unit file so CI runs it without Playwright. */
+// @vitest-environment jsdom
+/* oxlint-disable t3code/require-disposable-render -- Same as above: unit-file click tests use createRoot; the disposable helper is for *.browser.test.tsx. */
 import { act, createElement, useState, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -124,6 +127,23 @@ async function flush() {
   });
 }
 
+/** Render to a DOM so assertions can use text and aria-label, not raw HTML entities. */
+function mount(element: ReactElement): HTMLElement {
+  const container = document.createElement("div");
+  container.innerHTML = renderToStaticMarkup(element);
+  return container;
+}
+
+function textOf(container: HTMLElement): string {
+  return container.textContent ?? "";
+}
+
+function byAriaLabel(container: HTMLElement, name: string): Element | undefined {
+  return [...container.querySelectorAll("[aria-label]")].find(
+    (entry) => entry.getAttribute("aria-label") === name,
+  );
+}
+
 function click(container: HTMLElement, ariaLabel: string) {
   const button = [...container.querySelectorAll("button")].find(
     (entry) => entry.getAttribute("aria-label") === ariaLabel,
@@ -136,55 +156,51 @@ function click(container: HTMLElement, ariaLabel: string) {
 
 describe("LinkedRepositoriesDialogView", () => {
   it("shows help and a local-workspace message when no repository is linked", () => {
-    const markup = renderToStaticMarkup(view());
-    expect(markup).toContain(LINKED_REPOSITORIES_HELP);
-    expect(markup).toContain(NO_MAIN_REPOSITORY_MESSAGE);
-    expect(markup).toContain("No repositories are linked yet.");
-    expect(markup).not.toContain("Make main");
-    expect(markup).not.toContain(">Main<");
+    const container = mount(view());
+    expect(textOf(container)).toContain(LINKED_REPOSITORIES_HELP);
+    expect(textOf(container)).toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(textOf(container)).toContain("No repositories are linked yet.");
+    expect(textOf(container)).not.toContain("Make main");
+    expect(textOf(container)).not.toContain("Main");
   });
 
   it("marks the single linked repository as main", () => {
-    const markup = renderToStaticMarkup(view({ linkedUrls: [ALPHA], mainRepositoryUrl: ALPHA }));
-    expect(markup).toContain("acme/");
-    expect(markup).toContain("alpha");
-    expect(markup).toContain("is the main repository");
-    expect(markup).toContain(">Main<");
-    expect(markup).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
-    expect(markup).not.toContain("Make main");
+    const container = mount(view({ linkedUrls: [ALPHA], mainRepositoryUrl: ALPHA }));
+    expect(textOf(container)).toContain("acme/");
+    expect(textOf(container)).toContain("alpha");
+    expect(byAriaLabel(container, "acme/alpha is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain("Main");
+    expect(textOf(container)).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(textOf(container)).not.toContain("Make main");
   });
 
   it("offers Make main on every non-main row when several repositories are linked", () => {
-    const markup = renderToStaticMarkup(
-      view({ linkedUrls: [ALPHA, BETA, GAMMA], mainRepositoryUrl: ALPHA }),
-    );
-    expect(markup).toContain("acme/alpha is the main repository");
-    expect(markup).toContain("Make acme/beta the main repository");
-    expect(markup).toContain("Make acme/gamma the main repository");
-    expect(markup).toContain(">Main<");
-    expect(markup).not.toContain("Make acme/alpha the main repository");
-    expect(markup).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    const container = mount(view({ linkedUrls: [ALPHA, BETA, GAMMA], mainRepositoryUrl: ALPHA }));
+    expect(byAriaLabel(container, "acme/alpha is the main repository")).toBeDefined();
+    expect(byAriaLabel(container, "Make acme/beta the main repository")).toBeDefined();
+    expect(byAriaLabel(container, "Make acme/gamma the main repository")).toBeDefined();
+    expect(textOf(container)).toContain("Main");
+    expect(byAriaLabel(container, "Make acme/alpha the main repository")).toBeUndefined();
+    expect(textOf(container)).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
   });
 
   it("shows the local-workspace message for an existing project with linked repos and no main", () => {
-    const markup = renderToStaticMarkup(
-      view({ linkedUrls: [ALPHA, BETA], mainRepositoryUrl: null }),
-    );
-    expect(markup).toContain(NO_MAIN_REPOSITORY_MESSAGE);
-    expect(markup).toContain("Make acme/alpha the main repository");
-    expect(markup).toContain("Make acme/beta the main repository");
+    const container = mount(view({ linkedUrls: [ALPHA, BETA], mainRepositoryUrl: null }));
+    expect(textOf(container)).toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(byAriaLabel(container, "Make acme/alpha the main repository")).toBeDefined();
+    expect(byAriaLabel(container, "Make acme/beta the main repository")).toBeDefined();
   });
 
   it("shows the adopted-workspace message when the project workspace itself is main", () => {
-    const markup = renderToStaticMarkup(
+    const container = mount(
       view({ linkedUrls: [ALPHA], mainRepositoryUrl: null, adoptedWorkspace: true }),
     );
-    expect(markup).toContain(ADOPTED_WORKSPACE_MESSAGE);
-    expect(markup).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(textOf(container)).toContain(ADOPTED_WORKSPACE_MESSAGE);
+    expect(textOf(container)).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
   });
 
   it("shows Saving… on the new main row while the persist is pending", () => {
-    const markup = renderToStaticMarkup(
+    const container = mount(
       view({
         linkedUrls: [ALPHA, BETA],
         mainRepositoryUrl: BETA,
@@ -192,15 +208,15 @@ describe("LinkedRepositoriesDialogView", () => {
         mainPending: true,
       }),
     );
-    expect(markup).toContain("acme/beta is the main repository");
-    expect(markup).toContain("Saving…");
-    expect(markup).toContain("Make acme/alpha the main repository");
-    expect(markup).not.toContain("Making main…");
-    expect(markup).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(byAriaLabel(container, "acme/beta is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain("Saving…");
+    expect(byAriaLabel(container, "Make acme/alpha the main repository")).toBeDefined();
+    expect(textOf(container)).not.toContain("Making main…");
+    expect(textOf(container)).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
   });
 
   it("shows a plain error and Retry on the failed row, with the previous main restored", () => {
-    const markup = renderToStaticMarkup(
+    const container = mount(
       view({
         linkedUrls: [ALPHA, BETA],
         mainRepositoryUrl: ALPHA,
@@ -208,15 +224,15 @@ describe("LinkedRepositoriesDialogView", () => {
         onRetryMain: () => {},
       }),
     );
-    expect(markup).toContain("acme/alpha is the main repository");
-    expect(markup).toContain("Make acme/beta the main repository");
-    expect(markup).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
-    expect(markup).toContain(">Retry<");
-    expect(markup).not.toContain("Saving…");
+    expect(byAriaLabel(container, "acme/alpha is the main repository")).toBeDefined();
+    expect(byAriaLabel(container, "Make acme/beta the main repository")).toBeDefined();
+    expect(textOf(container)).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(textOf(container)).toContain("Retry");
+    expect(textOf(container)).not.toContain("Saving…");
   });
 
   it("keeps the promoted main and shows Retry when an unlink persist fails", () => {
-    const markup = renderToStaticMarkup(
+    const container = mount(
       view({
         linkedUrls: [ALPHA, GAMMA],
         mainRepositoryUrl: ALPHA,
@@ -224,13 +240,13 @@ describe("LinkedRepositoriesDialogView", () => {
         onRetryMain: () => {},
       }),
     );
-    expect(markup).toContain("acme/alpha is the main repository");
-    expect(markup).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
-    expect(markup).toContain(">Retry<");
+    expect(byAriaLabel(container, "acme/alpha is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(textOf(container)).toContain("Retry");
   });
 
   it("shows a save error with Retry", () => {
-    const markup = renderToStaticMarkup(
+    const container = mount(
       view({
         linkedUrls: [ALPHA],
         mainRepositoryUrl: ALPHA,
@@ -238,34 +254,36 @@ describe("LinkedRepositoriesDialogView", () => {
         dirty: true,
       }),
     );
-    expect(markup).toContain("network down");
-    expect(markup).toContain(">Retry<");
-    expect(markup).toContain("unsaved changes");
+    expect(textOf(container)).toContain("network down");
+    expect(textOf(container)).toContain("Retry");
+    expect(textOf(container)).toContain("unsaved changes");
   });
 
   it("switches main with one click and, when the main repo is unlinked, makes the first remaining one main", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     act(() => {
-      root.render(createElement(Interactive, { initialUrls: [ALPHA, BETA, GAMMA], initialMain: BETA }));
+      root.render(
+        createElement(Interactive, { initialUrls: [ALPHA, BETA, GAMMA], initialMain: BETA }),
+      );
     });
     click(container, "Make acme/gamma the main repository");
-    expect(container.innerHTML).toContain("acme/gamma is the main repository");
-    expect(container.innerHTML).toContain("Saving…");
-    expect(container.innerHTML).not.toContain("acme/beta is the main repository");
+    expect(byAriaLabel(container, "acme/gamma is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain("Saving…");
+    expect(byAriaLabel(container, "acme/beta is the main repository")).toBeUndefined();
     await flush();
-    expect(container.innerHTML).toContain("acme/gamma is the main repository");
-    expect(container.innerHTML).not.toContain("Saving…");
+    expect(byAriaLabel(container, "acme/gamma is the main repository")).toBeDefined();
+    expect(textOf(container)).not.toContain("Saving…");
 
     click(container, "Unlink acme/gamma");
     // Option A: first remaining (alpha) becomes main and persists on its own.
-    expect(container.innerHTML).toContain("acme/alpha is the main repository");
-    expect(container.innerHTML).toContain("Saving…");
+    expect(byAriaLabel(container, "acme/alpha is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain("Saving…");
     await flush();
-    expect(container.innerHTML).toContain("acme/alpha is the main repository");
-    expect(container.innerHTML).not.toContain("acme/gamma is the main repository");
-    expect(container.innerHTML).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
-    expect(container.innerHTML).not.toContain("Saving…");
+    expect(byAriaLabel(container, "acme/alpha is the main repository")).toBeDefined();
+    expect(byAriaLabel(container, "acme/gamma is the main repository")).toBeUndefined();
+    expect(textOf(container)).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(textOf(container)).not.toContain("Saving…");
   });
 
   it("reverts to the previous main on failure and retries from the same row", async () => {
@@ -286,34 +304,36 @@ describe("LinkedRepositoriesDialogView", () => {
       );
     });
     click(container, "Make acme/beta the main repository");
-    expect(container.innerHTML).toContain("acme/beta is the main repository");
-    expect(container.innerHTML).toContain("Saving…");
+    expect(byAriaLabel(container, "acme/beta is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain("Saving…");
     await act(async () => {
       next!.reject(new Error("refused"));
       await Promise.resolve();
     });
-    expect(container.innerHTML).toContain("acme/alpha is the main repository");
-    expect(container.innerHTML).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
-    expect(container.innerHTML).toContain(">Retry<");
-    expect(container.innerHTML).not.toContain("Saving…");
-    expect(container.innerHTML).toContain("Make acme/beta the main repository");
+    expect(byAriaLabel(container, "acme/alpha is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(textOf(container)).toContain("Retry");
+    expect(textOf(container)).not.toContain("Saving…");
+    expect(byAriaLabel(container, "Make acme/beta the main repository")).toBeDefined();
 
-    const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry");
+    const retry = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Retry",
+    );
     expect(retry).toBeDefined();
     act(() => {
       retry!.click();
     });
-    expect(container.innerHTML).toContain("acme/beta is the main repository");
-    expect(container.innerHTML).toContain("Saving…");
-    expect(container.innerHTML).not.toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(byAriaLabel(container, "acme/beta is the main repository")).toBeDefined();
+    expect(textOf(container)).toContain("Saving…");
+    expect(textOf(container)).not.toContain(MAIN_REPOSITORY_PERSIST_ERROR);
     await act(async () => {
       next!.resolve();
       await Promise.resolve();
     });
-    expect(container.innerHTML).toContain("acme/beta is the main repository");
-    expect(container.innerHTML).not.toContain("Saving…");
-    expect(container.innerHTML).not.toContain(MAIN_REPOSITORY_PERSIST_ERROR);
-    expect(container.innerHTML).not.toContain("Make acme/beta the main repository");
+    expect(byAriaLabel(container, "acme/beta is the main repository")).toBeDefined();
+    expect(textOf(container)).not.toContain("Saving…");
+    expect(textOf(container)).not.toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(byAriaLabel(container, "Make acme/beta the main repository")).toBeUndefined();
   });
 
   it("shows the local-workspace message after the last linked repository is removed", async () => {
@@ -323,9 +343,9 @@ describe("LinkedRepositoriesDialogView", () => {
       root.render(createElement(Interactive, { initialUrls: [ALPHA], initialMain: ALPHA }));
     });
     click(container, "Unlink acme/alpha");
-    expect(container.innerHTML).toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(textOf(container)).toContain(NO_MAIN_REPOSITORY_MESSAGE);
     await flush();
-    expect(container.innerHTML).toContain(NO_MAIN_REPOSITORY_MESSAGE);
-    expect(container.innerHTML).toContain("No repositories are linked yet.");
+    expect(textOf(container)).toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(textOf(container)).toContain("No repositories are linked yet.");
   });
 });

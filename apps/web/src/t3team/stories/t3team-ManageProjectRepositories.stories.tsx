@@ -16,13 +16,7 @@ const ALPHA = "https://github.com/acme/alpha";
 const BETA = "https://github.com/acme/beta";
 const GAMMA = "https://github.com/acme/gamma";
 
-function Frame({
-  children,
-  dark = false,
-}: {
-  children: ReactNode;
-  dark?: boolean;
-}) {
+function Frame({ children, dark = false }: { children: ReactNode; dark?: boolean | undefined }) {
   return (
     <div className={dark ? "dark" : undefined}>
       <div className="flex min-h-[640px] items-center justify-center bg-black/50 p-6">
@@ -32,9 +26,12 @@ function Frame({
   );
 }
 
-type Args = ComponentProps<typeof LinkedRepositoriesDialogView> & {
-  dark?: boolean;
-  persistOutcome?: "success" | "failure";
+type Args = Omit<
+  ComponentProps<typeof LinkedRepositoriesDialogView>,
+  "onMakeMain" | "onUnlink" | "onClose" | "onSave"
+> & {
+  dark?: boolean | undefined;
+  persistOutcome?: "success" | "failure" | undefined;
 };
 
 function Interactive({ dark, persistOutcome = "success", ...args }: Args) {
