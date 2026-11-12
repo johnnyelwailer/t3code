@@ -19,12 +19,8 @@ import {
   JIRA_CONNECTIONS_OFF_TEXT,
   useJiraConnectionsEnabled,
 } from "~/t3team/t3team-jiraConnectionsFlag";
-import { useT3TeamPackSetupProfiles } from "~/t3team/t3team-packSetupProfiles";
-import { writeT3TeamProjectSetupProfile } from "~/t3team/t3team-projectSetupProfile";
-import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileChooser";
 
 import { buildWelcomeAgentRows, isWelcomeAgentReady } from "./t3team-welcomeAgents.logic";
-import { useWelcomeChosenRole } from "./t3team-useWelcomeChosenRole";
 import { useWelcomeFlagSwitch } from "./t3team-useWelcomeFlagSwitch";
 import { useWelcomeGitHubSignIn } from "./t3team-useWelcomeGitHubSignIn";
 import { useWelcomeAccountCheck, useWelcomeJiraCheck } from "./t3team-useWelcomeChecks";
@@ -99,10 +95,6 @@ export function useNexiWelcomeActions(
 
   const cloudFlag = useWelcomeFlagSwitch("CLOUD_SESSIONS", environmentId);
   const phoneFlag = useWelcomeFlagSwitch("NEXI_MOBILE_BROKER", environmentId);
-  const roleEnabled = useT3TeamWorkProfileChooserEnabled();
-  const packProfiles = useT3TeamPackSetupProfiles() ?? [];
-  const storedRole = useWelcomeChosenRole();
-  const chosenRole = packProfiles.some((profile) => profile.id === storedRole) ? storedRole : null;
 
   return {
     account,
@@ -144,10 +136,6 @@ export function useNexiWelcomeActions(
     onTurnOnCloud: async () => {
       if (await cloudFlag.turnOn()) cloud.onCreate();
     },
-    roleEnabled,
-    packProfiles,
-    chosenRole,
-    onChooseRole: writeT3TeamProjectSetupProfile,
     onSetupPhone: () => void phoneFlag.turnOn(),
     onStart: async () => {
       await completeWelcomeSetup();

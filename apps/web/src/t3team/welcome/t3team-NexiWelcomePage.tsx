@@ -7,7 +7,6 @@ import { NexiWelcomeCloudPhoneSection } from "./t3team-NexiWelcomeCloudPhoneSect
 import { NexiWelcomeHeader } from "./t3team-NexiWelcomeHeader";
 import { NexiWelcomeGitHubRow } from "./t3team-NexiWelcomeGitHubRow";
 import { NexiWelcomeJiraRow } from "./t3team-NexiWelcomeJiraRow";
-import { NexiWelcomeRoleSection } from "./t3team-NexiWelcomeRoleSection";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
 import { useNexiWelcomeActions } from "./t3team-useNexiWelcomeActions";
 import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeLayout";
@@ -60,15 +59,6 @@ function NexiWelcomeRows({
             onCopyAndOpenTool={a.onCopyAndOpenTool}
           />
         </WelcomeSection>
-        {a.roleEnabled ? (
-          <WelcomeSection title="Role">
-            <NexiWelcomeRoleSection
-              profiles={a.packProfiles}
-              selectedId={a.chosenRole}
-              onChoose={a.onChooseRole}
-            />
-          </WelcomeSection>
-        ) : null}
         <WelcomeSection title="Jira">
           <NexiWelcomeJiraRow
             enabled={a.jiraEnabled}
