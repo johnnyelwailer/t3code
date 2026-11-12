@@ -198,7 +198,7 @@ it.layer(NodeServices.layer)("remote machine discovery", (it) => {
       );
       expect(result.status).toMatchObject({
         _tag: "None",
-        reason: expect.stringContaining("local checkout or a .nexi/machine.json pointer"),
+        reason: expect.stringContaining("local checkout or a .agents/nexi/machine.json pointer"),
       });
       expect(result.rejected).toEqual([]);
     }),

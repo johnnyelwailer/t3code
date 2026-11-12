@@ -20,7 +20,7 @@ interface EarlyDesktopSettingsInput {
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
   readonly readFileString: (path: string) => string;
-  readonly packagedBranding?: EarlyPackagedBranding;
+  readonly packagedBranding?: EarlyPackagedBranding | undefined;
   readonly appDataDirectory?: string;
 }
 
@@ -101,7 +101,7 @@ export function resolveEarlyDesktopBaseDir(input: {
   readonly env: NodeJS.ProcessEnv;
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
-  readonly packagedBranding?: EarlyPackagedBranding;
+  readonly packagedBranding?: EarlyPackagedBranding | undefined;
   readonly appDataDirectory?: string;
 }): { readonly baseDir: string; readonly isolated: boolean } {
   const name = input.packagedBranding?.userDataDirName?.trim();
@@ -130,7 +130,7 @@ function resolveEarlyDesktopSettingsPath(input: {
   readonly env: NodeJS.ProcessEnv;
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
-  readonly packagedBranding?: EarlyPackagedBranding;
+  readonly packagedBranding?: EarlyPackagedBranding | undefined;
   readonly appDataDirectory?: string;
 }): string {
   const { baseDir, isolated } = resolveEarlyDesktopBaseDir(input);

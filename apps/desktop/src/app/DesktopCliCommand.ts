@@ -70,6 +70,7 @@ export const make = Effect.gen(function* () {
   const windows = environment.platform === "win32";
   const launcher = DesktopCliShim.launcherPath(environment);
   const commandName = DesktopCliShim.cliPathLinkName(environment.isolatedInstance);
+  const marker = DesktopCliShim.cliShimMarker(environment.isolatedInstance);
   const binDirectory = path.dirname(launcher);
   const ownedPathMarker = path.join(environment.stateDir, "cli-command-path-entry");
 
@@ -88,7 +89,7 @@ export const make = Effect.gen(function* () {
       const info = yield* fs.stat(link);
       if (info.type !== "File" || Number(info.size) > 16_384) return false;
       const content = yield* fs.readFileString(link);
-      return content.includes(DesktopCliShim.MARKER);
+      return content.includes(marker);
     },
     Effect.orElseSucceed(() => false),
   );
@@ -101,7 +102,7 @@ export const make = Effect.gen(function* () {
       if (resolved !== ours) return false;
       const info = yield* fs.stat(candidate);
       if (info.type !== "File" || Number(info.size) > 16_384) return false;
-      return (yield* fs.readFileString(candidate)).includes(DesktopCliShim.MARKER);
+      return (yield* fs.readFileString(candidate)).includes(marker);
     },
     Effect.orElseSucceed(() => false),
   );
@@ -207,14 +208,16 @@ export const make = Effect.gen(function* () {
     Effect.provideService(FileSystem.FileSystem, fs),
     Effect.flatMap(
       Option.match({
-        onNone: () => Effect.fail(fail(`Could not set up the ${commandName} launcher at ${launcher}.`)),
+        onNone: () =>
+          Effect.fail(fail(`Could not set up the ${commandName} launcher at ${launcher}.`)),
         onSome: () => Effect.void,
       }),
     ),
   );
 
   const install: DesktopCliCommand["Service"]["install"] = Effect.gen(function* () {
-    if (!environment.isPackaged) return yield* fail(`The ${commandName} command needs an installed app.`);
+    if (!environment.isPackaged)
+      return yield* fail(`The ${commandName} command needs an installed app.`);
     yield* ensureLauncher;
     if (windows) {
       const entries = pathEntries(yield* readUserPath, ";");
@@ -222,7 +225,11 @@ export const make = Effect.gen(function* () {
         yield* writeUserPath([...entries, binDirectory].join(";"));
         yield* fs
           .writeFileString(ownedPathMarker, `${binDirectory}\n`)
-          .pipe(Effect.mapError(() => fail(`Added ${commandName} to your PATH but could not record it.`)));
+          .pipe(
+            Effect.mapError(() =>
+              fail(`Added ${commandName} to your PATH but could not record it.`),
+            ),
+          );
       }
       return yield* state;
     }

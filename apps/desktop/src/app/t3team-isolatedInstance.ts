@@ -62,7 +62,7 @@ export function explicitBackendHome(input: {
 export function isolatedBackendChildEnv(input: {
   readonly isolatedInstance: boolean;
   readonly home: string;
-  readonly appId?: string;
+  readonly appId?: string | undefined;
 }): Readonly<Record<string, string>> {
   if (!input.isolatedInstance) return {};
   const appId = input.appId?.trim();

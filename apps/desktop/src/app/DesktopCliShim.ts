@@ -47,7 +47,7 @@ export type CliShimTarget =
 /** Embed this install's home and executable path so `sudo`, which clears the environment, uses the same install. */
 function isolatedShimEnvLines(input: {
   readonly isolatedInstance?: boolean;
-  readonly appId?: string;
+  readonly appId?: string | undefined;
 }): { readonly windows: ReadonlyArray<string>; readonly unix: ReadonlyArray<string> } {
   if (input.isolatedInstance !== true) return { windows: [], unix: [] };
   const appId = input.appId?.trim();
@@ -65,7 +65,7 @@ export const renderCliShim = (input: {
   readonly shimPath: string;
   readonly t3Home: string;
   readonly isolatedInstance?: boolean;
-  readonly appId?: string;
+  readonly appId?: string | undefined;
 }) => {
   const marker = cliShimMarker(input.isolatedInstance === true);
   const identityEnv = isolatedShimEnvLines(input);
@@ -206,9 +206,10 @@ export const install = Effect.gen(function* () {
     return Option.some(shimPath);
   }).pipe(
     Effect.catchCause((cause) =>
-      logWarning(`could not install ${commandName} launcher`, { shimPath, cause: Cause.pretty(cause) }).pipe(
-        Effect.as(Option.none<string>()),
-      ),
+      logWarning(`could not install ${commandName} launcher`, {
+        shimPath,
+        cause: Cause.pretty(cause),
+      }).pipe(Effect.as(Option.none<string>())),
     ),
     Effect.withSpan("desktop.cliShim.install"),
   );

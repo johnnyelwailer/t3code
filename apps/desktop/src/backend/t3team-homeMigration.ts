@@ -2,6 +2,7 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
+import { DateTime } from "effect";
 
 /**
  * A SQLite file this small has a header and no user data. A real workspace DB
@@ -23,13 +24,17 @@ const PROFILE_SKIP_NAMES = new Set([
 
 export type JoinPath = (first: string, ...segments: string[]) => string;
 
+function nowIso(): string {
+  return DateTime.formatIso(DateTime.nowUnsafe());
+}
+
 export type HomeOwnership = "nexi" | "upstream" | "empty" | "unknown";
 
 export interface NexiIdentityMarker {
   readonly product: "nexi-work";
-  readonly productName?: string;
-  readonly appId?: string;
-  readonly at?: string;
+  readonly productName?: string | undefined;
+  readonly appId?: string | undefined;
+  readonly at?: string | undefined;
 }
 
 export interface MigrationStamp {
@@ -46,7 +51,7 @@ export interface MigrationStatus {
   readonly home?: "ok" | "skipped-upstream" | "skipped-existing" | "verify-failed" | "fresh";
   readonly profile?: "ok" | "skipped-upstream" | "skipped-existing" | "verify-failed" | "fresh";
   readonly safeStorage?: "copied" | "windows-local-state" | "unknown" | "not-needed";
-  readonly warning?: string;
+  readonly warning?: string | undefined;
 }
 
 export function fileSizeOrZero(candidate: string): number {
@@ -92,16 +97,19 @@ function markerPaths(dir: string, join: JoinPath): readonly string[] {
   return [join(dir, NEXI_IDENTITY_MARKER_NAME), join(dir, "userdata", NEXI_IDENTITY_MARKER_NAME)];
 }
 
-export function readNexiIdentityMarker(dir: string, join: JoinPath): NexiIdentityMarker | undefined {
+export function readNexiIdentityMarker(
+  dir: string,
+  join: JoinPath,
+): NexiIdentityMarker | undefined {
   for (const candidate of markerPaths(dir, join)) {
     try {
       const parsed = JSON.parse(NodeFS.readFileSync(candidate, "utf8")) as NexiIdentityMarker;
       if (parsed.product === "nexi-work") return parsed;
       if (typeof parsed.appId === "string" && parsed.appId.startsWith("ch.nexplore.nexi.work")) {
-        return { product: "nexi-work", ...parsed };
+        return { ...parsed, product: "nexi-work" };
       }
       if (typeof parsed.productName === "string" && parsed.productName.startsWith("Nexi Work")) {
-        return { product: "nexi-work", ...parsed };
+        return { ...parsed, product: "nexi-work" };
       }
     } catch {
       continue;
@@ -122,7 +130,7 @@ export function writeNexiIdentityMarker(
     if (NodeFS.existsSync(path)) return;
     NodeFS.writeFileSync(
       path,
-      `${JSON.stringify({ product: "nexi-work", ...marker, at: marker.at ?? new Date().toISOString() }, null, 2)}\n`,
+      `${JSON.stringify({ ...marker, product: "nexi-work", at: marker.at ?? nowIso() }, null, 2)}\n`,
       { flag: "wx" },
     );
   } catch {
@@ -157,7 +165,13 @@ export function detectProfileOwnership(
   adjacentNexiHome?: string,
 ): HomeOwnership {
   if (readNexiIdentityMarker(profileDir, join) !== undefined) return "nexi";
-  if (adjacentNexiHome && detectHomeOwnership(adjacentNexiHome, join) === "nexi") return "nexi";
+  if (
+    adjacentNexiHome &&
+    detectHomeOwnership(adjacentNexiHome, join) === "nexi" &&
+    isRealStateDb(join(adjacentNexiHome, "userdata"), join)
+  ) {
+    return "nexi";
+  }
   const base = NodePath.basename(profileDir);
   if (isNexiUserDataDirName(base) || base === "electron-profile") {
     // electron-profile lives inside the Nexi home; if the parent is Nexi, already handled.
@@ -181,7 +195,9 @@ const sha256File = (path: string): string => {
 };
 
 function writeStamp(destDir: string, stamp: MigrationStamp, join: JoinPath): string {
-  const userdata = NodeFS.existsSync(join(destDir, "userdata")) ? join(destDir, "userdata") : destDir;
+  const userdata = NodeFS.existsSync(join(destDir, "userdata"))
+    ? join(destDir, "userdata")
+    : destDir;
   NodeFS.mkdirSync(userdata, { recursive: true });
   const path = join(userdata, MIGRATION_STAMP_NAME);
   if (!NodeFS.existsSync(path)) {
@@ -269,7 +285,8 @@ export function copyTreeNoOverwrite(input: {
     if (NodeFS.existsSync(dest)) {
       if (
         input.replaceEmptyStateFiles &&
-        (NodePath.basename(dest) === "statev2.sqlite" || NodePath.basename(dest) === "state.sqlite") &&
+        (NodePath.basename(dest) === "statev2.sqlite" ||
+          NodePath.basename(dest) === "state.sqlite") &&
         fileSizeOrZero(dest) <= EMPTY_STATE_DB_MAX_BYTES &&
         lst.size > EMPTY_STATE_DB_MAX_BYTES
       ) {
@@ -312,7 +329,11 @@ function isSymlinkTo(maybeLink: string, target: string): boolean {
   }
 }
 
-function verifyHomeCopy(source: string, dest: string, join: JoinPath): { ok: boolean; reason?: string } {
+function verifyHomeCopy(
+  source: string,
+  dest: string,
+  join: JoinPath,
+): { ok: boolean; reason?: string } {
   const srcBytes = stateBytes(join(source, "userdata"), join);
   const destBytes = stateBytes(join(dest, "userdata"), join);
   if (srcBytes > EMPTY_STATE_DB_MAX_BYTES && destBytes <= EMPTY_STATE_DB_MAX_BYTES) {
@@ -324,7 +345,11 @@ function verifyHomeCopy(source: string, dest: string, join: JoinPath): { ok: boo
   return { ok: true };
 }
 
-function verifyProfileCopy(source: string, dest: string, join: JoinPath): { ok: boolean; reason?: string } {
+function verifyProfileCopy(
+  source: string,
+  dest: string,
+  join: JoinPath,
+): { ok: boolean; reason?: string } {
   if (!NodeFS.existsSync(join(dest, "Local State"))) {
     return { ok: false, reason: "destination profile is missing Local State" };
   }
@@ -353,9 +378,10 @@ export function migrateNexiHome(input: {
   readonly now?: string;
 }): HomeMigrationResult {
   const { legacyDir, brandedDir, join, stamp } = input;
-  const at = input.now ?? new Date().toISOString();
+  const at = input.now ?? nowIso();
 
-  if (legacyDir === brandedDir) return { home: brandedDir, copied: false, status: "skipped-existing" };
+  if (legacyDir === brandedDir)
+    return { home: brandedDir, copied: false, status: "skipped-existing" };
   if (sameResolvedPath(legacyDir, brandedDir) || isSymlinkTo(legacyDir, brandedDir)) {
     // Both names are the same home. Optionally replace a symlink at ~/.t3 with a real copy
     // so upstream and Nexi no longer share one directory.
@@ -406,7 +432,11 @@ export function migrateNexiHome(input: {
     });
     const verified = verifyHomeCopy(legacyDir, brandedDir, join);
     if (!verified.ok) {
-      writeMigrationStatus(brandedDir, { at, home: "verify-failed", warning: verified.reason }, join);
+      writeMigrationStatus(
+        brandedDir,
+        { at, home: "verify-failed", warning: verified.reason },
+        join,
+      );
       return { home: legacyDir, copied: false, status: "verify-failed" };
     }
     const dbPath = join(legacyDir, "userdata", "statev2.sqlite");
@@ -471,7 +501,8 @@ function restoreSymlinkedLegacyHome(input: {
         from: brandedDir,
         to: legacyDir,
         bytes: stateBytes(join(legacyDir, "userdata"), join),
-        sha256: sha256File(join(legacyDir, "userdata", "statev2.sqlite")) ||
+        sha256:
+          sha256File(join(legacyDir, "userdata", "statev2.sqlite")) ||
           sha256File(join(legacyDir, "userdata", "state.sqlite")),
         at,
         kind: "symlink-restore",
@@ -510,23 +541,46 @@ export function migrateNexiProfile(input: {
   readonly now?: string;
 }): ProfileMigrationResult {
   const { sourceProfileDir, destinationProfileDir, join, stamp } = input;
-  const at = input.now ?? new Date().toISOString();
+  const at = input.now ?? nowIso();
 
-  if (sourceProfileDir === destinationProfileDir || sameResolvedPath(sourceProfileDir, destinationProfileDir)) {
-    return { profile: destinationProfileDir, copied: false, status: "skipped-existing", safeStorage: "not-needed" };
+  if (
+    sourceProfileDir === destinationProfileDir ||
+    sameResolvedPath(sourceProfileDir, destinationProfileDir)
+  ) {
+    return {
+      profile: destinationProfileDir,
+      copied: false,
+      status: "skipped-existing",
+      safeStorage: "not-needed",
+    };
   }
 
   if (NodeFS.existsSync(join(destinationProfileDir, "Local State"))) {
-    return { profile: destinationProfileDir, copied: false, status: "skipped-existing", safeStorage: "not-needed" };
+    return {
+      profile: destinationProfileDir,
+      copied: false,
+      status: "skipped-existing",
+      safeStorage: "not-needed",
+    };
   }
 
   if (!NodeFS.existsSync(join(sourceProfileDir, "Local State"))) {
-    return { profile: destinationProfileDir, copied: false, status: "fresh", safeStorage: "not-needed" };
+    return {
+      profile: destinationProfileDir,
+      copied: false,
+      status: "fresh",
+      safeStorage: "not-needed",
+    };
   }
 
   const ownership = detectProfileOwnership(sourceProfileDir, join, input.adjacentNexiHome);
   if (ownership !== "nexi") {
-    return { profile: destinationProfileDir, copied: false, status: "skipped-upstream", safeStorage: "not-needed" };
+    return {
+      profile: destinationProfileDir,
+      copied: false,
+      status: "skipped-upstream",
+      safeStorage: "not-needed",
+    };
   }
 
   try {
@@ -540,8 +594,17 @@ export function migrateNexiProfile(input: {
     });
     const verified = verifyProfileCopy(sourceProfileDir, destinationProfileDir, join);
     if (!verified.ok) {
-      writeMigrationStatus(destinationProfileDir, { at, profile: "verify-failed", warning: verified.reason }, join);
-      return { profile: destinationProfileDir, copied: false, status: "verify-failed", safeStorage: "unknown" };
+      writeMigrationStatus(
+        destinationProfileDir,
+        { at, profile: "verify-failed", warning: verified.reason },
+        join,
+      );
+      return {
+        profile: destinationProfileDir,
+        copied: false,
+        status: "verify-failed",
+        safeStorage: "unknown",
+      };
     }
     writeStamp(
       destinationProfileDir,
@@ -557,7 +620,11 @@ export function migrateNexiProfile(input: {
     );
     writeNexiIdentityMarker(destinationProfileDir, { product: "nexi-work", at }, join);
     const safeStorage: MigrationStatus["safeStorage"] =
-      input.platform === "win32" ? "windows-local-state" : input.platform === "darwin" ? "unknown" : "copied";
+      input.platform === "win32"
+        ? "windows-local-state"
+        : input.platform === "darwin"
+          ? "unknown"
+          : "copied";
     const warning =
       safeStorage === "unknown"
         ? "Nexi Work could not carry your encrypted sign-in onto this app identity. Your projects and threads are intact. Please sign in again."
@@ -566,13 +633,23 @@ export function migrateNexiProfile(input: {
     if (input.adjacentNexiHome) {
       writeMigrationStatus(
         input.adjacentNexiHome,
-        { ...(readMigrationStatus(input.adjacentNexiHome, join) ?? { at }), profile: "ok", safeStorage, warning },
+        {
+          ...(readMigrationStatus(input.adjacentNexiHome, join) ?? { at }),
+          profile: "ok",
+          safeStorage,
+          warning,
+        },
         join,
       );
     }
     return { profile: destinationProfileDir, copied: true, status: "ok", safeStorage };
   } catch {
-    return { profile: destinationProfileDir, copied: false, status: "verify-failed", safeStorage: "unknown" };
+    return {
+      profile: destinationProfileDir,
+      copied: false,
+      status: "verify-failed",
+      safeStorage: "unknown",
+    };
   }
 }
 
@@ -594,7 +671,7 @@ export function migrateExistingNexiUser(input: {
 }): {
   readonly home: string;
   readonly homeResult: HomeMigrationResult;
-  readonly profileResult?: ProfileMigrationResult;
+  readonly profileResult?: ProfileMigrationResult | undefined;
 } {
   const homeResult = migrateNexiHome({
     legacyDir: input.defaultLegacyHome,
@@ -602,17 +679,6 @@ export function migrateExistingNexiUser(input: {
     join: input.join,
     stamp: input.stamp,
   });
-  writeNexiIdentityMarker(
-    homeResult.home === input.brandedHome && isRealStateDb(input.join(input.brandedHome, "userdata"), input.join)
-      ? input.brandedHome
-      : homeResult.home,
-    {
-      product: "nexi-work",
-      appId: input.appId,
-      productName: input.productName,
-    },
-    input.join,
-  );
   let profileResult: ProfileMigrationResult | undefined;
   if (input.isolatedProfileDir !== undefined && input.sharedProfileDir !== undefined) {
     profileResult = migrateNexiProfile({
@@ -624,5 +690,19 @@ export function migrateExistingNexiUser(input: {
       platform: input.platform,
     });
   }
+  const markedHome =
+    homeResult.home === input.brandedHome &&
+    isRealStateDb(input.join(input.brandedHome, "userdata"), input.join)
+      ? input.brandedHome
+      : homeResult.home;
+  writeNexiIdentityMarker(
+    markedHome,
+    {
+      product: "nexi-work",
+      appId: input.appId,
+      productName: input.productName,
+    },
+    input.join,
+  );
   return { home: homeResult.home, homeResult, profileResult };
 }

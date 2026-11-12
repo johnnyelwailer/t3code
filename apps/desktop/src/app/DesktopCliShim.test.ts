@@ -6,7 +6,14 @@ import * as NodePath from "node:path";
 
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { type CliShimTarget, cliBinaryName, cliPathLinkName, cliShimMarker, NEXI_MARKER, renderCliShim } from "./DesktopCliShim.ts";
+import {
+  type CliShimTarget,
+  cliBinaryName,
+  cliPathLinkName,
+  cliShimMarker,
+  NEXI_MARKER,
+  renderCliShim,
+} from "./DesktopCliShim.ts";
 
 const directories: Array<string> = [];
 afterEach(() => {
@@ -144,7 +151,7 @@ describe("isolated Nexi CLI names", () => {
     });
     expect(shim).toContain(NEXI_MARKER);
     expect(shim).toContain("export T3CODE_DESKTOP_ISOLATED_INSTANCE=1");
-    expect(shim).toContain("export T3CODE_DESKTOP_APP_ID=ch.nexplore.nexi.work");
+    expect(shim).toMatch(/export T3CODE_DESKTOP_APP_ID=.ch\.nexplore\.nexi\.work./);
     expect(shim).not.toContain("T3_BOOT_SERVICE_UNIT=");
   });
 });

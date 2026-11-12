@@ -608,7 +608,6 @@ it("skips a leading node-wrapped shim and picks the next spawnable esbuild", asy
   }
 });
 
-
 it.effect("gives a branded Linux build its own executable, WM_CLASS, metainfo and doc path", () =>
   Effect.gen(function* () {
     const unbranded = yield* createBuildConfig({
@@ -651,7 +650,9 @@ it.effect("gives a branded Linux build its own executable, WM_CLASS, metainfo an
         entry.endsWith("=/usr/share/metainfo/ch.nexplore.nexi.work.metainfo.xml"),
       ),
     );
-    assert.isTrue(brandedFpm.some((entry) => entry.endsWith("=/usr/share/doc/nexi-work/copyright")));
+    assert.isTrue(
+      brandedFpm.some((entry) => entry.endsWith("=/usr/share/doc/nexi-work/copyright")),
+    );
     const metainfoFrom = brandedFpm
       .find((entry) => entry.includes("ch.nexplore.nexi.work.metainfo.xml"))!
       .split("=")[0]!;
@@ -659,5 +660,8 @@ it.effect("gives a branded Linux build its own executable, WM_CLASS, metainfo an
     assert.include(xml, "<id>ch.nexplore.nexi.work</id>");
     assert.include(xml, "<binary>nexi-work</binary>");
     assert.notInclude(xml, "com.t3tools.t3code");
-  }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  }).pipe(
+    Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
+    Effect.provide(NodeServices.layer),
+  ),
 );
