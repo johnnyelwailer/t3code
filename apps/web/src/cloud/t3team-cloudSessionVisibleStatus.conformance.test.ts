@@ -16,13 +16,7 @@ import {
 import { tlcTraces } from "./t3team-cloudSessionVisibleStatus.fixtures";
 
 const TERMINAL = new Set(["failed", "stopped", "cancelled"]);
-const PROVISIONING = new Set([
-  "creating",
-  "requested",
-  "queued",
-  "preparing",
-  "starting",
-]);
+const PROVISIONING = new Set(["creating", "requested", "queued", "preparing", "starting"]);
 
 /** SetupCard */
 function specSetupCard(f: CloudSessionVisibleFacts): string {
@@ -36,7 +30,8 @@ function specSetupCard(f: CloudSessionVisibleFacts): string {
     return "failed";
   }
   if (f.phase === "ready" && f.queued === "none") return "ready";
-  if (f.queued === "waiting" || f.queued === "sending" || PROVISIONING.has(f.phase)) return "working";
+  if (f.queued === "waiting" || f.queued === "sending" || PROVISIONING.has(f.phase))
+    return "working";
   return "hidden";
 }
 
@@ -46,8 +41,7 @@ function specVisibleFixed(f: CloudSessionVisibleFacts): string[] {
   const settingUp = setup === "working" || setup === "failed" || setup === "ready";
   const ended = f.endedSticky && !settingUp && !f.startingAnother;
   const clone = false;
-  const offline =
-    (f.conn === "connecting" || f.conn === "offline") && !ended && !settingUp;
+  const offline = (f.conn === "connecting" || f.conn === "offline") && !ended && !settingUp;
   const vis: string[] = [];
   if (settingUp) vis.push("setup");
   if (ended) vis.push("ended");
@@ -140,7 +134,13 @@ describe("exhaustive fact space vs the TLA transcription", () => {
                       status.visible.length > 1
                     ) {
                       mismatches.push(
-                        JSON.stringify({ f, got: status.visible, stage: status.setupStage, expected, expStage: stage }),
+                        JSON.stringify({
+                          f,
+                          got: status.visible,
+                          stage: status.setupStage,
+                          expected,
+                          expStage: stage,
+                        }),
                       );
                     }
                   }

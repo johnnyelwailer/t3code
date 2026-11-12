@@ -1,13 +1,7 @@
 /** One visible cloud-session status. CloudSession.tla, ApplyFix = TRUE. */
 
 const TERMINAL = new Set(["failed", "stopped", "cancelled"]);
-const PROVISIONING = new Set([
-  "creating",
-  "requested",
-  "queued",
-  "preparing",
-  "starting",
-]);
+const PROVISIONING = new Set(["creating", "requested", "queued", "preparing", "starting"]);
 
 export type CloudSessionQueuedRecord = "none" | "waiting" | "failed" | "sending";
 export type CloudSessionConn = "live" | "connecting" | "offline" | "blocked";
@@ -47,9 +41,7 @@ export interface CloudSessionVisibleStatus {
 }
 
 /** SetupCard. Branches follow the TLA operator in order. */
-function cloudSessionSetupStage(
-  facts: CloudSessionVisibleFacts,
-): CloudSessionSetupStage {
+function cloudSessionSetupStage(facts: CloudSessionVisibleFacts): CloudSessionSetupStage {
   const { queued, phase, endedSticky } = facts;
   if (queued === "none" && (TERMINAL.has(phase) || phase === "none")) {
     return "hidden";
@@ -60,10 +52,7 @@ function cloudSessionSetupStage(
   if (
     queued === "failed" ||
     (queued === "waiting" && TERMINAL.has(phase)) ||
-    (queued === "waiting" &&
-      endedSticky &&
-      !PROVISIONING.has(phase) &&
-      phase !== "ready")
+    (queued === "waiting" && endedSticky && !PROVISIONING.has(phase) && phase !== "ready")
   ) {
     return "failed";
   }
@@ -106,13 +95,10 @@ export function resolveCloudSessionVisibleStatus(
 ): CloudSessionVisibleStatus {
   const setupStage = cloudSessionSetupStage(facts);
   const showSetupCard = setupStage !== "hidden";
-  const showEndedBanner =
-    facts.endedSticky && !showSetupCard && !facts.startingAnother;
+  const showEndedBanner = facts.endedSticky && !showSetupCard && !facts.startingAnother;
   const showCloneBanner = false;
   const showOfflineBanner =
-    (facts.conn === "connecting" || facts.conn === "offline") &&
-    !showEndedBanner &&
-    !showSetupCard;
+    (facts.conn === "connecting" || facts.conn === "offline") && !showEndedBanner && !showSetupCard;
   const visible: CloudSessionVisibleSurface[] = [];
   if (showSetupCard) visible.push("setup");
   if (showEndedBanner) visible.push("ended");
