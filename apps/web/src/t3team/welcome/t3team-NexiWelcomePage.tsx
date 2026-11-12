@@ -117,6 +117,8 @@ function NexiWelcomeRows({
           <NexiWelcomeCloudPhoneSection
             entraSignedIn={Boolean(entraSignedIn) && !a.skipped.account}
             skipped={a.skipped.cloud}
+            cloudOn={a.cloudOn}
+            cloudUsable={a.cloudUsable}
             cloudAvailable={a.cloud.available}
             cloudConfigured={a.cloud.configured}
             cloudPending={cloudPending}

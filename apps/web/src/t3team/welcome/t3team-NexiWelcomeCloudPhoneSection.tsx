@@ -6,6 +6,9 @@ import { SecondaryAction, ServiceMark, StatusLabel, WelcomeItem } from "./t3team
 export type NexiWelcomeCloudPhoneSectionProps = {
   readonly entraSignedIn: boolean;
   readonly skipped: boolean;
+  readonly cloudOn: boolean;
+  /** Cloud sessions are on, or this client may turn them on from the row. */
+  readonly cloudUsable: boolean;
   readonly cloudAvailable: boolean;
   readonly cloudConfigured: boolean;
   readonly cloudPending: boolean;
@@ -18,6 +21,8 @@ export type NexiWelcomeCloudPhoneSectionProps = {
 export function NexiWelcomeCloudPhoneSection({
   entraSignedIn,
   skipped,
+  cloudOn,
+  cloudUsable,
   cloudAvailable,
   cloudConfigured,
   cloudPending,
@@ -76,7 +81,14 @@ export function NexiWelcomeCloudPhoneSection({
       title="Cloud sessions"
       status={<StatusLabel status="pending" label="Setting up" />}
     />
-  ) : !cloudAvailable || !cloudConfigured ? (
+  ) : !cloudUsable ? (
+    <WelcomeItem
+      mark={cloudMark}
+      title="Cloud sessions"
+      description="Cloud sessions are turned off on this computer."
+      status={<StatusLabel status="locked" label="Unavailable" />}
+    />
+  ) : cloudOn && (!cloudAvailable || !cloudConfigured) ? (
     <WelcomeItem
       mark={cloudMark}
       title="Cloud sessions"
