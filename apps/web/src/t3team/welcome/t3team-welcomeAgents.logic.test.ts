@@ -73,7 +73,7 @@ describe("buildWelcomeAgentRows", () => {
     expect(missing?.description).toBe("Not reachable on this network");
   });
 
-  it("routes Cursor install through provider setup when the server advertises it", () => {
+  it("offers no button for an agent without an in-page install: the page never leaves", () => {
     const rows = buildWelcomeAgentRows([
       provider("cursor", {
         installed: false,
@@ -83,10 +83,7 @@ describe("buildWelcomeAgentRows", () => {
       }),
     ]);
     const cursor = rows.find((row) => row.driver === "cursor");
-    expect(cursor?.action).toEqual({
-      kind: "openProviderSetup",
-      instanceId: ProviderInstanceId.make("cursor-1"),
-    });
+    expect(cursor?.action.kind).toBe("disabled");
   });
 
   it("appends other enabled providers after the preferred list", () => {

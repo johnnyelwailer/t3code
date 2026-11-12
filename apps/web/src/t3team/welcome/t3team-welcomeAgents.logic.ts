@@ -2,7 +2,6 @@ import type { ProviderInstanceId, ServerProvider } from "@t3tools/contracts";
 import { ProviderDriverKind } from "@t3tools/contracts";
 
 import { getOnboardingProviderState } from "~/onboarding/providerReadiness.logic";
-import { hasProviderSetup } from "~/components/chat/ProviderStatusBanner";
 import { toolAuthToolForDriverKind } from "~/components/settings/t3team-toolAuthTools";
 
 export type WelcomeAgentTool = "claude" | "codex";
@@ -11,7 +10,6 @@ export type WelcomeAgentAction =
   | { readonly kind: "none" }
   | { readonly kind: "toolAuthInstall"; readonly tool: WelcomeAgentTool }
   | { readonly kind: "toolAuthSignIn"; readonly tool: WelcomeAgentTool }
-  | { readonly kind: "openProviderSetup"; readonly instanceId: ProviderInstanceId }
   | { readonly kind: "disabled"; readonly reason: string };
 
 export type WelcomeAgentRowModel = {
@@ -71,9 +69,6 @@ function resolveAction(provider: ServerProvider | undefined): WelcomeAgentAction
     if (state === "signIn" || state === "attention") {
       return { kind: "toolAuthSignIn", tool: agentTool };
     }
-  }
-  if (hasProviderSetup(provider)) {
-    return { kind: "openProviderSetup", instanceId: provider.instanceId };
   }
   if (state === "install") {
     return {
