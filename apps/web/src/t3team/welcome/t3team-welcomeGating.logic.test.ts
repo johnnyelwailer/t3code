@@ -80,7 +80,6 @@ describe("resolveNexiWelcomeFirstRunDecision", () => {
 
     const afterFinish = withWelcomeSeenVersion({
       welcomeSkipped: ["account", "jira"] as const,
-      welcomeSeenVersion: undefined,
       storedProjectsJson: "[{}]",
     });
     expect(afterFinish.welcomeSeenVersion).toBe(NEXI_WELCOME_SEEN_VERSION);
