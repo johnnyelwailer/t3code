@@ -28,8 +28,11 @@ import {
   hasWelcomeAutoOpened,
   markWelcomeAutoOpened,
 } from "../../t3team/welcome/t3team-welcomeAutoOpen";
-import { isWelcomeLandingPath } from "../../t3team/welcome/t3team-welcomeGating.logic";
 import { useNexiWelcomeEnabled } from "../../t3team/welcome/t3team-useNexiWelcomeEnabled";
+import {
+  isWelcomeLandingPath,
+  resolveNexiWelcomeFirstRunDecision,
+} from "../../t3team/welcome/t3team-welcomeGating.logic";
 import { Button } from "../ui/button";
 
 /** Pending blocks all rendering, including EventRouter welcome navigation. */
@@ -84,6 +87,8 @@ export function FirstRunGate({
   const hydrationStatus = useClientSettingsHydrationStatus();
   const hydrated = hydrationStatus === "ready";
   const onboardingCompletedAt = useClientSettings((settings) => settings.onboardingCompletedAt);
+  const welcomeSeenVersion = useClientSettings((settings) => settings.t3team.welcomeSeenVersion);
+  const nexiWelcome = useNexiWelcomeEnabled();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const { isReady: environmentCatalogReady } = useEnvironments();
   const projects = useProjects();
@@ -93,13 +98,24 @@ export function FirstRunGate({
   const serverWelcome = useAtomValue(primaryServerWelcomeAtom);
   const primaryShellLive = useAtomValue(primaryShellLiveAtom);
   const workspaceEvidenceLive = useAtomValue(workspaceEvidenceLiveAtom);
-  const [gateState, setGateState] = useState<FirstRunGateState>(() => ({
-    decision:
-      (!enabled && !hostedStatic) || (hydrated && onboardingCompletedAt !== null)
-        ? "app"
-        : "pending",
-    stalled: false,
-  }));
+  const [gateState, setGateState] = useState<FirstRunGateState>(() => {
+    if (hostedStatic) {
+      return { decision: hydrated ? "app" : "pending", stalled: false };
+    }
+    if (nexiWelcome && enabled) {
+      return {
+        decision: resolveNexiWelcomeFirstRunDecision({
+          hydrated,
+          seenVersion: welcomeSeenVersion,
+        }).decision,
+        stalled: false,
+      };
+    }
+    return {
+      decision: !enabled || (hydrated && onboardingCompletedAt !== null) ? "app" : "pending",
+      stalled: false,
+    };
+  });
   const { decision, stalled } = gateState;
   const settingsReadFailed = hydrationStatus === "failed" || hydrationStatus === "retrying";
   // The server's sole cwd-bootstrap project/thread still counts as fresh so npx t3 users see onboarding.
@@ -120,23 +136,28 @@ export function FirstRunGate({
 
   const { decision: nextDecision, persistCompletion } = hostedStatic
     ? resolveHostedFirstRunDecision(hydrated)
-    : resolveFirstRunDecision({
-        enabled,
-        hydrated,
-        completed: onboardingCompletedAt !== null,
-        bootstrapped,
-        authoritative: primaryShellLive,
-        workspaceAuthoritative: workspaceEvidenceLive,
-        workspaceProvenanceAuthoritative: isFirstRunWorkspaceProvenanceAuthoritative({
-          welcomeReceived: serverWelcome !== null,
-          bootstrapStatus: serverWelcome?.bootstrapStatus ?? null,
-        }),
-        catalogReady: environmentCatalogReady,
-        serverConfigAvailable: serverConfig !== null,
-        workspaceFresh,
-        projectCount: projects.length,
-        threadCount,
-      });
+    : nexiWelcome && enabled
+      ? resolveNexiWelcomeFirstRunDecision({
+          hydrated,
+          seenVersion: welcomeSeenVersion,
+        })
+      : resolveFirstRunDecision({
+          enabled,
+          hydrated,
+          completed: onboardingCompletedAt !== null,
+          bootstrapped,
+          authoritative: primaryShellLive,
+          workspaceAuthoritative: workspaceEvidenceLive,
+          workspaceProvenanceAuthoritative: isFirstRunWorkspaceProvenanceAuthoritative({
+            welcomeReceived: serverWelcome !== null,
+            bootstrapStatus: serverWelcome?.bootstrapStatus ?? null,
+          }),
+          catalogReady: environmentCatalogReady,
+          serverConfigAvailable: serverConfig !== null,
+          workspaceFresh,
+          projectCount: projects.length,
+          threadCount,
+        });
 
   if (hydrated) {
     const transitioned = transitionFirstRunGateState(gateState, {
@@ -166,7 +187,6 @@ export function FirstRunGate({
 
   // Setup opens by itself only from the landing route. A direct link, such as
   // Settings, opens as asked so setup can never lock a user out of the app.
-  const nexiWelcome = useNexiWelcomeEnabled();
   const wizardOwnsRoute = isWelcomeLandingPath(pathname, {
     nexiWelcome,
     alreadyOpened: hasWelcomeAutoOpened(),

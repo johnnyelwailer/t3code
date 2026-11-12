@@ -55,9 +55,17 @@ export type T3TeamServerSettingsPatch = typeof T3TeamServerSettingsPatch.Type;
 export const T3TeamWelcomeSkipKey = Schema.Literals(["account", "jira", "github", "cloud"]);
 export type T3TeamWelcomeSkipKey = typeof T3TeamWelcomeSkipKey.Type;
 
+/**
+ * The welcome-setup generation the user has already completed or skipped. Absent or older than
+ * the current generation means the setup should be shown once.
+ */
+export const T3TeamWelcomeSeenVersion = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+export type T3TeamWelcomeSeenVersion = typeof T3TeamWelcomeSeenVersion.Type;
+
 /** Fork fields on the client settings schema, nested under `t3team`. */
 export const T3TeamClientSettings = Schema.Struct({
   welcomeSkipped: Schema.optionalKey(Schema.Array(T3TeamWelcomeSkipKey)),
+  welcomeSeenVersion: Schema.optionalKey(T3TeamWelcomeSeenVersion),
   storedSidebarNavPreferencesJson: Schema.optionalKey(TrimmedString),
   storedProjectsJson: Schema.optionalKey(TrimmedString),
   storedSidebarPinsJson: Schema.optionalKey(TrimmedString),
@@ -68,6 +76,7 @@ export type T3TeamClientSettings = typeof T3TeamClientSettings.Type;
 
 export const T3TeamClientSettingsPatch = Schema.Struct({
   welcomeSkipped: Schema.optionalKey(Schema.Array(T3TeamWelcomeSkipKey)),
+  welcomeSeenVersion: Schema.optionalKey(T3TeamWelcomeSeenVersion),
   storedSidebarNavPreferencesJson: Schema.optionalKey(TrimmedString),
   storedProjectsJson: Schema.optionalKey(TrimmedString),
   storedSidebarPinsJson: Schema.optionalKey(TrimmedString),
