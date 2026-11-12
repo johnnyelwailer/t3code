@@ -53,11 +53,10 @@ describe("ptyCommandForResolved", () => {
   });
 });
 
-// HostProcess.Platform has to wrap start() itself: makeService only provides
-// layers while the service is built, and start() is a later Effect.
-// SpawnExecutableResolution is stubbed because Node's path.win32.join turns a
-// Linux temp path into "\\tmp\\..." which does not exist on this host;
-// PATHEXT lookup itself is already covered in packages/shared/src/shell.test.ts.
+// HostProcess.Platform and SpawnExecutableResolution wrap start(), not
+// makeService(): those layers only apply while the service is built.
+// The resolver is stubbed because path.win32.join of a Linux path is not
+// a real .exe. PATHEXT lookup is already covered in shell.test.ts.
 effectIt.layer(NodeServices.layer)("ToolAuth login spawn on Windows", (it) => {
   it.effect(
     "start() passes the PATHEXT-resolved claude.exe path to the pty, not the bare name",
