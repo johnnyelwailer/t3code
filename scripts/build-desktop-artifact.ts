@@ -4837,8 +4837,6 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     // not Electron's app.asar, so the afterPack hook has nothing to restore.
     dtsDirectories: options.platform === "win" ? [] : [...TYPECHECKER_DTS_DIRECTORIES],
     dtsFiles: options.platform === "win" ? [] : [...TYPECHECKER_DTS_FILES],
-    // Unsigned macOS builds are sealed ad hoc by the hook, so a downloaded copy is not called "damaged".
-    macAdhocSeal: options.platform === "mac" && !options.signed,
   });
   yield* fs.writeFileString(
     path.join(stageAppDir, "desktop-asar-dts-afterpack.json"),

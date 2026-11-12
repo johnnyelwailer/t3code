@@ -91,22 +91,4 @@ function buildExistingEntryStreams({ asarPath, header, headerSize }) {
   return { streams, existingFiles };
 }
 
-/**
- * An unsigned build keeps Electron's linker signature on a changed bundle: invalid, so macOS calls a
- * downloaded copy "damaged". A complete ad-hoc seal is valid; macOS then offers Open Anyway in System
- * Settings. Runs last: nothing may change the bundle after it.
- */
-function sealMacAppAdHoc(context, enabled, run = require("node:child_process").execFileSync) {
-  if (!enabled || context.electronPlatformName !== "darwin") return undefined;
-  const apps = NodeFS.readdirSync(context.appOutDir).filter((entry) => entry.endsWith(".app"));
-  if (apps.length !== 1) {
-    return fail(`expected exactly one .app in ${context.appOutDir}, found: [${apps.join(", ")}]`);
-  }
-  const appPath = NodePath.join(context.appOutDir, apps[0]);
-  run("/usr/bin/codesign", ["--force", "--deep", "--sign", "-", appPath], { stdio: "inherit" });
-  run("/usr/bin/codesign", ["--verify", "--deep", "--strict", appPath], { stdio: "inherit" });
-  console.log(`[desktop-mac-adhoc-seal] sealed ${appPath} with a complete ad-hoc signature`);
-  return appPath;
-}
-
-module.exports = { fail, collectDtsFiles, buildExistingEntryStreams, sealMacAppAdHoc };
+module.exports = { fail, collectDtsFiles, buildExistingEntryStreams };

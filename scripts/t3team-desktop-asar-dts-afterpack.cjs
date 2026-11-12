@@ -41,7 +41,7 @@ const NodeModule = require("node:module");
 const NodePath = require("node:path");
 const CONFIG_PATH = NodePath.join(__dirname, "desktop-asar-dts-afterpack.json");
 
-const { fail, collectDtsFiles, buildExistingEntryStreams, sealMacAppAdHoc } = (() => {
+const { fail, collectDtsFiles, buildExistingEntryStreams } = (() => {
   // The hook ships as a staged copy under the name desktop-asar-dts-afterpack.cjs
   // (repo files carry the t3team- prefix; the staged name is what electron-builder
   // and the round-trip test use). Resolve the sibling helper under whichever name
@@ -175,14 +175,10 @@ async function reinjectDts(context) {
  */
 module.exports = async function desktopAsarDtsAfterPack(context) {
   await reinjectDts(context);
-  const { repoScriptsPackageJson, macAdhocSeal } = JSON.parse(
-    NodeFS.readFileSync(CONFIG_PATH, "utf8"),
-  );
+  const { repoScriptsPackageJson } = JSON.parse(NodeFS.readFileSync(CONFIG_PATH, "utf8"));
   const serverCompileCacheHook = NodePath.join(
     NodePath.dirname(repoScriptsPackageJson),
     "prepare-server-compile-cache.cjs",
   );
   if (NodeFS.existsSync(serverCompileCacheHook)) await require(serverCompileCacheHook)(context);
-  // Last: an unsigned macOS bundle gets a complete ad-hoc seal once nothing changes it any more.
-  sealMacAppAdHoc(context, macAdhocSeal === true);
 };
