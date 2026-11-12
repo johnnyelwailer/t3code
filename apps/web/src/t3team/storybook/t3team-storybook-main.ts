@@ -4,8 +4,12 @@ import * as NodeURL from "node:url";
 import * as NodeModule from "node:module";
 import { mergeConfig, type Plugin, type PluginOption } from "vite";
 
-const srcDir =
-  process.env.T3TEAM_STORYBOOK_SRC_DIR ?? NodeURL.fileURLToPath(new URL("../src", import.meta.url));
+/** `apps/web/src`, two levels above this file; the launcher passes the same path in its env. */
+function webSourceDir(): string {
+  return NodeURL.fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]+$/, "");
+}
+
+const srcDir = process.env.T3TEAM_STORYBOOK_SRC_DIR ?? webSourceDir();
 
 /**
  * Storybook 9's builder-vite generates a virtual `vite-app.js` that imports
