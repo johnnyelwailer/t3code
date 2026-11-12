@@ -64,12 +64,13 @@ export function ModelPickerProviderConnectPanel({
     states.get(meta.tool),
     entry.snapshot.auth.status,
   );
-  // The provider list is probed on an interval, so once the CLI is signed in the machine is asked
-  // to re-check this instance; the picker then swaps this panel for the model list by itself.
+  // The re-check fires on the raw stream, not the reconciled card state: right after a sign-in the
+  // stream is `connected` while the provider snapshot still holds the pre-login probe, so the
+  // reconciled card reads `expired` until this very re-check answers with the new probe.
   const refreshAfterSignIn = useProviderRefreshAfterSignIn({
     environmentId,
     instanceId: entry.instanceId,
-    signedIn: toolAuthState?.phase === "connected",
+    signedIn: states.get(meta.tool)?.phase === "connected",
   });
   const missingEnvironment = environmentId === null && readiness === "needsInstall";
 
