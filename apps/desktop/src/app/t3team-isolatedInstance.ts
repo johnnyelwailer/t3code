@@ -76,9 +76,6 @@ export function isolatedInstanceStartupProblem(input: {
   readonly platform: NodeJS.Platform;
 }): string | undefined {
   if (!input.isolatedBranding) return undefined;
-  if (input.platform !== "darwin") {
-    return `This build is an isolated instance, and isolated instances are macOS-only (running on ${input.platform}). It would share state with an installed app. Install the replace-mode build instead.`;
-  }
   if (!input.userDataDirName) {
     return "This build is an isolated instance, but its branding has no userDataDirName, so it has no home of its own. Rebuild it with a product name.";
   }

@@ -256,15 +256,31 @@ const WSL_RUNTIME_SELECTION_GRACE_MINUTES = 5;
 
 const sanitizeWslRuntimeId = (value: string): string => value.replace(/[^A-Za-z0-9._-]/g, "_");
 
+/** WSL cache directory expression. An isolated instance uses a private path under `$HOME`. */
+export const DEFAULT_WSL_RUNTIME_PARENT = "$HOME/.t3/wsl-runtime";
+
+export function wslRuntimeParentExpression(
+  userDataDirName: string | undefined,
+  isolated: boolean,
+): string {
+  if (isolated && userDataDirName?.trim()) {
+    const slug = userDataDirName.trim().replace(/[^A-Za-z0-9._-]/g, "_");
+    return `$HOME/.${slug}/wsl-runtime`;
+  }
+  return DEFAULT_WSL_RUNTIME_PARENT;
+}
+
+
 export const buildWslRuntimeInstallScript = (
   linuxArchivePath: string,
   runtimeId: string,
   archiveSha256: string,
+  runtimeParent: string = DEFAULT_WSL_RUNTIME_PARENT,
 ): string => {
   const safeRuntimeId = sanitizeWslRuntimeId(runtimeId);
   return [
     "set -eu",
-    'runtime_parent="$HOME/.t3/wsl-runtime"',
+    `runtime_parent="${runtimeParent}"`,
     `runtime_root="$runtime_parent/${safeRuntimeId}"`,
     `ready_marker="$runtime_root/${WSL_RUNTIME_READY_MARKER}"`,
     "runtime_entry_runs() {",
@@ -349,11 +365,14 @@ export const buildWslRuntimeInstallScript = (
 // Two hours exceeds cold-install time while bounding orphan retention.
 const ORPHANED_RUNTIME_SCRATCH_MAX_AGE_MINUTES = 120;
 
-export const buildWslRuntimePruneScript = (runtimeId: string): string => {
+export const buildWslRuntimePruneScript = (
+  runtimeId: string,
+  runtimeParent: string = DEFAULT_WSL_RUNTIME_PARENT,
+): string => {
   const safeRuntimeId = sanitizeWslRuntimeId(runtimeId);
   return [
     "set -eu",
-    'runtime_parent="$HOME/.t3/wsl-runtime"',
+    `runtime_parent="${runtimeParent}"`,
     `current_runtime="$runtime_parent/${safeRuntimeId}"`,
     '[ -d "$runtime_parent" ] || exit 0',
     // Serialize pruning so backends cannot select and delete different previous caches.
@@ -400,11 +419,14 @@ export const buildWslRuntimePruneScript = (runtimeId: string): string => {
 };
 
 // Invalidate trees that pass install checks but fail launch probes, or each launch reuses the broken cache.
-export const buildWslRuntimeInvalidateScript = (runtimeId: string): string => {
+export const buildWslRuntimeInvalidateScript = (
+  runtimeId: string,
+  runtimeParent: string = DEFAULT_WSL_RUNTIME_PARENT,
+): string => {
   const safeRuntimeId = sanitizeWslRuntimeId(runtimeId);
   return [
     "set -eu",
-    `rm -f "$HOME/.t3/wsl-runtime/${safeRuntimeId}/${WSL_RUNTIME_READY_MARKER}"`,
+    `rm -f "${runtimeParent}/${safeRuntimeId}/${WSL_RUNTIME_READY_MARKER}"`,
   ].join("\n");
 };
 
@@ -781,6 +803,7 @@ const prepareWslRuntimeImpl = Effect.fn("desktop.wsl.prepareRuntimeImpl")(functi
     distro: string | null,
     windowsPath: string,
   ) => Effect.Effect<Option.Option<string>>,
+  runtimeParent: string = DEFAULT_WSL_RUNTIME_PARENT,
 ): Effect.fn.Return<PrepareWslRuntimeResult, never, ChildProcessSpawner.ChildProcessSpawner> {
   const linuxArchivePath = yield* windowsToWslPath(distro, archive.windowsPath);
   if (Option.isNone(linuxArchivePath)) {
@@ -792,7 +815,12 @@ const prepareWslRuntimeImpl = Effect.fn("desktop.wsl.prepareRuntimeImpl")(functi
 
   const install = yield* runWslShell(
     distro,
-    buildWslRuntimeInstallScript(linuxArchivePath.value, archive.runtimeId, archive.sha256),
+    buildWslRuntimeInstallScript(
+      linuxArchivePath.value,
+      archive.runtimeId,
+      archive.sha256,
+      runtimeParent,
+    ),
     RUNTIME_INSTALL_TIMEOUT,
     { resolveNode: false },
   );
@@ -825,10 +853,11 @@ const prepareWslRuntimeImpl = Effect.fn("desktop.wsl.prepareRuntimeImpl")(functi
 const pruneWslRuntimesImpl = Effect.fn("desktop.wsl.pruneRuntimesImpl")(function* (
   distro: string | null,
   runtimeId: string,
+  runtimeParent: string = DEFAULT_WSL_RUNTIME_PARENT,
 ): Effect.fn.Return<void, never, ChildProcessSpawner.ChildProcessSpawner> {
   const result = yield* runWslShell(
     distro,
-    buildWslRuntimePruneScript(runtimeId),
+    buildWslRuntimePruneScript(runtimeId, runtimeParent),
     RUNTIME_PRUNE_TIMEOUT,
     { resolveNode: false },
   );
@@ -845,10 +874,11 @@ const pruneWslRuntimesImpl = Effect.fn("desktop.wsl.pruneRuntimesImpl")(function
 const invalidateWslRuntimeImpl = Effect.fn("desktop.wsl.invalidateRuntimeImpl")(function* (
   distro: string | null,
   runtimeId: string,
+  runtimeParent: string = DEFAULT_WSL_RUNTIME_PARENT,
 ): Effect.fn.Return<void, never, ChildProcessSpawner.ChildProcessSpawner> {
   const result = yield* runWslShell(
     distro,
-    buildWslRuntimeInvalidateScript(runtimeId),
+    buildWslRuntimeInvalidateScript(runtimeId, runtimeParent),
     RUNTIME_INVALIDATE_TIMEOUT,
     { resolveNode: false },
   );
@@ -1139,6 +1169,10 @@ export const layer = Layer.effect(
   DesktopWslEnvironment,
   Effect.gen(function* () {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    const runtimeParent = wslRuntimeParentExpression(
+      environment.userDataDirName,
+      environment.isolatedInstance,
+    );
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const fileSystem = yield* FileSystem.FileSystem;
     const windir = process.env.WINDIR ?? "C:\\Windows";
@@ -1196,13 +1230,13 @@ export const layer = Layer.effect(
       getUserHome,
       getDistroIp,
       prepareRuntime: Effect.fn("desktop.wsl.prepareRuntime")(function (distro, archive) {
-        return provideSpawner(prepareWslRuntimeImpl(distro, archive, windowsToWslPath));
+        return provideSpawner(prepareWslRuntimeImpl(distro, archive, windowsToWslPath, runtimeParent));
       }),
       pruneRuntimes: Effect.fn("desktop.wsl.pruneRuntimes")(function (distro, runtimeId) {
-        return provideSpawner(pruneWslRuntimesImpl(distro, runtimeId));
+        return provideSpawner(pruneWslRuntimesImpl(distro, runtimeId, runtimeParent));
       }),
       invalidateRuntime: Effect.fn("desktop.wsl.invalidateRuntime")(function (distro, runtimeId) {
-        return provideSpawner(invalidateWslRuntimeImpl(distro, runtimeId));
+        return provideSpawner(invalidateWslRuntimeImpl(distro, runtimeId, runtimeParent));
       }),
       probeRuntime: Effect.fn("desktop.wsl.probeRuntime")(function (distro, linuxAppRoot) {
         return provideSpawner(probeWslRuntimeImpl(distro, linuxAppRoot));

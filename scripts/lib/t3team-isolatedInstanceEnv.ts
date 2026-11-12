@@ -70,24 +70,16 @@ export function isolatedBrandingFields(env: Env): { readonly isolatedInstance?: 
 }
 
 /**
- * Only macOS isolates every path an installed app shares with another install. Windows would start
- * its WSL backend on the distro's shared `~/.t3`, and Linux reads and writes shared state before
- * the isolated home exists (early settings, the device-scale-factor file, the portal desktop
- * entry, the URL-handler registration), so an isolated build for them would look isolated and not
- * be. Refuse to build one instead.
+ * An isolated instance needs a product name: that name is the directory it owns under app data.
+ * Windows and Linux builds are isolated the same way as macOS (a private home, Electron profile,
+ * and early-startup paths).
  */
 export function assertIsolatedBuildSupported(
   env: Env,
-  platform: "mac" | "win" | "linux",
+  _platform: "mac" | "win" | "linux",
   productName: string | undefined,
 ): void {
   if (!isIsolatedInstanceBuild(env)) return;
-  if (platform !== "mac") {
-    throw new Error(
-      `T3CODE_DESKTOP_ISOLATED_INSTANCE=1: isolated instances are macOS-only, not ${platform}. ` +
-        `Build this flavor for mac, or drop the isolation switch for a build that replaces the installed app.`,
-    );
-  }
   if (productName === undefined || productName.trim() === "") {
     throw new Error(
       "T3CODE_DESKTOP_ISOLATED_INSTANCE=1 needs a product name (T3CODE_DESKTOP_PRODUCT_NAME): the product name is the isolated home's directory.",

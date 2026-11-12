@@ -85,13 +85,9 @@ describe("isolated instance build output", () => {
 describe("isolated instance build support", () => {
   const on = { T3CODE_DESKTOP_ISOLATED_INSTANCE: "1" };
 
-  it("builds an isolated instance on macOS only", () => {
-    assert.doesNotThrow(() => assertIsolatedBuildSupported(on, "mac", "Nexi Work Dog"));
-    for (const platform of ["win", "linux"] as const) {
-      assert.throws(
-        () => assertIsolatedBuildSupported(on, platform, "Nexi Work Dog"),
-        /isolated instances are macOS-only.*\b(win|linux)\b/su,
-      );
+  it("builds an isolated instance on macOS, Windows and Linux", () => {
+    for (const platform of ["mac", "win", "linux"] as const) {
+      assert.doesNotThrow(() => assertIsolatedBuildSupported(on, platform, "Nexi Work Dog"));
     }
   });
 
