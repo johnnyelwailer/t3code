@@ -53,7 +53,7 @@ export function useNexiWelcomeActions(
   const accountId = broker?.enabled ? broker.accountId : "nexplore";
   const account = useAccount(accountId);
   const { skipped, skip } = useWelcomeSkips();
-  const accountCheck = useWelcomeAccountCheck(account);
+  const { accountCheck, retryAccount } = useWelcomeAccountCheck(account);
 
   const providersLive = useProvidersForWelcome(environmentId);
   const agentRows = buildWelcomeAgentRows(providersLive);
@@ -157,7 +157,7 @@ export function useNexiWelcomeActions(
       await onDone(undefined);
     },
     accountCheck,
-    onRetryAccount: account.retry,
+    onRetryAccount: retryAccount,
   };
 }
 

@@ -40,7 +40,9 @@ export function T3TeamSetupWelcomeSurface({
   // A role picked on the welcome page is not asked for again here.
   const nexiWelcome = useNexiWelcomeEnabled();
   const chosenRole = useWelcomeChosenRole();
-  const roleChosenOnWelcome = nexiWelcome && chosenRole !== null;
+  // A stored role the current pack no longer offers does not count: the chooser must still ask.
+  const roleChosenOnWelcome =
+    nexiWelcome && (packProfiles ?? []).some((profile) => profile.id === chosenRole);
   const chooserEnabled = useT3TeamWorkProfileChooserEnabled() && !roleChosenOnWelcome;
 
   const chipLabel =
