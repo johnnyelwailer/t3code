@@ -37,6 +37,12 @@ const CASES: ReadonlyArray<{
     retryable: true,
   },
   {
+    reason: "configuredBinaryMissing",
+    message: "The Claude Code binary set for this account was not found.",
+    nextStep: "Check the path in provider settings, then try again.",
+    retryable: true,
+  },
+  {
     reason: "installFailed",
     message: "Installing Claude Code on this cloud machine didn't finish.",
     nextStep: "Retry, or install it from the machine's terminal if it keeps failing.",

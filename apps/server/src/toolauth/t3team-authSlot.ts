@@ -125,8 +125,12 @@ export const probeToolStatus = (
   never,
   ProcessRunner.ProcessRunner | FileSystem.FileSystem | Path.Path
 > => {
+  // Same env the login pty gets, so status and Reconnect agree on the account's
+  // config dir (`CLAUDE_CONFIG_DIR`) and any other adapter spawn variables.
+  const env = { ...options.env, ...adapter.spawnEnv };
+  const merged = { ...options, env };
   const slot = AUTH_SLOTS.get(adapter.tool);
-  return slot !== undefined && options.env[slot.markerEnv] === "1"
-    ? readAuthSlotStatus(adapter.tool, slot, options)
-    : probeStatus(adapter, options);
+  return slot !== undefined && env[slot.markerEnv] === "1"
+    ? readAuthSlotStatus(adapter.tool, slot, merged)
+    : probeStatus(adapter, merged);
 };

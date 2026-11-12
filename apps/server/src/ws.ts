@@ -3352,7 +3352,7 @@ export const layerWsRpc = (
         [WS_METHODS.toolAuthStart]: (input) =>
           whenToolAuthFlowEnabled(
             input.tool,
-            toolAuth.start(input.tool, { hostname: input.hostname }),
+            toolAuth.start(input.tool, { hostname: input.hostname, instanceId: input.instanceId }),
             { publish: toolAuth.publish },
           ).pipe(Effect.map(toToolAuthWireState)),
         // One-click "install this CLI", chained into the real sign-in flow
