@@ -4981,12 +4981,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       },
     );
 
-    // A selection the provider applies on its next turn joins the running
-    // turn as a steer and waits for the next turn. Restarting the turn for it
-    // would end the turn's native subagents, which a steer must never do.
+    // A selection the next turn can apply joins the running turn as a steer:
+    // a restart would end the turn's native subagents. An instance switch
+    // restarts where the provider can, else waits for the next turn's handoff.
     const selectionMustApplyNow =
       selectionChanged &&
-      (providerInstanceChanged || selectionTransition?.type !== "apply_on_next_turn");
+      !providerInstanceChanged &&
+      selectionTransition?.type !== "apply_on_next_turn";
     const steeringPolicy = yield* mapDispatchError(input.command)(
       commandPolicy.decideSteeringExecution({
         commandId: input.command.commandId,
@@ -4994,6 +4995,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         providerInstanceId: targetRun.providerInstanceId,
         capabilities: session.providerSession.capabilities,
         forceRestart: input.forceRestart || selectionMustApplyNow,
+        preferRestart: providerInstanceChanged,
       }),
     );
 
