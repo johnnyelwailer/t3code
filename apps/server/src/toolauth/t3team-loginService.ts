@@ -13,7 +13,12 @@ import { ToolAuthSpawnError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
+import {
+  resolveSpawnCommand,
+  type ResolvedSpawnCommand,
+} from "@t3tools/shared/shell";
 import { adapterForHost, getAdapter } from "./t3team-adapters.ts";
 import { wireLoginProcess } from "./t3team-loginProcessWiring.ts";
 import { killSessionProcess, makeToolAuthSessionControl } from "./t3team-loginSessionControl.ts";
@@ -50,6 +55,28 @@ export interface ToolAuthLoginFlowDeps {
    * can show, instead of a bare spawn ENOENT the caller only sees as a toast.
    */
   readonly checkBinaryAvailable: (binary: string) => Effect.Effect<boolean>;
+}
+
+/**
+ * Map a `resolveSpawnCommand` result onto node-pty's `(file, args)` spawn.
+ *
+ * node-pty's Windows `get_shell_path` looks up the exact filename on PATH and
+ * does not apply PATHEXT, so a bare `claude` misses `claude.exe` and throws
+ * `File not found: ` (empty path). Resolving to the absolute `.exe` first,
+ * and wrapping `.cmd`/`.bat` in `cmd.exe /d /s /c`, is what the rest of the
+ * server already does for non-PTY child processes.
+ */
+export function ptyCommandForResolved(
+  resolved: ResolvedSpawnCommand,
+  platform: NodeJS.Platform,
+): { readonly shell: string; readonly args: ReadonlyArray<string> } {
+  if (!resolved.shell) {
+    return { shell: resolved.command, args: resolved.args };
+  }
+  if (platform === "win32") {
+    return { shell: "cmd.exe", args: ["/d", "/s", "/c", resolved.command] };
+  }
+  return { shell: "/bin/sh", args: ["-c", resolved.command] };
 }
 
 /**
@@ -106,16 +133,21 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
       ...(adapter.hostname === undefined ? {} : { hostname: adapter.hostname }),
     };
 
+    // Adapter-specific variables (gh's GH_NO_BROWSER) win over the
+    // service env: they exist precisely to change host behaviour.
+    const spawnEnv = { ...env, ...adapter.spawnEnv };
+    const platform = yield* HostProcess.Platform;
+    const resolved = yield* resolveSpawnCommand(shell!, args, { env: spawnEnv });
+    const ptyCommand = ptyCommandForResolved(resolved, platform);
+
     const process = yield* ptyAdapter
       .spawn({
-        shell: shell!,
-        args,
+        shell: ptyCommand.shell,
+        args: [...ptyCommand.args],
         cwd: homeDir,
         cols: 80,
         rows: 30,
-        // Adapter-specific variables (gh's GH_NO_BROWSER) win over the
-        // service env: they exist precisely to change host behaviour.
-        env: { ...env, ...adapter.spawnEnv },
+        env: spawnEnv,
       })
       .pipe(Effect.mapError((cause) => new ToolAuthSpawnError({ tool, cause })));
 
