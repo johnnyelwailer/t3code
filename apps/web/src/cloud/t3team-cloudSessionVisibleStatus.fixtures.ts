@@ -1,9 +1,4 @@
-/**
- * TLC-derived traces for CloudSession.tla (ApplyFix FALSE in "current",
- * TRUE in "fixed"). From traces/current-0827-ended-and-setup.tlc.log and
- * traces/current-0832-triple.tlc.log. Do not hand-edit "current" values:
- * they are the Alias visible set TLC printed.
- */
+/** TLC traces: "current" is ApplyFix FALSE, "fixed" is TRUE. Do not hand-edit "current". */
 import type { CloudSessionVisibleFacts } from "./t3team-cloudSessionVisibleStatus";
 
 export interface TlcTraceStep {

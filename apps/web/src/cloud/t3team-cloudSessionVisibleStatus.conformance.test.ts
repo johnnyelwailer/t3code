@@ -1,10 +1,4 @@
-/**
- * Conformance of resolveCloudSessionVisibleStatus against CloudSession.tla
- * under ApplyFix = TRUE. The oracle below is a line-by-line transcription of
- * the TLA operators (SetupCard, EndedBannerFixed, CloneBannerFixed,
- * OfflineBannerFixed, VisibleStatuses). Expected "current" values on the
- * named traces come from TLC itself (Alias visible), not from this oracle.
- */
+/** Conformance: the oracle transcribes TLA operators; named-trace "current" values come from TLC. */
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -66,23 +60,27 @@ function specVisibleCurrent(f: CloudSessionVisibleFacts): string[] {
 }
 
 describe("TLC trace conformance", () => {
-  for (const name of ["phil-0827", "phil-0832"] as const) {
-    it(`reducer matches ApplyFix=TRUE on every ${name} step, and fixtures match TLC current`, () => {
-      for (const [i, step] of tlcTraces[name].entries()) {
-        const status = resolveCloudSessionVisibleStatus(step.facts);
-        expect({ step: i, visible: [...status.visible] }).toEqual({
-          step: i,
-          visible: [...step.fixed.visible],
-        });
-        expect(status.setupStage).toBe(step.fixed.setupStage);
-        expect(status.setupStage).toBe(specSetupCard(step.facts));
-        expect([...status.visible]).toEqual(specVisibleFixed(step.facts));
-        // Fixture "current" is what TLC printed for ApplyFix=FALSE.
-        expect([...step.current.visible].sort()).toEqual(specVisibleCurrent(step.facts).sort());
-        expect(status.visible.length).toBeLessThanOrEqual(1);
-      }
-    });
+  function assertTrace(name: "phil-0827" | "phil-0832") {
+    for (const [i, step] of tlcTraces[name].entries()) {
+      const status = resolveCloudSessionVisibleStatus(step.facts);
+      expect({ step: i, visible: [...status.visible] }).toEqual({
+        step: i,
+        visible: [...step.fixed.visible],
+      });
+      expect(status.setupStage).toBe(step.fixed.setupStage);
+      expect(status.setupStage).toBe(specSetupCard(step.facts));
+      expect([...status.visible]).toEqual(specVisibleFixed(step.facts));
+      // Fixture "current" is what TLC printed for ApplyFix=FALSE.
+      expect([...step.current.visible].sort()).toEqual(specVisibleCurrent(step.facts).sort());
+      expect(status.visible.length).toBeLessThanOrEqual(1);
+    }
   }
+  it("reducer matches ApplyFix=TRUE on every phil-0827 step, and fixtures match TLC current", () => {
+    assertTrace("phil-0827");
+  });
+  it("reducer matches ApplyFix=TRUE on every phil-0832 step, and fixtures match TLC current", () => {
+    assertTrace("phil-0832");
+  });
 });
 
 const PHASES = [
