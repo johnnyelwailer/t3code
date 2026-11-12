@@ -3,11 +3,8 @@ import type { ScopedProjectRef } from "@t3tools/contracts";
 import { NexiWelcomeAccountRow } from "./t3team-NexiWelcomeAccountRow";
 import { NexiWelcomeAgentsSection } from "./t3team-NexiWelcomeAgentsSection";
 import { NexiWelcomeBackend } from "./t3team-NexiWelcomeBackend";
-import { NexiWelcomeCloudPhoneSection } from "./t3team-NexiWelcomeCloudPhoneSection";
 import { NexiWelcomeHeader } from "./t3team-NexiWelcomeHeader";
-import { NexiWelcomeGitHubRow } from "./t3team-NexiWelcomeGitHubRow";
 import { NexiWelcomeJiraRow } from "./t3team-NexiWelcomeJiraRow";
-import { NexiWelcomeRoleSection } from "./t3team-NexiWelcomeRoleSection";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
 import { useNexiWelcomeActions } from "./t3team-useNexiWelcomeActions";
 import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeLayout";
@@ -16,6 +13,8 @@ import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeL
  * Nexi Work single-page first-run setup. Replaces the multi-step WelcomeWizard when
  * `NEXI_WELCOME_SETUP` is on. Start completes onboarding and lands on the normal home /
  * new-thread surface (Add project → CommandPaletteAddProject).
+ *
+ * The Role, GitHub, and cloud session / phone rows are not rendered until their actions work.
  */
 export function NexiWelcomePage(props: {
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
@@ -27,26 +26,13 @@ export function NexiWelcomePage(props: {
   );
 }
 
-function NexiWelcomeRows({
+export function NexiWelcomeRows({
   onDone,
 }: {
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
   const a = useNexiWelcomeActions(onDone);
   const { productName } = useWelcomeWizardBrand();
-  const entraSignedIn = a.account.account?.auth._tag === "SignedIn";
-  const cloudSessions = a.cloud.sessions;
-  const cloudReady = cloudSessions.some((session) => session.phase === "ready");
-  const cloudPending =
-    a.cloud.createPending ||
-    cloudSessions.some(
-      (session) =>
-        session.phase === "requested" ||
-        session.phase === "queued" ||
-        session.phase === "preparing" ||
-        session.phase === "starting",
-    );
-
   return (
     <WelcomePageShell title={`Set up ${productName}`}>
       <NexiWelcomeHeader />
@@ -61,15 +47,6 @@ function NexiWelcomeRows({
             onOpenProviderSetup={a.onOpenProviderSetup}
           />
         </WelcomeSection>
-        {a.roleEnabled ? (
-          <WelcomeSection title="Role">
-            <NexiWelcomeRoleSection
-              profiles={a.packProfiles}
-              selectedId={a.chosenRole}
-              onChoose={a.onChooseRole}
-            />
-          </WelcomeSection>
-        ) : null}
         <WelcomeSection title="Jira">
           <NexiWelcomeJiraRow
             enabled={a.jiraEnabled}
@@ -83,27 +60,7 @@ function NexiWelcomeRows({
             onSkip={() => a.skip("jira")}
           />
         </WelcomeSection>
-        <WelcomeSection title="GitHub">
-          <NexiWelcomeGitHubRow
-            host={a.githubHosts[0]}
-            state={a.githubPrimary.state}
-            skipped={a.skipped.github}
-            onStart={a.githubPrimary.start}
-            onCopyAndOpen={a.onCopyAndOpenGitHubPrimary}
-            onSkip={() => a.skip("github")}
-            showSkip
-          />
-          <NexiWelcomeGitHubRow
-            host={a.githubHosts[1]}
-            state={a.githubSecondary.state}
-            skipped={a.skipped.github}
-            onStart={a.githubSecondary.start}
-            onCopyAndOpen={a.onCopyAndOpenGitHubSecondary}
-            onSkip={() => a.skip("github")}
-            showSkip={false}
-          />
-        </WelcomeSection>
-        <WelcomeSection title="Cloud">
+        <WelcomeSection title="Account">
           <NexiWelcomeAccountRow
             account={a.account.account}
             check={a.accountCheck}
@@ -114,18 +71,6 @@ function NexiWelcomeRows({
             onOpenVerification={a.account.openVerification}
             onSkip={() => a.skip("account")}
             onRetry={a.onRetryAccount}
-          />
-          <NexiWelcomeCloudPhoneSection
-            entraSignedIn={Boolean(entraSignedIn) && !a.skipped.account}
-            skipped={a.skipped.cloud}
-            cloudEnabled={a.cloudFlag}
-            cloudAvailable={a.cloud.available}
-            cloudConfigured={a.cloud.configured}
-            cloudPending={cloudPending}
-            cloudReady={cloudReady}
-            onTurnOnCloud={a.cloud.onCreate}
-            onSetupPhone={a.onSetupPhone}
-            onSkip={() => a.skip("cloud")}
           />
         </WelcomeSection>
       </div>
