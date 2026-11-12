@@ -51,8 +51,13 @@ export const T3TeamServerSettingsPatch = Schema.Struct({
 });
 export type T3TeamServerSettingsPatch = typeof T3TeamServerSettingsPatch.Type;
 
+/** Welcome-page sections the user skipped; kept so quitting mid-setup resumes where they were. */
+export const T3TeamWelcomeSkipKey = Schema.Literals(["account", "jira", "github", "cloud"]);
+export type T3TeamWelcomeSkipKey = typeof T3TeamWelcomeSkipKey.Type;
+
 /** Fork fields on the client settings schema, nested under `t3team`. */
 export const T3TeamClientSettings = Schema.Struct({
+  welcomeSkipped: Schema.optionalKey(Schema.Array(T3TeamWelcomeSkipKey)),
   storedSidebarNavPreferencesJson: Schema.optionalKey(TrimmedString),
   storedProjectsJson: Schema.optionalKey(TrimmedString),
   storedSidebarPinsJson: Schema.optionalKey(TrimmedString),
@@ -62,6 +67,7 @@ export const T3TeamClientSettings = Schema.Struct({
 export type T3TeamClientSettings = typeof T3TeamClientSettings.Type;
 
 export const T3TeamClientSettingsPatch = Schema.Struct({
+  welcomeSkipped: Schema.optionalKey(Schema.Array(T3TeamWelcomeSkipKey)),
   storedSidebarNavPreferencesJson: Schema.optionalKey(TrimmedString),
   storedProjectsJson: Schema.optionalKey(TrimmedString),
   storedSidebarPinsJson: Schema.optionalKey(TrimmedString),

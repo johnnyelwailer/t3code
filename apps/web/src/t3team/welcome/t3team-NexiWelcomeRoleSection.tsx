@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { EnvironmentSetupProfile } from "@t3tools/contracts";
 
 import { T3TeamRichChoice } from "~/t3team/rich-choice/t3team-RichChoice";
@@ -25,19 +24,16 @@ export function NexiWelcomeRoleSection({
   readonly selectedId: string | null;
   readonly onChoose: (profileId: string) => void;
 }) {
-  const [last, setLast] = useState<string | null>(selectedId);
   const options = profilesToRoleOptions(profiles);
   if (options.length === 0) return null;
   return (
-    <div className="py-1">
+    <div className="py-1 [mask-image:linear-gradient(to_right,transparent,black_7%,black_93%,transparent)]">
       <T3TeamRichChoice
         prompt="Choose your role"
         options={options}
-        selectedIds={last ? [last] : []}
+        selectedIds={selectedId ? [selectedId] : []}
         onChoose={([id]) => {
-          const next = id ?? null;
-          setLast(next);
-          if (next) onChoose(next);
+          if (id) onChoose(id);
         }}
       />
     </div>

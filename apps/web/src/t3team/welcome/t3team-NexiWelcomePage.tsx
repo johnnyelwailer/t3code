@@ -2,10 +2,13 @@ import type { ScopedProjectRef } from "@t3tools/contracts";
 
 import { NexiWelcomeAccountRow } from "./t3team-NexiWelcomeAccountRow";
 import { NexiWelcomeAgentsSection } from "./t3team-NexiWelcomeAgentsSection";
+import { NexiWelcomeBackend } from "./t3team-NexiWelcomeBackend";
 import { NexiWelcomeCloudPhoneSection } from "./t3team-NexiWelcomeCloudPhoneSection";
+import { NexiWelcomeHeader } from "./t3team-NexiWelcomeHeader";
 import { NexiWelcomeGitHubRow } from "./t3team-NexiWelcomeGitHubRow";
 import { NexiWelcomeJiraRow } from "./t3team-NexiWelcomeJiraRow";
 import { NexiWelcomeRoleSection } from "./t3team-NexiWelcomeRoleSection";
+import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
 import { useNexiWelcomeActions } from "./t3team-useNexiWelcomeActions";
 import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeLayout";
 
@@ -14,12 +17,23 @@ import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeL
  * `NEXI_WELCOME_SETUP` is on. Start completes onboarding and lands on the normal home /
  * new-thread surface (Add project → CommandPaletteAddProject).
  */
-export function NexiWelcomePage({
+export function NexiWelcomePage(props: {
+  readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
+}) {
+  return (
+    <NexiWelcomeBackend>
+      <NexiWelcomeRows onDone={props.onDone} />
+    </NexiWelcomeBackend>
+  );
+}
+
+function NexiWelcomeRows({
   onDone,
 }: {
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
   const a = useNexiWelcomeActions(onDone);
+  const { productName } = useWelcomeWizardBrand();
   const entraSignedIn = a.account.account?.auth._tag === "SignedIn";
   const cloudSessions = a.cloud.sessions;
   const cloudReady = cloudSessions.some((session) => session.phase === "ready");
@@ -34,7 +48,8 @@ export function NexiWelcomePage({
     );
 
   return (
-    <WelcomePageShell>
+    <WelcomePageShell title={`Set up ${productName}`}>
+      <NexiWelcomeHeader />
       <div className="border-t border-border/50">
         <WelcomeSection title="Agents">
           <NexiWelcomeAgentsSection
@@ -50,7 +65,7 @@ export function NexiWelcomePage({
           <WelcomeSection title="Role">
             <NexiWelcomeRoleSection
               profiles={a.packProfiles}
-              selectedId={null}
+              selectedId={a.chosenRole}
               onChoose={a.onChooseRole}
             />
           </WelcomeSection>
@@ -60,11 +75,11 @@ export function NexiWelcomePage({
             enabled={a.jiraEnabled}
             disabledReason={a.jiraDisabledReason}
             accounts={a.jiraAccounts}
-            loading={a.jiraLoading}
-            error={a.jiraError}
+            check={a.jiraCheck}
             skipped={a.skipped.jira}
             connecting={a.jiraConnecting}
             onConnect={a.onConnectJira}
+            onRetry={a.onRetryJira}
             onSkip={() => a.skip("jira")}
           />
         </WelcomeSection>
@@ -91,7 +106,7 @@ export function NexiWelcomePage({
         <WelcomeSection title="Cloud">
           <NexiWelcomeAccountRow
             account={a.account.account}
-            loaded={a.account.loaded}
+            check={a.accountCheck}
             pending={a.account.pending}
             error={a.account.error}
             skipped={a.skipped.account}

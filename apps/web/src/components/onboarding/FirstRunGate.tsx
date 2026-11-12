@@ -24,6 +24,12 @@ import { environmentProjects } from "../../state/projects";
 import { primaryServerConfigAtom, primaryServerWelcomeAtom } from "../../state/server";
 import { environmentShell } from "../../state/shell";
 import { environmentThreadShells } from "../../state/threads";
+import {
+  hasWelcomeAutoOpened,
+  markWelcomeAutoOpened,
+} from "../../t3team/welcome/t3team-welcomeAutoOpen";
+import { isWelcomeLandingPath } from "../../t3team/welcome/t3team-welcomeGating.logic";
+import { useNexiWelcomeEnabled } from "../../t3team/welcome/t3team-useNexiWelcomeEnabled";
 import { Button } from "../ui/button";
 
 /** Pending blocks all rendering, including EventRouter welcome navigation. */
@@ -158,12 +164,17 @@ export function FirstRunGate({
     return () => window.clearTimeout(timer);
   }, [decision, enabled, hydrated]);
 
-  // Setup opens by itself only from the home route. A direct link, such as
+  // Setup opens by itself only from the landing route. A direct link, such as
   // Settings, opens as asked so setup can never lock a user out of the app.
-  const wizardOwnsRoute = pathname === "/";
+  const nexiWelcome = useNexiWelcomeEnabled();
+  const wizardOwnsRoute = isWelcomeLandingPath(pathname, {
+    nexiWelcome,
+    alreadyOpened: hasWelcomeAutoOpened(),
+  });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- navigates from the home route to /welcome when the gate decides on the wizard
   useEffect(() => {
     if (decision === "wizard" && wizardOwnsRoute) {
+      markWelcomeAutoOpened();
       void navigate({ to: "/welcome", replace: true });
     }
   }, [decision, navigate, wizardOwnsRoute]);
