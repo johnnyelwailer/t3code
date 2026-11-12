@@ -68,6 +68,8 @@ import { CloudSessionSetupFooter } from "~/cloud/t3team-cloudSessionSetupFooter"
 import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
 import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
 import { useCloudProjectCloneBanner } from "~/cloud/t3team-useCloudProjectCloneBanner";
+import { applyCloudSessionBannerPolicy } from "~/cloud/t3team-cloudSessionBannerPolicy";
+import { useCloudSessionVisibleStatus } from "~/cloud/t3team-useCloudSessionVisibleStatus";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
@@ -1981,6 +1983,12 @@ export default function ChatView(props: ChatViewProps) {
     projectRef: activeProjectRef,
     gate: cloudSessionComposerGate,
   });
+  const cloudVisibleStatus = useCloudSessionVisibleStatus({
+    environmentId,
+    setupCard: cloudSetupCard,
+    createPending: cloudSessionComposerGate.cloud.createPending,
+    cloneSuggested: cloudProjectCloneBannerItem !== null,
+  });
   const cloudSetupElement = cloudSetupCard ? (
     <CloudSessionSetupFooter>
       <CloudSessionSetupHost {...cloudSetupCard} />
@@ -2772,7 +2780,7 @@ export default function ChatView(props: ChatViewProps) {
     threadId: activeThreadId,
     projection: serverProjection,
   });
-  const composerBannerItems = (() => {
+  const composerBannerItems = applyCloudSessionBannerPolicy((() => {
     const fallbackSelection = draftFallback?.selection;
     const defaultSelection =
       draftDefaultModelSelection ??
@@ -2882,7 +2890,7 @@ export default function ChatView(props: ChatViewProps) {
         },
       }),
     ];
-  })() as ComposerBannerStackItem[];
+  })(), cloudVisibleStatus) as ComposerBannerStackItem[];
 
   if (
     terminalUiLaunchContext !== null &&

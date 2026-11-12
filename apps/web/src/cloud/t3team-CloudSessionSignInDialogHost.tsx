@@ -24,10 +24,10 @@ import {
 const GH = toolAuthMetaForTool("gh");
 
 /**
- * Signs the GitHub CLI in to the host a session action needed (the session host, or the project's
- * repository host — the failure names it), then runs the action again: the user approves one
- * device code instead of reading an error. The gh device flow itself is the Connected tools one
- * (`toolAuth.start` for `gh`, with that host), so the sign-in is the same wherever it starts.
+ * Signs the GitHub CLI in to the host a session action needed, then runs the action again.
+ * Opens only when `request` is set by a user click (`acceptCloudSessionSignInOffer`); a
+ * create failure records an offer and does not open this dialog (InvNoAutoDialog). Once
+ * open, the gh device flow is the Connected tools one (`toolAuth.start` for `gh`).
  */
 export function CloudSessionSignInDialogHost() {
   const request = useCloudSessionSignInStore((state) => state.request);

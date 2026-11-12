@@ -8,6 +8,10 @@ import {
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 
 import { Button } from "../ui/button";
+import {
+  optimisticActionLabel,
+  useCloudSessionOptimisticAction,
+} from "~/cloud/t3team-cloudSessionOptimisticAction";
 
 /**
  * The ended-session banner's action, rendered from its inputs: which of the three states it is in
@@ -30,24 +34,40 @@ export function CloudSessionEndedActionsView({
   readonly onStart: () => void;
   readonly onConnect: (session: CloudSession) => void;
 }) {
+  const optimistic = useCloudSessionOptimisticAction();
   if (!available) return null;
   const action = resolveEndedSessionAction({ sessions, environmentId, createPending });
-  if (action.kind === "starting") {
+  if (action.kind === "starting" || optimistic.pending) {
     return (
-      <Button size="xs" variant="ghost" disabled>
+      <Button
+        data-cloud-session-ended=""
+        size="xs"
+        variant="ghost"
+        disabled
+      >
         {ENDED_SESSION_BANNER_COPY.starting}
       </Button>
     );
   }
   if (action.kind === "connect") {
     return (
-      <Button size="xs" variant="ghost" onClick={() => onConnect(action.session)}>
-        {ENDED_SESSION_BANNER_COPY.connect}
+      <Button
+        data-cloud-session-ended=""
+        size="xs"
+        variant="ghost"
+        onClick={() => optimistic.run(() => onConnect(action.session))}
+      >
+        {optimisticActionLabel(false, ENDED_SESSION_BANNER_COPY.connect, ENDED_SESSION_BANNER_COPY.starting)}
       </Button>
     );
   }
   return (
-    <Button size="xs" variant="ghost" onClick={onStart}>
+    <Button
+      data-cloud-session-ended=""
+      size="xs"
+      variant="ghost"
+      onClick={() => optimistic.run(onStart)}
+    >
       {ENDED_SESSION_BANNER_COPY.start}
     </Button>
   );
