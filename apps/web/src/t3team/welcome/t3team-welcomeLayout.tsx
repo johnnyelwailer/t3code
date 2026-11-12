@@ -104,29 +104,7 @@ export function WelcomeSection({
   );
 }
 
-export function WelcomePageShell({
-  children,
-  narrow,
-}: {
-  readonly children: ReactNode;
-  readonly narrow?: boolean | undefined;
-}) {
-  return (
-    <div
-      className="relative min-h-screen overflow-y-auto bg-background text-foreground scrollbar-gutter-both"
-      data-nexi-welcome=""
-      style={narrow ? { width: 390, marginInline: "auto" } : undefined}
-    >
-      <div
-        className={`relative mx-auto flex min-h-screen w-full flex-col px-5 pt-8 pb-12 sm:px-6 sm:pt-10 ${
-          narrow ? "max-w-[390px]" : "max-w-3xl"
-        }`}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
+export { WelcomePageShell } from "./t3team-NexiWelcomeShell";
 
 export function StartFooter({
   agentReady,

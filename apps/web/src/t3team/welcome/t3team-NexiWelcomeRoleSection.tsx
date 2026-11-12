@@ -27,7 +27,7 @@ export function NexiWelcomeRoleSection({
   const options = profilesToRoleOptions(profiles);
   if (options.length === 0) return null;
   return (
-    <div className="py-1">
+    <div className="py-1 [mask-image:linear-gradient(to_right,transparent,black_7%,black_93%,transparent)]">
       <T3TeamRichChoice
         prompt="Choose your role"
         options={options}

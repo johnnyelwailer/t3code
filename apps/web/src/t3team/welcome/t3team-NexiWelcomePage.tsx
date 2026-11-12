@@ -8,6 +8,7 @@ import { NexiWelcomeHeader } from "./t3team-NexiWelcomeHeader";
 import { NexiWelcomeGitHubRow } from "./t3team-NexiWelcomeGitHubRow";
 import { NexiWelcomeJiraRow } from "./t3team-NexiWelcomeJiraRow";
 import { NexiWelcomeRoleSection } from "./t3team-NexiWelcomeRoleSection";
+import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
 import { useNexiWelcomeActions } from "./t3team-useNexiWelcomeActions";
 import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeLayout";
 
@@ -32,6 +33,7 @@ function NexiWelcomeRows({
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
   const a = useNexiWelcomeActions(onDone);
+  const { productName } = useWelcomeWizardBrand();
   const entraSignedIn = a.account.account?.auth._tag === "SignedIn";
   const cloudSessions = a.cloud.sessions;
   const cloudReady = cloudSessions.some((session) => session.phase === "ready");
@@ -46,7 +48,7 @@ function NexiWelcomeRows({
     );
 
   return (
-    <WelcomePageShell>
+    <WelcomePageShell title={`Set up ${productName}`}>
       <NexiWelcomeHeader />
       <div className="border-t border-border/50">
         <WelcomeSection title="Agents">
