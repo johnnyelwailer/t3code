@@ -4148,25 +4148,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           });
         });
 
-      // A selection the provider applies on its next turn restarts the run when
-      // the provider can restart it. Otherwise the steer joins the running turn
-      // and the selection waits for the next one, rather than failing the steer.
-      const turnCapabilities = session.providerSession.capabilities.turns;
+      // A changed selection restarts the run when the provider can restart it.
+      // Otherwise the steer joins the running turn and the selection waits for
+      // the next one, rather than failing the steer. The next turn hands off an
+      // instance switch itself, since it classifies against the native thread's
+      // owner; only a same-instance session change cannot wait.
       const selectionMustApplyNow =
         selectionChanged &&
-        (providerInstanceChanged || selectionTransition?.type !== "apply_on_next_turn");
+        !providerInstanceChanged &&
+        selectionTransition?.type !== "apply_on_next_turn";
       const steeringPolicy = yield* enforceCommandPolicy(input.command)(
         commandPolicy.decideSteeringExecution({
           commandId: input.command.commandId,
           threadId: input.command.threadId,
           providerInstanceId: targetRun.providerInstanceId,
           capabilities: session.providerSession.capabilities,
-          forceRestart:
-            input.forceRestart ||
-            selectionMustApplyNow ||
-            (selectionChanged &&
-              turnCapabilities.supportsInterrupt &&
-              turnCapabilities.supportsSteeringByInterruptRestart),
+          forceRestart: input.forceRestart || selectionMustApplyNow,
+          preferRestart: selectionChanged,
         }),
       );
 

@@ -13,6 +13,7 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
+import { ClaudeProviderCapabilitiesV2 } from "./Adapters/ClaudeAdapterV2.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import { CursorProviderCapabilitiesV2 } from "@t3tools/provider-cursor/testing";
 import { GrokProviderCapabilitiesV2 } from "@t3tools/provider-grok/testing";
@@ -302,6 +303,23 @@ layer("CommandPolicyV2", (it) => {
       });
 
       assert.equal(result, "interrupt_restart");
+    }),
+  );
+
+  it.effect("restarts for a preferred restart only where the provider can, else steers", () =>
+    Effect.gen(function* () {
+      const policy = yield* CommandPolicy.CommandPolicyV2;
+      const decide = (capabilities: OrchestrationV2ProviderCapabilities) =>
+        policy.decideSteeringExecution({
+          commandId,
+          threadId,
+          providerInstanceId: ProviderInstanceId.make("account"),
+          capabilities,
+          preferRestart: true,
+        });
+
+      assert.equal(yield* decide(CodexProviderCapabilitiesV2), "interrupt_restart");
+      assert.equal(yield* decide(ClaudeProviderCapabilitiesV2), "active_steering");
     }),
   );
 
