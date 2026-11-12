@@ -21,6 +21,14 @@ vi.mock("~/t3team/t3team-workProfileChooser", async (importOriginal) => {
   return { ...actual, useT3TeamWorkProfileChooserEnabled: () => chooserEnabled.current };
 });
 
+const welcome: { enabled: boolean; role: string | null } = { enabled: false, role: null };
+vi.mock("~/t3team/welcome/t3team-useNexiWelcomeEnabled", () => ({
+  useNexiWelcomeEnabled: () => welcome.enabled,
+}));
+vi.mock("~/t3team/welcome/t3team-useWelcomeChosenRole", () => ({
+  useWelcomeChosenRole: () => welcome.role,
+}));
+
 const packProfiles: readonly EnvironmentSetupProfile[] = [
   {
     id: "requirements-product",
@@ -45,6 +53,8 @@ const hosts: HTMLElement[] = [];
 
 afterEach(() => {
   hosts.length = 0;
+  welcome.enabled = false;
+  welcome.role = null;
 });
 
 async function render(): Promise<HTMLElement> {
@@ -94,5 +104,25 @@ describe("T3TeamSetupWelcomeSurface work profile chooser gate", () => {
     expect(host.querySelector('[data-profile-id="engineer"]')).not.toBeNull();
     expect(host.querySelector('[data-profile-id="requirements-product"]')).not.toBeNull();
     expect(host.textContent).toContain("Pick how you want");
+  });
+
+  it("does not ask for the role again once the welcome page recorded one", async () => {
+    chooserEnabled.current = true;
+    welcome.enabled = true;
+    welcome.role = "engineer";
+    const host = await render();
+
+    expect(host.textContent).not.toContain("Who are you, and how do you want to work?");
+    expect(host.textContent).not.toContain("Selected profile");
+    expect(host.querySelectorAll("[data-profile-id]")).toHaveLength(0);
+    expect(host.textContent).toContain("Set up first project");
+  });
+
+  it("still asks when the welcome page is on but no role was picked", async () => {
+    chooserEnabled.current = true;
+    welcome.enabled = true;
+    const host = await render();
+
+    expect(host.textContent).toContain("Who are you, and how do you want to work?");
   });
 });

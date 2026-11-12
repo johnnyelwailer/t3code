@@ -17,6 +17,8 @@ import {
   type T3TeamSetupSurfaceReason,
 } from "~/t3team/t3team-setupSurfaceReason";
 import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileChooser";
+import { useNexiWelcomeEnabled } from "~/t3team/welcome/t3team-useNexiWelcomeEnabled";
+import { useWelcomeChosenRole } from "~/t3team/welcome/t3team-useWelcomeChosenRole";
 
 export function T3TeamSetupWelcomeSurface({
   onCreate,
@@ -35,7 +37,11 @@ export function T3TeamSetupWelcomeSurface({
   const packProfiles = profilesOverride ?? livePackProfiles;
   // Runtime feature flag (default off): with no chooser the right column, the selected-profile
   // chip and the "pick your style" step all go away, and the copy stops promising a choice.
-  const chooserEnabled = useT3TeamWorkProfileChooserEnabled();
+  // A role picked on the welcome page is not asked for again here.
+  const nexiWelcome = useNexiWelcomeEnabled();
+  const chosenRole = useWelcomeChosenRole();
+  const roleChosenOnWelcome = nexiWelcome && chosenRole !== null;
+  const chooserEnabled = useT3TeamWorkProfileChooserEnabled() && !roleChosenOnWelcome;
 
   const chipLabel =
     reason.kind === "no-work-project" ? "No work source connected yet" : "First project setup";

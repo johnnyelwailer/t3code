@@ -3,6 +3,7 @@ import type { ScopedProjectRef } from "@t3tools/contracts";
 import { NexiWelcomeAccountRow } from "./t3team-NexiWelcomeAccountRow";
 import { NexiWelcomeAgentsSection } from "./t3team-NexiWelcomeAgentsSection";
 import { NexiWelcomeCloudPhoneSection } from "./t3team-NexiWelcomeCloudPhoneSection";
+import { NexiWelcomeHeader } from "./t3team-NexiWelcomeHeader";
 import { NexiWelcomeGitHubRow } from "./t3team-NexiWelcomeGitHubRow";
 import { NexiWelcomeJiraRow } from "./t3team-NexiWelcomeJiraRow";
 import { NexiWelcomeRoleSection } from "./t3team-NexiWelcomeRoleSection";
@@ -35,6 +36,7 @@ export function NexiWelcomePage({
 
   return (
     <WelcomePageShell>
+      <NexiWelcomeHeader />
       <div className="border-t border-border/50">
         <WelcomeSection title="Agents">
           <NexiWelcomeAgentsSection
@@ -50,7 +52,7 @@ export function NexiWelcomePage({
           <WelcomeSection title="Role">
             <NexiWelcomeRoleSection
               profiles={a.packProfiles}
-              selectedId={null}
+              selectedId={a.chosenRole}
               onChoose={a.onChooseRole}
             />
           </WelcomeSection>
@@ -60,11 +62,11 @@ export function NexiWelcomePage({
             enabled={a.jiraEnabled}
             disabledReason={a.jiraDisabledReason}
             accounts={a.jiraAccounts}
-            loading={a.jiraLoading}
-            error={a.jiraError}
+            check={a.jiraCheck}
             skipped={a.skipped.jira}
             connecting={a.jiraConnecting}
             onConnect={a.onConnectJira}
+            onRetry={a.onRetryJira}
             onSkip={() => a.skip("jira")}
           />
         </WelcomeSection>
@@ -91,7 +93,7 @@ export function NexiWelcomePage({
         <WelcomeSection title="Cloud">
           <NexiWelcomeAccountRow
             account={a.account.account}
-            loaded={a.account.loaded}
+            check={a.accountCheck}
             pending={a.account.pending}
             error={a.account.error}
             skipped={a.skipped.account}

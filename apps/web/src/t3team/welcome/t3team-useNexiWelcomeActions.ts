@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ProviderInstanceId, type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
 
 import { useAccount } from "~/account/t3team-useAccounts";
@@ -27,11 +27,9 @@ import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileChooser";
 
 import { buildWelcomeAgentRows, isWelcomeAgentReady } from "./t3team-welcomeAgents.logic";
-import {
-  INITIAL_WELCOME_SKIP,
-  withWelcomeSkip,
-  type WelcomeSkipKey,
-} from "./t3team-welcomeSkipped";
+import { useWelcomeChosenRole } from "./t3team-useWelcomeChosenRole";
+import { useWelcomeAccountCheck, useWelcomeJiraCheck } from "./t3team-useWelcomeChecks";
+import { useWelcomeSkips } from "./t3team-useWelcomeSkips";
 
 function openExternal(url: string) {
   const api = readLocalApi();
@@ -54,8 +52,8 @@ export function useNexiWelcomeActions(
   const broker = useCloudBrokerStatus();
   const accountId = broker?.enabled ? broker.accountId : "nexplore";
   const account = useAccount(accountId);
-  const [skipped, setSkipped] = useState(INITIAL_WELCOME_SKIP);
-  const skip = (key: WelcomeSkipKey) => setSkipped((s) => withWelcomeSkip(s, key));
+  const { skipped, skip } = useWelcomeSkips();
+  const accountCheck = useWelcomeAccountCheck(account);
 
   const providersLive = useProvidersForWelcome(environmentId);
   const agentRows = buildWelcomeAgentRows(providersLive);
@@ -65,6 +63,7 @@ export function useNexiWelcomeActions(
 
   const jiraEnabled = useJiraConnectionsEnabled();
   const jiraStatuses = useJiraAccountStatuses();
+  const { jiraCheck, retryJira } = useWelcomeJiraCheck(jiraStatuses);
   const oauth = useAtlassianOAuth();
   const backend = useBackend();
   const jiraReported = useRef(false);
@@ -100,6 +99,8 @@ export function useNexiWelcomeActions(
   const cloudFlag = useFeatureFlag("CLOUD_SESSIONS");
   const roleEnabled = useT3TeamWorkProfileChooserEnabled();
   const packProfiles = useT3TeamPackSetupProfiles() ?? [];
+  const storedRole = useWelcomeChosenRole();
+  const chosenRole = packProfiles.some((profile) => profile.id === storedRole) ? storedRole : null;
 
   return {
     account,
@@ -128,8 +129,8 @@ export function useNexiWelcomeActions(
     jiraEnabled,
     jiraDisabledReason: JIRA_CONNECTIONS_OFF_TEXT,
     jiraAccounts: jiraStatuses.state.kind === "ready" ? jiraStatuses.state.accounts : null,
-    jiraLoading: jiraStatuses.state.kind === "loading",
-    jiraError: jiraStatuses.state.kind === "error" ? "Could not load Jira accounts." : null,
+    jiraCheck,
+    onRetryJira: retryJira,
     jiraConnecting:
       oauth.state.kind === "opening" ||
       oauth.state.kind === "waiting" ||
@@ -148,13 +149,15 @@ export function useNexiWelcomeActions(
     cloudFlag,
     roleEnabled,
     packProfiles,
+    chosenRole,
     onChooseRole: writeT3TeamProjectSetupProfile,
     onSetupPhone: () => void navigate({ to: "/settings/general" }),
     onStart: async () => {
       await completeOnboarding();
       await onDone(undefined);
     },
-    onRetryAccount: account.signIn,
+    accountCheck,
+    onRetryAccount: account.retry,
   };
 }
 
