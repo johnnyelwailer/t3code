@@ -5,6 +5,7 @@
  * context and the run from the thread facts; nothing here is PR-watch specific except the
  * summary fact's field names, which the pack writes.
  */
+import { NEXI_PROJECT_STATE_DIR, T3TEAM_PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import { PencilIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -43,7 +44,7 @@ export function resolveRecipeConfigPath(input: {
   if (!input.workspaceRoot) return null;
   const relative =
     input.configFile ??
-    `${input.nexiStateDir === false ? ".t3team" : ".nexi"}/recipes/${input.recipeId}.config.ts`;
+    `${input.nexiStateDir === false ? T3TEAM_PROJECT_STATE_DIR : NEXI_PROJECT_STATE_DIR}/recipes/${input.recipeId}.config.ts`;
   return `${input.workspaceRoot.replace(/\/$/, "")}/${relative}`;
 }
 

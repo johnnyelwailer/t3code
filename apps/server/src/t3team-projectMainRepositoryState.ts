@@ -1,13 +1,17 @@
 /**
  * Filesystem side of the project main repository (flag `NEXI_FF_MAIN_REPOSITORY`):
- * auto-detection candidates (linked clones that already carry a project state dir) and the
- * best-effort state-dir migration a main-repository switch performs.
+ * auto-detection candidates (linked clones that already carry a project state dir, looking at
+ * `.agents/nexi` first, then `.nexi`, then `.t3team`) and the best-effort state-dir migration
+ * a main-repository switch performs. A one-time copy moves older `.nexi` and `.t3team` state
+ * into `.agents/nexi` without overwriting or deleting user data.
  *
  * @module t3team-projectMainRepositoryState
  */
 import {
+  LEGACY_NEXI_PROJECT_STATE_DIR,
   NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
+  projectStateDirLookupOrder,
   T3TEAM_PROJECT_STATE_DIR,
 } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { ProjectMainRepositoryCandidate } from "@t3tools/contracts";
@@ -20,7 +24,6 @@ import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePa
 
 import {
   CHILD_WORKTREES_DIR_NAME,
-  HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
   hasProjectStateEntries,
@@ -47,10 +50,17 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
       yield* ensureNexiProjectStateDir(checkoutPath);
       const isClone = yield* exists(path.join(checkoutPath, ".git"));
       if (!isClone) continue;
-      const stateEntries = yield* fileSystem
-        .readDirectory(path.join(checkoutPath, HIDDEN_T3TEAM_DIR))
-        .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
-      if (hasProjectStateEntries(stateEntries)) {
+      let hasState = false;
+      for (const dir of projectStateDirLookupOrder()) {
+        const stateEntries = yield* fileSystem
+          .readDirectory(path.join(checkoutPath, dir))
+          .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
+        if (hasProjectStateEntries(stateEntries)) {
+          hasState = true;
+          break;
+        }
+      }
+      if (hasState) {
         candidates.push({ url: entry.url, checkoutPath });
       }
     }
@@ -102,7 +112,27 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
       }
       if (info.value.type !== "File") return;
       const target = path.join(targetRoot, ...segments);
-      if (yield* fileSystem.exists(target).pipe(Effect.orElseSucceed(() => true))) return;
+      if (yield* fileSystem.exists(target).pipe(Effect.orElseSucceed(() => true))) {
+        if (input.sourceDir !== input.targetDir) {
+          const sourceContents = yield* fileSystem
+            .readFileString(source)
+            .pipe(Effect.orElseSucceed(() => ""));
+          const targetContents = yield* fileSystem
+            .readFileString(target)
+            .pipe(Effect.orElseSucceed(() => ""));
+          if (sourceContents !== targetContents) {
+            yield* Effect.logWarning(
+              "Project state migration kept the existing file and left the older copy in place.",
+              {
+                path: segments.join("/"),
+                sourceDir: input.sourceDir,
+                targetDir: input.targetDir,
+              },
+            );
+          }
+        }
+        return;
+      }
       const done = yield* fileSystem.makeDirectory(path.dirname(target), { recursive: true }).pipe(
         Effect.andThen(fileSystem.copyFile(source, target)),
         Effect.as(true),
@@ -136,25 +166,46 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   return { copied, failed };
 });
 
-/** One-time additive normalization when a process selects .nexi. An existing target wins;
- * a failed attempt is removed so the next call retries instead of reading an empty dir. */
+/** One-time additive normalization when a process selects `.agents/nexi`. Sources are the
+ * older `.nexi` (preferred, as the previous default) then `.t3team`. An existing target
+ * wins and is not touched again (idempotent). Conflicting files keep the target copy, log,
+ * and leave the older file in place as a fallback. A failed attempt that created an empty
+ * or partial target is removed so the next call retries; sources are never deleted. */
 export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(function* (
   workspaceRoot: string,
 ) {
   if (PROJECT_STATE_DIR !== NEXI_PROJECT_STATE_DIR) return [];
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const nexiDir = path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR);
-  if (yield* fileSystem.exists(nexiDir)) return [];
-  if (!(yield* fileSystem.exists(path.join(workspaceRoot, T3TEAM_PROJECT_STATE_DIR)))) return [];
-  const outcome = yield* copyProjectStateDir({
-    fromRoot: workspaceRoot,
-    toRoot: workspaceRoot,
-    sourceDir: T3TEAM_PROJECT_STATE_DIR,
-    targetDir: NEXI_PROJECT_STATE_DIR,
-  });
-  if (!outcome.failed && outcome.copied.length > 0) return outcome.copied;
-  yield* fileSystem.remove(nexiDir, { recursive: true, force: true }).pipe(Effect.ignore);
+  const targetDir = NEXI_PROJECT_STATE_DIR;
+  const targetPath = path.join(workspaceRoot, targetDir);
+  if (yield* fileSystem.exists(targetPath)) return [];
+  const sources = [LEGACY_NEXI_PROJECT_STATE_DIR, T3TEAM_PROJECT_STATE_DIR].filter(
+    (dir) => dir !== targetDir,
+  );
+  const existingSources: string[] = [];
+  for (const sourceDir of sources) {
+    if (yield* fileSystem.exists(path.join(workspaceRoot, sourceDir))) {
+      existingSources.push(sourceDir);
+    }
+  }
+  if (existingSources.length === 0) return [];
+  const copied: string[] = [];
+  let failed = false;
+  for (const sourceDir of existingSources) {
+    const outcome = yield* copyProjectStateDir({
+      fromRoot: workspaceRoot,
+      toRoot: workspaceRoot,
+      sourceDir,
+      targetDir,
+    });
+    for (const file of outcome.copied) {
+      if (!copied.includes(file)) copied.push(file);
+    }
+    if (outcome.failed) failed = true;
+  }
+  if (!failed && copied.length > 0) return copied;
+  yield* fileSystem.remove(targetPath, { recursive: true, force: true }).pipe(Effect.ignore);
   return [];
 });
 

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   isNexiStateDirEnabled,
+  LEGACY_NEXI_PROJECT_STATE_DIR,
+  NEXI_PROJECT_STATE_DIR,
   NEXI_STATE_DIR_FLAG_ENV,
   PROJECT_STATE_DIR,
+  projectStateDirLookupOrder,
   resolveProjectStateDirName,
   toPhysicalProjectStatePath,
 } from "./t3teamProjectStateDir.ts";
@@ -15,11 +18,13 @@ const env =
     key === NEXI_STATE_DIR_FLAG_ENV ? value : undefined;
 
 describe("project state dir resolver", () => {
-  it("names the state dir .nexi by default and for any value that is not an explicit off", () => {
+  it("names the state dir .agents/nexi by default and for any value that is not an explicit off", () => {
     for (const value of [undefined, "", "   ", "yes", "1", "true", "ON", " on "]) {
       expect(isNexiStateDirEnabled(env(value))).toBe(true);
-      expect(resolveProjectStateDirName(env(value))).toBe(".nexi");
+      expect(resolveProjectStateDirName(env(value))).toBe(".agents/nexi");
     }
+    expect(NEXI_PROJECT_STATE_DIR).toBe(".agents/nexi");
+    expect(LEGACY_NEXI_PROJECT_STATE_DIR).toBe(".nexi");
   });
 
   it("names the state dir .t3team when NEXI_FF_NEXI_STATE_DIR is explicitly off", () => {
@@ -33,52 +38,89 @@ describe("project state dir resolver", () => {
     expect(T3TEAM_PROJECT_CONTEXT_ROOT).toBe(`${PROJECT_STATE_DIR}/context`);
   });
 
-  it("maps canonical client paths onto the physical dir, idempotently", () => {
+  it("lists lookup directories preferred-first, without duplicates", () => {
+    expect(projectStateDirLookupOrder(".agents/nexi")).toEqual([
+      ".agents/nexi",
+      ".nexi",
+      ".t3team",
+    ]);
+    expect(projectStateDirLookupOrder(".nexi")).toEqual([".nexi", ".agents/nexi", ".t3team"]);
+    expect(projectStateDirLookupOrder(".t3team")).toEqual([
+      ".t3team",
+      ".agents/nexi",
+      ".nexi",
+    ]);
+  });
+
+  it("maps canonical and legacy client paths onto the physical dir, idempotently", () => {
+    expect(toPhysicalProjectStatePath(".t3team/context/entrypoint.json", ".agents/nexi")).toBe(
+      ".agents/nexi/context/entrypoint.json",
+    );
+    expect(toPhysicalProjectStatePath(".nexi/context/entrypoint.json", ".agents/nexi")).toBe(
+      ".agents/nexi/context/entrypoint.json",
+    );
+    expect(toPhysicalProjectStatePath("./.t3team/recipes/a/recipe.ts", ".agents/nexi")).toBe(
+      ".agents/nexi/recipes/a/recipe.ts",
+    );
+    expect(toPhysicalProjectStatePath(".t3team", ".agents/nexi")).toBe(".agents/nexi");
+    expect(toPhysicalProjectStatePath(".nexi", ".agents/nexi")).toBe(".agents/nexi");
+    expect(toPhysicalProjectStatePath(".agents/nexi/context/x.json", ".agents/nexi")).toBe(
+      ".agents/nexi/context/x.json",
+    );
+    // Neighbours that merely share the prefix are not the state dir.
+    expect(toPhysicalProjectStatePath(".t3team-runs/run.json", ".agents/nexi")).toBe(
+      ".t3team-runs/run.json",
+    );
+    expect(toPhysicalProjectStatePath("AGENTS.md", ".agents/nexi")).toBe("AGENTS.md");
+    expect(toPhysicalProjectStatePath(".t3team/context/x.json", ".t3team")).toBe(
+      ".t3team/context/x.json",
+    );
+    // An explicit older physical target still maps .t3team onto .nexi.
     expect(toPhysicalProjectStatePath(".t3team/context/entrypoint.json", ".nexi")).toBe(
       ".nexi/context/entrypoint.json",
     );
-    expect(toPhysicalProjectStatePath("./.t3team/recipes/a/recipe.ts", ".nexi")).toBe(
-      ".nexi/recipes/a/recipe.ts",
-    );
-    expect(toPhysicalProjectStatePath(".t3team", ".nexi")).toBe(".nexi");
     expect(toPhysicalProjectStatePath(".nexi/context/x.json", ".nexi")).toBe(
       ".nexi/context/x.json",
-    );
-    // Neighbours that merely share the prefix are not the state dir.
-    expect(toPhysicalProjectStatePath(".t3team-runs/run.json", ".nexi")).toBe(
-      ".t3team-runs/run.json",
-    );
-    expect(toPhysicalProjectStatePath("AGENTS.md", ".nexi")).toBe("AGENTS.md");
-    expect(toPhysicalProjectStatePath(".t3team/context/x.json", ".t3team")).toBe(
-      ".t3team/context/x.json",
     );
   });
 
   it("maps absolute paths a client builds under the workspace root", () => {
-    expect(toPhysicalProjectStatePath("/ws/app/.t3team/recipes/r/workflow.ts", ".nexi")).toBe(
-      "/ws/app/.nexi/recipes/r/workflow.ts",
+    expect(toPhysicalProjectStatePath("/ws/app/.t3team/recipes/r/workflow.ts", ".agents/nexi")).toBe(
+      "/ws/app/.agents/nexi/recipes/r/workflow.ts",
     );
-    expect(toPhysicalProjectStatePath("C:\\ws\\.t3team\\recipes\\r", ".nexi")).toBe(
-      "C:\\ws\\.nexi\\recipes\\r",
+    expect(toPhysicalProjectStatePath("/ws/app/.nexi/recipes/r/workflow.ts", ".agents/nexi")).toBe(
+      "/ws/app/.agents/nexi/recipes/r/workflow.ts",
     );
-    expect(toPhysicalProjectStatePath("/ws/.t3team-runs/r/workflow.ts", ".nexi")).toBe(
+    expect(toPhysicalProjectStatePath("C:\\ws\\.t3team\\recipes\\r", ".agents/nexi")).toBe(
+      "C:\\ws\\.agents\\nexi\\recipes\\r",
+    );
+    expect(toPhysicalProjectStatePath("C:\\ws\\.nexi\\recipes\\r", ".agents/nexi")).toBe(
+      "C:\\ws\\.agents\\nexi\\recipes\\r",
+    );
+    expect(toPhysicalProjectStatePath("/ws/.t3team-runs/r/workflow.ts", ".agents/nexi")).toBe(
       "/ws/.t3team-runs/r/workflow.ts",
     );
-    expect(toPhysicalProjectStatePath("/ws/my.t3team/x", ".nexi")).toBe("/ws/my.t3team/x");
+    expect(toPhysicalProjectStatePath("/ws/my.t3team/x", ".agents/nexi")).toBe("/ws/my.t3team/x");
     // An unrelated ANCESTOR directory named .t3team (e.g. this app's own child-worktree roots)
     // is not the state dir: already-physical paths pass through, and the state-dir segment wins
     // over an ancestor of the same name.
     expect(
       toPhysicalProjectStatePath(
-        "/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts",
-        ".nexi",
+        "/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/plan.workflow.ts",
+        ".agents/nexi",
       ),
-    ).toBe("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts");
+    ).toBe("/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/plan.workflow.ts");
+    expect(
+      toPhysicalProjectStatePath(
+        "/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts",
+        ".agents/nexi",
+      ),
+    ).toBe("/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/plan.workflow.ts");
     expect(
       toPhysicalProjectStatePath(
         "/anc/.t3team/worktrees/ws/.t3team/recipes/r/plan.workflow.ts",
-        ".nexi",
+        ".agents/nexi",
       ),
-    ).toBe("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts");
+    ).toBe("/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/plan.workflow.ts");
   });
 });
