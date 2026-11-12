@@ -112,10 +112,7 @@ export function FirstRunGate({
       };
     }
     return {
-      decision:
-        !enabled || (hydrated && onboardingCompletedAt !== null)
-          ? "app"
-          : "pending",
+      decision: !enabled || (hydrated && onboardingCompletedAt !== null) ? "app" : "pending",
       stalled: false,
     };
   });
@@ -145,22 +142,22 @@ export function FirstRunGate({
           seenVersion: welcomeSeenVersion,
         })
       : resolveFirstRunDecision({
-        enabled,
-        hydrated,
-        completed: onboardingCompletedAt !== null,
-        bootstrapped,
-        authoritative: primaryShellLive,
-        workspaceAuthoritative: workspaceEvidenceLive,
-        workspaceProvenanceAuthoritative: isFirstRunWorkspaceProvenanceAuthoritative({
-          welcomeReceived: serverWelcome !== null,
-          bootstrapStatus: serverWelcome?.bootstrapStatus ?? null,
-        }),
-        catalogReady: environmentCatalogReady,
-        serverConfigAvailable: serverConfig !== null,
-        workspaceFresh,
-        projectCount: projects.length,
-        threadCount,
-      });
+          enabled,
+          hydrated,
+          completed: onboardingCompletedAt !== null,
+          bootstrapped,
+          authoritative: primaryShellLive,
+          workspaceAuthoritative: workspaceEvidenceLive,
+          workspaceProvenanceAuthoritative: isFirstRunWorkspaceProvenanceAuthoritative({
+            welcomeReceived: serverWelcome !== null,
+            bootstrapStatus: serverWelcome?.bootstrapStatus ?? null,
+          }),
+          catalogReady: environmentCatalogReady,
+          serverConfigAvailable: serverConfig !== null,
+          workspaceFresh,
+          projectCount: projects.length,
+          threadCount,
+        });
 
   if (hydrated) {
     const transitioned = transitionFirstRunGateState(gateState, {

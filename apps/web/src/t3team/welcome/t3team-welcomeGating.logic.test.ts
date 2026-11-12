@@ -57,9 +57,10 @@ describe("isWelcomeLandingPath", () => {
 
 describe("resolveNexiWelcomeFirstRunDecision", () => {
   it("shows the setup once on a fresh install, and not after it is marked seen", () => {
-    expect(
-      resolveNexiWelcomeFirstRunDecision({ hydrated: true, seenVersion: undefined }),
-    ).toEqual({ decision: "wizard", persistCompletion: false });
+    expect(resolveNexiWelcomeFirstRunDecision({ hydrated: true, seenVersion: undefined })).toEqual({
+      decision: "wizard",
+      persistCompletion: false,
+    });
     expect(
       resolveNexiWelcomeFirstRunDecision({
         hydrated: true,
@@ -95,15 +96,16 @@ describe("resolveNexiWelcomeFirstRunDecision", () => {
 
   it("shows the setup again when the stored generation is older than the current one", () => {
     expect(hasSeenCurrentWelcome(0)).toBe(false);
-    expect(
-      resolveNexiWelcomeFirstRunDecision({ hydrated: true, seenVersion: 0 }),
-    ).toEqual({ decision: "wizard", persistCompletion: false });
+    expect(resolveNexiWelcomeFirstRunDecision({ hydrated: true, seenVersion: 0 })).toEqual({
+      decision: "wizard",
+      persistCompletion: false,
+    });
   });
 
   it("waits for settings hydration before deciding", () => {
-    expect(
-      resolveNexiWelcomeFirstRunDecision({ hydrated: false, seenVersion: undefined }),
-    ).toEqual({ decision: "pending", persistCompletion: false });
+    expect(resolveNexiWelcomeFirstRunDecision({ hydrated: false, seenVersion: undefined })).toEqual(
+      { decision: "pending", persistCompletion: false },
+    );
     expect(
       resolveNexiWelcomeFirstRunDecision({
         hydrated: false,
