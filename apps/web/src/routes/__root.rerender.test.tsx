@@ -1,3 +1,5 @@
+/* oxlint-disable t3code/no-dom-test-environment -- The re-render gate requires this sibling name, which is not a browser test; the unit file sets jsdom. */
+/* oxlint-disable t3code/require-disposable-render -- The shared render helper imports vite-plus/test/browser and can only run in Browser Mode. */
 // @vitest-environment jsdom
 /**
  * RootRouteBranch latches a return-from-welcome flag and chooses a full-window
@@ -5,7 +7,7 @@
  * welcome and config. A hash-only change, or a store notify that does not
  * change those values, must not re-render them. The render count is the budget.
  */
-import { act, type ComponentType, type ReactNode } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -64,31 +66,34 @@ const hooks = vi.hoisted(() => {
   const navigate = vi.fn(async () => {});
   const setProjectExpanded = vi.fn();
   const count = { fn: (_id: string) => {} };
-    function useSelected<S>(select: (state: RootStore) => S): S {
-    const { useSyncExternalStore } = require("react");
+  const { useSyncExternalStore } = require("react") as typeof import("react");
+  function useSelected<S>(select: (state: RootStore) => S): S {
     return useSyncExternalStore(store.subscribe, () => select(store.get()));
   }
   function Empty() {
     return null;
   }
-  function Pass({ children }: { children?: import('react').ReactNode }): import('react').ReactNode {
+  function Pass({ children }: { children?: import("react").ReactNode }): import("react").ReactNode {
     return children;
   }
   return { store, initial, navigate, setProjectExpanded, count, useSelected, Empty, Pass };
-
 });
 
 vi.mock("@tanstack/react-router", () => ({
   createRootRoute: (opts: { component: unknown }) => ({
     ...opts,
+    options: opts,
     useRouteContext: () => ({
       authGateState: { status: hooks.store.get().authStatus },
     }),
   }),
   useNavigate: () => hooks.navigate,
   useRouter: () => ({ invalidate: vi.fn() }),
-  useLocation: ({ select }: { select: (location: { pathname: string; hash: string }) => unknown }) =>
-    hooks.useSelected((state) => select({ pathname: state.pathname, hash: state.hash })),
+  useLocation: ({
+    select,
+  }: {
+    select: (location: { pathname: string; hash: string }) => unknown;
+  }) => hooks.useSelected((state) => select({ pathname: state.pathname, hash: state.hash })),
   Outlet: () => {
     hooks.count.fn("outlet");
     return <div data-testid="outlet">outlet</div>;
@@ -116,25 +121,47 @@ vi.mock("../components/AppSidebarLayout", () => ({
 vi.mock("../components/CommandPalette", () => ({ CommandPalette: hooks.Pass }));
 vi.mock("../components/CustomSnoozeDialog", () => ({ CustomSnoozeDialogHost: hooks.Empty }));
 vi.mock("../components/chat/GuestShareControls", () => ({ GuestShareDialogHost: hooks.Empty }));
-vi.mock("../components/AddProjectToMachineDialog", () => ({ AddProjectToMachineDialogHost: hooks.Empty }));
+vi.mock("../components/AddProjectToMachineDialog", () => ({
+  AddProjectToMachineDialogHost: hooks.Empty,
+}));
 vi.mock("../components/ConfirmDialogHost", () => ({ ConfirmDialogHost: hooks.Empty }));
 vi.mock("../components/DevReplayHost", () => ({ DevReplayHost: hooks.Empty }));
 vi.mock("../components/onboarding/FirstRunGate", () => ({ FirstRunGate: hooks.Pass }));
-vi.mock("../components/cloud/ConnectOnboardingDialog", () => ({ ConnectOnboardingDialog: hooks.Empty }));
-vi.mock("../components/cloud/RelayClientInstallDialog", () => ({ RelayClientInstallDialog: hooks.Empty }));
-vi.mock("../components/desktop/SshPasswordPromptDialog", () => ({ SshPasswordPromptDialog: hooks.Empty }));
+vi.mock("../components/cloud/ConnectOnboardingDialog", () => ({
+  ConnectOnboardingDialog: hooks.Empty,
+}));
+vi.mock("../components/cloud/RelayClientInstallDialog", () => ({
+  RelayClientInstallDialog: hooks.Empty,
+}));
+vi.mock("../components/desktop/SshPasswordPromptDialog", () => ({
+  SshPasswordPromptDialog: hooks.Empty,
+}));
 vi.mock("../components/desktop/SnapShotCoordinator", () => ({ SnapShotCoordinator: hooks.Empty }));
 vi.mock("../components/desktop/DesktopAppActivationCoordinator", () => ({
   DesktopAppActivationCoordinator: hooks.Empty,
 }));
-vi.mock("../components/desktop/DesktopWebLinkCoordinator", () => ({ DesktopWebLinkCoordinator: hooks.Empty }));
-vi.mock("../cloud/t3team-DesktopRouteAnswerObserver", () => ({ DesktopRouteAnswerObserver: hooks.Empty }));
-vi.mock("../components/desktop/RunningThreadKeepAlive", () => ({ RunningThreadKeepAlive: hooks.Empty }));
-vi.mock("../components/ReopenClosedViewShortcut", () => ({ ReopenClosedViewShortcut: hooks.Empty }));
-vi.mock("../components/ProjectCloneToastCoordinator", () => ({ ProjectCloneToastCoordinator: hooks.Empty }));
-vi.mock("../components/settings/ChatGptWelcomeCoordinator", () => ({ ChatGptWelcomeCoordinator: hooks.Empty }));
+vi.mock("../components/desktop/DesktopWebLinkCoordinator", () => ({
+  DesktopWebLinkCoordinator: hooks.Empty,
+}));
+vi.mock("../cloud/t3team-DesktopRouteAnswerObserver", () => ({
+  DesktopRouteAnswerObserver: hooks.Empty,
+}));
+vi.mock("../components/desktop/RunningThreadKeepAlive", () => ({
+  RunningThreadKeepAlive: hooks.Empty,
+}));
+vi.mock("../components/ReopenClosedViewShortcut", () => ({
+  ReopenClosedViewShortcut: hooks.Empty,
+}));
+vi.mock("../components/ProjectCloneToastCoordinator", () => ({
+  ProjectCloneToastCoordinator: hooks.Empty,
+}));
+vi.mock("../components/settings/ChatGptWelcomeCoordinator", () => ({
+  ChatGptWelcomeCoordinator: hooks.Empty,
+}));
 vi.mock("../components/settings/ThemeEditorHost", () => ({ ThemeEditorHost: hooks.Empty }));
-vi.mock("../hooks/useCopyToClipboard", () => ({ useCopyToClipboard: () => ({ copied: false, copy: () => {} }) }));
+vi.mock("../hooks/useCopyToClipboard", () => ({
+  useCopyToClipboard: () => ({ copied: false, copy: () => {} }),
+}));
 vi.mock("../components/ui/button", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
 }));
@@ -143,7 +170,10 @@ vi.mock("../components/ui/standalone-page", () => ({
   StandalonePage: hooks.Pass,
   StandalonePageHeader: hooks.Empty,
 }));
-vi.mock("../components/ui/toast", () => ({ ToastProvider: hooks.Pass, AnchoredToastProvider: hooks.Pass }));
+vi.mock("../components/ui/toast", () => ({
+  ToastProvider: hooks.Pass,
+  AnchoredToastProvider: hooks.Pass,
+}));
 vi.mock("../env", () => ({ isElectron: false }));
 vi.mock("../hooks/useSettings", () => ({
   useClientSettings: () => {
@@ -166,7 +196,9 @@ vi.mock("../t3team/t3team-RootCoordinators", () => ({ T3TeamRootCoordinators: ho
 vi.mock("../t3team/t3team-WindowDragStrip", () => ({
   withT3TeamWindowDragStrip: (component: unknown) => component,
 }));
-vi.mock("../cloud/t3team-CloudSessionSignInDialogHost", () => ({ CloudSessionSignInDialogHost: hooks.Empty }));
+vi.mock("../cloud/t3team-CloudSessionSignInDialogHost", () => ({
+  CloudSessionSignInDialogHost: hooks.Empty,
+}));
 vi.mock("../cloud/t3team-CloudQueuedSendFlusher", () => ({ CloudQueuedSendFlusher: hooks.Empty }));
 vi.mock("../t3team/voice/t3team-VoiceSessionHost", () => ({ T3TeamVoiceSessionHost: hooks.Empty }));
 vi.mock("../t3team/t3team-appBrandName", () => ({ useT3TeamAppDisplayName: () => "Nexi Work" }));
@@ -199,7 +231,10 @@ vi.mock("@effect/atom-react", () => ({
 const counter = renderCounter();
 hooks.count.fn = (id: string) => counter.count(id);
 
-const RootView = Route.component as ComponentType;
+const RootView = Route.options.component;
+if (RootView === undefined) {
+  throw new Error("root route is missing its component");
+}
 
 const WELCOME: WelcomePayload = {
   bootstrapProjectId: "proj-1",

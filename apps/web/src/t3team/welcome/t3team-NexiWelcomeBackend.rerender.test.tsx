@@ -1,3 +1,5 @@
+/* oxlint-disable t3code/no-dom-test-environment -- The re-render gate requires this sibling name, which is not a browser test; the unit file sets jsdom. */
+/* oxlint-disable t3code/require-disposable-render -- The shared render helper imports vite-plus/test/browser and can only run in Browser Mode. */
 // @vitest-environment jsdom
 /**
  * NexiWelcomeBackend creates one backend client and connects it for the life
@@ -93,7 +95,9 @@ describe("NexiWelcomeBackend re-renders", () => {
     expect(harness.createT3Backend).toHaveBeenCalledTimes(1);
     expect(harness.createT3Backend).toHaveBeenCalledWith("ws://welcome-test");
     expect(harness.resolveWsBaseUrl).toHaveBeenCalledTimes(1);
-    const backend = harness.createT3Backend.mock.results[0]!.value as ReturnType<typeof makeBackend>;
+    const backend = harness.createT3Backend.mock.results[0]!.value as ReturnType<
+      typeof makeBackend
+    >;
     expect(backend.connect).toHaveBeenCalledTimes(1);
     expect(backend.disconnect).not.toHaveBeenCalled();
     counter.expectRerendered({ provider: 1, consumer: 1 });

@@ -1,3 +1,5 @@
+/* oxlint-disable t3code/no-dom-test-environment -- The re-render gate requires this sibling name, which is not a browser test; the unit file sets jsdom. */
+/* oxlint-disable t3code/require-disposable-render -- The shared render helper imports vite-plus/test/browser and can only run in Browser Mode. */
 // @vitest-environment jsdom
 /**
  * FirstRunGate holds gate state and subscribes to settings and workspace stores.
@@ -27,7 +29,10 @@ interface GateStore {
   }>;
   readonly threadCount: number;
   readonly soleThread: { readonly id: string } | null;
-  readonly serverConfig: { readonly cwd: string; readonly environment: { readonly environmentId: string } } | null;
+  readonly serverConfig: {
+    readonly cwd: string;
+    readonly environment: { readonly environmentId: string };
+  } | null;
   readonly serverWelcome: { readonly bootstrapStatus: "pending" | "complete" } | null;
   readonly primaryShellLive: boolean;
   readonly workspaceEvidenceLive: boolean;
@@ -84,12 +89,21 @@ const hooks = vi.hoisted(() => {
   const ensureClientSettingsHydrated = vi.fn(async () => {});
   const autoOpen = { opened: false };
   const count = { fn: (_id: string) => {} };
-    function useSelected<S>(select: (state: GateStore) => S): S {
-    const { useSyncExternalStore } = require("react");
+  const { useSyncExternalStore } = require("react") as typeof import("react");
+  function useSelected<S>(select: (state: GateStore) => S): S {
     return useSyncExternalStore(store.subscribe, () => select(store.get()));
   }
-  return { store, navigate, completeOnboarding, ensureClientSettingsHydrated, autoOpen, count, completed, twoProjects, useSelected };
-
+  return {
+    store,
+    navigate,
+    completeOnboarding,
+    ensureClientSettingsHydrated,
+    autoOpen,
+    count,
+    completed,
+    twoProjects,
+    useSelected,
+  };
 });
 
 const completedStore = hooks.completed;
@@ -158,7 +172,9 @@ vi.mock("~/state/environments", () => ({
 
 vi.mock("~/hooks/useSettings", () => ({
   useClientSettingsHydrationStatus: () => hooks.useSelected((state) => state.hydrationStatus),
-  useClientSettings: (select: (settings: { onboardingCompletedAt: string | null; theme: string }) => unknown) =>
+  useClientSettings: (
+    select: (settings: { onboardingCompletedAt: string | null; theme: string }) => unknown,
+  ) =>
     hooks.useSelected((state) =>
       select({
         onboardingCompletedAt: state.onboardingCompletedAt,
@@ -174,8 +190,11 @@ vi.mock("~/onboarding/firstRun", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => hooks.navigate,
-  useLocation: ({ select }: { select: (location: { pathname: string; hash: string }) => unknown }) =>
-    hooks.useSelected((state) => select({ pathname: state.pathname, hash: state.hash })),
+  useLocation: ({
+    select,
+  }: {
+    select: (location: { pathname: string; hash: string }) => unknown;
+  }) => hooks.useSelected((state) => select({ pathname: state.pathname, hash: state.hash })),
 }));
 
 vi.mock("~/t3team/welcome/t3team-useNexiWelcomeEnabled", () => ({
@@ -304,7 +323,11 @@ describe("FirstRunGate re-renders", () => {
   });
 
   it("shows settings recovery when hydration fails, and sits out unrelated workspace noise", async () => {
-    hooks.store.replace({ ...completedStore(), hydrationStatus: "failed", onboardingCompletedAt: null });
+    hooks.store.replace({
+      ...completedStore(),
+      hydrationStatus: "failed",
+      onboardingCompletedAt: null,
+    });
     await act(async () => {
       root.render(renderGate());
     });
