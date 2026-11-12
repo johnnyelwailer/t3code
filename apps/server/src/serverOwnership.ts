@@ -13,12 +13,8 @@ import * as Option from "effect/Option";
 import * as Runtime from "effect/Runtime";
 import * as Schema from "effect/Schema";
 
-import {
-  BOOT_SERVICE_LAUNCHD_LABEL,
-  BOOT_SERVICE_PLIST_FILE,
-  BOOT_SERVICE_UNIT_FILE,
-  bootServiceBaseDirOf,
-} from "./cloud/bootService.ts";
+import { bootServiceBaseDirOf } from "./cloud/bootService.ts";
+import { resolveBootServiceIdentity } from "./cloud/bootServiceIdentity.ts";
 import { ServiceLauncherHostProcess } from "./cloud/serviceLauncherClient.ts";
 import {
   SERVICE_LAUNCHER_CONTEXT_ENV,
@@ -122,10 +118,11 @@ const olderBootServiceHome = Effect.fn("olderBootServiceHome")(
     const homeDir = yield* HostProcess.HomeDirectory;
     const fs = yield* FileSystem.FileSystem;
     const runner = yield* ProcessRunner.ProcessRunner;
+    const identity = resolveBootServiceIdentity();
     const unitPath =
       platform === "darwin"
-        ? NodePath.join(homeDir, "Library", "LaunchAgents", BOOT_SERVICE_PLIST_FILE)
-        : NodePath.join(homeDir, ".config", "systemd", "user", BOOT_SERVICE_UNIT_FILE);
+        ? NodePath.join(homeDir, "Library", "LaunchAgents", identity.plistFile)
+        : NodePath.join(homeDir, ".config", "systemd", "user", identity.unitFile);
     const baseDir = bootServiceBaseDirOf(yield* fs.readFileString(unitPath));
     if (
       baseDir === undefined ||
@@ -143,23 +140,23 @@ const olderBootServiceHome = Effect.fn("olderBootServiceHome")(
     let loaded: boolean;
     if (platform === "darwin") {
       loaded =
-        (yield* run("launchctl", ["print", `gui/${uid}/${BOOT_SERVICE_LAUNCHD_LABEL}`])).code === 0;
+        (yield* run("launchctl", ["print", `gui/${uid}/${identity.launchdLabel}`])).code === 0;
       if (!loaded) {
         const disabled = yield* run("launchctl", ["print-disabled", `gui/${uid}`]);
         // Older macOS versions print `true` instead of `disabled`.
         if (
           disabled.code !== 0 ||
-          disabled.stdout.includes(`"${BOOT_SERVICE_LAUNCHD_LABEL}" => disabled`) ||
-          disabled.stdout.includes(`"${BOOT_SERVICE_LAUNCHD_LABEL}" => true`)
+          disabled.stdout.includes(`"${identity.launchdLabel}" => disabled`) ||
+          disabled.stdout.includes(`"${identity.launchdLabel}" => true`)
         )
           return undefined;
       }
     } else {
-      const active = yield* run("systemctl", ["--user", "is-active", BOOT_SERVICE_UNIT_FILE]);
+      const active = yield* run("systemctl", ["--user", "is-active", identity.unitFile]);
       // A unit waiting out its Restart= delay is activating, with exit code 3.
       loaded = active.code === 0 || (active.code === 3 && active.stdout.trim() === "activating");
       if (!loaded) {
-        const enabled = yield* run("systemctl", ["--user", "is-enabled", BOOT_SERVICE_UNIT_FILE]);
+        const enabled = yield* run("systemctl", ["--user", "is-enabled", identity.unitFile]);
         if (enabled.code !== 0 || enabled.stdout.trim() !== "enabled") return undefined;
       }
     }

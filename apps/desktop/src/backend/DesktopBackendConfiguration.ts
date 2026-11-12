@@ -710,6 +710,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         ...isolatedBackendChildEnv({
           isolatedInstance: environment.isolatedInstance,
           home: resolvedHomeDir,
+          appId: environment.appId,
         }),
         ELECTRON_RUN_AS_NODE: "1",
         // Secure corporate-CA fallback. Unlike NODE_TLS_REJECT_UNAUTHORIZED=0,

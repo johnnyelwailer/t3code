@@ -62,8 +62,15 @@ export function explicitBackendHome(input: {
 export function isolatedBackendChildEnv(input: {
   readonly isolatedInstance: boolean;
   readonly home: string;
+  readonly appId?: string;
 }): Readonly<Record<string, string>> {
-  return input.isolatedInstance ? { T3CODE_HOME: input.home } : {};
+  if (!input.isolatedInstance) return {};
+  const appId = input.appId?.trim();
+  return {
+    T3CODE_HOME: input.home,
+    T3CODE_DESKTOP_ISOLATED_INSTANCE: "1",
+    ...(appId ? { T3CODE_DESKTOP_APP_ID: appId } : {}),
+  };
 }
 
 /**
