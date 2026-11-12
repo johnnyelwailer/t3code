@@ -22,7 +22,7 @@ import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 /** Default PATH name when the instance has no binary path of its own. */
-export const DEFAULT_BINARY_BY_TOOL: Readonly<Record<string, string>> = {
+const DEFAULT_BINARY_BY_TOOL: Readonly<Record<string, string>> = {
   claude: "claude",
   codex: "codex",
 };
@@ -65,7 +65,7 @@ function stringEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return out;
 }
 
-export const resolveLoginSpawnEnv = Effect.fn("toolauth.resolveLoginSpawnEnv")(function* (
+const resolveLoginSpawnEnv = Effect.fn("toolauth.resolveLoginSpawnEnv")(function* (
   tool: string,
   account: LoginAccountSettings | undefined,
   baseEnv: NodeJS.ProcessEnv,
@@ -86,7 +86,7 @@ export const resolveLoginSpawnEnv = Effect.fn("toolauth.resolveLoginSpawnEnv")(f
   return withInstance;
 });
 
-export function missingConfiguredBinaryState(
+function missingConfiguredBinaryState(
   tool: string,
   adapter: ToolAuthAdapter,
   binary: string,
@@ -116,7 +116,7 @@ function withInstanceId(state: AuthState, instanceId: string | undefined): AuthS
   return instanceId === undefined ? state : { ...state, instanceId };
 }
 
-export const prepareLoginSpawn = Effect.fn("toolauth.prepareLoginSpawn")(function* (input: {
+const prepareLoginSpawn = Effect.fn("toolauth.prepareLoginSpawn")(function* (input: {
   readonly tool: string;
   readonly adapter: ToolAuthAdapter;
   readonly account: LoginAccountSettings | undefined;

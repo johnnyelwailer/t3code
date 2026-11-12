@@ -3,6 +3,7 @@ import {
   ClaudeSettings,
   CodexSettings,
   ProviderDriverKind,
+  ProviderInstanceId,
   type ProviderInstanceConfig,
   type ProviderInstanceConfigMap,
 } from "@t3tools/contracts";
@@ -14,6 +15,7 @@ import type { LoginAccountSettings } from "./t3team-loginAccount.ts";
 
 const decodeClaudeSettings = Schema.decodeUnknownOption(ClaudeSettings);
 const decodeCodexSettings = Schema.decodeUnknownOption(CodexSettings);
+const decodeProviderInstanceId = Schema.decodeUnknownOption(ProviderInstanceId);
 
 const DRIVER_FOR_TOOL: Readonly<Record<string, ProviderDriverKind>> = {
   claude: ProviderDriverKind.make("claudeAgent"),
@@ -63,7 +65,9 @@ export function loginAccountFromInstances(
 ): LoginAccountSettings | undefined {
   if (instances === undefined) return undefined;
   if (instanceId !== undefined) {
-    const instance = Object.hasOwn(instances, instanceId) ? instances[instanceId] : undefined;
+    const key = Option.getOrUndefined(decodeProviderInstanceId(instanceId));
+    if (key === undefined) return undefined;
+    const instance = Object.hasOwn(instances, key) ? instances[key] : undefined;
     return instance === undefined ? undefined : settingsFromInstance(tool, instance, instanceId);
   }
   const matches = Object.entries(instances).filter(([, instance]) => driverMatches(tool, instance));

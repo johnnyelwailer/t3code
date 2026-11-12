@@ -1,4 +1,9 @@
-import { ProviderDriverKind, type ProviderInstanceConfigMap } from "@t3tools/contracts";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ProviderInstanceConfig,
+  type ProviderInstanceConfigMap,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 
 import { adapterForAccount, isConfiguredBinaryPath } from "./t3team-loginAccount.ts";
@@ -28,33 +33,35 @@ describe("adapterForAccount", () => {
 });
 
 describe("loginAccountFromInstances", () => {
-  const mon: ProviderInstanceConfigMap[string] = {
+  const workId = ProviderInstanceId.make("work");
+  const homeId = ProviderInstanceId.make("home");
+  const work: ProviderInstanceConfig = {
     driver: ProviderDriverKind.make("claudeAgent"),
-    displayName: "Mon",
-    config: { binaryPath: "/accounts/mon/claude", homePath: "/accounts/mon/home" },
+    displayName: "Work",
+    config: { binaryPath: "/accounts/work/claude", homePath: "/accounts/work/home" },
   };
-  const wed: ProviderInstanceConfigMap[string] = {
+  const home: ProviderInstanceConfig = {
     driver: ProviderDriverKind.make("claudeAgent"),
-    displayName: "Wed",
-    config: { binaryPath: "/accounts/wed/claude", homePath: "/accounts/wed/home" },
+    displayName: "Home",
+    config: { binaryPath: "/accounts/home/claude", homePath: "/accounts/home/home" },
   };
-  const instances: ProviderInstanceConfigMap = { mon, wed };
+  const instances: ProviderInstanceConfigMap = { [workId]: work, [homeId]: home };
 
   it("resolves a configured path and config dir per account", () => {
-    expect(loginAccountFromInstances("claude", "mon", instances)).toEqual({
-      instanceId: "mon",
-      binaryPath: "/accounts/mon/claude",
-      homePath: "/accounts/mon/home",
+    expect(loginAccountFromInstances("claude", workId, instances)).toEqual({
+      instanceId: workId,
+      binaryPath: "/accounts/work/claude",
+      homePath: "/accounts/work/home",
       instanceEnvironment: undefined,
     });
   });
 
   it("keeps two accounts on different binaries", () => {
-    const monAccount = loginAccountFromInstances("claude", "mon", instances);
-    const wedAccount = loginAccountFromInstances("claude", "wed", instances);
-    expect(monAccount?.binaryPath).toBe("/accounts/mon/claude");
-    expect(wedAccount?.binaryPath).toBe("/accounts/wed/claude");
-    expect(monAccount?.homePath).not.toBe(wedAccount?.homePath);
+    const workAccount = loginAccountFromInstances("claude", workId, instances);
+    const homeAccount = loginAccountFromInstances("claude", homeId, instances);
+    expect(workAccount?.binaryPath).toBe("/accounts/work/claude");
+    expect(homeAccount?.binaryPath).toBe("/accounts/home/claude");
+    expect(workAccount?.homePath).not.toBe(homeAccount?.homePath);
   });
 
   it("returns undefined when several accounts exist and no instance id is given", () => {
@@ -62,8 +69,12 @@ describe("loginAccountFromInstances", () => {
   });
 
   it("uses the only instance of that driver when no instance id is given", () => {
-    const only = loginAccountFromInstances("claude", undefined, { mon });
-    expect(only?.instanceId).toBe("mon");
-    expect(only?.binaryPath).toBe("/accounts/mon/claude");
+    const only = loginAccountFromInstances("claude", undefined, { [workId]: work });
+    expect(only?.instanceId).toBe(workId);
+    expect(only?.binaryPath).toBe("/accounts/work/claude");
+  });
+
+  it("returns undefined for a string that is not a provider instance id", () => {
+    expect(loginAccountFromInstances("claude", "not a valid id", instances)).toBeUndefined();
   });
 });
