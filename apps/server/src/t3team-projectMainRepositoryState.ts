@@ -8,9 +8,12 @@
  * @module t3team-projectMainRepositoryState
  */
 import {
+  decideMachineFileMigration,
   LEGACY_NEXI_PROJECT_STATE_DIR,
   NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
+  projectMachineFilePath,
+  projectMachineFilePathLookupOrder,
   projectStateDirLookupOrder,
   T3TEAM_PROJECT_STATE_DIR,
 } from "@t3tools/project-context/t3teamProjectStateDir";
@@ -166,6 +169,46 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   return { copied, failed };
 });
 
+
+/** Copy `machine.json` into `.agents/nexi` when the target file is missing. Runs even when
+ * the target directory already exists (the full-dir migration returns early in that case).
+ * Never overwrites or deletes; the target wins. Sources stay as a fallback. */
+export const ensureNexiMachineFile = Effect.fn("ensureNexiMachineFile")(function* (
+  workspaceRoot: string,
+) {
+  if (PROJECT_STATE_DIR !== NEXI_PROJECT_STATE_DIR) return false;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const targetRelative = projectMachineFilePath(NEXI_PROJECT_STATE_DIR);
+  const target = path.join(workspaceRoot, targetRelative);
+  const targetExists = yield* fileSystem.exists(target);
+  const sources: Array<{ path: string; exists: boolean }> = [];
+  for (const relative of projectMachineFilePathLookupOrder(NEXI_PROJECT_STATE_DIR)) {
+    if (relative === targetRelative) continue;
+    const source = path.join(workspaceRoot, relative);
+    const present = yield* fileSystem.exists(source);
+    const info = present
+      ? yield* fileSystem.stat(source).pipe(Effect.option)
+      : ({ _tag: "None" } as const);
+    sources.push({
+      path: relative,
+      exists: present && info._tag === "Some" && info.value.type === "File",
+    });
+  }
+  const decision = decideMachineFileMigration({
+    targetPath: targetRelative,
+    targetExists,
+    sources,
+  });
+  if (decision.action === "noop") return false;
+  const source = path.join(workspaceRoot, decision.source);
+  return yield* fileSystem.makeDirectory(path.dirname(target), { recursive: true }).pipe(
+    Effect.andThen(fileSystem.copyFile(source, target)),
+    Effect.as(true),
+    Effect.orElseSucceed(() => false),
+  );
+});
+
 /** One-time additive normalization when a process selects `.agents/nexi`. Sources are the
  * older `.nexi` (preferred, as the previous default) then `.t3team`. An existing target
  * wins and is not touched again (idempotent). Conflicting files keep the target copy, log,
@@ -179,7 +222,10 @@ export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(
   const path = yield* Path.Path;
   const targetDir = NEXI_PROJECT_STATE_DIR;
   const targetPath = path.join(workspaceRoot, targetDir);
-  if (yield* fileSystem.exists(targetPath)) return [];
+  if (yield* fileSystem.exists(targetPath)) {
+    yield* ensureNexiMachineFile(workspaceRoot);
+    return [];
+  }
   const sources = [LEGACY_NEXI_PROJECT_STATE_DIR, T3TEAM_PROJECT_STATE_DIR].filter(
     (dir) => dir !== targetDir,
   );
@@ -204,7 +250,10 @@ export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(
     }
     if (outcome.failed) failed = true;
   }
-  if (!failed && copied.length > 0) return copied;
+  if (!failed && copied.length > 0) {
+    yield* ensureNexiMachineFile(workspaceRoot);
+    return copied;
+  }
   yield* fileSystem.remove(targetPath, { recursive: true, force: true }).pipe(Effect.ignore);
   return [];
 });

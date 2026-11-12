@@ -2,8 +2,8 @@
  * Per-row marker and action for the project's main repository. The main row shows a clear
  * "Main" badge; any other linked row has a "Make main" action so the user can switch with
  * one click. The control lives outside the row's link-toggle so it does not unlink the
- * repository. A failed action shows an inline error with Retry; a pending click is labelled
- * so the row is never a silent no-op.
+ * repository. A click shows the new Main badge at once, then a pending "Saving…" on that
+ * row; a failure shows a plain inline error with Retry and the previous main is restored.
  */
 
 export function LinkedRepositoryMainMarker({
@@ -23,13 +23,38 @@ export function LinkedRepositoryMainMarker({
   readonly onRetry?: () => void;
   readonly repositoryLabel: string;
 }) {
+  const errorLine =
+    error ? (
+      <span className="inline-flex items-center gap-1 text-xs text-destructive" role="alert">
+        {error}
+        {onRetry ? (
+          <button
+            type="button"
+            className="font-medium text-primary underline"
+            onClick={onRetry}
+            disabled={disabled || pending}
+          >
+            Retry
+          </button>
+        ) : null}
+      </span>
+    ) : null;
+
   if (isMain) {
     return (
-      <span
-        className="inline-flex items-center rounded-md bg-primary/15 px-1.5 py-0.5 text-2xs font-semibold text-primary"
-        aria-label={`${repositoryLabel} is the main repository`}
-      >
-        Main
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span
+          className="inline-flex items-center rounded-md bg-primary/15 px-1.5 py-0.5 text-2xs font-semibold text-primary"
+          aria-label={`${repositoryLabel} is the main repository`}
+        >
+          Main
+        </span>
+        {pending ? (
+          <span className="text-xs text-muted-foreground" aria-live="polite">
+            Saving…
+          </span>
+        ) : null}
+        {errorLine}
       </span>
     );
   }
@@ -42,23 +67,9 @@ export function LinkedRepositoryMainMarker({
         disabled={disabled || pending}
         aria-label={`Make ${repositoryLabel} the main repository`}
       >
-        {pending ? "Making main…" : "Make main"}
+        Make main
       </button>
-      {error ? (
-        <span className="inline-flex items-center gap-1 text-xs text-destructive" role="alert">
-          {error}
-          {onRetry ? (
-            <button
-              type="button"
-              className="font-medium text-primary underline"
-              onClick={onRetry}
-              disabled={disabled || pending}
-            >
-              Retry
-            </button>
-          ) : null}
-        </span>
-      ) : null}
+      {errorLine}
     </span>
   );
 }

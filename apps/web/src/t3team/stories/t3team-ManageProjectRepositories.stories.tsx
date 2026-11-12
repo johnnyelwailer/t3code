@@ -2,6 +2,14 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useState, type ComponentProps, type ReactNode } from "react";
 
 import { resolveMainRepositoryUrl } from "~/t3team/hooks/t3team-linkedRepositoryMainSelection";
+import {
+  beginMainPersist,
+  completeMainPersist,
+  failMainPersist,
+  initialMainOptimisticState,
+  MAIN_REPOSITORY_PERSIST_ERROR,
+  type MainRepositoryOptimisticState,
+} from "~/t3team/hooks/t3team-mainRepositoryOptimistic";
 import { LinkedRepositoriesDialogView } from "~/t3team/components/t3team-LinkedRepositoriesDialogView";
 
 const ALPHA = "https://github.com/acme/alpha";
@@ -24,29 +32,54 @@ function Frame({
   );
 }
 
-type Args = ComponentProps<typeof LinkedRepositoriesDialogView> & { dark?: boolean };
+type Args = ComponentProps<typeof LinkedRepositoriesDialogView> & {
+  dark?: boolean;
+  persistOutcome?: "success" | "failure";
+};
 
-function Interactive({ dark, ...args }: Args) {
+function Interactive({ dark, persistOutcome = "success", ...args }: Args) {
   const [linkedUrls, setLinkedUrls] = useState(args.linkedUrls);
-  const [main, setMain] = useState(args.mainRepositoryUrl);
+  const [state, setState] = useState<MainRepositoryOptimisticState>(() =>
+    initialMainOptimisticState(args.mainRepositoryUrl),
+  );
+  const runPersist = (nextUrl: string | null, revertOnFailure: boolean) => {
+    setState((current) => beginMainPersist(current, nextUrl, revertOnFailure));
+    window.setTimeout(() => {
+      setState((current) =>
+        persistOutcome === "failure"
+          ? failMainPersist(current)
+          : completeMainPersist(current, nextUrl),
+      );
+    }, 600);
+  };
+  const retry = () => {
+    if (!state.error) return;
+    runPersist(state.error.url, state.revertOnFailure);
+  };
   return (
     <Frame dark={dark}>
       <LinkedRepositoriesDialogView
         {...args}
         linkedUrls={linkedUrls}
-        mainRepositoryUrl={main}
+        mainRepositoryUrl={state.mainUrl}
         dirty
-        onMakeMain={(url) => setMain(url)}
+        pendingMainUrl={state.pendingUrl}
+        mainPending={state.pendingUrl !== undefined}
+        mainError={state.error}
+        onMakeMain={(url) => runPersist(url, true)}
+        onRetryMain={retry}
         onUnlink={(url) => {
           const next = linkedUrls.filter((entry) => entry !== url);
-          setMain(
-            resolveMainRepositoryUrl({
-              linkedUrls: next,
-              currentMain: main,
-              previousLinkedUrls: linkedUrls,
-            }),
-          );
+          const newMain = resolveMainRepositoryUrl({
+            linkedUrls: next,
+            currentMain: state.mainUrl,
+            previousLinkedUrls: linkedUrls,
+          });
           setLinkedUrls(next);
+          if (newMain === state.mainUrl) return;
+          const previousStillLinked =
+            state.committedUrl !== null && next.includes(state.committedUrl);
+          runPersist(newMain, previousStillLinked);
         }}
         onClose={() => {}}
         onSave={() => {}}
@@ -96,13 +129,61 @@ export const AdoptedWorkspace: Story = {
   },
 };
 
+export const MakeMainPending: Story = {
+  args: {
+    projectTitle: "Project Alpha",
+    linkedUrls: [ALPHA, BETA],
+    mainRepositoryUrl: BETA,
+    pendingMainUrl: BETA,
+    mainPending: true,
+  },
+  // Static snapshot of the pending row: skip the interactive persist so Saving… stays visible.
+  render: (args) => (
+    <Frame>
+      <LinkedRepositoriesDialogView
+        projectTitle={args.projectTitle}
+        linkedUrls={args.linkedUrls}
+        mainRepositoryUrl={args.mainRepositoryUrl}
+        pendingMainUrl={args.pendingMainUrl}
+        mainPending={args.mainPending}
+        onMakeMain={() => {}}
+        onClose={() => {}}
+        onSave={() => {}}
+      />
+    </Frame>
+  ),
+};
+
 export const MakeMainError: Story = {
   args: {
     projectTitle: "Project Alpha",
     linkedUrls: [ALPHA, BETA],
     mainRepositoryUrl: ALPHA,
-    mainError: { url: BETA, message: "Could not switch the main repository." },
+    mainError: { url: BETA, message: MAIN_REPOSITORY_PERSIST_ERROR },
     onRetryMain: () => {},
+  },
+  render: (args) => (
+    <Frame>
+      <LinkedRepositoriesDialogView
+        projectTitle={args.projectTitle}
+        linkedUrls={args.linkedUrls}
+        mainRepositoryUrl={args.mainRepositoryUrl}
+        mainError={args.mainError}
+        onMakeMain={() => {}}
+        onRetryMain={args.onRetryMain}
+        onClose={() => {}}
+        onSave={() => {}}
+      />
+    </Frame>
+  ),
+};
+
+export const MakeMainRetry: Story = {
+  args: {
+    projectTitle: "Project Alpha",
+    linkedUrls: [ALPHA, BETA],
+    mainRepositoryUrl: ALPHA,
+    persistOutcome: "failure",
   },
 };
 

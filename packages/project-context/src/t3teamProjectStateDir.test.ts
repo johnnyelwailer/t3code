@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  decideMachineFileMigration,
   isNexiStateDirEnabled,
   LEGACY_NEXI_PROJECT_STATE_DIR,
   NEXI_PROJECT_STATE_DIR,
   NEXI_STATE_DIR_FLAG_ENV,
+  PROJECT_MACHINE_FILE_PATH,
   PROJECT_STATE_DIR,
+  projectMachineCheckedLocations,
+  projectMachineFilePath,
+  projectMachineFilePathLookupOrder,
   projectStateDirLookupOrder,
   resolveProjectStateDirName,
   toPhysicalProjectStatePath,
@@ -122,5 +127,64 @@ describe("project state dir resolver", () => {
         ".agents/nexi",
       ),
     ).toBe("/anc/.t3team/worktrees/ws/.agents/nexi/recipes/r/plan.workflow.ts");
+  });
+
+
+  it("derives the machine pointer from the state dir and looks up older paths after it", () => {
+    expect(projectMachineFilePath(".agents/nexi")).toBe(".agents/nexi/machine.json");
+    expect(projectMachineFilePath(".nexi")).toBe(".nexi/machine.json");
+    expect(projectMachineFilePath(".t3team")).toBe(".t3team/machine.json");
+    expect(projectMachineFilePath()).toBe(PROJECT_MACHINE_FILE_PATH);
+    expect(PROJECT_MACHINE_FILE_PATH).toBe(`${PROJECT_STATE_DIR}/machine.json`);
+    expect(projectMachineFilePathLookupOrder(".agents/nexi")).toEqual([
+      ".agents/nexi/machine.json",
+      ".nexi/machine.json",
+      ".t3team/machine.json",
+    ]);
+    expect(projectMachineFilePathLookupOrder(".t3team")).toEqual([
+      ".t3team/machine.json",
+      ".agents/nexi/machine.json",
+      ".nexi/machine.json",
+    ]);
+    expect(projectMachineCheckedLocations(".agents/nexi")).toBe(
+      ".agents/nexi/machine.json, .nexi/machine.json, .t3team/machine.json, .devcontainer/devcontainer.json and .devcontainer.json",
+    );
+  });
+
+  it("copies a missing machine pointer once and leaves an existing target alone", () => {
+    const targetPath = ".agents/nexi/machine.json";
+    const sources = [
+      { path: ".nexi/machine.json", exists: true },
+      { path: ".t3team/machine.json", exists: true },
+    ];
+    expect(
+      decideMachineFileMigration({ targetPath, targetExists: false, sources: [] }),
+    ).toEqual({ action: "noop" });
+    expect(
+      decideMachineFileMigration({
+        targetPath,
+        targetExists: false,
+        sources: [{ path: ".nexi/machine.json", exists: false }, { path: ".t3team/machine.json", exists: false }],
+      }),
+    ).toEqual({ action: "noop" });
+    expect(
+      decideMachineFileMigration({ targetPath, targetExists: false, sources }),
+    ).toEqual({ action: "copy", source: ".nexi/machine.json" });
+    expect(
+      decideMachineFileMigration({
+        targetPath,
+        targetExists: false,
+        sources: [
+          { path: ".nexi/machine.json", exists: false },
+          { path: ".t3team/machine.json", exists: true },
+        ],
+      }),
+    ).toEqual({ action: "copy", source: ".t3team/machine.json" });
+    expect(
+      decideMachineFileMigration({ targetPath, targetExists: true, sources }),
+    ).toEqual({ action: "noop" });
+    expect(
+      decideMachineFileMigration({ targetPath, targetExists: true, sources }),
+    ).toEqual({ action: "noop" });
   });
 });

@@ -5,6 +5,14 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { resolveMainRepositoryUrl } from "~/t3team/hooks/t3team-linkedRepositoryMainSelection";
 import {
+  beginMainPersist,
+  completeMainPersist,
+  failMainPersist,
+  initialMainOptimisticState,
+  MAIN_REPOSITORY_PERSIST_ERROR,
+  type MainRepositoryOptimisticState,
+} from "~/t3team/hooks/t3team-mainRepositoryOptimistic";
+import {
   ADOPTED_WORKSPACE_MESSAGE,
   LINKED_REPOSITORIES_HELP,
   NO_MAIN_REPOSITORY_MESSAGE,
@@ -58,34 +66,72 @@ function view(props: Partial<React.ComponentProps<typeof LinkedRepositoriesDialo
 function Interactive({
   initialUrls,
   initialMain,
+  persist,
 }: {
   initialUrls: ReadonlyArray<string>;
   initialMain: string | null;
+  persist?: (url: string | null) => Promise<void>;
 }): ReactElement {
   const [linkedUrls, setLinkedUrls] = useState(initialUrls);
-  const [main, setMain] = useState(initialMain);
+  const [state, setState] = useState<MainRepositoryOptimisticState>(() =>
+    initialMainOptimisticState(initialMain),
+  );
+  const runPersist = (nextUrl: string | null, revertOnFailure: boolean) => {
+    setState((current) => beginMainPersist(current, nextUrl, revertOnFailure));
+    void (persist ?? (async () => undefined))(nextUrl).then(
+      () => setState((current) => completeMainPersist(current, nextUrl)),
+      () => setState((current) => failMainPersist(current)),
+    );
+  };
+  const retry = () => {
+    if (!state.error) return;
+    runPersist(state.error.url, state.revertOnFailure);
+  };
   return (
     <LinkedRepositoriesDialogView
       projectTitle="Project Alpha"
       linkedUrls={linkedUrls}
-      mainRepositoryUrl={main}
+      mainRepositoryUrl={state.mainUrl}
       dirty
-      onMakeMain={(url) => setMain(url)}
+      pendingMainUrl={state.pendingUrl}
+      mainPending={state.pendingUrl !== undefined}
+      mainError={state.error}
+      onMakeMain={(url) => runPersist(url, true)}
+      onRetryMain={retry}
       onUnlink={(url) => {
         const next = linkedUrls.filter((entry) => entry !== url);
-        setMain(
-          resolveMainRepositoryUrl({
-            linkedUrls: next,
-            currentMain: main,
-            previousLinkedUrls: linkedUrls,
-          }),
-        );
+        const newMain = resolveMainRepositoryUrl({
+          linkedUrls: next,
+          currentMain: state.mainUrl,
+          previousLinkedUrls: linkedUrls,
+        });
         setLinkedUrls(next);
+        if (newMain === state.mainUrl) return;
+        const previousStillLinked =
+          state.committedUrl !== null && next.includes(state.committedUrl);
+        runPersist(newMain, previousStillLinked);
       }}
       onClose={() => {}}
       onSave={() => {}}
     />
   );
+}
+
+async function flush() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+function click(container: HTMLElement, ariaLabel: string) {
+  const button = [...container.querySelectorAll("button")].find(
+    (entry) => entry.getAttribute("aria-label") === ariaLabel,
+  );
+  expect(button).toBeDefined();
+  act(() => {
+    button!.click();
+  });
 }
 
 describe("LinkedRepositoriesDialogView", () => {
@@ -137,18 +183,49 @@ describe("LinkedRepositoriesDialogView", () => {
     expect(markup).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
   });
 
-  it("shows a pending Make main label and an inline error with Retry", () => {
+  it("shows Saving… on the new main row while the persist is pending", () => {
+    const markup = renderToStaticMarkup(
+      view({
+        linkedUrls: [ALPHA, BETA],
+        mainRepositoryUrl: BETA,
+        pendingMainUrl: BETA,
+        mainPending: true,
+      }),
+    );
+    expect(markup).toContain("acme/beta is the main repository");
+    expect(markup).toContain("Saving…");
+    expect(markup).toContain("Make acme/alpha the main repository");
+    expect(markup).not.toContain("Making main…");
+    expect(markup).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
+  });
+
+  it("shows a plain error and Retry on the failed row, with the previous main restored", () => {
     const markup = renderToStaticMarkup(
       view({
         linkedUrls: [ALPHA, BETA],
         mainRepositoryUrl: ALPHA,
-        pendingMainUrl: BETA,
-        mainError: { url: BETA, message: "Could not switch the main repository." },
+        mainError: { url: BETA, message: MAIN_REPOSITORY_PERSIST_ERROR },
         onRetryMain: () => {},
       }),
     );
-    expect(markup).toContain("Making main…");
-    expect(markup).toContain("Could not switch the main repository.");
+    expect(markup).toContain("acme/alpha is the main repository");
+    expect(markup).toContain("Make acme/beta the main repository");
+    expect(markup).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(markup).toContain(">Retry<");
+    expect(markup).not.toContain("Saving…");
+  });
+
+  it("keeps the promoted main and shows Retry when an unlink persist fails", () => {
+    const markup = renderToStaticMarkup(
+      view({
+        linkedUrls: [ALPHA, GAMMA],
+        mainRepositoryUrl: ALPHA,
+        mainError: { url: ALPHA, message: MAIN_REPOSITORY_PERSIST_ERROR },
+        onRetryMain: () => {},
+      }),
+    );
+    expect(markup).toContain("acme/alpha is the main repository");
+    expect(markup).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
     expect(markup).toContain(">Retry<");
   });
 
@@ -166,46 +243,88 @@ describe("LinkedRepositoriesDialogView", () => {
     expect(markup).toContain("unsaved changes");
   });
 
-  it("switches main with one click and, when the main repo is unlinked, makes the first remaining one main", () => {
+  it("switches main with one click and, when the main repo is unlinked, makes the first remaining one main", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     act(() => {
       root.render(createElement(Interactive, { initialUrls: [ALPHA, BETA, GAMMA], initialMain: BETA }));
     });
-    const makeGamma = [...container.querySelectorAll("button")].find(
-      (button) => button.getAttribute("aria-label") === "Make acme/gamma the main repository",
-    );
-    expect(makeGamma).toBeDefined();
-    act(() => {
-      makeGamma!.click();
-    });
+    click(container, "Make acme/gamma the main repository");
     expect(container.innerHTML).toContain("acme/gamma is the main repository");
+    expect(container.innerHTML).toContain("Saving…");
     expect(container.innerHTML).not.toContain("acme/beta is the main repository");
+    await flush();
+    expect(container.innerHTML).toContain("acme/gamma is the main repository");
+    expect(container.innerHTML).not.toContain("Saving…");
 
-    const unlinkGamma = [...container.querySelectorAll("button")].find(
-      (button) => button.getAttribute("aria-label") === "Unlink acme/gamma",
-    );
-    act(() => {
-      unlinkGamma!.click();
-    });
-    // Option A: first remaining (alpha) becomes main.
+    click(container, "Unlink acme/gamma");
+    // Option A: first remaining (alpha) becomes main and persists on its own.
+    expect(container.innerHTML).toContain("acme/alpha is the main repository");
+    expect(container.innerHTML).toContain("Saving…");
+    await flush();
     expect(container.innerHTML).toContain("acme/alpha is the main repository");
     expect(container.innerHTML).not.toContain("acme/gamma is the main repository");
     expect(container.innerHTML).not.toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    expect(container.innerHTML).not.toContain("Saving…");
   });
 
-  it("shows the local-workspace message after the last linked repository is removed", () => {
+  it("reverts to the previous main on failure and retries from the same row", async () => {
+    let next: { resolve: () => void; reject: (error: Error) => void } | undefined;
+    const persist = () =>
+      new Promise<void>((resolve, reject) => {
+        next = { resolve, reject };
+      });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        createElement(Interactive, {
+          initialUrls: [ALPHA, BETA],
+          initialMain: ALPHA,
+          persist,
+        }),
+      );
+    });
+    click(container, "Make acme/beta the main repository");
+    expect(container.innerHTML).toContain("acme/beta is the main repository");
+    expect(container.innerHTML).toContain("Saving…");
+    await act(async () => {
+      next!.reject(new Error("refused"));
+      await Promise.resolve();
+    });
+    expect(container.innerHTML).toContain("acme/alpha is the main repository");
+    expect(container.innerHTML).toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(container.innerHTML).toContain(">Retry<");
+    expect(container.innerHTML).not.toContain("Saving…");
+    expect(container.innerHTML).toContain("Make acme/beta the main repository");
+
+    const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry");
+    expect(retry).toBeDefined();
+    act(() => {
+      retry!.click();
+    });
+    expect(container.innerHTML).toContain("acme/beta is the main repository");
+    expect(container.innerHTML).toContain("Saving…");
+    expect(container.innerHTML).not.toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    await act(async () => {
+      next!.resolve();
+      await Promise.resolve();
+    });
+    expect(container.innerHTML).toContain("acme/beta is the main repository");
+    expect(container.innerHTML).not.toContain("Saving…");
+    expect(container.innerHTML).not.toContain(MAIN_REPOSITORY_PERSIST_ERROR);
+    expect(container.innerHTML).not.toContain("Make acme/beta the main repository");
+  });
+
+  it("shows the local-workspace message after the last linked repository is removed", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
     act(() => {
       root.render(createElement(Interactive, { initialUrls: [ALPHA], initialMain: ALPHA }));
     });
-    const unlink = [...container.querySelectorAll("button")].find(
-      (button) => button.getAttribute("aria-label") === "Unlink acme/alpha",
-    );
-    act(() => {
-      unlink!.click();
-    });
+    click(container, "Unlink acme/alpha");
+    expect(container.innerHTML).toContain(NO_MAIN_REPOSITORY_MESSAGE);
+    await flush();
     expect(container.innerHTML).toContain(NO_MAIN_REPOSITORY_MESSAGE);
     expect(container.innerHTML).toContain("No repositories are linked yet.");
   });

@@ -223,7 +223,7 @@ it.layer(NodeServices.layer)("remote machine discovery", (it) => {
       expect(result.status).toEqual({
         _tag: "None",
         reason:
-          "No remote machine definition was found in acme/api, acme/web at the default branch. Checked .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json; subfolder discovery needs a local checkout or a .nexi/machine.json pointer.",
+          "No remote machine definition was found in acme/api, acme/web at the default branch. Checked .agents/nexi/machine.json, .nexi/machine.json, .t3team/machine.json, .devcontainer/devcontainer.json and .devcontainer.json; subfolder discovery needs a local checkout or a .agents/nexi/machine.json pointer.",
       });
     }),
   );

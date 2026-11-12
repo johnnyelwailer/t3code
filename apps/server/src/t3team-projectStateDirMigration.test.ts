@@ -342,3 +342,112 @@ it.effect(
       ]);
     }),
 );
+
+
+const MACHINE_POINTER = `{ "version": 1, "devcontainer": ".devcontainer/devcontainer.json" }`;
+const OTHER_POINTER = `{ "version": 1, "devcontainer": ".devcontainer/other.json" }`;
+
+it.effect("copies machine.json from .nexi when only the older pointer is present", () =>
+  Effect.gen(function* () {
+    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+    vi.resetModules();
+    const { ensureNexiMachineFile } = yield* Effect.promise(
+      () => import("./t3team-projectMainRepositoryState.ts"),
+    );
+    const { files, fileSystem } = memoryFs({
+      "/repo/.nexi/machine.json": MACHINE_POINTER,
+    });
+    expect(
+      yield* ensureNexiMachineFile("/repo").pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provide(Path.layer),
+      ),
+    ).toBe(true);
+    expect(files.get("/repo/.agents/nexi/machine.json")).toBe(MACHINE_POINTER);
+    expect(files.get("/repo/.nexi/machine.json")).toBe(MACHINE_POINTER);
+  }),
+);
+
+it.effect("leaves a canonical machine.json alone when it is the only pointer", () =>
+  Effect.gen(function* () {
+    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+    vi.resetModules();
+    const { ensureNexiMachineFile } = yield* Effect.promise(
+      () => import("./t3team-projectMainRepositoryState.ts"),
+    );
+    const { files, fileSystem, directories } = memoryFs({
+      "/repo/.agents/nexi/machine.json": MACHINE_POINTER,
+    });
+    expect(
+      yield* ensureNexiMachineFile("/repo").pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provide(Path.layer),
+      ),
+    ).toBe(false);
+    expect(files.get("/repo/.agents/nexi/machine.json")).toBe(MACHINE_POINTER);
+    expect(files.has("/repo/.nexi/machine.json")).toBe(false);
+    expect(files.has("/repo/.t3team/machine.json")).toBe(false);
+    expect(nexiGate(files, directories)).toBe(true);
+  }),
+);
+
+it.effect("prefers an existing .agents/nexi/machine.json when older pointers are also present", () =>
+  Effect.gen(function* () {
+    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+    vi.resetModules();
+    const { ensureNexiMachineFile } = yield* Effect.promise(
+      () => import("./t3team-projectMainRepositoryState.ts"),
+    );
+    const { files, fileSystem } = memoryFs({
+      "/repo/.agents/nexi/machine.json": MACHINE_POINTER,
+      "/repo/.nexi/machine.json": OTHER_POINTER,
+      "/repo/.t3team/machine.json": OTHER_POINTER,
+    });
+    expect(
+      yield* ensureNexiMachineFile("/repo").pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provide(Path.layer),
+      ),
+    ).toBe(false);
+    expect(files.get("/repo/.agents/nexi/machine.json")).toBe(MACHINE_POINTER);
+    expect(files.get("/repo/.nexi/machine.json")).toBe(OTHER_POINTER);
+    expect(files.get("/repo/.t3team/machine.json")).toBe(OTHER_POINTER);
+  }),
+);
+
+it.effect("copies machine.json into an existing .agents/nexi dir and is a no-op on a re-run", () =>
+  Effect.gen(function* () {
+    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+    vi.resetModules();
+    const { ensureNexiProjectStateDir } = yield* Effect.promise(
+      () => import("./t3team-projectMainRepositoryState.ts"),
+    );
+    const control = { failCopies: false, failWrites: false, copies: 0 };
+    const { files, fileSystem } = memoryFs(
+      {
+        "/repo/.agents/nexi/context/shared.json": "already-there",
+        "/repo/.nexi/machine.json": MACHINE_POINTER,
+      },
+      control,
+    );
+    expect(
+      yield* ensureNexiProjectStateDir("/repo").pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provide(Path.layer),
+      ),
+    ).toEqual([]);
+    expect(files.get("/repo/.agents/nexi/machine.json")).toBe(MACHINE_POINTER);
+    expect(files.get("/repo/.agents/nexi/context/shared.json")).toBe("already-there");
+    expect(files.get("/repo/.nexi/machine.json")).toBe(MACHINE_POINTER);
+    const copiesAfterFirst = control.copies;
+    expect(copiesAfterFirst).toBeGreaterThan(0);
+    expect(
+      yield* ensureNexiProjectStateDir("/repo").pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provide(Path.layer),
+      ),
+    ).toEqual([]);
+    expect(files.get("/repo/.agents/nexi/machine.json")).toBe(MACHINE_POINTER);
+    expect(control.copies).toBe(copiesAfterFirst);
+  }),
+);

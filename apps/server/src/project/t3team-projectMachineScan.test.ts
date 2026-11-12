@@ -251,6 +251,80 @@ it.layer(NodeServices.layer)("scanCheckout", (it) => {
         ]);
       }),
     );
+
+    it.effect("prefers .agents/nexi/machine.json when an older pointer is also present", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".agents/nexi/machine.json": `{
+            "version": 1,
+            "devcontainer": ".devcontainer/api/devcontainer.json"
+          }`,
+          ".nexi/machine.json": `{
+            "version": 1,
+            "devcontainer": ".devcontainer/devcontainer.json"
+          }`,
+          ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+          ".devcontainer/api/devcontainer.json": `{ "image": "node:22" }`,
+        });
+        expect(result.rejected).toEqual([]);
+        expect(result.candidates).toHaveLength(1);
+        expect(result.candidates[0]).toMatchObject({
+          devcontainerPath: ".devcontainer/api/devcontainer.json",
+          machineFilePath: ".agents/nexi/machine.json",
+        });
+      }),
+    );
+
+    it.effect("falls back to .nexi/machine.json when the canonical pointer is missing", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".nexi/machine.json": `{
+            "version": 1,
+            "devcontainer": ".devcontainer/devcontainer.json"
+          }`,
+          ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+        });
+        expect(result.candidates[0]).toMatchObject({
+          machineFilePath: ".nexi/machine.json",
+        });
+      }),
+    );
+
+    it.effect("falls back to .t3team/machine.json when newer pointers are missing", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".t3team/machine.json": `{
+            "version": 1,
+            "devcontainer": ".devcontainer/devcontainer.json"
+          }`,
+          ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+        });
+        expect(result.candidates[0]).toMatchObject({
+          machineFilePath: ".t3team/machine.json",
+        });
+      }),
+    );
+
+    it.effect("an invalid canonical pointer is reported and does not fall back to an older one", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".agents/nexi/machine.json": `{ "version": 2 }`,
+          ".nexi/machine.json": `{
+            "version": 1,
+            "devcontainer": ".devcontainer/devcontainer.json"
+          }`,
+          ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+        });
+        expect(result.candidates).toEqual([]);
+        expect(result.rejected).toEqual([
+          {
+            repository: ".",
+            path: ".agents/nexi/machine.json",
+            reason: ".agents/nexi/machine.json is not a valid machine file.",
+          },
+        ]);
+      }),
+    );
   });
 
   it.effect("rejects a devcontainer that is a symlink out of the repository", () =>

@@ -7,6 +7,7 @@
  *
  * @module t3team-ProjectMachineDiscovery
  */
+import { projectMachineCheckedLocations, projectMachineFilePath } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   type ProjectId,
   type ProjectMachineDiscovery as Discovery,
@@ -165,7 +166,7 @@ const make = Effect.gen(function* () {
       ];
       if (missing.length > 0)
         hints.unshift(
-          `No remote machine definition was found in ${missing.join(", ")} at the default branch. Checked .nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json; subfolder discovery needs a local checkout or a .nexi/machine.json pointer.`,
+          `No remote machine definition was found in ${missing.join(", ")} at the default branch. Checked ${projectMachineCheckedLocations()}; subfolder discovery needs a local checkout or a ${projectMachineFilePath()} pointer.`,
         );
       const selection = selectProjectMachine({
         sources: scans.flatMap((scan) => scan.sources),

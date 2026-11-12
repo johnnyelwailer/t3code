@@ -108,3 +108,47 @@ export function toPhysicalProjectStatePath(
   if (alreadyPhysical.test(tail)) return statePath;
   return normalized.slice(0, last.index! + leading.length) + physical + tail;
 }
+
+/** The machine-definition pointer's file name, always inside the project state dir. */
+export const PROJECT_MACHINE_FILE_NAME = "machine.json";
+
+/** Derive the machine pointer path from a state dir (the process's physical dir by default). */
+export function projectMachineFilePath(stateDir: string = PROJECT_STATE_DIR): string {
+  return `${stateDir.replace(/[\\/]+$/, "")}/${PROJECT_MACHINE_FILE_NAME}`;
+}
+
+/**
+ * Where to look for an existing machine pointer, preferred first: the process's physical
+ * path, then `.agents/nexi/machine.json`, `.nexi/machine.json`, and `.t3team/machine.json`.
+ * Duplicates are dropped. A present file at an earlier path wins, including an invalid one.
+ */
+export function projectMachineFilePathLookupOrder(
+  stateDir: string = PROJECT_STATE_DIR,
+): ReadonlyArray<string> {
+  return projectStateDirLookupOrder(stateDir).map((dir) => projectMachineFilePath(dir));
+}
+
+/** The process's machine pointer path: `.agents/nexi/machine.json` by default. */
+export const PROJECT_MACHINE_FILE_PATH = projectMachineFilePath();
+
+/** Locations a discovery message lists as having been checked. */
+export function projectMachineCheckedLocations(
+  stateDir: string = PROJECT_STATE_DIR,
+): string {
+  const pointers = projectMachineFilePathLookupOrder(stateDir).join(", ");
+  return `${pointers}, .devcontainer/devcontainer.json and .devcontainer.json`;
+}
+
+/**
+ * Copy-once rule for the machine pointer: never overwrite or delete. The target wins
+ * when it is already present; otherwise the first existing fallback is copied.
+ */
+export function decideMachineFileMigration(input: {
+  readonly targetPath: string;
+  readonly targetExists: boolean;
+  readonly sources: ReadonlyArray<{ readonly path: string; readonly exists: boolean }>;
+}): { readonly action: "noop" } | { readonly action: "copy"; readonly source: string } {
+  if (input.targetExists) return { action: "noop" };
+  const source = input.sources.find((entry) => entry.exists && entry.path !== input.targetPath);
+  return source === undefined ? { action: "noop" } : { action: "copy", source: source.path };
+}

@@ -10,6 +10,11 @@ import {
   readLinkedRepositoryUrlsFromProject,
 } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { resolveMainRepositoryUrl } from "~/t3team/hooks/t3team-linkedRepositoryMainSelection";
+import {
+  canPersistMainRepositoryNow,
+  isMainPersistPending,
+} from "~/t3team/hooks/t3team-mainRepositoryOptimistic";
+import { usePersistMainRepository } from "~/t3team/hooks/t3team-persistMainRepository";
 import { readMainRepositoryFromProject } from "~/t3team/hooks/t3team-projectMainRepository";
 import { useSaveProjectRepositories } from "~/t3team/hooks/t3team-useSaveProjectRepositories";
 import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRepositorySyncStatus";
@@ -48,7 +53,18 @@ export function ManageProjectRepositoriesDialog({
   const currentMain = readMainRepositoryFromProject(project);
   const adoptedWorkspace = currentMain?.status === "adopted";
   const initialMainUrl = adoptedWorkspace ? null : (currentMain?.url ?? null);
-  const [mainRepositoryUrl, setMainRepositoryUrl] = useState<string | null>(initialMainUrl);
+  const {
+    state: mainState,
+    persist: persistMain,
+    setLocal,
+    retry: retryMain,
+  } = usePersistMainRepository({
+    project,
+    initialMainUrl,
+    onProjectUpdated,
+  });
+  const mainRepositoryUrl = mainState.mainUrl;
+  const mainPending = isMainPersistPending(mainState);
 
   const discovery = useGitHubRepositoryDiscovery({
     enabled: true,
@@ -64,19 +80,28 @@ export function ManageProjectRepositoriesDialog({
 
   const dirty =
     branches.changed ||
-    mainRepositoryUrl !== initialMainUrl ||
     linkedRepositoryUrls.length !== currentUrls.length ||
     linkedRepositoryUrls.some((url) => !currentUrls.includes(url));
 
+  const assignMain = (nextUrl: string | null, revertOnFailure: boolean) => {
+    if (canPersistMainRepositoryNow(nextUrl, currentUrls)) {
+      void persistMain(nextUrl, revertOnFailure);
+      return;
+    }
+    setLocal(nextUrl);
+  };
+
   const applyLinkedUrls = (next: ReadonlyArray<string>) => {
-    setMainRepositoryUrl((main) =>
-      resolveMainRepositoryUrl({
-        linkedUrls: next,
-        currentMain: main,
-        previousLinkedUrls: linkedRepositoryUrls,
-      }),
-    );
+    const newMain = resolveMainRepositoryUrl({
+      linkedUrls: next,
+      currentMain: mainRepositoryUrl,
+      previousLinkedUrls: linkedRepositoryUrls,
+    });
     setLinkedRepositoryUrls(next);
+    if (newMain === mainRepositoryUrl) return;
+    const previousCommittedStillLinked =
+      mainState.committedUrl !== null && next.includes(mainState.committedUrl);
+    assignMain(newMain, previousCommittedStillLinked);
   };
 
   const toggleRepository = (url: string) => {
@@ -90,35 +115,49 @@ export function ManageProjectRepositoriesDialog({
     applyLinkedUrls(normalizeRepositoryUrls([...linkedRepositoryUrls, ...urls]));
 
   const makeMain = (url: string) => {
-    if (linkedRepositoryUrls.includes(url)) setMainRepositoryUrl(url);
+    if (!linkedRepositoryUrls.includes(url)) return;
+    if (url === mainRepositoryUrl && mainState.error === null) return;
+    assignMain(url, true);
   };
 
-  const mainChange =
-    mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl ? mainRepositoryUrl : undefined;
   const { save, saving, saved, saveError, syncView, unchangedSinceSave } =
     useSaveProjectRepositories({
       project,
       linkedRepositoryUrls,
       linkedRepositoryBranches: branches.branches,
-      mainRepositoryUrl,
-      mainChange,
       syncStatus,
       onProjectUpdated,
     });
 
+  const handleSave = async () => {
+    const nextProject = await save();
+    if (!nextProject) return;
+    const localMain = mainState.mainUrl;
+    const savedMainRecord = readMainRepositoryFromProject(nextProject);
+    const savedMain =
+      savedMainRecord?.status === "adopted" ? null : (savedMainRecord?.url ?? null);
+    if (localMain === savedMain) return;
+    const savedUrls = readLinkedRepositoryUrlsFromProject(nextProject);
+    if (canPersistMainRepositoryNow(localMain, savedUrls)) {
+      void persistMain(localMain, true);
+    }
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving) onClose();
+      if (event.key === "Escape" && !saving && !mainPending) onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, saving]);
+  }, [onClose, saving, mainPending]);
+
+  const busy = saving || mainPending;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-2 sm:items-center sm:p-4"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) onClose();
+        if (event.target === event.currentTarget && !busy) onClose();
       }}
     >
       {syncEnabled && syncView.visible ? (
@@ -143,11 +182,15 @@ export function ManageProjectRepositoriesDialog({
           showMainRepository={mainRepositoryEnabled}
           onMakeMain={makeMain}
           onClose={onClose}
-          onSave={() => void save()}
+          onSave={() => void handleSave()}
           saving={saving}
+          mainPending={mainPending}
           saved={saved !== null}
           dirty={dirty && !unchangedSinceSave}
           saveError={saveError}
+          pendingMainUrl={mainState.pendingUrl}
+          mainError={mainState.error}
+          onRetryMain={retryMain}
         >
           <RepositoryPicker
             discovery={discovery}
@@ -168,7 +211,10 @@ export function ManageProjectRepositoriesDialog({
                   <LinkedRepositoryMainMarker
                     isMain={url === mainRepositoryUrl}
                     onMakeMain={() => makeMain(url)}
-                    disabled={saving}
+                    disabled={busy}
+                    pending={mainState.pendingUrl === url}
+                    error={mainState.error?.url === url ? mainState.error.message : null}
+                    onRetry={mainState.error?.url === url ? retryMain : undefined}
                     repositoryLabel={parseRepositoryLabel(url)}
                   />
                 ) : null}
