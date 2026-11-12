@@ -8,6 +8,7 @@ import {
   t3teamFillPackagedAtlassianEnv,
 } from "./lib/t3team-packaged-env.ts";
 import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
@@ -68,6 +69,10 @@ import {
   T3TeamIsolatedBuildError,
   t3codeProtocolClaims,
 } from "./lib/t3team-isolatedInstanceEnv.ts";
+import {
+  renderLinuxMetainfoXml,
+  resolveLinuxPackagingIdentity,
+} from "./lib/t3team-linuxPackagingIdentity.ts";
 import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
@@ -3219,6 +3224,7 @@ interface PackagedDesktopBrandingResource {
   readonly linuxDesktopEntryName: string;
   readonly linuxWmClass: string;
   readonly isolatedInstance?: true;
+  readonly appId?: string;
 }
 
 interface BuildConfigOptions {
@@ -3250,6 +3256,7 @@ interface BuildConfigOptions {
   // t3team: release flavor (lib/t3team-releaseFlavor.ts).
   readonly flagPresetStaged?: boolean | undefined;
   readonly appId?: string | undefined;
+  readonly linuxMetainfoPath?: string | undefined;
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -3272,6 +3279,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     arch,
     flagPresetStaged = false,
     appId = DESKTOP_APP_ID,
+    linuxMetainfoPath,
   } = options;
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
   // Artifact file names are derived from the resolved product name, not hardcoded:
@@ -3466,9 +3474,36 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.toolsets = { appimage: "1.0.3" };
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    const linuxIdentity = resolveLinuxPackagingIdentity({
+      appId,
+      productNameOverride,
+    });
+    let metainfoSource = linuxMetainfoPath;
+    if (linuxIdentity.branded && metainfoSource === undefined) {
+      const staged = path.join(
+        NodeOS.tmpdir(),
+        `desktop-metainfo-${linuxIdentity.metainfoId}.xml`,
+      );
+      NodeFS.writeFileSync(
+        staged,
+        renderLinuxMetainfoXml({
+          appId: linuxIdentity.metainfoId,
+          productName: resolvedProductName,
+          executableName: linuxIdentity.executableName,
+          desktopEntryName: linuxIdentity.desktopEntryName,
+        }),
+      );
+      metainfoSource = staged;
+    }
+    if (metainfoSource === undefined) {
+      metainfoSource = path.join(
+        repoRoot,
+        "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml",
+      );
+    }
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: "t3code",
+      executableName: linuxIdentity.executableName,
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
@@ -3476,15 +3511,15 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [...t3codeProtocolClaims(process.env)],
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: linuxIdentity.startupWmClass,
         },
       },
     };
     buildConfig.deb = {
       // FPM runs outside the staged app directory, so source paths must be absolute.
       fpm: [
-        `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
-        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code/copyright`,
+        `${metainfoSource}=/usr/share/metainfo/${linuxIdentity.metainfoId}.metainfo.xml`,
+        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/${linuxIdentity.docDir}/copyright`,
       ],
       // Debian 13 and Ubuntu 24.04 use 64-bit-time names; retain old-name fallbacks.
       depends: [
@@ -4559,6 +4594,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       legacyUserDataDirName: options.productName,
       linuxDesktopEntryName: `${slug}.desktop`,
       linuxWmClass: slug,
+      appId: resolveDesktopAppId(process.env),
       ...isolatedBrandingFields(process.env),
     };
     yield* fs.writeFileString(

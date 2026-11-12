@@ -117,6 +117,7 @@ interface PackagedDesktopBrandingResource {
   readonly isolatedInstance?: boolean;
   readonly linuxDesktopEntryName?: string;
   readonly linuxWmClass?: string;
+  readonly appId?: string;
 }
 
 function readPackagedDesktopBranding(
@@ -320,9 +321,11 @@ const make = Effect.fn("desktop.environment.make")(function* (
         : {}),
     },
     displayName,
-    appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
-    ),
+    appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () => {
+      const packagedAppId = packagedBranding?.appId?.trim();
+      if (packagedAppId) return packagedAppId;
+      return isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code";
+    }),
     linuxDesktopEntryName:
       packagedBranding?.linuxDesktopEntryName?.trim() ||
       resolveLinuxDesktopEntryName(isDevelopment),

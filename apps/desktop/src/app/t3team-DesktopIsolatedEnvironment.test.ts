@@ -148,4 +148,24 @@ describe("DesktopEnvironment isolated instance", () => {
         assert.equal(userData, `${home}/electron-profile`);
       }),
   );
+
+  it.effect("uses the packaged appId as the runtime AppUserModelID", () =>
+    Effect.gen(function* () {
+      const environment = yield* withBranding({
+        ...isolated,
+        appId: "ch.nexplore.nexi.work",
+      });
+      assert.equal(environment.appUserModelId, "ch.nexplore.nexi.work");
+    }),
+  );
+
+  it.effect("lets T3CODE_DESKTOP_APP_USER_MODEL_ID override the packaged appId", () =>
+    Effect.gen(function* () {
+      const environment = yield* withBranding(
+        { ...isolated, appId: "ch.nexplore.nexi.work" },
+        { T3CODE_DESKTOP_APP_USER_MODEL_ID: "custom.id" },
+      );
+      assert.equal(environment.appUserModelId, "custom.id");
+    }),
+  );
 });

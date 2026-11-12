@@ -607,3 +607,57 @@ it("skips a leading node-wrapped shim and picks the next spawnable esbuild", asy
     NodeFS.rmSync(root, { recursive: true, force: true });
   }
 });
+
+
+it.effect("gives a branded Linux build its own executable, WM_CLASS, metainfo and doc path", () =>
+  Effect.gen(function* () {
+    const unbranded = yield* createBuildConfig({
+      platform: "linux",
+      target: "AppImage",
+      version: "1.2.3",
+      signed: false,
+      mockUpdates: false,
+    });
+    assert.equal((unbranded.linux as { executableName: string }).executableName, "t3code");
+    assert.equal(
+      (unbranded.linux as { desktop: { entry: { StartupWMClass: string } } }).desktop.entry
+        .StartupWMClass,
+      "t3code",
+    );
+    const fpm = (unbranded.deb as { fpm: string[] }).fpm;
+    assert.isTrue(
+      fpm.some((entry) => entry.endsWith("=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml")),
+    );
+    assert.isTrue(fpm.some((entry) => entry.endsWith("=/usr/share/doc/t3code/copyright")));
+
+    const branded = yield* createBuildConfig({
+      platform: "linux",
+      target: "AppImage",
+      version: "1.2.3",
+      signed: false,
+      mockUpdates: false,
+      productNameOverride: "Nexi Work",
+      appId: "ch.nexplore.nexi.work",
+    });
+    assert.equal((branded.linux as { executableName: string }).executableName, "nexi-work");
+    assert.equal(
+      (branded.linux as { desktop: { entry: { StartupWMClass: string } } }).desktop.entry
+        .StartupWMClass,
+      "nexi-work",
+    );
+    const brandedFpm = (branded.deb as { fpm: string[] }).fpm;
+    assert.isTrue(
+      brandedFpm.some((entry) =>
+        entry.endsWith("=/usr/share/metainfo/ch.nexplore.nexi.work.metainfo.xml"),
+      ),
+    );
+    assert.isTrue(brandedFpm.some((entry) => entry.endsWith("=/usr/share/doc/nexi-work/copyright")));
+    const metainfoFrom = brandedFpm
+      .find((entry) => entry.includes("ch.nexplore.nexi.work.metainfo.xml"))!
+      .split("=")[0]!;
+    const xml = NodeFS.readFileSync(metainfoFrom, "utf8");
+    assert.include(xml, "<id>ch.nexplore.nexi.work</id>");
+    assert.include(xml, "<binary>nexi-work</binary>");
+    assert.notInclude(xml, "com.t3tools.t3code");
+  }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+);
