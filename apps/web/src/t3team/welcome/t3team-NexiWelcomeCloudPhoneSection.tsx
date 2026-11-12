@@ -42,16 +42,6 @@ export function NexiWelcomeCloudPhoneSection({
     </ServiceMark>
   );
 
-  if (skipped) {
-    return (
-      <WelcomeItem
-        mark={cloudMark}
-        title="Cloud sessions"
-        status={<StatusLabel status="skipped" label="Skipped" />}
-      />
-    );
-  }
-
   if (!entraSignedIn) {
     return (
       <>
@@ -69,7 +59,13 @@ export function NexiWelcomeCloudPhoneSection({
     );
   }
 
-  const cloudRow = cloudReady ? (
+  const cloudRow = skipped ? (
+    <WelcomeItem
+      mark={cloudMark}
+      title="Cloud sessions"
+      status={<StatusLabel status="skipped" label="Skipped" />}
+    />
+  ) : cloudReady ? (
     <WelcomeItem
       mark={cloudMark}
       title="Cloud sessions"
