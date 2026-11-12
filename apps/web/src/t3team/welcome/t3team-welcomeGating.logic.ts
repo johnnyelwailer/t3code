@@ -30,11 +30,12 @@ export function hasSeenCurrentWelcome(seenVersion: number | undefined): boolean 
 }
 
 /** Records the current generation on the `t3team` client-settings namespace; no-ops when already set. */
-export function withWelcomeSeenVersion<T extends { readonly welcomeSeenVersion?: number }>(
+export function withWelcomeSeenVersion<T extends object>(
   t3team: T,
 ): T & { readonly welcomeSeenVersion: number } {
-  if (hasSeenCurrentWelcome(t3team.welcomeSeenVersion)) {
-    return t3team as T & { readonly welcomeSeenVersion: number };
+  const current = t3team as T & { readonly welcomeSeenVersion?: number };
+  if (hasSeenCurrentWelcome(current.welcomeSeenVersion)) {
+    return current as T & { readonly welcomeSeenVersion: number };
   }
   return { ...t3team, welcomeSeenVersion: NEXI_WELCOME_SEEN_VERSION };
 }
