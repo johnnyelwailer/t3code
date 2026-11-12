@@ -14,7 +14,9 @@
  * The broker is created per run, so it carries the run's id, project, and model selection.
  * Host calls are chained on a single tail promise: `thread.create` is fired floating by the
  * SDK's one-way `sendOneWay`, so chaining guarantees the create lands before the `thread.turn`
- * it precedes (turn-on-a-missing-thread would otherwise race).
+ * it precedes (turn-on-a-missing-thread would otherwise race) — and, because that fire has no
+ * caller to reject to, a refused create is remembered per child and re-thrown by the turn that
+ * follows it (see t3team-workflowChildSpawnRefusals.ts).
  */
 
 import type { MessageBroker, MessageEnvelope } from "@t3team/sdk";
@@ -26,6 +28,7 @@ import {
 } from "./t3team-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
 import { createWorkflowChild } from "./t3team-workflowChildPlacement.ts";
+import { makeChildSpawnRefusalStore } from "./t3team-workflowChildSpawnRefusals.ts";
 import {
   resolveWorkflowChildModel,
   resolveWorkflowModelCascade,
@@ -61,6 +64,11 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
   // Ask verbs (thread.turn / user.input) are awaited, so their failures propagate and fail the
   // run rather than parking it forever on a turn that never started.
   const enqueueOneWay = (fn: () => Promise<void>): Promise<void> => enqueue(fn).catch(() => {});
+  // `thread.create` is the one one-way verb with a failure the run must see. Its send is fired
+  // FLOATING by the SDK, so rejecting here would only produce an unhandled rejection; the refusal
+  // is caught inside the queue (keeping the ordering) and answered at the child's next awaited
+  // verb — the `thread.turn` an `agent()` always follows its spawn with.
+  const childSpawnRefusals = makeChildSpawnRefusalStore();
   const runPrimitive = async (
     fn: () => Promise<void>,
     beforeDispatch?: () => Promise<void>,
@@ -93,7 +101,14 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     });
   };
 
-  const core: BrokerCore = { deps, enqueue, enqueueOneWay, runPrimitive, step };
+  const core: BrokerCore = {
+    deps,
+    enqueue,
+    enqueueOneWay,
+    runPrimitive,
+    step,
+    childSpawnRefusalFor: (threadId) => childSpawnRefusals.refusalFor(threadId),
+  };
 
   const send = async (envelope: MessageEnvelope, resolver: ReplyResolver): Promise<void> => {
     const { correlationId, kind, payload } = envelope;
@@ -129,8 +144,8 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     if (kind === "thread.create") {
       const p = payload as ThreadCreatePayload;
       if (deps.registry.childThreadsForRun(deps.runId).includes(p.threadId)) return;
-      // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
-      // invalid provider/model must reject this send() while the SDK still observes it.
+      // Resolve BEFORE dispatching so an invalid provider/model rejects this send() while the SDK
+      // still observes it.
       // Stay SYNCHRONOUS in catalog-free harnesses: awaiting unconditionally would yield a
       // microtask before `setPending`, and callers observe the pending entry right after `send`.
       const modelSelection =
@@ -142,8 +157,29 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
               p.effort,
               p.modelIsDefault,
             );
-      step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
-      await runPrimitive(() => enqueueOneWay(() => createWorkflowChild(deps, p, modelSelection)));
+      let created = false;
+      await runPrimitive(() =>
+        enqueue(async () => {
+          // Re-check INSIDE the queue: two creates for the same child fired back to back both pass
+          // the check above (neither has registered yet) and are serialized here, so only the
+          // first may reach the host.
+          if (deps.registry.childThreadsForRun(deps.runId).includes(p.threadId)) return;
+          try {
+            await createWorkflowChild(deps, p, modelSelection);
+          } catch (error) {
+            // Swallowed on purpose: this send is fired floating, so a rejection has no caller —
+            // it would be an unhandled rejection, and the child it names does not exist. The
+            // refusal is remembered (bounded, by child id) and re-thrown by that child's next
+            // awaited `thread.turn`, which is where the author's `agent()` actually observes it.
+            childSpawnRefusals.record(p.threadId, error);
+            return;
+          }
+          created = true;
+          childSpawnRefusals.clear(p.threadId); // the retry landed: this child is really there
+        }),
+      );
+      // The completed pip CLAIMS the child exists, so it rides only a create the host accepted.
+      if (created) step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
       return;
     }
     // Signal-source verbs (GHE #332): `signal.register` (one-way binding FACT), `signal.wait` and
