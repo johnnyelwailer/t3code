@@ -19,7 +19,7 @@ import {
 
 const PROVISIONING = new Set(["creating", "requested", "queued", "preparing", "starting"]);
 
-export function connFromEnvironmentPhase(
+function connFromEnvironmentPhase(
   phase: string | undefined,
   endedSticky: boolean,
 ): CloudSessionConn {
@@ -31,7 +31,7 @@ export function connFromEnvironmentPhase(
   return "live";
 }
 
-export function queuedRecordFromSetup(
+function queuedRecordFromSetup(
   card: CloudSessionSetupCardProps | null,
 ): CloudSessionQueuedRecord {
   if (card === null) return "none";

@@ -76,7 +76,7 @@ export function SetupActions({
           data-cloud-setup-action="primary"
           data-cloud-setup-signin=""
           disabled={optimistic.pending}
-          onClick={() => optimistic.run(() => acceptCloudSessionSignInOffer())}
+          onClick={() => optimistic.run(() => { acceptCloudSessionSignInOffer(); })}
         >
           {optimisticActionLabel(optimistic.pending, signInLabel, "Starting…")}
         </Button>
@@ -99,7 +99,7 @@ export function SetupActions({
           size="xs"
           variant="ghost"
           data-cloud-setup-action="retry-error"
-          onClick={() => optimistic.run(offer !== null ? acceptCloudSessionSignInOffer : (primary ?? (() => {})))}
+          onClick={() => optimistic.run(() => { if (offer !== null) acceptCloudSessionSignInOffer(); else primary?.(); })}
         >
           Retry
         </Button>

@@ -26,25 +26,25 @@ export function withLiveSetupCard(
   };
 }
 
-export const CLOUD_SESSION_ENDED_BANNER_PREFIX = "cloud-session-ended:";
-export const CLOUD_SESSION_ENDING_BANNER_PREFIX = "cloud-session-ending:";
-export const CLOUD_PROJECT_CLONE_BANNER_PREFIX = "cloud-project-clone:";
-export const ENVIRONMENT_UNAVAILABLE_BANNER_PREFIX = "environment-unavailable:";
-export const CLOUD_SESSION_BIND_BANNER_PREFIX = "cloud-session-bind:";
+const CLOUD_SESSION_ENDED_BANNER_PREFIX = "cloud-session-ended:";
+const CLOUD_SESSION_ENDING_BANNER_PREFIX = "cloud-session-ending:";
+const CLOUD_PROJECT_CLONE_BANNER_PREFIX = "cloud-project-clone:";
+const ENVIRONMENT_UNAVAILABLE_BANNER_PREFIX = "environment-unavailable:";
+const CLOUD_SESSION_BIND_BANNER_PREFIX = "cloud-session-bind:";
 
-export function isCloudSessionEndedBanner(id: string): boolean {
+function isCloudSessionEndedBanner(id: string): boolean {
   return id.startsWith(CLOUD_SESSION_ENDED_BANNER_PREFIX);
 }
-export function isCloudSessionEndingBanner(id: string): boolean {
+function isCloudSessionEndingBanner(id: string): boolean {
   return id.startsWith(CLOUD_SESSION_ENDING_BANNER_PREFIX);
 }
-export function isCloudProjectCloneBanner(id: string): boolean {
+function isCloudProjectCloneBanner(id: string): boolean {
   return id.startsWith(CLOUD_PROJECT_CLONE_BANNER_PREFIX);
 }
-export function isEnvironmentUnavailableBanner(id: string): boolean {
+function isEnvironmentUnavailableBanner(id: string): boolean {
   return id.startsWith(ENVIRONMENT_UNAVAILABLE_BANNER_PREFIX);
 }
-export function isCloudSessionBindBanner(id: string): boolean {
+function isCloudSessionBindBanner(id: string): boolean {
   return id.startsWith(CLOUD_SESSION_BIND_BANNER_PREFIX);
 }
 
