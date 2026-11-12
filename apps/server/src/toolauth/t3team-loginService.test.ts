@@ -4,10 +4,7 @@ import { describe, expect, it, it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import {
-  CommandResolutionCache,
-  SpawnExecutableResolution,
-} from "@t3tools/shared/shell";
+import { CommandResolutionCache, SpawnExecutableResolution } from "@t3tools/shared/shell";
 import { CLAUDE } from "./t3team-adapters.ts";
 import { ptyCommandForResolved } from "./t3team-loginService.ts";
 import {
@@ -86,12 +83,10 @@ effectIt.layer(NodeServices.layer)("ToolAuth login spawn on Windows", (it) => {
       }).pipe(
         Effect.provideService(HostProcess.Platform, "win32"),
         Effect.provideService(CommandResolutionCache, new Map()),
-        Effect.provideService(
-          SpawnExecutableResolution,
-          (command, platform) =>
-            command === "claude" && platform === "win32"
-              ? "C:\\Users\\me\\.local\\bin\\claude.exe"
-              : undefined,
+        Effect.provideService(SpawnExecutableResolution, (command, platform) =>
+          command === "claude" && platform === "win32"
+            ? "C:\\Users\\me\\.local\\bin\\claude.exe"
+            : undefined,
         ),
       ),
   );

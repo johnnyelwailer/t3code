@@ -15,10 +15,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
-import {
-  resolveSpawnCommand,
-  type ResolvedSpawnCommand,
-} from "@t3tools/shared/shell";
+import { resolveSpawnCommand, type ResolvedSpawnCommand } from "@t3tools/shared/shell";
 import { adapterForHost, getAdapter } from "./t3team-adapters.ts";
 import { wireLoginProcess } from "./t3team-loginProcessWiring.ts";
 import { killSessionProcess, makeToolAuthSessionControl } from "./t3team-loginSessionControl.ts";
