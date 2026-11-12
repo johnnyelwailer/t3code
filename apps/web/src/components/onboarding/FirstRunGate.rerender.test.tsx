@@ -37,6 +37,8 @@ interface GateStore {
   readonly primaryShellLive: boolean;
   readonly workspaceEvidenceLive: boolean;
   readonly nexiWelcome: boolean;
+  readonly welcomeSeenVersion: number | undefined;
+  readonly welcomeSkipped: ReadonlyArray<string> | undefined;
   readonly pathname: string;
   readonly hash: string;
 }
@@ -60,6 +62,8 @@ const hooks = vi.hoisted(() => {
     primaryShellLive: true,
     workspaceEvidenceLive: true,
     nexiWelcome: false,
+    welcomeSeenVersion: undefined,
+    welcomeSkipped: undefined,
     pathname: "/",
     hash: "",
   });
@@ -173,12 +177,23 @@ vi.mock("~/state/environments", () => ({
 vi.mock("~/hooks/useSettings", () => ({
   useClientSettingsHydrationStatus: () => hooks.useSelected((state) => state.hydrationStatus),
   useClientSettings: (
-    select: (settings: { onboardingCompletedAt: string | null; theme: string }) => unknown,
+    select: (settings: {
+      onboardingCompletedAt: string | null;
+      theme: string;
+      t3team: {
+        welcomeSeenVersion: number | undefined;
+        welcomeSkipped: ReadonlyArray<string> | undefined;
+      };
+    }) => unknown,
   ) =>
     hooks.useSelected((state) =>
       select({
         onboardingCompletedAt: state.onboardingCompletedAt,
         theme: state.theme,
+        t3team: {
+          welcomeSeenVersion: state.welcomeSeenVersion,
+          welcomeSkipped: state.welcomeSkipped,
+        },
       }),
     ),
   ensureClientSettingsHydrated: () => hooks.ensureClientSettingsHydrated(),
@@ -419,6 +434,103 @@ describe("FirstRunGate re-renders", () => {
     });
     counter.expectRerendered({});
     expect(hooks.navigate).not.toHaveBeenCalled();
+  });
+
+  it("opens setup once for an upgrade with old data, and not on the second launch", async () => {
+    const upgrade = {
+      ...completedStore(),
+      nexiWelcome: true,
+      welcomeSeenVersion: undefined,
+      welcomeSkipped: ["account", "jira"],
+      // Existing completed onboarding, projects, and threads: these used to skip first-run.
+      onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+      pathname: "/",
+    };
+    hooks.store.replace(upgrade);
+    await act(async () => {
+      root.render(renderGate());
+    });
+    expect(hooks.navigate).toHaveBeenCalledTimes(1);
+    expect(hooks.navigate).toHaveBeenCalledWith({ to: "/welcome", replace: true });
+    expect(hooks.autoOpen.opened).toBe(true);
+    expect(container.textContent).not.toContain("app");
+    expect(hooks.completeOnboarding).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+    hooks.navigate.mockReset();
+    hooks.autoOpen.opened = false;
+    hooks.store.replace({ ...upgrade, welcomeSeenVersion: 1 });
+    root = createRoot(container);
+    counter.reset();
+    await act(async () => {
+      root.render(renderGate());
+    });
+    expect(hooks.navigate).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("app");
+  });
+
+  it("opens setup once on a fresh install, and not on the second launch", async () => {
+    const fresh = {
+      ...completedStore(),
+      nexiWelcome: true,
+      welcomeSeenVersion: undefined,
+      onboardingCompletedAt: null,
+      projects: [] as GateStore["projects"],
+      threadCount: 0,
+      soleThread: null,
+      pathname: "/",
+    };
+    hooks.store.replace(fresh);
+    await act(async () => {
+      root.render(renderGate());
+    });
+    expect(hooks.navigate).toHaveBeenCalledTimes(1);
+    expect(hooks.navigate).toHaveBeenCalledWith({ to: "/welcome", replace: true });
+    expect(container.textContent).not.toContain("app");
+
+    await act(async () => {
+      root.unmount();
+    });
+    hooks.navigate.mockReset();
+    hooks.autoOpen.opened = false;
+    hooks.store.replace({ ...fresh, welcomeSeenVersion: 1 });
+    root = createRoot(container);
+    await act(async () => {
+      root.render(renderGate());
+    });
+    expect(hooks.navigate).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("app");
+  });
+
+  it("does not auto-open from Settings after the current generation is seen, and still renders the page when reopened", async () => {
+    const seen = {
+      ...completedStore(),
+      nexiWelcome: true,
+      welcomeSeenVersion: 1,
+      onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+      pathname: "/settings",
+    };
+    hooks.store.replace(seen);
+    await act(async () => {
+      root.render(renderGate());
+    });
+    expect(hooks.navigate).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("app");
+
+    await act(async () => {
+      root.unmount();
+    });
+    hooks.navigate.mockReset();
+    hooks.autoOpen.opened = false;
+    hooks.store.replace({ ...seen, pathname: "/welcome" });
+    root = createRoot(container);
+    await act(async () => {
+      root.render(renderGate());
+    });
+    expect(hooks.navigate).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("app");
   });
 
   it("ignores workspace store changes on the hosted-static path, which does not use them for its decision", async () => {

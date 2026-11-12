@@ -9,7 +9,6 @@ import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionControl
 import { useJiraAccountStatuses } from "~/components/settings/t3team-useJiraAccountStatuses";
 import { toolAuthMetaForTool } from "~/components/settings/t3team-toolAuthTools";
 import { readLocalApi } from "~/localApi";
-import { completeOnboarding } from "~/onboarding/firstRun";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { primaryServerConfigAtom, serverEnvironment } from "~/state/server";
 import { useToolAuthActions, useToolAuthStates } from "~/state/t3team-toolauth";
@@ -29,6 +28,7 @@ import { useT3TeamWorkProfileChooserEnabled } from "~/t3team/t3team-workProfileC
 import { buildWelcomeAgentRows, isWelcomeAgentReady } from "./t3team-welcomeAgents.logic";
 import { useWelcomeChosenRole } from "./t3team-useWelcomeChosenRole";
 import { useWelcomeAccountCheck, useWelcomeJiraCheck } from "./t3team-useWelcomeChecks";
+import { completeWelcomeSetup } from "./t3team-welcomeSeen";
 import { useWelcomeSkips } from "./t3team-useWelcomeSkips";
 
 function openExternal(url: string) {
@@ -153,7 +153,7 @@ export function useNexiWelcomeActions(
     onChooseRole: writeT3TeamProjectSetupProfile,
     onSetupPhone: () => void navigate({ to: "/settings/general" }),
     onStart: async () => {
-      await completeOnboarding();
+      await completeWelcomeSetup();
       await onDone(undefined);
     },
     accountCheck,
