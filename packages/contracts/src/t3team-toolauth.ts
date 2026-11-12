@@ -79,6 +79,11 @@ export const ToolAuthState = Schema.Struct({
    * specific host compares it before trusting `connected`.
    */
   hostname: Schema.optional(Schema.String),
+  /**
+   * The provider instance this state is about, when sign-in used that account's
+   * configured binary and config dir.
+   */
+  instanceId: Schema.optional(Schema.String),
   /** Epoch milliseconds. Only present when the tool's credential store reports it. */
   expiresAt: Schema.optional(Schema.Number),
   /**
@@ -103,6 +108,12 @@ export const ToolAuthStartInput = Schema.Struct({
   tool: ToolAuthToolId,
   /** Signs in to this host instead of the tool's default one. Only per-host tools accept it. */
   hostname: Schema.optional(ToolAuthHostname),
+  /**
+   * The provider instance whose configured binary and config dir this sign-in
+   * must use. Absent for a tool with no per-account settings (or a client that
+   * predates the field).
+   */
+  instanceId: Schema.optional(Schema.String),
 });
 export type ToolAuthStartInput = typeof ToolAuthStartInput.Type;
 

@@ -57,6 +57,11 @@ const FAILURE_COPY: Record<ToolAuthFailureKind, CopyBuilder> = {
     nextStep: "Install and connect installs it for you.",
     retryable: true,
   }),
+  configuredBinaryMissing: ({ label }) => ({
+    message: `The ${label} binary set for this account was not found.`,
+    nextStep: "Check the path in provider settings, then try again.",
+    retryable: true,
+  }),
   installFailed: ({ label, machine }) => ({
     message: `Installing ${label} on ${machine} didn't finish.`,
     nextStep: "Retry, or install it from the machine's terminal if it keeps failing.",
