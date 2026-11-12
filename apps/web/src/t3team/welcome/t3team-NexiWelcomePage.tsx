@@ -2,6 +2,7 @@ import type { ScopedProjectRef } from "@t3tools/contracts";
 
 import { NexiWelcomeAccountRow } from "./t3team-NexiWelcomeAccountRow";
 import { NexiWelcomeAgentsSection } from "./t3team-NexiWelcomeAgentsSection";
+import { NexiWelcomeBackend } from "./t3team-NexiWelcomeBackend";
 import { NexiWelcomeCloudPhoneSection } from "./t3team-NexiWelcomeCloudPhoneSection";
 import { NexiWelcomeHeader } from "./t3team-NexiWelcomeHeader";
 import { NexiWelcomeGitHubRow } from "./t3team-NexiWelcomeGitHubRow";
@@ -15,7 +16,17 @@ import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeL
  * `NEXI_WELCOME_SETUP` is on. Start completes onboarding and lands on the normal home /
  * new-thread surface (Add project → CommandPaletteAddProject).
  */
-export function NexiWelcomePage({
+export function NexiWelcomePage(props: {
+  readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
+}) {
+  return (
+    <NexiWelcomeBackend>
+      <NexiWelcomeRows onDone={props.onDone} />
+    </NexiWelcomeBackend>
+  );
+}
+
+function NexiWelcomeRows({
   onDone,
 }: {
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
