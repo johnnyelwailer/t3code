@@ -133,9 +133,9 @@ export function useNexiWelcomeActions(
     cloud,
     cloudOn: cloudFlag.on,
     cloudUsable: cloudFlag.usable,
-    onTurnOnCloud: async () => {
-      if (await cloudFlag.turnOn()) cloud.onCreate();
-    },
+    // Turns the feature on only. A machine started here has no project on it, so a later
+    // thread could not use it without adding the project by hand.
+    onTurnOnCloud: () => void cloudFlag.turnOn(),
     onSetupPhone: () => void phoneFlag.turnOn(),
     onStart: async () => {
       await completeWelcomeSetup();

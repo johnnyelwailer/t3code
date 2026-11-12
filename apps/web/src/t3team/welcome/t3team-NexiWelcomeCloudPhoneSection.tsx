@@ -1,6 +1,4 @@
-import { CloudIcon, HourglassIcon, SmartphoneIcon } from "lucide-react";
-
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { CloudIcon, SmartphoneIcon } from "lucide-react";
 
 import { NexiWelcomePhoneRow } from "./t3team-NexiWelcomePhoneRow";
 import { SecondaryAction, ServiceMark, StatusLabel, WelcomeItem } from "./t3team-welcomeLayout";
@@ -13,8 +11,6 @@ export type NexiWelcomeCloudPhoneSectionProps = {
   readonly cloudUsable: boolean;
   readonly cloudAvailable: boolean;
   readonly cloudConfigured: boolean;
-  readonly cloudPending: boolean;
-  readonly cloudReady: boolean;
   readonly onTurnOnCloud: () => void;
   readonly onSetupPhone: () => void;
   readonly onSkip: () => void;
@@ -27,8 +23,6 @@ export function NexiWelcomeCloudPhoneSection({
   cloudUsable,
   cloudAvailable,
   cloudConfigured,
-  cloudPending,
-  cloudReady,
   onTurnOnCloud,
   onSetupPhone,
   onSkip,
@@ -67,30 +61,6 @@ export function NexiWelcomeCloudPhoneSection({
       title="Cloud sessions"
       status={<StatusLabel status="skipped" label="Skipped" />}
     />
-  ) : cloudReady ? (
-    <WelcomeItem
-      mark={cloudMark}
-      title="Cloud sessions"
-      status={<StatusLabel status="ready" label="Ready" />}
-    />
-  ) : cloudPending ? (
-    <WelcomeItem
-      mark={cloudMark}
-      title="Cloud sessions"
-      status={
-        <span className="inline-flex items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger
-              render={<span className="inline-flex text-muted-foreground" tabIndex={0} />}
-            >
-              <HourglassIcon className="size-3.5" aria-label="A cloud machine is warming up" />
-            </TooltipTrigger>
-            <TooltipPopup>A cloud machine is warming up</TooltipPopup>
-          </Tooltip>
-          <StatusLabel status="ready" label="Ready" />
-        </span>
-      }
-    />
   ) : !cloudUsable ? (
     <WelcomeItem
       mark={cloudMark}
@@ -98,7 +68,18 @@ export function NexiWelcomeCloudPhoneSection({
       description="Cloud sessions are turned off on this computer."
       status={<StatusLabel status="locked" label="Unavailable" />}
     />
-  ) : cloudOn && (!cloudAvailable || !cloudConfigured) ? (
+  ) : !cloudOn ? (
+    <WelcomeItem
+      mark={cloudMark}
+      title="Cloud sessions"
+      action={
+        <div className="flex items-center gap-2">
+          <SecondaryAction onClick={onSkip}>Skip</SecondaryAction>
+          <SecondaryAction onClick={onTurnOnCloud}>Turn on</SecondaryAction>
+        </div>
+      }
+    />
+  ) : !cloudAvailable || !cloudConfigured ? (
     <WelcomeItem
       mark={cloudMark}
       title="Cloud sessions"
@@ -113,12 +94,7 @@ export function NexiWelcomeCloudPhoneSection({
     <WelcomeItem
       mark={cloudMark}
       title="Cloud sessions"
-      action={
-        <div className="flex items-center gap-2">
-          <SecondaryAction onClick={onSkip}>Skip</SecondaryAction>
-          <SecondaryAction onClick={onTurnOnCloud}>Turn on</SecondaryAction>
-        </div>
-      }
+      status={<StatusLabel status="ready" label="Ready" />}
     />
   );
 

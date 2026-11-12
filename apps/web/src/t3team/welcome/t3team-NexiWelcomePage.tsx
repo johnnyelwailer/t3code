@@ -34,17 +34,6 @@ function NexiWelcomeRows({
   const a = useNexiWelcomeActions(onDone);
   const { productName } = useWelcomeWizardBrand();
   const entraSignedIn = a.account.account?.auth._tag === "SignedIn";
-  const cloudSessions = a.cloud.sessions;
-  const cloudReady = cloudSessions.some((session) => session.phase === "ready");
-  const cloudPending =
-    a.cloud.createPending ||
-    cloudSessions.some(
-      (session) =>
-        session.phase === "requested" ||
-        session.phase === "queued" ||
-        session.phase === "preparing" ||
-        session.phase === "starting",
-    );
 
   return (
     <WelcomePageShell title={`Set up ${productName}`}>
@@ -111,8 +100,6 @@ function NexiWelcomeRows({
             cloudUsable={a.cloudUsable}
             cloudAvailable={a.cloud.available}
             cloudConfigured={a.cloud.configured}
-            cloudPending={cloudPending}
-            cloudReady={cloudReady}
             onTurnOnCloud={a.onTurnOnCloud}
             onSetupPhone={a.onSetupPhone}
             onSkip={() => a.skip("cloud")}
