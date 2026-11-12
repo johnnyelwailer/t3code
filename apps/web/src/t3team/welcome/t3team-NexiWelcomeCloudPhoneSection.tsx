@@ -1,11 +1,11 @@
 import { CloudIcon, SmartphoneIcon } from "lucide-react";
 
+import { NexiWelcomePhoneRow } from "./t3team-NexiWelcomePhoneRow";
 import { SecondaryAction, ServiceMark, StatusLabel, WelcomeItem } from "./t3team-welcomeLayout";
 
 export type NexiWelcomeCloudPhoneSectionProps = {
   readonly entraSignedIn: boolean;
   readonly skipped: boolean;
-  readonly cloudEnabled: boolean;
   readonly cloudAvailable: boolean;
   readonly cloudConfigured: boolean;
   readonly cloudPending: boolean;
@@ -18,7 +18,6 @@ export type NexiWelcomeCloudPhoneSectionProps = {
 export function NexiWelcomeCloudPhoneSection({
   entraSignedIn,
   skipped,
-  cloudEnabled,
   cloudAvailable,
   cloudConfigured,
   cloudPending,
@@ -77,13 +76,6 @@ export function NexiWelcomeCloudPhoneSection({
       title="Cloud sessions"
       status={<StatusLabel status="pending" label="Setting up" />}
     />
-  ) : !cloudEnabled ? (
-    <WelcomeItem
-      mark={cloudMark}
-      title="Cloud sessions"
-      description="Turn on Cloud sessions in Settings → Features."
-      status={<StatusLabel status="locked" label="Unavailable" />}
-    />
   ) : !cloudAvailable || !cloudConfigured ? (
     <WelcomeItem
       mark={cloudMark}
@@ -111,11 +103,7 @@ export function NexiWelcomeCloudPhoneSection({
   return (
     <>
       {cloudRow}
-      <WelcomeItem
-        mark={phoneMark}
-        title="Phone"
-        action={<SecondaryAction onClick={onSetupPhone}>Set up</SecondaryAction>}
-      />
+      <NexiWelcomePhoneRow onOpen={onSetupPhone} />
     </>
   );
 }

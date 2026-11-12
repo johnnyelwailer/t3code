@@ -1,7 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import { ProviderInstanceId, type EnvironmentId, type ScopedProjectRef } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
+import type { FeatureFlagKey } from "@t3tools/project-context/t3teamFeatureFlags";
 
 import { useAccount } from "~/account/t3team-useAccounts";
 import { useCloudBrokerStatus } from "~/cloud/t3team-useCloudBrokerStatus";
@@ -45,7 +45,6 @@ function copyOpen(code?: string, url?: string) {
 export function useNexiWelcomeActions(
   onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>,
 ) {
-  const navigate = useNavigate();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const serverConfig = useAtomValue(primaryServerConfigAtom);
   const environmentId = primaryEnvironmentId ?? serverConfig?.environment.environmentId ?? null;
@@ -97,6 +96,14 @@ export function useNexiWelcomeActions(
   }, [onPanelVisibilityChange]);
 
   const cloudFlag = useFeatureFlag("CLOUD_SESSIONS");
+  const phoneFlag = useFeatureFlag("NEXI_MOBILE_BROKER");
+  const setFeatureFlag = useAtomCommand(serverEnvironment.setFeatureFlag);
+  const turnOnFlag = async (key: FeatureFlagKey, on: boolean) => {
+    if (on) return true;
+    if (environmentId === null) return false;
+    const result = await setFeatureFlag({ environmentId, input: { key, enabled: true } });
+    return result._tag === "Success";
+  };
   const roleEnabled = useT3TeamWorkProfileChooserEnabled();
   const packProfiles = useT3TeamPackSetupProfiles() ?? [];
   const storedRole = useWelcomeChosenRole();
@@ -116,15 +123,6 @@ export function useNexiWelcomeActions(
     onCopyAndOpenTool: (tool: "claude" | "codex") => {
       const state = toolStates.get(tool);
       copyOpen(state?.displayCode, state?.url);
-    },
-    onOpenProviderSetup: (instanceId: string) => {
-      void navigate({
-        to: "/settings/providers",
-        search: {
-          ...(environmentId ? { environmentId } : {}),
-          instanceId: ProviderInstanceId.make(instanceId),
-        },
-      });
     },
     jiraEnabled,
     jiraDisabledReason: JIRA_CONNECTIONS_OFF_TEXT,
@@ -146,12 +144,14 @@ export function useNexiWelcomeActions(
     onCopyAndOpenGitHubSecondary: () =>
       copyOpen(ghSecondary.state?.displayCode, ghSecondary.state?.url),
     cloud,
-    cloudFlag,
+    onTurnOnCloud: async () => {
+      if (await turnOnFlag("CLOUD_SESSIONS", cloudFlag)) cloud.onCreate();
+    },
     roleEnabled,
     packProfiles,
     chosenRole,
     onChooseRole: writeT3TeamProjectSetupProfile,
-    onSetupPhone: () => void navigate({ to: "/settings/general" }),
+    onSetupPhone: () => void turnOnFlag("NEXI_MOBILE_BROKER", phoneFlag),
     onStart: async () => {
       await completeWelcomeSetup();
       await onDone(undefined);

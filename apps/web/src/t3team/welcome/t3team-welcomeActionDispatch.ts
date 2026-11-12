@@ -3,7 +3,6 @@ import type { WelcomeAgentAction } from "./t3team-welcomeAgents.logic";
 export type WelcomeToolAuthHandlers = {
   readonly onInstall: (tool: "claude" | "codex") => void;
   readonly onSignIn: (tool: "claude" | "codex") => void;
-  readonly onOpenProviderSetup: (instanceId: string) => void;
 };
 
 /** Resolves which real handler a welcome agent action button should fire. */
@@ -16,12 +15,6 @@ export function dispatchWelcomeAgentAction(
   }
   if (action.kind === "toolAuthSignIn") {
     return { label: "Sign in", run: () => handlers.onSignIn(action.tool) };
-  }
-  if (action.kind === "openProviderSetup") {
-    return {
-      label: "Install",
-      run: () => handlers.onOpenProviderSetup(action.instanceId),
-    };
   }
   return null;
 }
