@@ -17,44 +17,12 @@ import { AwaitingCodePhase, AwaitingOpenPhase, InstallingPhase } from "./t3team-
 import { ToolAuthActionRow, ToolAuthFailureRow } from "./t3team-ToolAuthCardActions";
 import { useToolAuthCardAction } from "./t3team-useToolAuthCardAction";
 import type { ToolAuthToolMeta } from "./t3team-toolAuthTools";
-
-/** Dot color per phase — same token classes `providerStatus.ts` uses. */
-const PHASE_DOT_CLASS: Record<ToolAuthState["phase"], string> = {
-  idle: "bg-muted-foreground/40",
-  installing: "bg-warning",
-  starting: "bg-warning",
-  "awaiting-open": "bg-warning",
-  "awaiting-code": "bg-warning",
-  verifying: "bg-warning",
-  connected: "bg-success",
-  failed: "bg-destructive",
-  expired: "bg-destructive",
-};
-
-function expiryLabel(expiresAt: number | undefined): string | null {
-  if (expiresAt === undefined) return null;
-  const date = new Date(expiresAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return `Expires ${date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
-}
-
-/**
- * `account` and `organization` are independent, both optional, and — per the
- * one real CLI shape verified so far (`claude auth status --json`, which
- * reports only `authMethod`/`apiProvider`) — usually BOTH absent. Degrades to
- * a plain "Connected" rather than a dangling separator or an empty "Signed in
- * as ". Never presents `authMethod`/`apiProvider` as an account — those
- * describe how the tool is authenticated, not who is signed in, and this
- * summary only ever reads the two dedicated fields.
- */
-function connectedSummary(state: ToolAuthState | undefined): string {
-  const account = state?.account?.trim();
-  const organization = state?.organization?.trim();
-  if (account && organization) return `Signed in as ${account} · ${organization}`;
-  if (account) return `Signed in as ${account}`;
-  if (organization) return `Signed in · ${organization}`;
-  return "Connected";
-}
+import {
+  PHASE_DOT_CLASS,
+  connectedSummary,
+  expiryLabel,
+  toolAuthCardActionKind,
+} from "./t3team-ToolAuthCardSummary";
 
 export interface ToolAuthCardProps {
   readonly meta: ToolAuthToolMeta;
@@ -102,7 +70,10 @@ export function ToolAuthCard({
   // when the CLI is already there. An expired credential is the exception — the CLI is plainly
   // installed, so there is nothing to install and this is a plain reconnect.
   const action = useToolAuthCardAction({
-    action: phase === "expired" ? onConnect : (onInstall ?? onConnect),
+    action:
+      toolAuthCardActionKind(phase, state?.reason) === "connect"
+        ? onConnect
+        : (onInstall ?? onConnect),
     phase,
   });
   const pendingLabel = onInstall ? "Starting install…" : "Starting sign-in…";

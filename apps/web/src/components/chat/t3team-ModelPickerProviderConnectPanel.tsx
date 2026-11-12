@@ -53,7 +53,9 @@ export function ModelPickerProviderConnectPanel({
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const environmentId = resolveToolAuthEnvironmentId(threadEnvironmentId, primaryEnvironmentId);
   const states = useToolAuthStates(environmentId);
-  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
+  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId, {
+    instanceId: entry.instanceId,
+  });
   const signInDescription = useSignInDescriptionForEnvironment(environmentId);
   const machineLabel = useToolAuthMachineLabel(environmentId);
   const availability = useToolAuthEnvironmentAvailability(environmentId);
