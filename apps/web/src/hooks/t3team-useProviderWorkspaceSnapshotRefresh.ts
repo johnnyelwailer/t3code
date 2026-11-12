@@ -1,36 +1,48 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
+  isProviderWorkspaceSnapshotCurrent,
   PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
   type EnvironmentId,
   type ProviderInstanceId,
   type ServerProvider,
 } from "@t3tools/contracts";
-import {
-  hasCompleteProviderWorkspaceSnapshot,
-  hasCurrentProviderWorkspaceSnapshot,
-} from "@t3tools/client-runtime/providerSkills";
+import { hasCompleteProviderWorkspaceSnapshot } from "@t3tools/client-runtime/providerSkills";
 
 import { serverEnvironment } from "~/state/server";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { useStableCallback } from "./useStableCallback";
 
 const WORKSPACE_SNAPSHOT_RETRY_COOLDOWN_MS = 10_000;
+
+// Upstream un-exported `hasCurrentProviderWorkspaceSnapshot` from client-runtime when it moved the
+// scan into an atom family; this hook keeps its own check on the contracts predicate.
+function hasCurrentProviderWorkspaceSnapshot(
+  provider: ServerProvider | null | undefined,
+  cwd: string | null | undefined,
+  nowMs: number,
+): boolean {
+  const snapshot = cwd ? provider?.workspaceSnapshots?.find((entry) => entry.cwd === cwd) : null;
+  return Boolean(
+    snapshot &&
+    !snapshot.slashCommandsPending &&
+    isProviderWorkspaceSnapshotCurrent(snapshot, nowMs),
+  );
+}
 
 /**
  * Keeps the selected provider's workspace snapshot for one cwd scanned and current, so a
  * composer's `/` menu sees that workspace's skills and slash commands the way the server sees
  * them. One scan request per TTL window, with a retry cooldown when the server has not finished
- * the scan yet; when a previously complete snapshot disappears the TTL entry resets so the
- * rescan request is not suppressed. `revalidationKey` re-checks the TTL whenever it changes; the
- * composers pass their prompt text, so typing after the TTL has lapsed triggers a fresh scan.
+ * the scan yet; losing a snapshot lifts both so the next check rescans at once. Returns a check
+ * the composers run when the user types, so typing after the TTL has lapsed triggers a fresh scan.
  */
 export function useProviderWorkspaceSnapshotRefresh(input: {
   readonly provider: ServerProvider | null;
   readonly instanceId: ProviderInstanceId | null;
   readonly cwd: string | null;
   readonly environmentId: EnvironmentId | null;
-  readonly revalidationKey: string;
 }) {
-  const { provider, instanceId, cwd, environmentId, revalidationKey } = input;
+  const { provider, instanceId, cwd, environmentId } = input;
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -42,7 +54,7 @@ export function useProviderWorkspaceSnapshotRefresh(input: {
     notBefore: number;
   } | null>(null);
   const workspaceRefreshScopeKey =
-    cwd && instanceId ? `${environmentId}:${instanceId}:${cwd}` : null;
+    cwd && instanceId && environmentId !== null ? `${environmentId}:${instanceId}:${cwd}` : null;
   const workspaceSlashCommandsPending =
     provider?.workspaceSnapshots?.some(
       (snapshot) => snapshot.cwd === cwd && snapshot.slashCommandsPending === true,
@@ -62,30 +74,36 @@ export function useProviderWorkspaceSnapshotRefresh(input: {
     );
     return () => clearTimeout(timeout);
   }, [workspaceRefreshRetry, workspaceRefreshScopeKey, workspaceSlashCommandsPending]);
-  const hadWorkspaceSnapshotRef = useRef(false);
-  useEffect(() => {
-    const hasWorkspaceSnapshot = hasCompleteProviderWorkspaceSnapshot(provider, cwd);
-    if (hadWorkspaceSnapshotRef.current && !hasWorkspaceSnapshot) {
-      workspaceRefreshKeyRef.current = null;
+  const hasWorkspaceSnapshot = hasCompleteProviderWorkspaceSnapshot(provider, cwd);
+  const [hadWorkspaceSnapshot, setHadWorkspaceSnapshot] = useState(hasWorkspaceSnapshot);
+  const [workspaceSnapshotLossCount, setWorkspaceSnapshotLossCount] = useState(0);
+  if (hadWorkspaceSnapshot !== hasWorkspaceSnapshot) {
+    setHadWorkspaceSnapshot(hasWorkspaceSnapshot);
+    if (!hasWorkspaceSnapshot) {
+      setWorkspaceSnapshotLossCount((count) => count + 1);
       setWorkspaceRefreshRetry(null);
     }
-    hadWorkspaceSnapshotRef.current = hasWorkspaceSnapshot;
-  }, [cwd, provider]);
-  useEffect(() => {
-    if (!cwd || !instanceId || environmentId === null) return;
-    const key = `${environmentId}:${instanceId}:${cwd}`;
-    const now = Date.now();
+  }
+  const lastWorkspaceSnapshotLossRef = useRef(workspaceSnapshotLossCount);
+  const refreshWorkspaceSnapshotIfStale = (
+    now: number,
+    key: string | null,
+    retry: { key: string; notBefore: number } | null,
+    snapshotLossCount: number,
+  ) => {
+    if (lastWorkspaceSnapshotLossRef.current !== snapshotLossCount) {
+      lastWorkspaceSnapshotLossRef.current = snapshotLossCount;
+      workspaceRefreshKeyRef.current = null;
+    }
+    if (key === null || !cwd || !instanceId || environmentId === null) return;
     const lastRequest = workspaceRefreshKeyRef.current;
     if (
       lastRequest?.key === key &&
       now - lastRequest.requestedAt < PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS
     )
       return;
-    if (hasCurrentProviderWorkspaceSnapshot(provider, cwd, now)) {
-      setWorkspaceRefreshRetry(null);
-      return;
-    }
-    const retry = workspaceRefreshRetry;
+    // A pending retry needs no clearing here: its cooldown lapses long before the TTL.
+    if (hasCurrentProviderWorkspaceSnapshot(provider, cwd, now)) return;
     if (retry?.key === key && now < retry.notBefore) return;
     const request = { key, requestedAt: now };
     workspaceRefreshKeyRef.current = request;
@@ -101,21 +119,30 @@ export function useProviderWorkspaceSnapshotRefresh(input: {
       environmentId,
       input: { instanceId, cwd },
     }).then((result) => {
-      const hasWorkspaceSnapshot =
+      const refreshedSnapshot =
         result._tag === "Success" &&
         hasCompleteProviderWorkspaceSnapshot(
-          result.value.providers.find((provider) => provider.instanceId === instanceId),
+          result.value.providers.find((candidate) => candidate.instanceId === instanceId),
           cwd,
         );
-      if (!hasWorkspaceSnapshot) retryLater();
+      if (!refreshedSnapshot) retryLater();
     }, retryLater);
-  }, [
-    cwd,
-    environmentId,
-    instanceId,
-    provider,
-    refreshProviders,
-    revalidationKey,
-    workspaceRefreshRetry,
-  ]);
+  };
+  const refreshWorkspaceSnapshotOnChange = useEffectEvent(refreshWorkspaceSnapshotIfStale);
+  useEffect(() => {
+    refreshWorkspaceSnapshotOnChange(
+      Date.now(),
+      workspaceRefreshScopeKey,
+      workspaceRefreshRetry,
+      workspaceSnapshotLossCount,
+    );
+  }, [workspaceRefreshScopeKey, workspaceRefreshRetry, workspaceSnapshotLossCount]);
+  return useStableCallback(() =>
+    refreshWorkspaceSnapshotIfStale(
+      Date.now(),
+      workspaceRefreshScopeKey,
+      workspaceRefreshRetry,
+      workspaceSnapshotLossCount,
+    ),
+  );
 }

@@ -58,7 +58,7 @@ Each session's `events()` is single-consumer and yields `ProviderAdapterV2Event`
 - The host re-stamps `driver`. An undecodable event is dropped and logged; an undecodable
   `turn.terminal` (or a throwing iterable) fails the session and the run settles `failed`.
 - End every turn with exactly one `turn.terminal {providerThreadId, providerTurnId, runOrdinal,
-status, failure, threadDisposition}`. `status: "failed"` also needs `failureItemOrdinal` and an
+  status, failure, threadDisposition}`. `status: "failed"` also needs `failureItemOrdinal` and an
   `OrchestrationV2ProviderFailure {class, message, code, retryable, resetAt?}`.
 - Put the turn's answer in its last assistant message: a delegated task's result is the child's
   last assistant message, and a workflow `askAgent` step reads the run's last substantive one.

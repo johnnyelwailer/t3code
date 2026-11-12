@@ -45,7 +45,10 @@ export function callT3TeamWorkflowResumeTool(input: {
     );
   }
 
-  return foldResult(handlers.resumeWorkflowRun(readArgs(input.toolArgs)), okResult, (message) =>
-    errorResult(`Failed to run ${mcpToolNameOf(T3TEAM_WORKFLOW_RESUME_TOOL_ID)}: ${message}`),
+  return foldResult(
+    handlers.resumeWorkflowRun(readArgs(input.toolArgs)),
+    (value) => ({ ...okResult(value), ...(value.ok ? {} : { isError: true }) }),
+    (message) =>
+      errorResult(`Failed to run ${mcpToolNameOf(T3TEAM_WORKFLOW_RESUME_TOOL_ID)}: ${message}`),
   );
 }

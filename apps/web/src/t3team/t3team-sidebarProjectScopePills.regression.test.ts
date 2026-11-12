@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - regression guard reads component source from disk.
 /**
  * Static regression guard: the sidebar renders the one-click project scope
- * pills when `t3teamProjectScopePillsEnabled` is on (the distribution default).
+ * pills when `t3team.projectScopePills` is on (the distribution default).
  *
  * The 2026-09-18 upstream sync replaced the sidebar header with
  * `SidebarThreadHeader` and dropped the pills' JSX, leaving only the import and
@@ -26,8 +26,10 @@ describe("Sidebar project scope pills regression guard", () => {
   });
 
   it("wires selection to the shared sidebar scope", () => {
+    // The sidebar scope is multi-select: the pills show the single scoped project as active
+    // (none while several are scoped) and a pick replaces the whole scope with that one project.
     expect(source).toMatch(
-      /<T3TeamSidebarProjectScopePills[\s\S]*?activeScopeKey=\{projectScopeKey\}[\s\S]*?onSelectScope=\{setProjectScopeKey\}/,
+      /<T3TeamSidebarProjectScopePills[\s\S]*?activeScopeKey=\{t3teamScope\.group\?\.projectKey \?\? null\}[\s\S]*?onSelectScope=\{\(scopeKey\) =>\s*setProjectScopeKeys\(scopeKey === null \? \[\] : \[scopeKey\]\)\s*\}/,
     );
   });
 

@@ -4,7 +4,7 @@ import { SidebarGroup, SidebarMenu, SidebarMenuItem } from "~/t3team/components/
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { ProjectSortMenu } from "./t3team-ProjectSortMenu";
 import { ProjectRowWithTickets } from "./t3team-ProjectSidebarProjectRow";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { resolveProjectStatusIndicator, type TicketViewMode } from "./t3team-projectSidebarShared";
 import type { ProjectSidebarProps } from "./t3team-projectSidebarTypes";
 
@@ -85,9 +85,7 @@ export function ProjectSidebarProjectsSection({
   onThreadPreviewCountChange,
   ticketViewMode,
 }: ProjectSidebarProjectsSectionProps) {
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
+  const activityLabelsEnabled = useActivityLabelsEnabled();
   return (
     <SidebarGroup>
       <div className="group/projects-header mb-1 flex items-center justify-between pl-2 pr-1.5">

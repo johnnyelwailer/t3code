@@ -33,6 +33,8 @@ export interface WorkflowRunSummary {
   readonly name: string;
   /** Who started the run. This GHE ignores `actor=` on the list query, so filter on this. */
   readonly actor: string;
+  /** The actor's numeric id; session.yml names a non-broker run's snapshot owner after it. */
+  readonly actorId?: number;
   /** Which attempt of the run this is; a re-run keeps `id` and bumps this. Absent reads as 1. */
   readonly runAttempt?: number;
 }
@@ -46,6 +48,8 @@ export interface WorkflowJobStep {
   readonly name: string;
   readonly status: string;
   readonly conclusion: string | null;
+  /** When the step began (ISO 8601); absent for a step that has not started or a reply without it. */
+  readonly startedAt?: string | null;
 }
 
 /**
@@ -161,11 +165,50 @@ export function jobStepsRequest(
   };
 }
 
+export function getRunRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.getRun",
+    path: repoApiPath(ref, `actions/runs/${runId}`),
+  };
+}
+
 export function cancelRunRequest(ref: CloudSessionRepoRef, runId: number): GitHubActionsRequest {
   return {
     kind: "rest",
     operation: "cloudSession.cancelRun",
     method: "POST",
     path: repoApiPath(ref, `actions/runs/${runId}/cancel`),
+  };
+}
+
+/**
+ * One page of the fleet's Actions caches whose key starts with `keyPrefix` (the API's `key`
+ * filter). The caller bounds the pagination.
+ */
+export function listCachesRequest(
+  ref: CloudSessionRepoRef,
+  page: number,
+  keyPrefix: string,
+): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.listCaches",
+    path: repoApiPath(
+      ref,
+      `actions/caches?per_page=100&page=${page}&key=${encodeURIComponent(keyPrefix)}`,
+    ),
+  };
+}
+
+export function deleteCacheRequest(
+  ref: CloudSessionRepoRef,
+  cacheId: number,
+): GitHubActionsRequest {
+  return {
+    kind: "rest",
+    operation: "cloudSession.deleteCache",
+    method: "DELETE",
+    path: repoApiPath(ref, `actions/caches/${cacheId}`),
   };
 }

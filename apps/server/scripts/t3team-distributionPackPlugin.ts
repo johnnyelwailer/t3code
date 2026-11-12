@@ -31,9 +31,11 @@ import * as NodePath from "node:path";
 import {
   createDistributionImportResolver,
   isBareSpecifier,
+  isDistributionImporter,
 } from "./t3team-distributionImportResolver.ts";
 
 import { distributionPersistenceModule } from "./t3team-distributionPersistenceModule.ts";
+import { distributionThemeExports } from "./t3team-distributionThemesModule.ts";
 
 const VIRTUAL_ID = "\0@t3code/distribution";
 const SPECIFIER = "@t3code/distribution";
@@ -57,6 +59,7 @@ type DistributionManifest = {
   readonly packs?: readonly string[];
   readonly assetsDir?: string;
   readonly theme?: string;
+  readonly themes?: readonly string[];
   readonly branding?: Record<string, string>;
 };
 
@@ -111,36 +114,13 @@ const inlineAssets = (dir: string, assetsDir: string): Record<string, string> =>
   return out;
 };
 
-/** Read the distribution's theme JSON (raw; its brand paths are resolved at activation time). */
-const readTheme = (dir: string, themeRelPath: string): unknown => {
-  const themePath = NodePath.resolve(dir, themeRelPath);
-  if (!NodeFS.existsSync(themePath)) {
-    throw new Error(`[t3code/distribution] theme not found: ${themePath}`);
-  }
-  return JSON.parse(NodeFS.readFileSync(themePath, "utf8"));
-};
-
 const stubModule = (): string =>
   "export const distributionPersistence = [];\n" +
   "export const activateDistribution = undefined;\n" +
   "export const distributionAssets = {};\n" +
   "export const distributionTheme = undefined;\n" +
+  "export const distributionAlternateThemes = [];\n" +
   "export const distributionBranding = undefined;\n";
-
-/** Fail the build when the theme references a brand asset that is not in the inlined asset map. */
-const assertThemeBrandInlined = (theme: unknown, assets: Record<string, string>): void => {
-  const brand = (theme as { readonly brand?: Record<string, string | undefined> } | undefined)
-    ?.brand;
-  if (!brand) return;
-  const missing = Object.values(brand).filter(
-    (value) => value !== undefined && !value.startsWith("data:") && !assets[value],
-  );
-  if (missing.length > 0) {
-    throw new Error(
-      `[t3code/distribution] theme brand assets are missing from the inlined asset map: ${missing.join(", ")}`,
-    );
-  }
-};
 
 const distributionModule = (dir: string): string => {
   const manifest = readManifest(dir);
@@ -150,8 +130,6 @@ const distributionModule = (dir: string): string => {
     throw new Error(`[t3code/distribution] entry not found: ${entryPath}`);
   }
   const assets = manifest.assetsDir ? inlineAssets(dir, manifest.assetsDir) : {};
-  const theme = manifest.theme ? readTheme(dir, manifest.theme) : undefined;
-  if (theme !== undefined) assertThemeBrandInlined(theme, assets);
   const branding = manifest.branding ?? {};
   const entryUrl = entryPath.split(NodePath.sep).join("/");
   // The entry may export `activate` as the default or a named export — the runtime pack loader
@@ -161,7 +139,7 @@ const distributionModule = (dir: string): string => {
     `import * as __entry from ${JSON.stringify(entryUrl)};\n` +
     `export const activateDistribution = __entry.default ?? __entry.activate;\n` +
     `export const distributionAssets = ${JSON.stringify(assets)};\n` +
-    `export const distributionTheme = ${theme === undefined ? "undefined" : JSON.stringify(theme)};\n` +
+    distributionThemeExports(dir, manifest, assets) +
     `export const distributionBranding = ${JSON.stringify(branding)};\n`
   );
 };
@@ -172,15 +150,17 @@ const distributionModule = (dir: string): string => {
  * (symlink-resolved) path — e.g. /private/tmp on macOS — so canonicalize here or the prefix check
  * in `resolveId` compares different spellings of the same path.
  */
+const realpathOrSelf = (path: string): string => {
+  try {
+    return NodeFS.realpathSync.native(path);
+  } catch {
+    return path;
+  }
+};
+
 const distributionDir = (): string | undefined => {
   const dir = process.env.T3CODE_DISTRIBUTION?.trim();
-  if (!dir) return undefined;
-  const resolved = NodePath.resolve(dir);
-  try {
-    return NodeFS.realpathSync.native(resolved);
-  } catch {
-    return resolved;
-  }
+  return dir ? realpathOrSelf(NodePath.resolve(dir)) : undefined;
 };
 
 export function t3teamDistributionPackPlugin(): {
@@ -189,16 +169,20 @@ export function t3teamDistributionPackPlugin(): {
   load(id: string): string | null;
 } {
   const resolvePackImport = createDistributionImportResolver();
+  // `vp pack` runs with the server package as cwd; the t3code workspace root is two levels up.
+  const workspaceRoot = realpathOrSelf(NodePath.resolve(process.cwd(), "..", ".."));
   return {
     name: "t3code-distribution",
     resolveId(source, importer) {
       if (source === SPECIFIER) return VIRTUAL_ID;
       const dir = distributionDir();
       if (!dir || !importer || !isBareSpecifier(source)) return null;
-      // Only imports made by distribution modules (the compiled-in pack), never imports from the
-      // server's own source, which already resolve in this workspace.
+      // Only imports made by distribution modules (the compiled-in pack and the distribution files
+      // it reaches), never imports from the server's own source, which already resolve here.
       const importerPath = NodePath.resolve(importer);
-      if (!importerPath.startsWith(dir + NodePath.sep)) return null;
+      if (!isDistributionImporter({ importerPath, distributionDir: dir, workspaceRoot })) {
+        return null;
+      }
       return resolvePackImport(source, importerPath);
     },
     load(id) {

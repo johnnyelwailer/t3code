@@ -290,6 +290,40 @@ describe("ToolAuthService", () => {
     }),
   );
 
+  it.effect("publish pushes a state the flow never produced onto the stream", () =>
+    // How the feature-gate refusal reaches a card: `ws.ts` hands the gate this `publish`, so a
+    // click that spawns no CLI still moves the card off `idle`.
+    Effect.gen(function* () {
+      const homeDir = makeTempHome();
+      try {
+        const { service, ptyAdapter } = yield* makeService(homeDir);
+        const events: ToolAuthService.ToolAuthServiceStreamEvent[] = [];
+        yield* service.attachStream((event) =>
+          Effect.sync(() => {
+            events.push(event);
+          }),
+        );
+        yield* waitFor(Effect.sync(() => events.length >= 1));
+
+        yield* service.publish({ tool: "fake", phase: "failed", reason: "featureDisabled" });
+
+        yield* waitFor(
+          Effect.sync(() =>
+            events.some(
+              (event) =>
+                event.type === "update" &&
+                event.state.phase === "failed" &&
+                event.state.reason === "featureDisabled",
+            ),
+          ),
+        );
+        expect(ptyAdapter.processes).toHaveLength(0);
+      } finally {
+        removeTempHome(homeDir);
+      }
+    }),
+  );
+
   describe("gh (GHE device flow)", () => {
     /** Flushes cooperative fibers so auto-Enter writes scheduled after a state update land. */
     const flush = Effect.gen(function* () {
@@ -300,10 +334,15 @@ describe("ToolAuthService", () => {
       Effect.gen(function* () {
         const homeDir = makeTempHome();
         try {
-          const { service, ptyAdapter } = yield* makeService(homeDir, {
-            tools: ["gh"],
-            checkBinaryAvailable: () => Effect.succeed(true),
-          });
+          // A finished sign-in defers to `gh auth status`; stub it so the machine's own gh
+          // login never decides the outcome (a signed-out CI runner never reads connected).
+          const { service, ptyAdapter } = yield* makeService(
+            homeDir,
+            { tools: ["gh"], checkBinaryAvailable: () => Effect.succeed(true) },
+            stubProbeRunner(
+              `${GH.hostname!}\n  ✓ Logged in to ${GH.hostname!} account octocat (keyring)\n  - Active account: true\n`,
+            ),
+          );
           const state = yield* service.start("gh");
           expect(state.phase).toBe("starting");
           const process = ptyAdapter.processes[0]!;

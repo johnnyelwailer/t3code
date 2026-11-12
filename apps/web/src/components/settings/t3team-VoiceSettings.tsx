@@ -1,5 +1,6 @@
 import type { VoiceTranscriberSettings } from "@t3tools/contracts";
 
+import { useFeatureFlag } from "../../t3team/t3team-useFeatureFlag";
 import { SettingsSection } from "./settingsLayout";
 import { VoiceHotkeySettingRow } from "./t3team-VoiceHotkeySettingRow";
 import { VoiceTranscriberSettingRows } from "./t3team-VoiceTranscriberSettingRows";
@@ -12,6 +13,7 @@ export function T3TeamVoiceSettings({
   transcriber: VoiceTranscriberSettings;
   onTranscriberChange: (patch: Partial<VoiceTranscriberSettings>) => void;
 }) {
+  const voiceSessionsEnabled = useFeatureFlag("VOICE_SESSIONS");
   if (
     typeof window === "undefined" ||
     window.desktopBridge?.prepareVoiceTranscriber === undefined
@@ -20,7 +22,7 @@ export function T3TeamVoiceSettings({
   }
   return (
     <SettingsSection id="voice" title="Voice">
-      <VoiceHotkeySettingRow />
+      {voiceSessionsEnabled ? <VoiceHotkeySettingRow /> : null}
       <VoiceTranscriberSettingRows transcriber={transcriber} onChange={onTranscriberChange} />
     </SettingsSection>
   );

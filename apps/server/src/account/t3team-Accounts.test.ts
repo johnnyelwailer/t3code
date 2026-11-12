@@ -41,6 +41,8 @@ interface IssuerFake {
   readonly requests: Array<{ readonly path: string; readonly params: URLSearchParams }>;
   /** Replies to the token endpoint, consumed in order; the last one repeats. */
   readonly tokenReplies: Array<Reply>;
+  /** Runs as a token request arrives, before its reply: another instance acting meanwhile. */
+  readonly onTokenRequest?: (params: URLSearchParams) => void;
 }
 
 const issuerLayer = (fake: IssuerFake) =>
@@ -51,7 +53,9 @@ const issuerLayer = (fake: IssuerFake) =>
         const body =
           request.body._tag === "Uint8Array" ? new TextDecoder().decode(request.body.body) : "";
         const path = new URL(request.url).pathname;
-        fake.requests.push({ path, params: new URLSearchParams(body) });
+        const params = new URLSearchParams(body);
+        fake.requests.push({ path, params });
+        if (path.endsWith("/token")) fake.onTokenRequest?.(params);
         const reply: Reply = path.endsWith("/devicecode")
           ? {
               status: 200,
@@ -93,7 +97,9 @@ const memorySecrets = (initial: Record<string, string> = {}) => {
     const value = values.get(name);
     return value === undefined ? undefined : new TextDecoder().decode(value);
   };
-  return { layer, read };
+  const write = (name: string, value: string) =>
+    void values.set(name, new TextEncoder().encode(value));
+  return { layer, read, write };
 };
 
 /** A machine without a browser: the device code is the only way in, and no real browser opens. */
@@ -318,6 +324,34 @@ it.layer(NodeServices.layer)("Accounts", (it) => {
     }).pipe(Effect.provide(accountsWith(fake, secrets)));
   });
 
+  it.effect("a fresh-token request refreshes even while the normal access token is cached", () => {
+    const fake: IssuerFake = {
+      requests: [],
+      tokenReplies: [
+        {
+          status: 200,
+          body: { access_token: "cached-token", refresh_token: "rt-2", expires_in: 3600 },
+        },
+        {
+          status: 200,
+          body: { access_token: "fresh-token", refresh_token: "rt-3", expires_in: 3600 },
+        },
+      ],
+    };
+    return Effect.gen(function* () {
+      const accounts = yield* Accounts;
+      assert.equal(yield* accounts.accessToken("acme", "broker"), "cached-token");
+      assert.equal(yield* accounts.accessToken("acme", "broker"), "cached-token");
+      assert.equal(fake.requests.length, 1);
+      assert.equal(
+        yield* accounts.accessToken("acme", "broker", { forceRefresh: true }),
+        "fresh-token",
+      );
+      assert.equal(fake.requests.length, 2);
+      assert.equal(fake.requests[1]?.params.get("refresh_token"), "rt-2");
+    }).pipe(Effect.provide(accountsWith(fake, memorySecrets({ [SECRET]: "rt-1" }))));
+  });
+
   it.effect(
     "a revoked refresh token self-heals into 'sign in again' and forgets the dead token",
     () => {
@@ -469,6 +503,80 @@ it.layer(NodeServices.layer)("Accounts", (it) => {
       assert.deepEqual((yield* restarted.status).auth, { _tag: "SignedIn", name: "PJ" });
       yield* restarted.signOut;
       assert.equal(secrets.read("account.acme.name"), undefined);
+    });
+  });
+  it.effect("a refused refresh that is not a dead grant (429) keeps the sign-in (#1307)", () => {
+    const secrets = memorySecrets({ [SECRET]: "rt-1", "account.acme.name": "PJ" });
+    return Effect.gen(function* () {
+      const auth = yield* acme;
+      const failure = yield* Effect.flip(auth.accessToken);
+      assert.equal(failure.reason, "unavailable");
+      assert.equal(secrets.read(SECRET), "rt-1", "the grant is kept");
+      assert.deepEqual((yield* auth.status).auth, { _tag: "SignedIn", name: "PJ" });
+    }).pipe(
+      Effect.provide(
+        accountsWith(
+          { requests: [], tokenReplies: [{ status: 429, body: { error: "slow_down" } }] },
+          secrets,
+        ),
+      ),
+    );
+  });
+
+  it.effect(
+    "an update overlap: a grant another instance rotated meanwhile is redeemed, not signed out (#1307)",
+    () => {
+      const secrets = memorySecrets({ [SECRET]: "rt-1" });
+      const fake: IssuerFake = {
+        requests: [],
+        tokenReplies: [
+          { status: 400, body: { error: "invalid_grant" } },
+          {
+            status: 200,
+            body: { access_token: accessTokenFor("PJ"), refresh_token: "rt-3", expires_in: 3600 },
+          },
+        ],
+        // The old app (still quitting during the update) redeems rt-1 first and stores rt-2.
+        onTokenRequest: (params) => {
+          if (params.get("refresh_token") === "rt-1") secrets.write(SECRET, "rt-2");
+        },
+      };
+      return Effect.gen(function* () {
+        const auth = yield* acme;
+        assert.equal(yield* auth.accessToken, accessTokenFor("PJ"));
+        const sent = fake.requests
+          .filter((r) => r.path.endsWith("/token"))
+          .map((r) => r.params.get("refresh_token"));
+        assert.deepEqual(sent, ["rt-1", "rt-2"]);
+        assert.equal(secrets.read(SECRET), "rt-3");
+        assert.equal((yield* auth.status).auth._tag, "SignedIn");
+      }).pipe(Effect.provide(accountsWith(fake, secrets)));
+    },
+  );
+
+  it.effect("the sign-in survives an update: the next version starts signed in (#1307)", () => {
+    const secrets = memorySecrets({ [SECRET]: "rt-1" });
+    const fake: IssuerFake = {
+      requests: [],
+      tokenReplies: [
+        {
+          status: 200,
+          body: { access_token: accessTokenFor("PJ"), refresh_token: "rt-2", expires_in: 3600 },
+        },
+        { status: 503, body: {} },
+      ],
+    };
+    return Effect.gen(function* () {
+      // The old version refreshes once and quits.
+      yield* acme.pipe(
+        Effect.flatMap((old) => old.accessToken),
+        Effect.provide(accountsWith(fake, secrets)),
+      );
+      // The updated version starts on the same store while the issuer is briefly down.
+      const updated = yield* acme.pipe(Effect.provide(accountsWith(fake, secrets)));
+      assert.deepEqual((yield* updated.status).auth, { _tag: "SignedIn", name: "PJ" });
+      assert.equal((yield* Effect.flip(updated.accessToken)).reason, "unavailable");
+      assert.equal(secrets.read(SECRET), "rt-2", "still signed in with the rotated grant");
     });
   });
 });

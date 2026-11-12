@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
-import { MAX_KEYBINDING_VALUE_LENGTH } from "./keybindings.ts";
+/** Same limit as `KeybindingValue` in keybindings.ts, which upstream keeps module-private. */
+const MAX_VOICE_HOTKEY_KEY_LENGTH = 64;
 
 /** Menu action the main process sends when the global voice hotkey is pressed (toggle). */
 export const VOICE_HOTKEY_TOGGLE_ACTION = "voice-toggle";
@@ -11,7 +12,7 @@ export const VOICE_HOTKEY_TOGGLE_ACTION = "voice-toggle";
  * would take that key away from every other app.
  */
 export const VoiceHotkeyChord = Schema.Struct({
-  key: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(MAX_KEYBINDING_VALUE_LENGTH)),
+  key: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(MAX_VOICE_HOTKEY_KEY_LENGTH)),
   metaKey: Schema.Boolean,
   ctrlKey: Schema.Boolean,
   shiftKey: Schema.Boolean,

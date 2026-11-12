@@ -1,56 +1,29 @@
 /**
- * Inline ad-hoc widget block (Epic 24 ephemeral tier).
+ * Inline ad-hoc widget block (Epic 24 ephemeral tier): a sandboxed srcdoc iframe carrying the
+ * sendPrompt/callTool bridge and CSP `connect-src 'none'`.
  *
- * - `format: "html"` with an `htmlRender` ref (shim onto upstream HtmlRender) → HtmlRenderFrame
- *   when the thread environment is known and the widget has no tool bridge to drive.
- * - Capability widgets (tools allowlist) and legacy html without htmlRender → sandboxed srcdoc
- *   iframe so the sendPrompt/callTool bridge and CSP `connect-src 'none'` stay intact.
- * - svg and other formats stay on the srcdoc widget tier.
+ * `t3_show_widget` publishes every widget that does not need the bridge through upstream HTML
+ * renders, which the timeline shows from the tool call (HtmlRenderFrame). This block renders the
+ * rest: bridge widgets, failed publishes, workflow `thread.showWidget` output, and pack frames.
  */
 
 import type { ScopedThreadRef, T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
-import { readHtmlRenderReference } from "@t3tools/shared/htmlRender";
 
-import { HtmlRenderFrame } from "~/components/chat/HtmlRenderFrame";
+import { T3TeamRichChoiceWidgetBlock } from "~/t3team/chat/t3team-RichChoiceWidgetBlock";
 import { useT3TeamWidgetBlockController } from "~/t3team/chat/t3team-useWidgetBlockController";
-
-function widgetUsesHtmlRenderShim(widget: T3TeamMessageWidgetAttachment["widget"]): boolean {
-  if (widget.format !== "html") return false;
-  if (readHtmlRenderReference(widget.htmlRender) === undefined) return false;
-  // Keep the srcdoc + postMessage bridge when the widget can call tools.
-  const tools = widget.capabilities?.tools ?? [];
-  return tools.length === 0;
-}
 
 export function T3TeamWidgetBlock(props: {
   readonly widget: T3TeamMessageWidgetAttachment["widget"];
   readonly threadRef: ScopedThreadRef | null;
 }) {
-  const { widget, threadRef } = props;
-  const useShim = widgetUsesHtmlRenderShim(widget) && threadRef !== null;
-  const htmlRender = useShim ? readHtmlRenderReference(widget.htmlRender) : undefined;
-
-  if (useShim && htmlRender !== undefined && threadRef !== null) {
-    return (
-      <div
-        className="w-full overflow-hidden rounded-xl border border-border/55 bg-background/65 p-4"
-        data-widget-id={widget.widgetId}
-        data-widget-format={widget.format}
-        data-widget-html-shim="true"
-      >
-        <HtmlRenderFrame
-          environmentId={threadRef.environmentId}
-          htmlRender={htmlRender}
-          threadRef={threadRef}
-        />
-      </div>
-    );
-  }
-
-  return <T3TeamWidgetSrcdocBlock widget={widget} threadRef={threadRef} />;
+  return props.widget.format === "rich-choice" ? (
+    <T3TeamRichChoiceWidgetBlock {...props} />
+  ) : (
+    <T3TeamIframeWidgetBlock {...props} />
+  );
 }
 
-function T3TeamWidgetSrcdocBlock(props: {
+function T3TeamIframeWidgetBlock(props: {
   readonly widget: T3TeamMessageWidgetAttachment["widget"];
   readonly threadRef: ScopedThreadRef | null;
 }) {
@@ -71,11 +44,4 @@ function T3TeamWidgetSrcdocBlock(props: {
       />
     </div>
   );
-}
-
-/** Exported for tests: whether the block would choose the HtmlRenderFrame shim path. */
-export function t3teamWidgetBlockUsesHtmlRenderShim(
-  widget: T3TeamMessageWidgetAttachment["widget"],
-): boolean {
-  return widgetUsesHtmlRenderShim(widget);
 }

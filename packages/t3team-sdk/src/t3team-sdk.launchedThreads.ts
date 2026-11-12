@@ -127,7 +127,6 @@ export function createLaunchedThreadPrimitives(deps: {
   return { launchThread, setRunFacts };
 }
 
-// --- Engine API (imported form) ------------------------------------------------
 /** Launch (or find, by key) a top-level thread this run addresses. Requires `"launch"`. */
 export function launchThread(opts: LaunchThreadOpts): Promise<LaunchedThread> {
   return fromRun<LaunchedThreadPrimitives["launchThread"]>("launchThread")(opts);

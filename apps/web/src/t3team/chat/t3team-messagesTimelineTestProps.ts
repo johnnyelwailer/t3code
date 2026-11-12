@@ -5,7 +5,6 @@ import type { LegendListRef } from "@legendapp/list/react";
 export function buildT3TeamMessagesTimelineTestProps() {
   return {
     isWorking: false,
-    activeTurnInProgress: false,
     activeTurnStartedAt: null,
     listRef: createRef<LegendListRef | null>(),
     latestRun: null,
@@ -29,6 +28,7 @@ export function buildT3TeamMessagesTimelineTestProps() {
     runs: [],
     anchorMessageId: null,
     contentInsetEndAdjustment: 0,
+    emptyPlaceholderInset: 0,
     // Upstream (2026-08) made live-follow an explicit prop rather than an internal default;
     // these snapshots assert rendered content, so following the live edge is the neutral value.
     liveFollowEnabled: true,

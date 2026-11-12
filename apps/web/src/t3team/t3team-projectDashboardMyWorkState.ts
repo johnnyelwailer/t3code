@@ -1,4 +1,5 @@
 import { useT3TeamPersistedRouteState } from "~/t3team/hooks/t3team-usePersistedRouteState";
+import { offeredMyWorkLens, useMyWorkViewFlags } from "~/t3team/t3team-myWorkViewFlags";
 
 export type {
   PersistedProjectDashboardMyWorkState,
@@ -41,8 +42,9 @@ import {
   writePersistedProjectDashboardMyWorkState,
 } from "./t3team-projectDashboardMyWorkStatePersistence";
 
+/** `state.lens` is the lens on screen: a saved lens whose feature is off reads as the List lens. */
 export function useProjectDashboardMyWorkState(projectId: string) {
-  return useT3TeamPersistedRouteState({
+  const persisted = useT3TeamPersistedRouteState({
     storageKey: getProjectDashboardMyWorkStorageKey(projectId),
     parseSearch: parseProjectDashboardMyWorkRouteSearch,
     readPersistedState: readPersistedProjectDashboardMyWorkState,
@@ -53,4 +55,7 @@ export function useProjectDashboardMyWorkState(projectId: string) {
     areRouteSearchEqual: areProjectDashboardMyWorkRouteSearchEqual,
     stripRouteSearchParams: stripProjectDashboardMyWorkSearchParams,
   });
+  const lens = offeredMyWorkLens(persisted.state.lens, useMyWorkViewFlags());
+  const state = lens === persisted.state.lens ? persisted.state : { ...persisted.state, lens };
+  return { state, setState: persisted.setState };
 }

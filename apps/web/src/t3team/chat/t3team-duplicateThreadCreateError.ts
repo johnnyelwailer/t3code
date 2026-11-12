@@ -17,7 +17,11 @@
  * the Cause shape.
  */
 
-const DUPLICATE_THREAD_CREATE_ERROR_FRAGMENT = "already exists and cannot be created twice.";
+// The v1 decider invariant, and the v2 orchestrator's `OrchestratorThreadAlreadyExistsError`.
+const DUPLICATE_THREAD_CREATE_ERROR_FRAGMENTS = [
+  "already exists and cannot be created twice.",
+  "already exists. Use a new thread id.",
+];
 
 // `project.create`/`project.meta.update` invariants: a work-source binding already claimed by
 // another active project (`requireProjectSourceBindingUnclaimed`), or a workspace root already
@@ -80,7 +84,7 @@ function causeIncludesFragment(error: unknown, fragments: readonly string[]): bo
 
 /** True when `error` (in any wrapper shape) reports a `thread.create` duplicate-thread invariant. */
 export function isDuplicateThreadCreateError(error: unknown): boolean {
-  return causeIncludesFragment(error, [DUPLICATE_THREAD_CREATE_ERROR_FRAGMENT]);
+  return causeIncludesFragment(error, DUPLICATE_THREAD_CREATE_ERROR_FRAGMENTS);
 }
 
 /**

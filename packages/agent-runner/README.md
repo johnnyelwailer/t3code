@@ -78,7 +78,7 @@ Design rules from the doc are enforced in code, not just comments:
   somewhere the workspace-scoped guard structurally cannot reach — not
   merely somewhere it's told not to serve. `readOnly` defaults to `true`.
   `buildDockerRunArgs` mounts each entry as its own `-v hostPath:
-containerPath:<ro|rw>`, independent of and never colliding with the
+  containerPath:<ro|rw>`, independent of and never colliding with the
   workspace mount.
 - **Validation happens at the trust boundary, not just at the CLI.**
   `startSandbox()` — the one function every real caller (the CLI via

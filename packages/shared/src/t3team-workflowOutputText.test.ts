@@ -15,9 +15,9 @@ describe("renderWorkflowRecordAsDisplayText", () => {
     ).toBe("All checks passed.");
   });
 
-  it("humanizes flat scalar and scalar-array fields inline, as before", () => {
+  it("humanizes flat fields as separate markdown paragraphs", () => {
     const output = render({ decision: "approved", markers: ["ready", "healthy"] });
-    expect(output).toBe("**Decision:** approved\n**Markers:** ready, healthy");
+    expect(output).toBe("**Decision:** approved\n\n**Markers:** ready, healthy");
   });
 
   it("renders an array of flat objects instead of dropping it", () => {

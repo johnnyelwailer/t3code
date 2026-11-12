@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
 import ThreadSidebar from "~/components/Sidebar";
+import type { SidebarRouteReveal } from "~/components/sidebar/routeReveal";
 import { useThreadShells } from "~/state/entities";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { isTeamShellEnvironment } from "~/t3team/t3team-upstreamRouteBridge";
@@ -22,6 +23,12 @@ import { setT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigat
 export function InboxSidebar() {
   const navigate = useNavigate();
   const threadShells = useThreadShells();
+  // Upstream's AppSidebarLayout owns this for its sidebar; the lens hosts the sidebar itself, so
+  // it owns the reveal state (scroll-to-open-thread bookkeeping) for as long as the lens stays mounted.
+  const [routeReveal] = useState<SidebarRouteReveal>(() => ({
+    observedKey: null,
+    pendingKey: null,
+  }));
 
   // The handler runs only inside click events, so it reads the latest shells
   // through a ref; re-registering per shells change would be pure churn.
@@ -68,7 +75,7 @@ export function InboxSidebar() {
   // rows beneath it.
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <ThreadSidebar />
+      <ThreadSidebar routeReveal={routeReveal} />
     </div>
   );
 }

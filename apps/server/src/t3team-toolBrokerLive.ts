@@ -15,6 +15,7 @@ import { ServerEnvironmentIdentity } from "./environment/ServerEnvironment.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
+import { makeLiveAgentNotices } from "./t3team-agentNoticesLive.ts";
 import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
@@ -24,10 +25,12 @@ import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts"
 import { makeChangeRequestToolsForThread } from "./t3team-toolBrokerChangeRequestLive.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
+import { makeWorkItemReadToolHandlers } from "./t3team-workItemReadLive.ts";
 import { makeMyWorkToolHandlers } from "./t3team-toolBrokerMyWorkLive.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeT3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
+import { withPublishedViewContext } from "./t3team-toolBrokerViewContext.ts";
 import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeT3TeamDraftMutationPublisherBinder } from "./t3team-draftMutationPublish.ts";
@@ -67,6 +70,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   const resourcePressure = Option.getOrUndefined(
     yield* Effect.serviceOption(ResourcePressureMonitor),
   );
+  const agentNotices = yield* makeLiveAgentNotices(threads, providerRegistry);
   // This server's own EnvironmentId: the children `environments` op marks it as the default.
   const serverEnvironmentIdentity = Option.getOrUndefined(
     yield* Effect.serviceOption(ServerEnvironmentIdentity),
@@ -94,6 +98,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     loadThreadProject,
   });
 
+  const workItemReadTools = yield* makeWorkItemReadToolHandlers({ loadThreadProject });
+
   const bindSession = makeBindSession({
     contextStore,
     genericThreadToolIds: T3TEAM_GENERIC_THREAD_TOOL_IDS,
@@ -101,6 +107,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     providerRegistry,
     usageLimitSources,
     resourcePressure,
+    agentNotices,
     contextRefresh,
     bindShowWidget: yield* makeT3TeamWidgetShowBinder(),
     bindPublishDraft: yield* makeT3TeamDraftMutationPublisherBinder(),
@@ -109,9 +116,13 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         ? undefined
         : (threadId, messageId) =>
             mailbox.find(threadId, messageId).pipe(Effect.mapError((error) => error.operation)),
-    loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
+    loadThreadView: withPublishedViewContext(
+      makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
+      contextStore,
+    ),
     manageChildren,
     myWorkTools,
+    workItemReadTools,
     recipeToolsForThread: makeRecipeToolHandlers({
       fileSystem,
       path,

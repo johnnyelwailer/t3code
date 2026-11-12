@@ -25,12 +25,18 @@ globalThis.ResizeObserver ??= class ResizeObserver {
   disconnect() {}
 };
 
-vi.mock("~/lib/composerPathSearchState", () => ({
-  useComposerPathSearch: () => ({ entries: [], error: null, isPending: false }),
+vi.mock(import("~/state/queries"), async (original) => ({
+  ...(await original()),
+  useComposerPathSearch: (() => ({
+    entries: [],
+    error: null,
+    isPending: false,
+    searchedTarget: { environmentId: null, cwd: null, query: null },
+  })) as never,
 }));
 vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 
-import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
+import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditorTiptap";
 import { KickoffComposerEditor } from "~/t3team/composer/t3team-KickoffComposerEditor";
 import { composerSuggestionOptionId } from "~/components/chat/ComposerCommandMenu";
 import type { T3TeamComposerMenuSelectionEffect } from "~/t3team/composer/t3team-composerMenuSelection";

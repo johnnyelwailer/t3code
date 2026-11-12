@@ -20,23 +20,32 @@ import { cn } from "~/lib/utils";
 export type ProjectFaviconProject = Pick<
   EnvironmentProject,
   "environmentId" | "workspaceRoot" | "title" | "faviconPath" | "projectIcon"
->;
+> & {
+  /** When a cloud checkout adopts the user's project, load the favicon from that environment. */
+  readonly faviconEnvironmentId?: EnvironmentProject["environmentId"];
+  readonly faviconWorkspaceRoot?: string;
+};
 export function ProjectFavicon(input: {
   project: ProjectFaviconProject;
   className?: string | undefined;
   fallbackIcon?: ComponentType<{ className?: string }>;
 }) {
   const { project } = input;
-  const src = useAtomValue(
-    projectFaviconUrlAtom({
-      environmentId: project.environmentId,
-      cwd: project.workspaceRoot,
-      faviconPath: project.faviconPath,
-    }),
-  );
   if (project.projectIcon) {
     return <ProjectIconGlyph icon={project.projectIcon} className={input.className} />;
   }
+  return <AutomaticProjectFavicon {...input} />;
+}
+
+function AutomaticProjectFavicon(input: Parameters<typeof ProjectFavicon>[0]) {
+  const { project } = input;
+  const src = useAtomValue(
+    projectFaviconUrlAtom({
+      environmentId: project.faviconEnvironmentId ?? project.environmentId,
+      cwd: project.faviconWorkspaceRoot ?? project.workspaceRoot,
+      faviconPath: project.faviconPath,
+    }),
+  );
   const FallbackIcon = input.fallbackIcon ?? FolderCodeIcon;
 
   if (!src || isProjectFaviconFallbackUrl(src)) {
@@ -50,8 +59,8 @@ export function ProjectFavicon(input: {
   }
 
   const cacheKey = getProjectFaviconResourceKey(
-    project.environmentId,
-    project.workspaceRoot,
+    project.faviconEnvironmentId ?? project.environmentId,
+    project.faviconWorkspaceRoot ?? project.workspaceRoot,
     project.faviconPath,
   );
 

@@ -14,7 +14,7 @@ import type * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import type * as ExternalLauncher from "../process/externalLauncher.ts";
 import { NO_BROWSER, runAccountBrowserSignIn } from "./t3team-AccountBrowserSignIn.ts";
 import { AccountError } from "./t3team-AccountError.ts";
-import { makeAccountOAuthClient } from "./t3team-AccountOAuth.ts";
+import { makeAccountOAuthClient, type Tokens } from "./t3team-AccountOAuth.ts";
 import { makeAccountTokenStore } from "./t3team-AccountTokenStore.ts";
 
 /**
@@ -137,7 +137,10 @@ export const makeAccountSession = Effect.fn("account.session.make")(function* (
     yield* tokens.clear;
   });
 
-  const accessToken = (resource: string): Effect.Effect<string, AccountError> =>
+  const accessToken = (
+    resource: string,
+    options?: { readonly forceRefresh?: boolean },
+  ): Effect.Effect<string, AccountError> =>
     Effect.gen(function* () {
       if (!Object.hasOwn(account.resources, resource)) {
         return yield* new AccountError({
@@ -146,35 +149,46 @@ export const makeAccountSession = Effect.fn("account.session.make")(function* (
         });
       }
       const hit = yield* tokens.fresh(resource);
-      if (Option.isSome(hit)) return hit.value;
+      if (!options?.forceRefresh && Option.isSome(hit)) return hit.value;
       // One refresh at a time: two concurrent refreshes with one rotating grant would make the loser
       // look "rejected" and sign the user out right after the winner stored the new grant.
       return yield* refreshLock.withPermits(1)(
         Effect.gen(function* () {
           const raced = yield* tokens.fresh(resource);
-          if (Option.isSome(raced)) return raced.value;
+          if (!options?.forceRefresh && Option.isSome(raced)) return raced.value;
           const refresh = yield* tokens.grant;
           if (Option.isNone(refresh)) return yield* signInRequired();
           const before = yield* Ref.get(generation);
-          const granted = yield* oauth.refresh(refresh.value, resource).pipe(
-            Effect.catch((failure) =>
-              failure === "unreachable"
-                ? Effect.fail(
-                    new AccountError({
-                      reason: "unavailable",
-                      message: `Could not reach the ${account.label} sign-in.`,
+          const unavailable = new AccountError({
+            reason: "unavailable",
+            message: `Could not reach the ${account.label} sign-in.`,
+          });
+          const redeem = (grant: string, retried: boolean): Effect.Effect<Tokens, AccountError> =>
+            oauth.refresh(grant, resource).pipe(
+              Effect.catch((failure) =>
+                failure === "unreachable"
+                  ? Effect.fail(unavailable)
+                  : Effect.gen(function* () {
+                      // Another instance of this install (the old app during an update, a second
+                      // backend) may have rotated the grant after it was read here. The store then
+                      // holds a newer grant: redeem that one, and never delete it.
+                      const stored = yield* tokens.grant;
+                      if (Option.isSome(stored) && stored.value !== grant) {
+                        if (!retried) return yield* redeem(stored.value, true);
+                        return yield* unavailable;
+                      }
+                      yield* Effect.logWarning("account sign-in rejected by the issuer", {
+                        account: account.id,
+                      });
+                      // The stored grant itself is spent or revoked: self-heal into "sign in again".
+                      yield* signOut;
+                      return yield* signInRequired(
+                        `Your ${account.label} sign-in expired. Sign in again.`,
+                      );
                     }),
-                  )
-                : // The grant is spent or revoked: self-heal into "sign in again".
-                  signOut.pipe(
-                    Effect.flatMap(() =>
-                      Effect.fail(
-                        signInRequired(`Your ${account.label} sign-in expired. Sign in again.`),
-                      ),
-                    ),
-                  ),
-            ),
-          );
+              ),
+            );
+          const granted = yield* redeem(refresh.value, false);
           if ((yield* Ref.get(generation)) !== before) return yield* signInRequired();
           return yield* tokens.store(resource, granted);
         }),

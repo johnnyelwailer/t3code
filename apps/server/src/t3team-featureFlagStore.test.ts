@@ -4,8 +4,10 @@ import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import {
+  listFeatureFlags,
   readFeatureFlag,
   replaceFeatureFlagDatabaseValues,
+  replaceFeatureFlagPresetValues,
 } from "@t3tools/project-context/t3teamFeatureFlags";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isMachineSetupEnabled } from "./cloud/t3team-machineSetupFlag.ts";
@@ -14,11 +16,7 @@ import {
   PROJECT_STATE_DIR,
   resolveProjectStateDirName,
 } from "@t3tools/project-context/t3teamProjectStateDir";
-import {
-  initializeFeatureFlags,
-  registeredFeatureFlags,
-  setFeatureFlag,
-} from "./t3team-featureFlagStore.ts";
+import { initializeFeatureFlags, setFeatureFlag } from "./t3team-featureFlagStore.ts";
 
 const noEnv = () => undefined;
 afterEach(() => replaceFeatureFlagDatabaseValues(new Map()));
@@ -64,43 +62,43 @@ describe("feature flag layering", () => {
     expect(isWorkProfileChooserEnabled(() => "off")).toBe(false);
   });
 
-  test("registers the Admin switches and freezes state-dir selection for this process", () => {
+  test("state dir follows env and the release preset, never a user value", () => {
     const startup = PROJECT_STATE_DIR;
     replaceFeatureFlagDatabaseValues(new Map());
     expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
     expect(resolveProjectStateDirName(() => "")).toBe(".nexi");
     expect(resolveProjectStateDirName(() => "off")).toBe(".t3team");
     replaceFeatureFlagDatabaseValues(new Map([["NEXI_STATE_DIR", false]]));
+    expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
+    replaceFeatureFlagPresetValues(new Map([["NEXI_STATE_DIR", false]]));
     expect(resolveProjectStateDirName(noEnv)).toBe(".t3team");
     expect(resolveProjectStateDirName(() => "1")).toBe(".nexi");
-    replaceFeatureFlagDatabaseValues(new Map([["NEXI_STATE_DIR", true]]));
-    expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
-    expect(resolveProjectStateDirName(() => "0")).toBe(".t3team");
+    replaceFeatureFlagPresetValues(new Map());
     expect(PROJECT_STATE_DIR).toBe(startup);
-    expect(registeredFeatureFlags).toEqual([
-      expect.objectContaining({ key: "MAIN_REPOSITORY", requiresRestart: false }),
-      expect.objectContaining({
-        key: "NEXI_STATE_DIR",
-        requiresRestart: true,
-        description: expect.stringContaining("next server start"),
-      }),
-      expect.objectContaining({ key: "MACHINE_SETUP", requiresRestart: false }),
-      expect.objectContaining({
-        key: "WORK_PROFILE_CHOOSER",
-        requiresRestart: false,
-        defaultEnabled: false,
-      }),
-      expect.objectContaining({
-        key: "MYWORK_RIGHT_PANEL",
-        requiresRestart: false,
-        defaultEnabled: true,
-      }),
-      expect.objectContaining({
-        key: "TRANSIENT_AUTO_RESUME",
-        requiresRestart: false,
-        defaultEnabled: true,
-      }),
-    ]);
+    // Looked up by key, not by position: a flag added to the registry must not break this test.
+    const registered = new Map(listFeatureFlags().map((flag) => [flag.key, flag]));
+    expect(registered.get("MAIN_REPOSITORY")).toMatchObject({ requiresRestart: false });
+    expect(registered.get("NEXI_STATE_DIR")).toMatchObject({
+      requiresRestart: true,
+      userToggleable: false,
+    });
+    expect(registered.get("MACHINE_SETUP")).toMatchObject({ requiresRestart: false });
+    expect(registered.get("WORK_PROFILE_CHOOSER")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: false,
+    });
+    expect(registered.get("MYWORK_RIGHT_PANEL")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: true,
+    });
+    expect(registered.get("TRANSIENT_AUTO_RESUME")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: true,
+    });
+    expect(registered.get("GHE_REPOSITORY_CATALOG")).toMatchObject({
+      requiresRestart: false,
+      defaultEnabled: true,
+    });
   });
 });
 
@@ -115,12 +113,18 @@ it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("feature_flags SQL se
       assert.equal(readFeatureFlag("MAIN_REPOSITORY", noEnv), true);
       yield* setFeatureFlag("MAIN_REPOSITORY", false);
       assert.equal(readFeatureFlag("MAIN_REPOSITORY", noEnv), false);
-      yield* setFeatureFlag("NEXI_STATE_DIR", true);
+      yield* setFeatureFlag("MACHINE_SETUP", false);
       replaceFeatureFlagDatabaseValues(new Map());
       yield* initializeFeatureFlags();
-      assert.equal(readFeatureFlag("NEXI_STATE_DIR", noEnv), true);
+      assert.equal(readFeatureFlag("MACHINE_SETUP", noEnv), false);
       const rows = yield* sql<{ readonly key: string }>`SELECT key FROM feature_flags`;
       assert.equal(rows.length, 2);
+      yield* setFeatureFlag("MACHINE_SETUP", null);
+      assert.equal(readFeatureFlag("MACHINE_SETUP", noEnv), true);
+      const locked = yield* Effect.flip(setFeatureFlag("NEXI_STATE_DIR", false));
+      assert.equal(locked.category, "locked");
+      const unknown = yield* Effect.flip(setFeatureFlag("NOT_A_FLAG", true));
+      assert.equal(unknown.category, "unknown");
     }),
   );
 });

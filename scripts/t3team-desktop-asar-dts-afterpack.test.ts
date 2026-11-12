@@ -30,6 +30,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { vi } from "vite-plus/test";
 
 const repoScriptsPackageJson = NodePath.join(import.meta.dirname, "package.json");
 const asar = NodeModule.createRequire(repoScriptsPackageJson)("@electron/asar") as {
@@ -105,6 +106,13 @@ const buildInputAsar = async (dest: string): Promise<void> => {
       unpacked: true,
       stat: { size: Buffer.byteLength(UNPACKED_BODY), mode: 0o644 },
       streamGenerator: readableFrom(UNPACKED_BODY),
+    },
+    {
+      path: "big/helper",
+      type: "file",
+      unpacked: true,
+      stat: { size: Buffer.byteLength(EXEC_BODY), mode: 0o755 },
+      streamGenerator: readableFrom(EXEC_BODY),
     },
   ]);
 };
@@ -204,6 +212,11 @@ it.layer(NodeServices.layer)("desktop-asar-dts-afterpack", (it) => {
           NodeFS.readFileSync(path.join(extractDir, "big", "unpacked.bin"), "utf8"),
           UNPACKED_BODY,
         );
+        // The asar header records no executable flag for unpacked entries.
+        assert.equal(
+          NodeFS.statSync(path.join(`${outputAsar}.unpacked`, "big", "helper")).mode & 0o777,
+          0o755,
+        );
 
         // The regression: read the symlink THROUGH the real filesystem link. A
         // wrong (double-resolved) target either throws ENOENT or reads the wrong
@@ -216,5 +229,23 @@ it.layer(NodeServices.layer)("desktop-asar-dts-afterpack", (it) => {
         );
         assert.equal(NodeFS.readFileSync(linkPath, "utf8"), TARGET_BODY);
       }),
+  );
+
+  it.effect("runs upstream's server compile cache hook after the re-injection", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "desktop-asar-dts-chain-" });
+      const inputAsar = path.join(scratch, "input.asar");
+      yield* Effect.promise(() => buildInputAsar(inputAsar));
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      yield* Effect.addFinalizer(() => Effect.sync(() => log.mockRestore()));
+      yield* runAfterPackHook(inputAsar);
+      const lines = log.mock.calls.map((call) => String(call[0]));
+      const reinjected = lines.findIndex((line) => line.startsWith("[desktop-asar-dts]"));
+      const cached = lines.findIndex((line) => line.startsWith("[server-compile-cache]"));
+      assert.isAtLeast(reinjected, 0);
+      assert.isAbove(cached, reinjected);
+    }),
   );
 });

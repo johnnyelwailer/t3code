@@ -1,6 +1,4 @@
 import tailwindcss from "@tailwindcss/vite";
-import babel from "@rolldown/plugin-babel";
-import { reactCompilerPreset } from "@vitejs/plugin-react";
 import type { StorybookConfig } from "@storybook/react-vite";
 import * as NodeURL from "node:url";
 import * as NodeModule from "node:module";
@@ -159,10 +157,8 @@ const config: StorybookConfig = {
     return mergeConfig(config, {
       plugins: [
         t3teamStorybookResolver(srcDir),
-        babel({
-          parserOpts: { plugins: ["typescript", "jsx"] },
-          presets: [reactCompilerPreset()],
-        }),
+        // The React Compiler comes with the inherited app config (`react({ compiler: true })`,
+        // upstream's native compiler since #20114), so no Babel pass is added here.
         tailwindcss(),
       ],
       resolve: {

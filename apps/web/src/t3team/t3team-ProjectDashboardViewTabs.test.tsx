@@ -32,6 +32,12 @@ vi.mock("@tanstack/react-router", () => ({
     ),
 }));
 
+// The control spans the board and the planning space, so both features are on here.
+vi.mock("~/t3team/t3team-myWorkViewFlags", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/t3team/t3team-myWorkViewFlags")>()),
+  useMyWorkViewFlags: () => ({ digest: true, board: true, planningSpace: true }),
+}));
+
 const { useProjectDashboardViewTab } =
   await import("~/t3team/hooks/t3team-useProjectDashboardViewTab");
 const { ProjectMyWorkViewSwitch } = await import("~/t3team/t3team-ProjectMyWorkViewSwitch");

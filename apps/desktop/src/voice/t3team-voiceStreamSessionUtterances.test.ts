@@ -6,11 +6,15 @@ import {
   createVoiceStreamSession,
   type VoiceStreamTranscription,
 } from "./t3team-voiceStreamSession.ts";
-import { FRAME_MS, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
+import { createNearFieldGate } from "./t3team-voiceNearFieldGate.ts";
+import { FRAME_MS, fakeSilero, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
 
 type Call = { readonly language: string; readonly ms: number };
 
-function setup(options: { language?: string } = {}) {
+/** The 1000 ms pause plus one Silero step: a pause is noticed on the next look. */
+const PAUSE_MS = 1_300;
+
+function setup(options: { language?: string; nearField?: boolean } = {}) {
   const events: Array<{ type: string; [key: string]: unknown }> = [];
   const waiting: Array<(result: VoiceStreamTranscription) => void> = [];
   const calls: Call[] = [];
@@ -21,8 +25,10 @@ function setup(options: { language?: string } = {}) {
       calls.push({ language, ms: samplesToMs(pcm16FromBase64(pcm16Base64).length) });
       return new Promise((resolve) => waiting.push(resolve));
     },
+    detect: fakeSilero,
     emit: (event) => events.push(event),
     log: vi.fn(),
+    ...(options.nearField === true ? { nearField: createNearFieldGate() } : {}),
   });
   const feed = (amplitude: number, ms: number) => {
     for (let at = 0; at < ms; at += FRAME_MS) session.push(tone(FRAME_MS, amplitude));
@@ -36,12 +42,29 @@ function setup(options: { language?: string } = {}) {
   const speakAndPause = (speechMs = 1200) => {
     feed(ROOM, 600);
     feed(SPEECH, speechMs);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
   };
   return { session, events, calls, waiting, feed, answer, ofType, speakAndPause };
 }
 
 describe("a recording session across utterances", () => {
+  it("never writes down a voice far quieter than the speaker, and keeps the speaker after it", async () => {
+    const { calls, feed, answer, ofType } = setup({ nearField: true });
+    feed(ROOM, 600);
+    feed(2 * SPEECH, 1200);
+    feed(ROOM, PAUSE_MS);
+    await answer("mine");
+    feed(0.032, 1200);
+    feed(ROOM, PAUSE_MS);
+    expect(calls).toHaveLength(1);
+    expect(ofType("auto-commit")).toHaveLength(1);
+    expect(ofType("partial").at(-1)).toMatchObject({ text: "" });
+    feed(SPEECH, 1200);
+    feed(ROOM, PAUSE_MS);
+    await answer("mine again");
+    expect(ofType("utterance").map((event) => event.text)).toEqual(["mine", "mine again"]);
+  });
+
   it("writes an utterance down on its pause and keeps listening", async () => {
     const { session, events, calls, feed, answer, ofType, speakAndPause } = setup();
     speakAndPause();
@@ -66,10 +89,10 @@ describe("a recording session across utterances", () => {
     const { calls, feed, answer, ofType } = setup();
     feed(ROOM, 600);
     feed(SPEECH, 1200);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     await answer("first");
     feed(SPEECH, 2600);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     expect(ofType("auto-commit")).toHaveLength(2);
     await answer("partial of the second", "en");
     await answer("second");
@@ -83,7 +106,7 @@ describe("a recording session across utterances", () => {
     feed(ROOM, 600);
     feed(SPEECH, 2500);
     expect(calls).toHaveLength(1);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     expect(calls).toHaveLength(1);
     await answer("partial");
     expect(calls).toHaveLength(2);
@@ -97,7 +120,7 @@ describe("a recording session across utterances", () => {
     const { feed, answer, ofType } = setup();
     feed(ROOM, 600);
     feed(SPEECH, 2500);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     await answer("late partial");
     expect(ofType("partial")).toEqual([]);
     await answer("final");
@@ -111,10 +134,10 @@ describe("a recording session across utterances", () => {
       feed(SPEECH, 2500);
       await answer("worte", "de");
     }
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     await answer("worte", "de");
     feed(SPEECH, 1200);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     expect(calls.at(-1)!.language).toBe("de");
   });
 
@@ -122,7 +145,7 @@ describe("a recording session across utterances", () => {
     const { session, waiting, feed, ofType } = setup();
     feed(ROOM, 600);
     feed(SPEECH, 1200);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     waiting.shift()?.({ ok: false, message: "worker died" });
     for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
     expect(ofType("utterance-failed")).toEqual([
@@ -140,7 +163,7 @@ describe("ending a session", () => {
     const { session, feed, answer, ofType } = setup();
     feed(ROOM, 600);
     feed(SPEECH, 1200);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     feed(SPEECH, 1500);
     const finishing = session.finish();
     await answer("first");
@@ -164,6 +187,8 @@ describe("ending a session", () => {
     feed(ROOM, 600);
     feed(SPEECH, 1200);
     const finishing = session.finish();
+    // `finish` takes one last look with Silero before it queues the tail's pass.
+    for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
     waiting.shift()?.({ ok: false, message: "gpu lost" });
     expect(await finishing).toEqual({ text: "", committed: 0, error: "gpu lost" });
   });
@@ -172,7 +197,7 @@ describe("ending a session", () => {
     const { session, events, feed, answer } = setup();
     feed(ROOM, 600);
     feed(SPEECH, 1200);
-    feed(ROOM, 1100);
+    feed(ROOM, PAUSE_MS);
     session.stop();
     await answer("late");
     expect(events.some((event) => event.type === "utterance")).toBe(false);

@@ -1,6 +1,6 @@
 import { CloudSessionFailedError } from "@t3tools/contracts";
 
-import type * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import type * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 
 /**
  * The error boundary between GitHub's API and the cloud session surface: every

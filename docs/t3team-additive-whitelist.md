@@ -22,7 +22,50 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261015` → the 2026-10-15 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261102b` → the 2026-11-02 sync branch after it absorbed the
+  10 upstream commits (`d01b92c061..7cf653bca6`) and fork main `8c8e38d5a5` that landed after the
+  first merge. Grandfathered: everything in `t3team/fork-baseline-20261102` below, plus those
+  merges. The fork's Android extra-tab slot on top of upstream's reworked floating tabs is
+  re-applied after this baseline, so it is measured.
+- Before that: `t3team/fork-baseline-20261102` → the 2026-11-02 upstream sync merge commit
+  `7b0e95cbeb` (351 upstream commits absorbed, `79f1fadfc6..d01b92c061`, on top of fork main
+  `8d16c7f944`). Grandfathered: upstream's tree (managed policy, child approvals in parent
+  threads, migration 077 at fork id 127) plus the conflict resolutions that port the fork
+  features into it (47 conflicted files). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261031` → the 2026-10-31 upstream sync merge commit
+  `c9bb891a26` (429 upstream commits absorbed, `52f4ec6f9..79f1fadfc6`, on top of fork main
+  `20ca81b84a`). Grandfathered: upstream's tree (side chats beside the main thread, #26901)
+  plus the conflict resolutions that port the fork features into it (74 conflicted files).
+  Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261029` → the 2026-10-29 upstream sync merge commit
+  `862e690b2c` (906 upstream commits absorbed, `60b35a1ee0..52f4ec6f9`, on top of fork main
+  `81f7e41d0e`). Grandfathered: upstream's tree plus the conflict resolutions that port the fork
+  features into it (208 conflicted files). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261022` → the 2026-10-22 upstream sync merge commit
+  `08997b085a` (203 upstream commits absorbed, `4f651cb10d..60b35a1ee0`, on top of
+  `t3team/fork-baseline-20261021`). Grandfathered: upstream's tree (ChatView/ChatComposer/
+  MessagesTimeline/Sidebar split into hooks and row files, pnpm 12) plus the conflict resolutions
+  that port the fork features into those files. Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261021` → the 2026-10-21 upstream sync merge commit
+  `634351795a` (upstream `4f651cb10d`).
+- Before that: `t3team/fork-baseline-20261019` → the 2026-10-19 upstream sync merge commit
+  `d583ffcede` (642 upstream commits absorbed, `79ad856b4e..1451e7cb23`, on top of
+  `t3team/fork-baseline-20261017`). Grandfathered: upstream's tree (React Compiler rules on every
+  web file #20791, tests moved to `.browser.test.tsx`, migrations 063/064) plus the conflict
+  resolutions in that merge. Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261017` → the 2026-10-17 upstream sync merge commit
+  `f794c02535` (133 upstream commits absorbed, `3962ae8586..79ad856b4e`, fork main `86c966fe1d`
+  already contained). Grandfathered: upstream's tree (React Compiler conversion, ChatView /
+  Sidebar / right-panel splits, comment prune #19559) plus the conflict resolutions in that merge,
+  which re-apply the fork's extension points onto upstream's new structure. Post-merge fixes stay
+  measured.
+- Before that: `t3team/fork-baseline-20261016` → the 2026-10-16 upstream sync merge commit
+  `4b11a68c8b` (95 upstream commits absorbed, `339179f50a..3962ae8586`, onto fork main
+  `86c966fe1d`). Grandfathered: upstream's tree plus the conflict resolutions in that merge
+  (including the `t3team-GitHubApi` facade over upstream's GitHubRest/GitHubRequestPolicy and the
+  fork coalesce/search-quota delta relocated into `GitHubRest.ts`). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261015b` → `0bfee31044` (second 2026-10-15 upstream merge).
+- Before that: `t3team/fork-baseline-20261015` → the 2026-10-15 upstream sync merge commit
   `9c38e942cd` (107 upstream commits absorbed, `11fd54fcbb..e536bfd33b`, after merging fork main
   `1d15b3ecfc`). Grandfathered: upstream's tree plus the conflict resolutions in that merge.
   Post-merge fixes on the sync branch stay measured.
@@ -99,6 +142,13 @@ git push origin t3team/fork-baseline-YYYYMMDD
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
 ## Allowed Modified Upstream Files
+
+### Upstream sync 2026-10-22
+
+- `apps/server/src/cli/thread.ts`
+  - Upstream's new `t3 thread send --wait` reads `runId`, which the fork's mailbox delivery leaves absent (no run starts yet); `--wait` is skipped when there is no run to wait on.
+- `docs/t3team-mvp/12-profiles-and-skill-packs.md`, `docs/t3team-mvp/40-code-and-team-modes.md`, `packages/agent-runner/README.md`
+  - Fork-owned docs without the prefix; reformatted only, by upstream's newer `vp fmt` (CI `vp check`).
 
 ### Client-only thread icon (voice V1 item 8, PR #606)
 
@@ -206,7 +256,7 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 - `apps/server/src/persistence/Migrations.ts`
   - Register the additive t3team migration that adds `projection_thread_messages.t3team_ext_json`.
 - `apps/server/src/persistence/Migrations.test.ts`
-  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14).
+  - Upstream's V2 guard tests hard-code ids 54/55/56; this fork registers upstream 055 at 84 (`FIRST_V2_MIGRATION_ID`), so the same assertions are expressed relative to that constant. Unavoidable: with literal ids they assert the bug that refused pre-sync fork databases (2026-10-14). Refusal is asserted for upstream-owned ids only (`UPSTREAM_V2_MIGRATION_IDS`); fork-owned ledger gaps must still start.
 - `apps/server/src/persistence/Services/ProjectionThreadMessages.ts`
   - Extend the projection-thread message schema with optional `t3teamExt` so the persistence layer can carry the namespaced message extension.
 - `packages/contracts/src/settings.ts`
@@ -455,19 +505,32 @@ New unprefixed upstream files (upstream's modules, taken verbatim):
 - `apps/desktop/scripts/main-process-bundle.test.mjs` — fixture writes the `src/voice/t3team-whisperWorker.ts` worker entry that the desktop `pack` config now builds.
 - `third-party-licenses.config.json` — notice overrides for the `@fugood/node-whisper-*` platform binaries pulled in by `@fugood/whisper.node`.
 
+## `t3_show_widget` maps to upstream HTML renders (2026-10-13)
+
+- `packages/shared/src/t3McpToolPresentation.ts` — one import and one spread of
+  `T3TEAM_MCP_TOOLS` (`t3team-mcpToolPresentation.ts`) into the T3 tool inventory, so fork tools
+  on the `t3-code` server get upstream's cards, summaries and ACP identity recovery.
+- `packages/shared/src/toolOutput.ts` — `htmlRenderFromToolItem` gates on the tool's
+  `html-render` summary action instead of the literal `html_render` name, so `t3_show_widget`
+  results render inline (and are cleaned up on thread deletion) through upstream's path.
+
+## 2026-10-21 upstream sync (upstream 4f651cb10d)
+
+- `apps/server/src/persistence/Migrations/063_DropUnusedV1Projections.test.ts` — the held upstream 063 test stays skipped, with the quarantine marker the new lint rule asks for.
+- `apps/server/src/ws.test.ts` — the RPC-boundary test mocks the fork's handler services (`CloudSessionService`, `ProjectMachineDiscovery`, `ResourcePressureMonitor`, `ToolAuthService`).
+- `apps/web/src/components/pullRequest/PullRequestSummaryTab.browser.test.tsx` — the fork's pack-view test moved onto upstream's disposable `render` screen.
+- `apps/web/src/composerDraftStore.test.ts` — non-null assertion for the fork's nullable draft image `file`.
+- `apps/web/src/hooks/useLogicalProjectEnvironments.ts` — `cloudSessionScopeKey` defaults to `null`, so upstream's new `AddProjectToMachineDialog` keeps calling it with two arguments.
+- `packages/source-control-github/src/server/GitHubRest.ts` — the fork's read coalescer wrapper is an `Effect.fn`.
+
 ## Voice hotkey chord, model download progress, model settings UI (2026-10-21)
 
 - `apps/desktop/src/ipc/methods/clientSettings.ts` — `setClientSettings` also calls `DesktopVoiceHotkey.configure`, next to the existing `DesktopSnapShot.configure`, so a changed `voiceHotkeyChord` re-registers the global shortcut (logic in `t3team-voiceHotkeyController.ts`).
 - `apps/web/src/components/settings/useSnapShotShortcutRecorder.tsx` — optional `label` so the voice shortcut row reuses the recorder instead of a second one; the default label keeps the snapshot wording.
 
-## Pre-existing Test Web nightly fixes (2026-10-21)
-
-- `apps/web/src/components/BranchToolbar.panel.test.tsx` — the mocked draft store gains `draftsByThreadKey`, which the cloud queued-send hook now reads.
-
 ## Pre-existing server test failures (nightly CI, 2026-10-21)
 
 - `apps/server/src/orchestration-v2/testkit/fixtures/*/muse_transcript.ndjson` (8 scenarios) — re-recorded against the current `link_pull_request` runtime instruction in `packages/provider-core/src/server/runtimeInstructions.ts`, which the Muse replay compares byte-for-byte.
-- `apps/server/src/testkit/RpcInitialMemory.fixture.mjs` — the mocked event store gains `readAgentEventId`, which the thread-resume cursor identity check (#538) now calls.
 
 ## Voice floating widget (desktop main, 2026-10-21)
 
@@ -498,3 +561,119 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 ## Cross-environment project identity by work source (2026-10-21)
 
 - `packages/client-runtime/src/state/projectGrouping.ts` — one import and one `deriveWorkSourceProjectKey(project) ??` line ahead of the repository key in `deriveLogicalProjectKey`, plus `"source"` in its three `Pick`s. A project bound to an external work source (Jira, …) groups by that binding, so the same t3team project on two T3 Connect machines is one sidebar entry, and a bound project no longer merges into a plain project that shares its repository. The logic lives in `t3team-workSourceProjectKey.ts`; unbound projects group exactly as before.
+
+## Settings → Features page (2026-10-22)
+
+- `apps/web/src/components/settings/FoldedSettingsSection.tsx` — optional `defaultOpen`, so the Features page's group sections start open; the default keeps every existing fold closed.
+- `apps/web/src/routes/settings.features.tsx` (unprefixed new file) — TanStack's file router derives the URL from the file name, like `settings.connected-tools.tsx`. Since 2026-11-06 it only redirects to `/settings/labs`, keeping search and hash.
+- Already listed, each gains only the Features seam: `SettingsSidebarNav.tsx` (no Features entry of its own since 2026-11-06: the page lives on `/settings/labs`, which keeps its own route and labels it Features), `routeTree.gen.ts` (generated entry), `packages/client-runtime/src/state/server.ts` (spreads `createFeatureFlagAtoms` from `t3team-featureFlags.ts`).
+- `apps/web/src/components/settings/LabsSettingsPanel.tsx` (approved by Phil, 2026-11-06): two slots that put Nexi's feature switches on upstream's Labs page, labelled Features, so Settings has one entry instead of Labs plus Features. Both render nothing while `SETTINGS_FEATURES_PAGE` is off.
+- `apps/server/src/bin.ts` — one `await import("./t3team-featureFlagBoot.ts")` ahead of the CLI graph, so the release preset is installed before any module reads a startup-only flag or resolves the state directory.
+- `packages/client-runtime/src/rpc/session.ts` — advertises the `featureFlags` capability so the server streams `featureFlagsUpdated`.
+- `packages/client-runtime/src/state/serverConfigProjection.ts` — one `featureFlagsUpdated` case that replaces `config.featureFlags`.
+- `packages/contracts/src/clientRpcPermissions.ts` — `serverSetFeatureFlag` requires the settings-write scope, like the other host settings writes.
+- `scripts/package.json` — `@t3tools/project-context` dependency for the release-flavor preset writer in `build-desktop-artifact.ts`.
+
+## Full-text affordances for truncated rows (2026-10-23)
+
+- `apps/web/src/components/settings/ScheduledTasksSettings.tsx` — tooltip exposes the full scheduled-task prompt while preserving its two-line clamp.
+- `apps/web/src/components/settings/settingsLayout.tsx` — settings row titles wrap long unbroken text within the existing content grid.
+
+## Mobile extension seams (2026-10-25)
+
+Reasons for the upstream files the mobile extension registry touches. Each edit is additive and a no-op without a distribution.
+
+- `apps/mobile/src/features/connection/ConnectionsNewRouteScreen.tsx` — renders the `connectionsNewTop` slot (inside an error boundary) above the stock pairing options.
+- `apps/mobile/src/App.tsx` — one call that runs the distribution's startup hook before the first render, instead of relying on import order.
+- `apps/mobile/metro.config.js` — wraps the config with the distribution hook (`t3team-distributionMobileMetro.cjs`) and takes the CSS entry from it; both are identity for a build without a selected overlay.
+- `apps/mobile/tsconfig.json` — `paths` for `@t3code/distribution-mobile` (the stock stub) and `@t3code/mobile-api` (the overlay's explicit surface), as `apps/web/tsconfig.json` does for `@t3code/distribution-web`.
+- `apps/mobile/vite.config.ts` — `resolve.tsconfigPaths` so the mobile unit tests resolve those two specifiers like the app does.
+- `packages/client-runtime/src/connection/wakeups.ts` and `.../supervisor.test.ts` — the `broker-availability-changed` wake reason (it only unparks blocked waits, never ends a healthy relay lease) and its two supervisor tests.
+- `apps/mobile/src/connection/platform.ts` — merges the distribution's extra wakeup sources and lets a distribution replace the stock broker gateway stub; both additive.
+- `knip.jsonc` — lists `src/extensions/t3team-api.ts` (the overlay's `@t3code/mobile-api`) as a mobile entry: only the distribution Metro hook resolves it, so nothing imports it.
+
+## Mobile URL policy seam (2026-10-25)
+
+Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op without a distribution policy.
+
+- `apps/mobile/src/lib/openExternalUrl.ts` — refuses to hand an app-private URL to another app.
+- `apps/mobile/src/native/EnrichedMarkdownText.tsx` — the markdown "Share link" action skips app-private URLs.
+- `apps/mobile/src/features/threads/QuestionAnswerHistory.tsx` and `apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx` — "open attachment" and "open in browser" go through `openAssetLink`, which opens an app-private asset through the policy instead of another app.
+- `apps/mobile/src/lib/attachmentDownload.ts` — tells the policy before each native download.
+- `apps/mobile/src/features/browser/PreviewStreamWebView.tsx` and `apps/mobile/src/features/devices/device-stream-document.ts` — the stream WebView document base URL may be overridden by the policy.
+- `packages/client-runtime/src/state/assets.ts` and `.../assets.test.ts` — `setAssetUrlObserver`: a platform sees each asset URL before it reaches a consumer (a platform whose native HTTP clients cannot send an environment's credentials authorizes the exact URL).
+- `apps/mobile/app.config.ts` — passes the config through `applyDistributionMobile`: identity for a stock build; with a selected overlay it turns Expo updates off (a stock OTA must not replace overlay JavaScript) and adds a Gradle plugin that makes the overlay an input of the bundle task.
+- `apps/mobile/fingerprint.config.js` — adds the overlay's entry and a hash of its files to the runtime version, so a distribution binary never shares a runtime version with a stock binary (empty for a stock build).
+- `apps/mobile/src/features/home/HomeScreen.tsx` — renders the distribution's `homeTop` slot (isolated, nothing without one) at the top of the Chats list and above the stock empty state, and lets a `homeEmptyState` slot replace the empty home (isolated; a failure restores the stock empty home).
+- `apps/mobile/src/features/settings/SettingsRouteScreen.tsx` — renders the distribution's `settingsConnections` row (isolated, nothing without one) as the last row of the Connections group (two one-line additions).
+- `apps/mobile/src/components/CompactBrandTitle.tsx` — a distribution's `brandTitle` replaces the wordmark title of the home header.
+- `apps/mobile/src/components/LoadingScreen.tsx` — a distribution may hide the app's brand mark on the loading screen (`showsLoadingBrandMark`).
+- `apps/mobile/src/lib/mobileThemeVariables.ts` — a distribution's `themeVariables` repaints the default theme (its palette); identity without one.
+- `packages/shared/package.json` — exports `t3team-packThemeColors`, the pack-theme overlay shared by the web app and the mobile distribution theme (the web files `t3team-packThemeDefinition.ts` and `t3team-packThemeRoles.ts` now use it; both are fork-owned).
+
+## Slow login shell keeps Homebrew on the backend PATH (2026-10-26)
+
+- `apps/desktop/src/shell/DesktopShellEnvironment.ts` — when neither the login-shell probe nor launchctl yields a PATH on macOS (a loaded machine times the 5 s probe out), appends the existing well-known user bin dirs after the current PATH entries, so Homebrew `gh`/`codex`/`claude` are found. darwin only; the timeout is unchanged.
+- `apps/desktop/src/app/DesktopCliCommand.ts` — exports `unixCandidates` (one word) so the fallback shares that list instead of duplicating it.
+- `apps/desktop/src/shell/DesktopShellEnvironment.test.ts` — covers the fallback on macOS and its absence on linux.
+
+## Plan and decision cards render from the streamed timeline (2026-10-26)
+
+- `apps/web/src/components/chat/ThreadTimeline.tsx` — derives the streamed entries itself (upstream #23117), bypassing ChatView's fork-artifact join, so a plan card showed as bare "Plan: <name>" text. It now joins the thread's fork artifacts onto its own entries with `useT3TeamTimelineArtifacts`.
+- `apps/web/src/components/ChatView.tsx` — passes the join's inputs (`t3teamArtifacts`) to `ThreadTimeline`.
+
+## Mobile `homeFilters` and `workspaceTab` seams (2026-10-28)
+
+- `apps/mobile/src/features/home/HomeScreen.tsx` (already listed for `homeTop`) — renders the distribution's `homeFilters` slot (isolated, nothing without one, Android only) directly under `homeTop` in the Chats list header: one added line. The Android "no threads match" early return gets the same line plus a wrapper `View`, so a selected project with no threads still shows the Nexi rows (`homeTop`) and the pills and can be cleared (`px-4` moves to the inner view).
+- `apps/mobile/src/features/workspace/workspace-tabs-state.ts`, `WorkspaceTabsContext.tsx` — `WorkspaceTab` gains `"extra"` (the distribution's one extra Android tab): its state, its scroll offset, and an optional `initialTab` for the provider. Stock behavior is unchanged.
+- `apps/mobile/src/features/workspace/AndroidWorkspaceTabsProvider.tsx` — opens on the extra tab when it asks for it (`selectOnLaunch`).
+- `apps/mobile/src/features/workspace/WorkspaceRootScreen.android.tsx`, `AndroidWorkspaceSidebar.android.tsx` — the panes list and the extra tab's pane come from `t3team-workspaceExtraTab`; with no extra tab the list is the stock two. In split view the extra tab fills the sidebar column and the detail pane stays the empty chat detail.
+- `apps/mobile/src/features/workspace/AndroidWorkspaceNavigation.android.tsx` — passes the ordered `tabs` to the native navigation (the stock three when there is no extra tab).
+- `apps/mobile/src/features/workspace/WorkspaceRootScreen.tsx` — `TAB_TITLES` needs an `extra` entry now that `WorkspaceTab` has one; the iOS/web screen never selects it.
+- `apps/mobile/modules/t3-native-controls/android/.../T3WorkspaceNavigationModule.kt` — the hardcoded tab list becomes a `tabs` prop (default: the stock three, same titles and icons); an unknown id uses the generic extra icon and the given title.
+- `apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml` — the extra tab's icon (allowed unprefixed in `.t3team-additive-guard.json`: an Android resource name cannot contain `-` or `.`).
+
+## Cloud checkout joins the user's project in the sidebar (2026-10-29, #777)
+
+- `apps/web/src/hooks/useSidebarProjectGroups.ts`, `components/settings/useSettingsProjectGroups.ts`, `components/CommandPaletteLookups.ts`, `components/chat/DraftHeroHeadline.tsx` — run the project list through `useCloudAdoptedProjects` (`t3team-cloudCheckoutProjectAdoption.ts`) before grouping: a cloud session's checkout (named after a runner folder, unbound) adopts the title and work-source binding of the primary environment's project for the same repository, so both group as one project under the user's name and icon. One changed line each (plus the import); with no broker environment the list is returned unchanged.
+
+## Cloud checkout joins the user's project on the phone (2026-11-03, #999)
+
+- `packages/client-runtime/src/state/t3team-cloudCheckoutAdoption.ts` and `...test.ts` — the #777 adoption rule, moved from `apps/web` to client-runtime so both surfaces share one implementation: the `primaryEnvironmentId` input becomes an `isOwnEnvironment` predicate (web passes its primary environment; the phone passes every non-machine environment). Web's `t3team-cloudCheckoutProjectAdoption.ts` now re-exports it; its test moved here.
+- `apps/mobile/src/state/t3team-cloudAdoption.ts` and `...test.ts` — the phone's application: a broker (`BrokerConnectionTarget`) environment is a cloud session machine; its checkouts adopt the title and work-source binding of the user's own project of the same repository, so the Chats project pills, the new-task project picker, the thread navigation sidebar and the PR filters list the project once, under the user's name and icon, with its Jira link. The view keeps every project's environment and id; the raw catalog (`useProjects`) is untouched, so the attach binding still sees the machine's real project.
+- `apps/mobile/src/features/home/HomeRouteScreen.tsx`, `features/threads/new-task-flow-provider.tsx`, `features/threads/ThreadNavigationSidebar.tsx`, `features/pull-requests/PullRequestListFilters.tsx` — one changed line each: the project list those selectors group comes from `useCloudAdoptedProjects` (or `cloudAdoptedProjectsAtom`) instead of the raw catalog. `features/threads/new-task-flow-provider.test.tsx` — the provider's project list now comes from the adoption module, so the test routes its `projects` mock to `useCloudAdoptedProjects` (the module itself stays mocked out, as every other state module in that test does).
+
+## Mobile `newTaskTop` and `environmentPickerTop` seams (2026-10-29)
+
+- `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx` — renders the distribution's `newTaskTop` slot (isolated, nothing without one) first in the New task project list: one import and one line, so a distribution can offer another way to start a thread (a cloud session) next to the stock ones.
+- `apps/mobile/src/features/threads/NewTaskContextPickerScreens.tsx` — renders the `environmentPickerTop` slot above the stock rows of the New task Environment picker: one import and one line, so a distribution can list an environment the stock list does not offer (a running cloud session) and start a thread on it.
+
+## Accepted machine source is saved on the user's own environment (2026-10-29, #791)
+
+- `apps/web/src/components/chat/usePendingThreadRequests.ts` — when the user submits an answer, `useApplyMachineSourceAnswer` (`apps/web/src/cloud/t3team-useApplyMachineSourceAnswer.ts`) captures the accepted machine-source proposal and its target project (so switching threads before the answer lands cannot move it), and the saved result runs once the response succeeds: one hook call, one capture line, one call. The machine-setup agent (in a cloud session) proposes a machine source through `t3_machine_set_source`, a `t3_ask_user` question whose id carries the proposal; the setting lives on the primary environment, so the web client saves it there when the answer is the accept label. Any other question or answer is a no-op.
+- `apps/mobile/src/state/use-selected-thread-requests.ts` — after a user-input response succeeds, `noticeMachineSourceNotSaved` (`t3team-machineSourceNotice.ts`) tells the user an accepted machine-source proposal was not saved by the app (the setting lives on the desktop environment, which mobile cannot reach) and what to set there: one import, one call. Any other question or answer is a no-op.
+
+## Mobile `pendingDraft` seam (2026-10-30)
+
+A draft can wait for an environment the catalog does not list yet (a cloud session still starting). The distribution holds such drafts in a map by draft key (`mobileExtensions.pendingDraft.usePendingDrafts`); everything below is a no-op without one.
+
+- `apps/mobile/src/features/threads/new-task-flow-provider.tsx` — the flow's project list gains a placeholder project for the route draft's pending project (`usePendingDraftProjects`, so the draft opens instead of returning to the picker), and the context exposes `pendingDraft`. The home project scopes keep the catalog list. A few lines.
+- `apps/mobile/src/features/threads/NewTaskDraftScreen.tsx` — shows the pending draft's status card above the composer controls, lets its reason block Send, and does not remember its placeholder project as the last used one: one import pair and three lines.
+- `apps/mobile/src/state/pending-new-tasks-model.ts`, `use-pending-new-tasks.ts` — a draft the distribution holds is listed in the Chats list even while empty, with its project's title: two predicates in `t3team-pendingDraft.ts`, one added input and one hook call.
+- `apps/mobile/src/features/threads/thread-list-v2-items.tsx` — a draft row shows the distribution's live status (`PendingDraftRowStatus`) instead of the static "Draft", and its project title when the catalog has none.
+
+- `apps/server/src/usage/UsageService.test.ts` — one test (`reports saved usage of a removed directory only for windows it reaches`) pins the clock with `TestClock` because its 2026-08-01 fixtures fall out of the 92-day usage cache retention on 2026-11-01T10:00Z; three lines, test only. Upstream will hit the same date dependence: remove this entry when the sync brings an upstream fix. Awaits human approval.
+- `packages/provider-cursor/src/server/driver.test.ts` — fork test updated for upstream's HttpClient-based Cursor catalog (`CursorSdkCatalog`, upstream #28718/#24639): the test that keeps an explicit API key's account out of the CLI login's Limits now answers `/v1/me` and the models list through an HttpClient mock like the neighbouring tests, instead of mocking `Cursor.me`/`Cursor.models.list`. Test only; removable once upstreamed. Approved by Phil 2026-11-02.
+
+## Mobile provider icon for the `nexplore` driver (2026-11-03)
+
+- `apps/mobile/src/components/ProviderIcon.tsx` — one branch before the package-icon lookup: the `nexplore` driver draws `NexploreMark` (`t3team-NexploreMark.tsx`), as the web's `PROVIDER_ICON_BY_PROVIDER` already does. Without it the driver fell through to the generic default glyph.
+
+## Settings registry: fork settings move out of the hot files (2026-11-07)
+
+- `apps/web/src/clientPersistenceStorage.ts` — the browser's client-settings load path runs the fork's legacy-key alias (`migrateLegacyT3TeamClientSettingsJson`, `packages/contracts/src/t3team-settings.ts`) before decoding, so values persisted under the old flat `t3team*` keys keep reading after the fork's settings moved under the `t3team` namespace. Write path unchanged; two lines.
+- `apps/web/src/components/settings/useAvailableSettingsSearchItems.ts` — joins the fork's registered search items (`useT3TeamSettingsSearchItems`, `~/t3team/settings/t3team-settingsRegistry.tsx`) after the upstream availability filter, so the command palette and the settings nav search find the fork rows (connected tools, Nexi feature switches, voice). Flag-gated fork sections join here, where a hook can decide their visibility; three lines.
+
+## Composer forwards the ready-provider flag (2026-11-10, #656)
+
+- `apps/web/src/components/chat/useComposerProviderModel.ts` — ChatComposer passes `AGENTS_PREFER_READY_PROVIDER` into this hook, which was dropping it. The hook forwards the flag into `resolveComposerProviderSelection` and omits it when undefined. Claude stays selected in that function; the preference itself stays in `t3team-readyProviderPreference.ts`. Two lines.

@@ -3,12 +3,8 @@ import {
   createToolAuthEnvironmentAtoms,
   type ToolAuthStatesByTool,
 } from "@t3tools/client-runtime/state/toolauth";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId } from "@t3tools/contracts";
-import type * as Cause from "effect/Cause";
+import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
+import type { EnvironmentId, ToolAuthState } from "@t3tools/contracts";
 import { useCallback } from "react";
 
 import type { ToolAuthToolMeta } from "../components/settings/t3team-toolAuthTools";
@@ -17,6 +13,11 @@ import { connectionAtomRuntime } from "../connection/runtime";
 import { usePrimaryEnvironmentId } from "./environments";
 import { useEnvironmentQuery } from "./query";
 import { useAtomCommand } from "./use-atom-command";
+import {
+  missingToolAuthEnvironmentError,
+  resolveToolAuthEnvironmentId,
+} from "./t3team-toolauthActions";
+import { toolAuthActionOutcome, type ToolAuthActionOutcome } from "./t3team-toolauthActionOutcome";
 
 export const toolAuthEnvironment = createToolAuthEnvironmentAtoms(connectionAtomRuntime);
 
@@ -40,12 +41,7 @@ export function useToolAuthStates(environmentId: EnvironmentId | null): ToolAuth
   return useToolAuthStatesQuery(environmentId).states;
 }
 
-function reportToolAuthFailure(
-  label: string,
-  action: string,
-  result: { readonly cause: Cause.Cause<unknown> },
-) {
-  const error = squashAtomCommandFailure(result);
+function reportToolAuthFailure(label: string, action: string, error: unknown) {
   toastManager.add(
     stackedThreadToast({
       type: "error",
@@ -61,6 +57,16 @@ function reportToolAuthFailure(
   });
 }
 
+function reportMissingToolAuthEnvironment(label: string, action: string) {
+  const error = missingToolAuthEnvironmentError(label, action);
+  toastManager.add(stackedThreadToast({ type: "error", ...error }));
+  console.warn(`Failed to ${action} tool auth`, {
+    operation: `toolauth-${action}`,
+    tool: label,
+    reason: "missing-environment",
+  });
+}
+
 /**
  * `start`/`install`/`submitCode`/`cancel` wired to an environment (the primary unless one is given),
  * with failure toasts + logging. Shared by every "Connect this tool" surface —
@@ -73,28 +79,53 @@ function reportToolAuthFailure(
 export function useToolAuthActions(
   meta: ToolAuthToolMeta,
   targetEnvironmentId?: EnvironmentId | null,
-  options?: { readonly hostname?: string | undefined },
+  options?: { readonly hostname?: string | undefined; readonly instanceId?: string | undefined },
 ) {
   const hostname = options?.hostname;
+  const instanceId = options?.instanceId;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const environmentId = targetEnvironmentId ?? primaryEnvironmentId;
+  const environmentId = resolveToolAuthEnvironmentId(targetEnvironmentId, primaryEnvironmentId);
   const start = useAtomCommand(toolAuthEnvironment.start, { reportFailure: false });
   const install = useAtomCommand(toolAuthEnvironment.install, { reportFailure: false });
   const submitCode = useAtomCommand(toolAuthEnvironment.submitCode, { reportFailure: false });
   const cancel = useAtomCommand(toolAuthEnvironment.cancel, { reportFailure: false });
 
-  const onConnect = useCallback(() => {
-    if (!environmentId) return;
-    void (async () => {
-      const result = await start({
-        environmentId,
-        input: { tool: meta.tool, ...(hostname === undefined ? {} : { hostname }) },
-      });
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-        reportToolAuthFailure(meta.label, "connect", result);
+  /**
+   * Every action answers with what happened. A refusal the server returns as a success value (the
+   * `INTEGRATIONS_TOOL_AUTH` gate) is a `failed` outcome here, not a dropped result — the card
+   * merges it in and shows it with Retry. The toast stays for the error channel only, so the two
+   * never say the same thing twice.
+   */
+  const runAction = useCallback(
+    async (
+      action: string,
+      send: () => Promise<AtomCommandResult<ToolAuthState, unknown>>,
+    ): Promise<ToolAuthActionOutcome> => {
+      const outcome = toolAuthActionOutcome(await send());
+      if (outcome.kind === "failed" && outcome.error !== undefined) {
+        reportToolAuthFailure(meta.label, action, outcome.error);
       }
-    })();
-  }, [environmentId, hostname, meta.label, meta.tool, start]);
+      return outcome;
+    },
+    [meta.label],
+  );
+
+  const onConnect = useCallback((): Promise<ToolAuthActionOutcome> => {
+    if (!environmentId) {
+      reportMissingToolAuthEnvironment(meta.label, "connect");
+      return Promise.resolve({ kind: "failed", reason: "noEnvironment" });
+    }
+    return runAction("connect", () =>
+      start({
+        environmentId,
+        input: {
+          tool: meta.tool,
+          ...(hostname === undefined ? {} : { hostname }),
+          ...(instanceId === undefined ? {} : { instanceId }),
+        },
+      }),
+    );
+  }, [environmentId, hostname, instanceId, meta.label, meta.tool, runAction, start]);
 
   /**
    * One click for "install it and sign me in". The server installs, re-probes,
@@ -102,38 +133,34 @@ export function useToolAuthActions(
    * same stream `useToolAuthStates` already renders — so there is nothing to
    * call afterwards and no intermediate state for the caller to manage.
    */
-  const onInstall = useCallback(() => {
-    if (!environmentId) return;
-    void (async () => {
-      const result = await install({ environmentId, input: { tool: meta.tool } });
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-        reportToolAuthFailure(meta.label, "install", result);
-      }
-    })();
-  }, [environmentId, meta.label, meta.tool, install]);
+  const onInstall = useCallback((): Promise<ToolAuthActionOutcome> => {
+    if (!environmentId) {
+      reportMissingToolAuthEnvironment(meta.label, "install");
+      return Promise.resolve({ kind: "failed", reason: "noEnvironment" });
+    }
+    return runAction("install", () => install({ environmentId, input: { tool: meta.tool } }));
+  }, [environmentId, meta.label, meta.tool, install, runAction]);
 
   const onSubmitCode = useCallback(
-    (code: string) => {
-      if (!environmentId) return;
-      void (async () => {
-        const result = await submitCode({ environmentId, input: { tool: meta.tool, code } });
-        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-          reportToolAuthFailure(meta.label, "verify", result);
-        }
-      })();
+    (code: string): Promise<ToolAuthActionOutcome> => {
+      if (!environmentId) {
+        reportMissingToolAuthEnvironment(meta.label, "verify");
+        return Promise.resolve({ kind: "failed", reason: "noEnvironment" });
+      }
+      return runAction("verify", () =>
+        submitCode({ environmentId, input: { tool: meta.tool, code } }),
+      );
     },
-    [environmentId, meta.label, meta.tool, submitCode],
+    [environmentId, meta.label, meta.tool, runAction, submitCode],
   );
 
-  const onCancel = useCallback(() => {
-    if (!environmentId) return;
-    void (async () => {
-      const result = await cancel({ environmentId, input: { tool: meta.tool } });
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-        reportToolAuthFailure(meta.label, "cancel", result);
-      }
-    })();
-  }, [environmentId, meta.label, meta.tool, cancel]);
+  const onCancel = useCallback((): Promise<ToolAuthActionOutcome> => {
+    if (!environmentId) {
+      reportMissingToolAuthEnvironment(meta.label, "cancel");
+      return Promise.resolve({ kind: "failed", reason: "noEnvironment" });
+    }
+    return runAction("cancel", () => cancel({ environmentId, input: { tool: meta.tool } }));
+  }, [environmentId, meta.label, meta.tool, cancel, runAction]);
 
-  return { onConnect, onInstall, onSubmitCode, onCancel };
+  return { onConnect, onInstall, onSubmitCode, onCancel, environmentId };
 }

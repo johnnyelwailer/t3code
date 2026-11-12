@@ -8,6 +8,8 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { parseWindowsCommitMemory } from "./t3team-windowsCommitMemory.ts";
+import { isResourcePressureEnabled } from "../t3team-resourcePressureFlag.ts";
 
 export class HostResources extends Context.Service<
   HostResources,
@@ -32,8 +34,7 @@ function darwinAvailableMemory(output: string): number | null {
   const inactive = /^Pages inactive:\s+(\d+)\./m.exec(output)?.[1];
   const speculative = /^Pages speculative:\s+(\d+)\./m.exec(output)?.[1];
   if (!pageSize || !free || !inactive || !speculative) return null;
-  // vm_stat subtracts speculative pages from its printed "Pages free" count.
-  // Adding them here counts each reclaimable page once; purgeable pages overlap.
+  // vm_stat excludes speculative from free; add it once, without overlapping purgeable pages.
   const available = (Number(free) + Number(inactive) + Number(speculative)) * Number(pageSize);
   return Number.isSafeInteger(available) && Number(pageSize) > 0 ? available : null;
 }
@@ -45,7 +46,6 @@ const make = Effect.fn("makeHostResources")(function* () {
 
   const sample = Effect.fn("HostResources.sample")(function* () {
     const previousCpu = readCpu();
-    // CPU counters need two readings; idle servers do no polling or process scans.
     yield* Effect.sleep("200 millis");
     const cpu = readCpu();
     const totalDelta = cpu.total - previousCpu.total;
@@ -55,6 +55,27 @@ const make = Effect.fn("makeHostResources")(function* () {
         ? Math.min(1, Math.max(0, 1 - idleDelta / totalDelta))
         : null;
     const totalMemoryBytes = NodeOS.totalmem();
+    const commit =
+      platform === "win32" && isResourcePressureEnabled()
+        ? yield* spawner
+            .string(
+              ChildProcess.make(
+                "powershell.exe",
+                [
+                  "-NoProfile",
+                  "-NonInteractive",
+                  "-Command",
+                  "Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory | Select-Object CommittedBytes,CommitLimit | ConvertTo-Json -Compress",
+                ],
+                { stdin: "ignore", stderr: "ignore" },
+              ),
+            )
+            .pipe(
+              Effect.timeout("2 seconds"),
+              Effect.map(parseWindowsCommitMemory),
+              Effect.orElseSucceed(() => null),
+            )
+        : null;
     // On Windows libuv returns GlobalMemoryStatusEx.ullAvailPhys, including standby memory.
     let availableMemoryBytes = NodeOS.freemem();
     if (platform === "linux") {
@@ -78,10 +99,10 @@ const make = Effect.fn("makeHostResources")(function* () {
       cpuCount: cpu.count,
       availableMemoryBytes: Math.min(totalMemoryBytes, Math.max(0, availableMemoryBytes)),
       totalMemoryBytes,
+      ...commit,
     };
   });
 
-  // One server-lifetime cache deduplicates simultaneous requests from all sockets.
   const cache = yield* Cache.make({
     capacity: 1,
     lookup: (_key: "host") => sample(),

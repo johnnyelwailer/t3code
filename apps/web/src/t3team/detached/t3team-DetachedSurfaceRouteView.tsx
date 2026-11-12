@@ -27,9 +27,9 @@ export function DetachedSurfaceRouteView({
   const View = detachedSurfaceView(kind);
   if (View === undefined) {
     return (
-      <StandalonePage tone="error">
+      <StandalonePage>
         <StandalonePageHeader
-          eyebrow={appName}
+          context={appName}
           title="Nothing to show here"
           description="This window was opened for something this version of the app cannot display. Close it and open it again from the app."
         />

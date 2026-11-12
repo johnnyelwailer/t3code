@@ -1,6 +1,5 @@
 import * as Effect from "effect/Effect";
 import {
-  pullRequestHostOf,
   type OrchestrationProjectShell,
   type ProjectId,
   type SourceControlProviderKind,
@@ -8,6 +7,7 @@ import {
 
 import * as ProjectService from "./project/ProjectService.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
+import { sourceControlDefinitions } from "./sourceControl/sourceControlDefinitions.ts";
 
 /**
  * Upstream's `PullRequestService` is keyed by `projectId`, not by `host`+`repository`: it reads a
@@ -57,7 +57,10 @@ export function resolvePullRequestProjectId(input: {
         if (!repository || repository.toLowerCase() !== wantedRepository) return false;
         const kind = project.repositoryIdentity?.provider as SourceControlProviderKind | undefined;
         if (kind === undefined || kind === "unknown" || registry.get(kind) === null) return false;
-        return pullRequestHostOf(project.repositoryIdentity, kind) === wantedHost;
+        return (
+          sourceControlDefinitions.changeRequestHost(project.repositoryIdentity, kind) ===
+          wantedHost
+        );
       });
 
       const logAmbiguity =

@@ -1,6 +1,12 @@
 import { ProviderDriverKind, type ToolAuthToolId } from "@t3tools/contracts";
 
-import { ClaudeAI, GitHubIcon, OpenAI, type Icon } from "../Icons";
+import type { ElementType } from "react";
+
+import { getSourceControlPresentationForKind } from "../../sourceControlPresentation";
+import { ClaudeAI, OpenAI } from "../Icons";
+
+/** Upstream moved the GitHub mark into the source-control definitions; read it from there. */
+const GitHubIcon = getSourceControlPresentationForKind("github").Icon;
 
 /**
  * Static per-tool metadata for the "Connected tools" card list. Mirrors the
@@ -17,27 +23,33 @@ export interface ToolAuthToolMeta {
   readonly tool: ToolAuthToolId;
   readonly label: string;
   readonly description: string;
-  readonly icon: Icon;
+  readonly icon: ElementType<{ className?: string }>;
+}
+
+/** GitHub sign-in copy. Names the session or repository host when it is known; never a baked-in one. */
+export function gitHubToolAuthDescription(hostname?: string): string {
+  return hostname
+    ? `Log in to your ${hostname} account so git work on this machine uses your own identity.`
+    : "Log in to your GitHub account so git work on this machine uses your own identity.";
 }
 
 export const TOOL_AUTH_TOOLS: ReadonlyArray<ToolAuthToolMeta> = [
   {
     tool: "claude",
     label: "Claude Code",
-    description: "Sign in with your Claude account to use Claude Code in this sandbox.",
+    description: "Sign in with your Claude account to use Claude Code on this machine.",
     icon: ClaudeAI,
   },
   {
     tool: "codex",
     label: "Codex",
-    description: "Sign in with your ChatGPT account to use Codex in this sandbox.",
+    description: "Sign in with your ChatGPT account to use Codex on this machine.",
     icon: OpenAI,
   },
   {
     tool: "gh",
     label: "GitHub",
-    description:
-      "Log in to your GHE account (nexplore.ghe.com) so git work in this sandbox uses your own identity.",
+    description: gitHubToolAuthDescription(),
     icon: GitHubIcon,
   },
 ];

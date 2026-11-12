@@ -13,17 +13,23 @@ import {
   selectHistory,
 } from "@t3tools/provider-core/server/handoffBudget";
 
-/**
- * Persist before/after injection: an ambiguous pending delivery requires a fresh native thread.
- * Run `unsent` when the provider refused the turn before reading the prompt, so that
- * refusal does not leave an ambiguous marker behind.
- */
+/** The provider prompt for a turn that carries inline context ahead of the user's text. */
+export const withInlineContext = (context: string, userText: string): string =>
+  context === "" ? userText : `${context}\n\nUser message:\n${userText}`;
+
+/** Persist around injection; ambiguous delivery requires a fresh native thread. Call unsent if refused before prompt consumption. */
 export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextHandoffs")(
   function* <InjectError = never, PersistError = never, BudgetError = never>(input: {
     readonly handoffs: ReadonlyArray<OrchestrationV2ContextHandoff>;
     readonly providerThread: OrchestrationV2ProviderThread;
     readonly budget: number | Effect.Effect<number, BudgetError>;
     readonly deferInline?: boolean;
+    /**
+     * t3team: probe mode. An overflow fails with `ContextHandoffBudgetError` instead of
+     * middle-truncating, so a caller deciding whether a native thread can take the handoff
+     * (upstream's exhausted-target recovery) still sees "does not fit".
+     */
+    readonly failOnBudgetOverflow?: boolean;
     readonly alreadyDeliveredItemIds: ReadonlySet<string>;
     readonly inject?: (
       history: ProviderAdapter.ProviderAdapterV2HistoricalContext,
@@ -49,9 +55,6 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
           }`,
       )
       .join("\n");
-    // Repeated failures can accumulate many recovery markers. Keep a single
-    // thread-level entry point when detailed coverage would crowd out history;
-    // its activity includes the original handoff/fork source references.
     if (historyCost([], coverage) > Math.min(4_000, budget / 2)) {
       const strategies = Array.from(new Set(pending.map((handoff) => handoff.strategy)));
       const threadId = input.providerThread.appThreadId ?? pending[0]!.threadId;
@@ -65,8 +68,6 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
         seen.add(message.itemId);
         return true;
       });
-    // Old preview handoffs remain readable. Their preformatted context is included
-    // as a whole when it fits, otherwise the coverage marker points to retrieval.
     const oldContext = pending
       .filter((handoff) => handoff.history === undefined)
       .map((handoff) => handoff.summaryText)
@@ -86,9 +87,11 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
       budget,
     });
     // Upstream hard-fails when the selected pack still exceeds the budget. Only then
-    // fall back to middle-truncate + search/read recall (not on every handoff).
+    // fall back to middle-truncate + search/read recall (not on every handoff), unless the
+    // caller is probing whether the handoff fits.
     if (historyCost(selected.messages, selected.context) > budget) {
       if (input.deferInline) return { context: "", delivered: Effect.void, unsent: Effect.void };
+      if (input.failOnBudgetOverflow === true) return yield* new ContextHandoffBudgetError();
       selected = fitHistoryWithMiddleTruncate({
         messages,
         omittedItems,
@@ -147,12 +150,10 @@ export const deliverContextHandoffs = Effect.fn("orchestrationV2.deliverContextH
         return { context: "", delivered: Effect.void, unsent: Effect.void };
       }
     } else {
-      // Text-only delivery can also be accepted before a connection drops.
       yield* persist("pending");
     }
     if (input.deferInline) {
-      // Compaction APIs cannot accept an inline transcript. Keep it available
-      // for the next ordinary turn when native injection is unsupported.
+      // Compaction cannot carry inline transcripts; retain for the next turn if native injection is unsupported.
       yield* Effect.forEach(pending, input.persist, { discard: true });
       return { context: "", delivered: Effect.void, unsent: Effect.void };
     }

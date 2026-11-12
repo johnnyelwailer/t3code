@@ -26,6 +26,8 @@ export function packSlotEntry(
   const owner = { kind: "pack", packId } as const;
   const { id } = registration;
   switch (registration.slot) {
+    case "settings.connections":
+      return { ...registration, owner };
     case "changeRequest.summary":
     case "myWork.changeRequest":
       return { ...registration, owner } as SlotViewEntry;

@@ -10,6 +10,7 @@ import {
   ThreadEnvMode,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -31,7 +32,6 @@ export class ProjectStoreV2Error extends Schema.TaggedError<ProjectStoreV2Error>
   }
 }
 
-/** One row of `projection_projects`, the durable project read model. */
 export const ProjectRow = Schema.Struct({
   projectId: ProjectId,
   title: Schema.String,
@@ -43,6 +43,8 @@ export const ProjectRow = Schema.Struct({
   projectIcon: Schema.NullOr(StoredProjectIcon),
   mainRepository: Schema.NullOr(ProjectMainRepository),
   scripts: Schema.Array(ProjectScript),
+  pinnedAt: Schema.NullOr(IsoDateTime),
+  archivedAt: Schema.NullOr(IsoDateTime),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
@@ -58,7 +60,6 @@ const ProjectDbRow = Schema.Struct({
   scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
 });
 
-/** Shell fields without workspace-derived enrichment such as repository identity. */
 function toShell(row: ProjectRow): OrchestrationProjectShell {
   return {
     id: row.projectId,
@@ -72,6 +73,8 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
     projectIcon: row.projectIcon,
     mainRepository: row.mainRepository,
     scripts: row.scripts,
+    pinnedAt: row.pinnedAt,
+    archivedAt: row.archivedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -80,7 +83,7 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
 export class ProjectStoreV2 extends Context.Service<
   ProjectStoreV2,
   {
-    /** Fold one committed project event into its row. Call inside the commit transaction. */
+    /** Call inside the commit transaction. */
     readonly apply: (event: ApplicationProjectEvent) => Effect.Effect<void, ProjectStoreV2Error>;
     readonly get: (
       projectId: ProjectId,
@@ -94,18 +97,16 @@ export class ProjectStoreV2 extends Context.Service<
     readonly findActiveByWorkspaceRoot: (
       workspaceRoot: string,
     ) => Effect.Effect<Option.Option<ProjectRow>, ProjectStoreV2Error>;
-    /** An active project's shell without enrichment such as repository identity. */
     readonly getShell: (
       projectId: ProjectId,
     ) => Effect.Effect<Option.Option<OrchestrationProjectShell>, ProjectStoreV2Error>;
-    /** Active project shells in creation order, without enrichment. */
     readonly listShells: (options?: {
       readonly projectIds?: ReadonlyArray<ProjectId>;
     }) => Effect.Effect<ReadonlyArray<OrchestrationProjectShell>, ProjectStoreV2Error>;
   }
 >()("t3/orchestration-v2/ProjectStore/ProjectStoreV2") {}
 
-/** @public Service construction is part of the canonical Effect module API. */
+/** @public */
 export const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const attachSources = attachProjectSourceBindings(sql);
@@ -131,6 +132,8 @@ export const make = Effect.gen(function* () {
         project_icon_json AS "projectIcon",
         main_repository_json AS "mainRepository",
         scripts_json AS "scripts",
+        pinned_at AS "pinnedAt",
+        archived_at AS "archivedAt",
         created_at AS "createdAt",
         updated_at AS "updatedAt",
         deleted_at AS "deletedAt"
@@ -162,6 +165,8 @@ export const make = Effect.gen(function* () {
             project_icon_json,
             main_repository_json,
             scripts_json,
+            pinned_at,
+            archived_at,
             created_at,
             updated_at,
             deleted_at
@@ -177,6 +182,8 @@ export const make = Effect.gen(function* () {
             ${encoded.projectIcon},
             ${encoded.mainRepository},
             ${encoded.scripts},
+            ${encoded.pinnedAt},
+            ${encoded.archivedAt},
             ${encoded.createdAt},
             ${encoded.updatedAt},
             ${encoded.deletedAt}
@@ -192,6 +199,8 @@ export const make = Effect.gen(function* () {
             project_icon_json = excluded.project_icon_json,
             main_repository_json = excluded.main_repository_json,
             scripts_json = excluded.scripts_json,
+            pinned_at = excluded.pinned_at,
+            archived_at = excluded.archived_at,
             created_at = excluded.created_at,
             updated_at = excluded.updated_at,
             deleted_at = excluded.deleted_at
@@ -206,6 +215,7 @@ export const make = Effect.gen(function* () {
 
   const get: ProjectStoreV2["Service"]["get"] = (projectId, options) =>
     selectRows({ projectId, includeDeleted: options?.includeDeleted === true }).pipe(
+      NodeSqliteClient.readOnly,
       Effect.map((rows) => Option.fromUndefinedOr(rows[0])),
       mapError("get"),
     );
@@ -214,12 +224,13 @@ export const make = Effect.gen(function* () {
     selectRows({
       ...(options?.projectIds === undefined ? {} : { projectIds: options.projectIds }),
       includeDeleted: options?.includeDeleted === true,
-    }).pipe(mapError("list"));
+    }).pipe(NodeSqliteClient.readOnly, mapError("list"));
 
   const findActiveByWorkspaceRoot: ProjectStoreV2["Service"]["findActiveByWorkspaceRoot"] = (
     workspaceRoot,
   ) =>
     selectRows({ workspaceRoot, includeDeleted: false }).pipe(
+      NodeSqliteClient.readOnly,
       Effect.map((rows) => Option.fromUndefinedOr(rows[0])),
       mapError("findActiveByWorkspaceRoot"),
     );
@@ -239,6 +250,8 @@ export const make = Effect.gen(function* () {
           projectIcon: payload.projectIcon ?? null,
           mainRepository: null,
           scripts: payload.scripts,
+          pinnedAt: null,
+          archivedAt: null,
           createdAt: payload.createdAt,
           updatedAt: payload.updatedAt,
           deletedAt: null,
@@ -270,6 +283,8 @@ export const make = Effect.gen(function* () {
         ...(payload.projectIcon === undefined ? {} : { projectIcon: payload.projectIcon }),
         ...(payload.mainRepository === undefined ? {} : { mainRepository: payload.mainRepository }),
         ...(payload.scripts === undefined ? {} : { scripts: payload.scripts }),
+        ...(payload.pinnedAt === undefined ? {} : { pinnedAt: payload.pinnedAt }),
+        ...(payload.archivedAt === undefined ? {} : { archivedAt: payload.archivedAt }),
         updatedAt: payload.updatedAt,
       }).pipe(mapError("apply"));
     },
@@ -280,8 +295,8 @@ export const make = Effect.gen(function* () {
     get,
     list,
     findActiveByWorkspaceRoot,
-    getShell: (projectId) =>
-      get(projectId).pipe(
+    getShell: Effect.fn("ProjectStoreV2.getShell")(function (projectId) {
+      return get(projectId).pipe(
         Effect.map(Option.map(toShell)),
         // t3team: work-source binding badge (fork table, display only).
         Effect.flatMap((shell) =>
@@ -289,12 +304,16 @@ export const make = Effect.gen(function* () {
             ? Effect.succeed(shell)
             : attachSources([shell.value]).pipe(Effect.map((shells) => Option.some(shells[0]!))),
         ),
-      ),
-    listShells: (options) =>
-      list(options?.projectIds === undefined ? undefined : { projectIds: options.projectIds }).pipe(
+      );
+    }),
+    listShells: Effect.fn("ProjectStoreV2.listShells")(function (options) {
+      return list(
+        options?.projectIds === undefined ? undefined : { projectIds: options.projectIds },
+      ).pipe(
         Effect.map((rows) => rows.map(toShell)),
         Effect.flatMap(attachSources),
-      ),
+      );
+    }),
   });
 });
 

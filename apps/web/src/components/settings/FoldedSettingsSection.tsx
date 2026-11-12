@@ -6,27 +6,24 @@ import { cn } from "~/lib/utils";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { useSettingsSearchTarget, useSettingsSearchTargetId } from "./settingsLayout";
 
-/**
- * A grouped settings section that starts closed. The header carries the title,
- * a one line summary of what is set inside, and an optional control such as
- * the section's own switch. A settings search that targets the section opens it.
- */
 export function FoldedSettingsSection({
   id,
   title,
   summary,
   control,
   headerPlacement = "inside",
+  defaultOpen = false,
   children,
 }: {
   readonly id: string;
-  readonly title: string;
+  readonly title: ReactNode;
   readonly summary?: string | null;
   readonly control?: ReactNode;
   readonly headerPlacement?: "inside" | "outside";
+  readonly defaultOpen?: boolean;
   readonly children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const searchTargetId = useSettingsSearchTargetId();
   const targetRef = useSettingsSearchTarget<HTMLElement>(id);
   // A search jump lands inside the fold, so open it before the scroll runs.

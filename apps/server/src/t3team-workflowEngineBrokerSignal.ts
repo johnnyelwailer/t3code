@@ -17,6 +17,9 @@
  *     correlation) and suspends out of band, mirroring the `wait.until` clock park: no resolver
  *     settle, no orchestration command (an event has no message) — the delivery port appends the
  *     resolved entry when the source fires.
+ *
+ * With signal sources turned off no source would ever fire, so `signal.register` records nothing
+ * and a wait throws {@link WORKFLOW_SIGNAL_SOURCES_OFF} at the body's `await` instead of parking.
  */
 import { anyWinner } from "@t3team/sdk";
 
@@ -26,9 +29,23 @@ import type {
   SignalWaitAnyPayload,
   SignalWaitPayload,
 } from "./t3team-workflowEngineBrokerTypes.ts";
+import {
+  isWorkflowSignalSourcesEnabled,
+  WORKFLOW_SIGNAL_SOURCES_OFF,
+} from "./t3team-workflowSignalSourcesFlag.ts";
 
 export async function handleBrokerSignalVerb(core: BrokerCore, s: BrokerSend): Promise<boolean> {
   const { correlationId, kind, payload } = s;
+  if (!isWorkflowSignalSourcesEnabled()) {
+    if (kind === "signal.register") {
+      core.step(correlationId, kind, "completed", "Signal sources are turned off");
+      return true;
+    }
+    if (kind === "signal.wait" || kind === "signal.waitAny") {
+      throw new Error(WORKFLOW_SIGNAL_SOURCES_OFF);
+    }
+    return false;
+  }
   if (kind === "signal.register") {
     const p = payload as SignalRegisterPayload;
     core.step(correlationId, kind, "waiting", `Watch source ${p.source}`);

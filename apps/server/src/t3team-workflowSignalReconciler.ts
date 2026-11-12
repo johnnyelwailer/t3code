@@ -13,6 +13,9 @@
  * binding and calls `reconcile`), survive restarts (the boot reconcile recomputes desired from
  * the journal), self-clean (a terminal run drops out of desired and its source stops), and
  * catch up after crashes (each source's durable cursor bridges the host-down window).
+ *
+ * With `ORCHESTRATION_SIGNAL_SOURCES` off at start the reconciler is inert: no instance starts,
+ * no sweep runs, and the durable registrations wait for a start with the flag on.
  */
 
 import * as Clock from "effect/Clock";
@@ -25,6 +28,12 @@ import * as EffectPath from "effect/Path";
 import * as EffectFileSystem from "effect/FileSystem";
 
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
+import * as SqlClient from "effect/sql/SqlClient";
+
+import {
+  ProjectionProjectSourceBindingRepository,
+  ProjectionProjectSourceBindingRepositoryLive,
+} from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 
 import { T3TeamWorkflowSignalDelivery } from "./t3team-workflowSignalDelivery.ts";
 import {
@@ -33,10 +42,17 @@ import {
 } from "./t3team-workflowSignalCatalog.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";
-import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
+import {
+  makeReconcilerCore,
+  type SignalInstanceStatus,
+} from "./t3team-workflowSignalReconcilerCore.ts";
+import {
+  makeProjectScopePorts,
+  type ProjectScopeServices,
+} from "./t3team-workflowSignalProjectPorts.ts";
 import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,
@@ -44,6 +60,8 @@ import {
 import * as Scheduler from "./scheduling/Scheduler.ts";
 import { providerForAccount, providerForPersistedAuths } from "./t3team-atlassian-auth-store.ts";
 import * as ServerConfig from "./config.ts";
+import * as FeatureFlags from "./t3team-FeatureFlags.ts";
+import { isWorkflowSignalSourcesEnabled } from "./t3team-workflowSignalSourcesFlag.ts";
 
 /** The periodic sweep cadence: catch orphaned instances + GC without hammering the DB. */
 const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
@@ -65,7 +83,16 @@ export interface WorkflowSignalReconcilerShape {
   readonly sweep: () => Promise<void>;
   /** Stop every live instance (host shutdown finalizer). */
   readonly stopAll: () => Promise<void>;
+  /** The instances this process runs or fails to start (diagnostics). */
+  readonly status: () => ReadonlyArray<SignalInstanceStatus>;
 }
+
+const INERT_RECONCILER: WorkflowSignalReconcilerShape = {
+  reconcile: () => Promise.resolve(),
+  sweep: () => Promise.resolve(),
+  stopAll: () => Promise.resolve(),
+  status: () => [],
+};
 
 /** T3TeamWorkflowSignalReconciler - service tag for the signal-source reconciler. */
 export class T3TeamWorkflowSignalReconciler extends Context.Service<
@@ -76,11 +103,17 @@ export class T3TeamWorkflowSignalReconciler extends Context.Service<
 export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
   T3TeamWorkflowSignalReconciler,
   Effect.gen(function* () {
+    // A startup-only flag: read after FeatureFlags has loaded the user's value.
+    yield* FeatureFlags.FeatureFlags;
+    if (!isWorkflowSignalSourcesEnabled()) return INERT_RECONCILER;
     const store = yield* WorkflowSignalStore;
     const delivery = yield* T3TeamWorkflowSignalDelivery;
     const pullRequestService = yield* PullRequestService;
     const gitHubApi = yield* GitHubApi.GitHubApi;
     const vcsProcess = yield* VcsProcess.VcsProcess;
+    // Held here, not read ambiently: the app provides the binding repository only to its consumers.
+    const sourceBindings = yield* ProjectionProjectSourceBindingRepository;
+    const sql = yield* SqlClient.SqlClient;
     // Boot ordering (GHE #332 review): no source instance may start — and so DELIVER — before
     // boot rehydration has rebuilt the watching-run controllers, or a first tick would hit the
     // delivery port's orphan branch and fail a healthy parked run. Rehydration runs with the
@@ -106,6 +139,18 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
         Effect.provideService(VcsProcess.VcsProcess, vcsProcess),
       ),
       resolveWorkItemProvider,
+      projectScope: makeProjectScopePorts({
+        pullRequestService,
+        gitHubApi,
+        runAmbient: (effect) =>
+          Effect.runPromiseWith(ambient as Context.Context<ProjectScopeServices>)(
+            effect.pipe(
+              Effect.provideService(ProjectionProjectSourceBindingRepository, sourceBindings),
+              Effect.provideService(SqlClient.SqlClient, sql),
+            ),
+          ),
+        resolveJiraProvider: resolveWorkItemProvider,
+      }),
     });
     // Loud boot cross-check: a renamed/missing catalog entry breaks boot, not a parked body.
     assertCatalogCoversDeclarations(catalog);
@@ -160,10 +205,12 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       reconcile: () => rehydrated.then(() => core.reconcile()),
       sweep: () => rehydrated.then(() => core.sweep()),
       stopAll: () => core.stopAll(),
+      status: () => core.status(),
     };
   }),
 ).pipe(
   Layer.provide(Scheduler.layer),
+  Layer.provide(ProjectionProjectSourceBindingRepositoryLive),
   // The same gate reference the rehydrate layer and the delivery port use (memoized: one flag).
   Layer.provide(T3TeamWorkflowSignalRehydrateGateLive),
 );

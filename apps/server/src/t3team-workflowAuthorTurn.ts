@@ -114,6 +114,7 @@ export function driveWorkflowAuthorTurn(
     readonly correlationId: string;
     readonly text: string;
     readonly timeoutMs: number;
+    readonly retainTurnDraft?: boolean;
   },
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
@@ -130,6 +131,7 @@ export function driveWorkflowAuthorTurn(
       runId: input.runId,
       correlationId: input.correlationId,
       kind: "thread.turn",
+      ...(input.retainTurnDraft ? { retainTurnDraft: true } : {}),
       promptMessageId,
       resolveLive: async (reply) =>
         done(() => resolve(typeof reply === "string" ? reply : JSON.stringify(reply))),

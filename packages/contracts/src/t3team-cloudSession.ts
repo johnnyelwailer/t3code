@@ -61,6 +61,13 @@ export const CloudSessionMachineStageSchema = Schema.Literals([
 ]);
 export type CloudSessionMachineStage = typeof CloudSessionMachineStageSchema.Type;
 
+/**
+ * The longest a cloud session holds its machine: the `hold_minutes` the app always dispatches
+ * (345 minutes, under the workflow's 350-minute job timeout). An upper bound on what is left of a
+ * live session: the workflow's idle check can release it sooner.
+ */
+export const CLOUD_SESSION_HOLD_CEILING_SECONDS = 345 * 60;
+
 export const CloudSessionSchema = Schema.Struct({
   /** Stable per attempt. Opaque to the client — do not parse it. */
   sessionId: Schema.String,
@@ -74,6 +81,11 @@ export const CloudSessionSchema = Schema.Struct({
   startedAt: Schema.optional(Schema.String),
   /** Remaining lifetime in seconds; null until the session is running. */
   remainingSeconds: Schema.NullOr(Schema.Int),
+  /**
+   * When a ready session's hold ends (ISO 8601): an upper bound, as the idle check can release it
+   * sooner. Clients count down to this instead of timing when they received `remainingSeconds`.
+   */
+  endsAt: Schema.optional(Schema.String),
   /** Human-readable compute shape, e.g. "ubuntu-slim · 12 GB · 4 cores". */
   machineLabel: Schema.String,
   /** Provider-supplied reason, present only when `phase` is `failed`. */
@@ -132,11 +144,16 @@ export const CloudSessionCreateInputSchema = Schema.Struct({
   /** How long to hold the machine before it stops itself. */
   durationSeconds: Schema.Int,
   /**
-   * The project the session is for. When the project's checkouts hold a machine definition
+   * The project the session is for. When the project's OWN repository holds a machine definition
    * (`t3team-projectMachine.ts`), the session runs inside that machine; otherwise it is a plain
-   * session, exactly as without a project.
+   * session, exactly as without a project. A definition in a linked repository is never used.
    */
   projectId: Schema.optional(ProjectId),
+  /**
+   * Start a plain session in the project even though it has a machine: the retry a create offers
+   * (`CloudSessionFailedError.plainAvailable`) when the machine cannot be used.
+   */
+  plain: Schema.optional(Schema.Boolean),
   /**
    * Start a host checkout of the project so an agent can write its machine definition.
    * Refused when the flag is off, or when the project already has a definition.
@@ -151,6 +168,47 @@ export const CloudSessionCancelInputSchema = Schema.Struct({
   sessionId: Schema.String,
 });
 export type CloudSessionCancelInput = typeof CloudSessionCancelInputSchema.Type;
+
+/**
+ * Delete a machine, not just this session's run: its persistent state (the workspace's
+ * snapshots and the machine's resume branch) goes with it. Same targeting rules as cancel:
+ * only one of the caller's own sessions.
+ */
+export const CloudSessionDeleteInputSchema = Schema.Struct({
+  sessionId: Schema.String,
+  /** The snapshot-only projects (no git remote) the user confirmed losing. */
+  acknowledgedProjects: Schema.optional(Schema.Array(Schema.String)),
+});
+export type CloudSessionDeleteInput = typeof CloudSessionDeleteInputSchema.Type;
+
+/**
+ * What a delete removed. `wipBranch`: when the machine carried work that was not pushed
+ * anywhere of the user's own, that work was pushed to a branch of the project's remote
+ * before the delete finished.
+ */
+export const CloudSessionDeleteResultSchema = Schema.Struct({
+  /** The branch the unpushed work was saved on, or null when the machine carried none. */
+  wipBranch: Schema.NullOr(Schema.String),
+  /** Parts the delete could not reach (e.g. no snapshot was ever saved for the run). */
+  warnings: Schema.Array(Schema.String),
+});
+export type CloudSessionDeleteResult = typeof CloudSessionDeleteResultSchema.Type;
+
+/**
+ * What the delete confirmation shows before anything is removed: the machine's repository
+ * and the projects on this server that run on it.
+ */
+export const CloudSessionDeleteInfoSchema = Schema.Struct({
+  /** `owner/name` of the repository whose resume branch the machine preserves; null when unknown. */
+  repository: Schema.NullOr(Schema.String),
+  /** The names of this server's projects whose machine is this one. */
+  projects: Schema.Array(Schema.String),
+  /** Earlier sessions of the machine whose saved state the delete removes too. */
+  otherSessions: Schema.optional(Schema.Number),
+  /** Projects with no git remote, whose only copy is the snapshot; null when the session never said. */
+  snapshotOnlyProjects: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+});
+export type CloudSessionDeleteInfo = typeof CloudSessionDeleteInfoSchema.Type;
 
 export * from "./t3team-cloudSessionFailure.ts";
 export * from "./t3team-cloudSessionProjectFolder.ts";

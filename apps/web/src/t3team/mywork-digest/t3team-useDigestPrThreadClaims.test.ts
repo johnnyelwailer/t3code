@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
-import { digestPrThreadClaims } from "./t3team-useDigestPrThreadClaims";
+import { digestPrThreadClaims, withClaimProviderInstances } from "./t3team-useDigestPrThreadClaims";
 
 const NOW = Date.parse("2026-10-06T12:00:00Z");
 const pr = {
@@ -36,7 +36,12 @@ describe("digestPrThreadClaims", () => {
       [shell("a", "running", "2026-10-06T11:59:00Z")],
       NOW,
     );
-    expect(claim).toMatchObject({ threadId: "a", ticketId: "IES-1", running: true });
+    expect(claim).toMatchObject({
+      threadId: "a",
+      ticketId: "IES-1",
+      running: true,
+      providerInstanceId: "nexplore",
+    });
     expect(claim?.threadUrl).toBe("/t3team/projects/proj/threads/a");
   });
   it("keeps a recently finished thread outlined, drops week-old ones and unrelated threads", () => {
@@ -50,5 +55,23 @@ describe("digestPrThreadClaims", () => {
       NOW,
     );
     expect(claims.map((claim) => [claim.threadId, claim.finished])).toEqual([["done", true]]);
+  });
+});
+
+describe("withClaimProviderInstances", () => {
+  const serverClaim = {
+    threadId: "a",
+    threadTitle: "thread a",
+    ticketId: "IES-1",
+    agent: "Nexplore AI · model",
+    lastActivityAt: "2026-10-06T11:59:00Z",
+  };
+  it("stamps the thread shell's provider instance on a server claim", () => {
+    const [claim] = withClaimProviderInstances([serverClaim], [shell("a", null, "", [])]);
+    expect(claim?.providerInstanceId).toBe("nexplore");
+  });
+  it("leaves a claim without a matching shell untouched instead of guessing", () => {
+    const [claim] = withClaimProviderInstances([serverClaim], [shell("other", null, "", [])]);
+    expect(claim).toBe(serverClaim);
   });
 });

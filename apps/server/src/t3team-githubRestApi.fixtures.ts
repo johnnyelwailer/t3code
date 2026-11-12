@@ -7,7 +7,7 @@
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 
 export interface RecordedRestCall {

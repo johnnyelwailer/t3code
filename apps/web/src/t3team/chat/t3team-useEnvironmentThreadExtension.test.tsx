@@ -5,6 +5,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const environmentPhase = vi.hoisted(() => ({ value: "connected" }));
+const outboxFlag = vi.hoisted(() => ({ enabled: true }));
 const preparedConnection = vi.hoisted(() => ({
   value: null as null | { environmentId: string; httpBaseUrl: string },
 }));
@@ -15,6 +16,9 @@ const environmentPost = vi.hoisted(() => ({
 
 vi.mock("~/state/environments", () => ({
   useEnvironment: () => ({ connection: { phase: environmentPhase.value } }),
+}));
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
+  useFeatureFlag: (key: string) => key !== "UI_OUTBOX" || outboxFlag.enabled,
 }));
 vi.mock("~/state/session", () => ({
   readPreparedConnection: () => preparedConnection.value,
@@ -105,6 +109,7 @@ beforeEach(() => {
   });
   resetT3TeamOutboxStoreForTests();
   environmentPhase.value = "connected";
+  outboxFlag.enabled = true;
   preparedConnection.value = { environmentId: "relay-env", httpBaseUrl: "http://127.0.0.1:50123/" };
   environmentPost.calls = [];
   environmentPost.reply = { status: 200, payload: { ok: true } };
@@ -169,6 +174,17 @@ describe("useT3TeamEnvironmentThreadExtension", () => {
 
     expect(environmentPost.calls).toEqual([]);
     expectQueuedAnswer();
+  });
+
+  it("sends straight, never queueing, while the UI_OUTBOX flag is off", async () => {
+    outboxFlag.enabled = false;
+    environmentPhase.value = "backoff";
+    const latest = await mountExtension();
+
+    await latest.extension?.dispatchWorkflowDecision?.(DECISION);
+
+    expect(environmentPost.calls).toHaveLength(1);
+    expect(getT3TeamOutboxSnapshot().entries).toEqual([]);
   });
 
   it("controls a run on the thread's own environment", async () => {

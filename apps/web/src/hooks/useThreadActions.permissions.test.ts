@@ -1,7 +1,6 @@
 import {
   AuthOrchestrationOperateScope,
   AuthSourceControlWriteScope,
-  EnvironmentAuthorizationError,
   EnvironmentId,
   ProjectId,
   ThreadId,
@@ -10,6 +9,11 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { useDiffPanelStore } from "../diffPanelStore";
+import { browserMiniPlayerSource, usePreviewMiniPlayerStore } from "../previewMiniPlayerStore";
+import { useRightPanelStore } from "../rightPanelStore";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -21,6 +25,7 @@ function deferred<T>() {
 
 const state = vi.hoisted(() => ({
   scopes: new Map<string, Set<string>>(),
+  unreachable: new Set<string>(),
   threads: [] as {
     environmentId: EnvironmentId;
     id: ThreadId;
@@ -44,7 +49,10 @@ vi.mock("react", () => ({
   useRef: (current: unknown) => ({ current }),
 }));
 vi.mock("@tanstack/react-router", () => ({
-  useRouter: () => ({ state: { matches: [] }, navigate: async () => {} }),
+  useRouter: () => ({ state: { location: { href: "/" }, matches: [] }, navigate: async () => {} }),
+}));
+vi.mock("../state/t3team-localThreadActions", () => ({
+  readEnvironmentUnreachable: (environmentId: string) => state.unreachable.has(environmentId),
 }));
 vi.mock("../state/session", () => ({
   environmentSession: { sessionStateAtom: "session" },
@@ -56,6 +64,7 @@ vi.mock("../state/use-atom-command", () => ({
     (action: string) =>
     async (request: { environmentId: string; input: { threadId?: string } }) => {
       state.requests.push({ action, ...request });
+      if (action === "localOverride") return AsyncResult.success(undefined);
       const scope =
         action === "removeWorktree" ? AuthSourceControlWriteScope : AuthOrchestrationOperateScope;
       if (!state.scopes.get(request.environmentId)?.has(scope)) {
@@ -89,6 +98,7 @@ vi.mock("../state/threads", () => ({
       "snooze",
       "unsnooze",
       "stopSession",
+      "localOverride",
     ].map((action) => [action, action]),
   ),
 }));
@@ -96,10 +106,7 @@ vi.mock("../state/vcs", () => ({
   vcsEnvironment: { removeWorktree: "removeWorktree", refreshStatus: "refreshStatus" },
 }));
 vi.mock("../state/entities", () => ({
-  readEnvironmentSupportsPinning: () => true,
-  readEnvironmentSupportsPinReorder: () => true,
-  readEnvironmentSupportsSettlement: () => true,
-  readEnvironmentSupportsSnooze: () => true,
+  readEnvironmentServerConfigLoaded: () => true,
   readThreadShell: (ref: ScopedThreadRef) =>
     state.threads.find(
       (thread) => thread.environmentId === ref.environmentId && thread.id === ref.threadId,
@@ -167,6 +174,23 @@ vi.mock("./useSettings", () => ({
 
 import { useThreadActions } from "./useThreadActions";
 
+function seedThreadPanelState(ref: ScopedThreadRef) {
+  useRightPanelStore.getState().show(ref);
+  useDiffPanelStore.getState().selectGitScope(ref, "branch");
+  usePreviewMiniPlayerStore.getState().open(ref, browserMiniPlayerSource("tab"));
+}
+
+function threadPanelStatePresence(ref: ScopedThreadRef) {
+  const key = scopedThreadKey(ref);
+  return {
+    rightPanel: key in useRightPanelStore.getState().byThreadKey,
+    diffPanel: key in useDiffPanelStore.getState().byThreadKey,
+    miniPlayer: key in usePreviewMiniPlayerStore.getState().byThreadKey,
+  };
+}
+const panelStateKept = { rightPanel: true, diffPanel: true, miniPlayer: true };
+const panelStateCleared = { rightPanel: false, diffPanel: false, miniPlayer: false };
+
 const primary = EnvironmentId.make("primary");
 const secondary = EnvironmentId.make("secondary");
 const target = { environmentId: secondary, threadId: ThreadId.make("thread") };
@@ -209,6 +233,7 @@ const operations = [
 ] as const;
 
 beforeEach(() => {
+  state.unreachable = new Set();
   state.scopes = new Map([
     [primary, new Set([AuthOrchestrationOperateScope])],
     [secondary, new Set<string>()],
@@ -230,6 +255,9 @@ beforeEach(() => {
   state.toasts = [];
   state.afterRequest = undefined;
   state.sessionLookupFails = false;
+  useRightPanelStore.setState(useRightPanelStore.getInitialState(), true);
+  useDiffPanelStore.setState(useDiffPanelStore.getInitialState(), true);
+  usePreviewMiniPlayerStore.setState(usePreviewMiniPlayerStore.getInitialState(), true);
 });
 
 describe("thread action permissions", () => {
@@ -286,37 +314,30 @@ describe("thread action permissions", () => {
     },
   );
 
-  it("identifies the missing task scope when thread deletion is denied", async () => {
-    const result = await useThreadActions().deleteThread(target);
-
-    expect(result._tag).toBe("Failure");
-    if (result._tag !== "Failure") throw new Error("Expected permission denial");
-    const error = Cause.squash<unknown>(result.cause);
-    expect(error).toBeInstanceOf(EnvironmentAuthorizationError);
-    expect(error).toMatchObject({ requiredScope: AuthOrchestrationOperateScope });
-    expect(state.requests).toEqual([]);
-    expect(state.localEffects).toEqual([]);
-  });
-
   it("deletes an archived thread only with its own environment's grant", async () => {
     state.threads = [];
+    seedThreadPanelState(target);
     const actions = useThreadActions();
     await actions.deleteThread(target);
     expect(state.requests).toEqual([]);
+    expect(threadPanelStatePresence(target)).toEqual(panelStateKept);
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     expect((await actions.deleteThread(target))._tag).toBe("Success");
     expect(state.requests).toEqual([
       expect.objectContaining({ action: "delete", environmentId: secondary }),
     ]);
+    expect(threadPanelStatePresence(target)).toEqual(panelStateCleared);
   });
 
   it("stops before delete and local cleanup when permission is revoked during session stop", async () => {
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     state.threads[0]!.session = { status: "ready" };
     state.afterRequest = () => state.scopes.get(secondary)!.clear();
+    seedThreadPanelState(target);
     expect((await useThreadActions().deleteThread(target))._tag).toBe("Failure");
     expect(state.requests.map((request) => request.action)).toEqual(["stopSession"]);
     expect(state.localEffects).toEqual([]);
+    expect(threadPanelStatePresence(target)).toEqual(panelStateKept);
   });
 
   it.each([
@@ -326,10 +347,12 @@ describe("thread action permissions", () => {
     state.scopes.get(secondary)!.add(AuthOrchestrationOperateScope);
     state.threads[0]!.worktreePath = "/worktrees/thread";
     state.sessionLookupFails = sessionLookupFails;
+    seedThreadPanelState(target);
     expect((await useThreadActions().deleteThread(target))._tag).toBe("Success");
     expect(state.confirm).not.toHaveBeenCalled();
     expect(state.requests.map((request) => request.action)).toEqual(["stopSession", "delete"]);
     expect(state.localEffects).toContain("clear-terminal-ui");
+    expect(threadPanelStatePresence(target)).toEqual(panelStateCleared);
   });
 
   it("does not request worktree removal after its grant is revoked during delete", async () => {
@@ -341,8 +364,6 @@ describe("thread action permissions", () => {
     state.afterRequest = () => state.scopes.get(secondary)!.delete(AuthSourceControlWriteScope);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      // The thread is already gone, so cleanup reports itself in a toast
-      // instead of failing the deletion.
       const result = await useThreadActions().deleteThread(target);
       expect(result._tag).toBe("Success");
       expect(state.requests.map((request) => request.action)).toEqual(["stopSession", "delete"]);
@@ -351,5 +372,44 @@ describe("thread action permissions", () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+});
+
+describe("threads of an unreachable environment (ended cloud session)", () => {
+  beforeEach(() => {
+    state.unreachable.add(secondary);
+  });
+
+  it("settles locally without a grant or a remote command", async () => {
+    const result = await useThreadActions().settleThread(target);
+    expect(result._tag).toBe("Success");
+    expect(state.requests).toEqual([
+      {
+        action: "localOverride",
+        environmentId: secondary,
+        input: { threadId: target.threadId, override: "settled" },
+      },
+    ]);
+  });
+
+  it("deletes locally, cleans up local state, and never asks the environment", async () => {
+    state.threads[0]!.session = { status: "ready" };
+    const result = await useThreadActions().confirmAndDeleteThread(target);
+    expect(result._tag).toBe("Success");
+    expect(state.requests).toEqual([
+      {
+        action: "localOverride",
+        environmentId: secondary,
+        input: { threadId: target.threadId, override: "removed" },
+      },
+    ]);
+    expect(state.localEffects).toContain("clear-draft");
+    expect(state.toasts).toEqual([]);
+  });
+
+  it("keeps every other action behind the grant", async () => {
+    const result = await useThreadActions().archiveThread(target);
+    expect(result._tag).toBe("Failure");
+    expect(state.requests).toEqual([]);
   });
 });

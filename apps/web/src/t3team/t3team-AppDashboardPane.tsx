@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import type { ServerProvider } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
+import { bindProjectKickoffThread } from "~/t3team/t3team-bindProjectKickoffThread";
+import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
+import { usePublishThreadViewContext } from "~/t3team/t3team-usePublishThreadViewContext";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
 import { MyWorkRightPanel } from "~/t3team/t3team-MyWorkRightPanel";
@@ -48,7 +50,7 @@ export function AppDashboardPane({
   onOpenFullThread: (projectId: string, threadId: string) => void;
   onThreadKickoffConsumed: (threadId: string) => void;
   onRememberEmbeddedThread: (threadId: string) => void;
-  onKickoffProjectThread: (input: ProjectKickoffThreadInput) => void;
+  onKickoffProjectThread: CreateProjectKickoffThread;
   renderDashboard: (project: ProjectShellProject) => React.ReactNode;
 }) {
   useProjectWorkspaceAutoSync({
@@ -61,6 +63,12 @@ export function AppDashboardPane({
       activeThreadStatus: activeThread?.status ?? null,
       visibleThreadCount: projectThreads.length,
     },
+  });
+
+  usePublishThreadViewContext({
+    threadId: activeThreadId,
+    projectId: project.id,
+    active: activeDashboardMode === "my-work",
   });
 
   useEffect(() => {
@@ -116,29 +124,11 @@ export function AppDashboardPane({
       onOpenThread={(threadId) => onOpenThread(project.id, threadId)}
       onOpenFullThread={(threadId) => onOpenFullThread(project.id, threadId)}
       onThreadKickoffConsumed={onThreadKickoffConsumed}
-      onKickoffThread={(
-        kickoffMessage,
-        kickoffPending,
-        kickoffModelSelection,
-        kickoffRuntimeMode,
-        kickoffInteractionMode,
-        selectedToolIds,
-        kickoffContextAttachments,
-        kickoffWorkflow,
-      ) => {
-        onKickoffProjectThread({
-          projectId: project.id,
-          dashboardMode: activeDashboardMode,
-          kickoffMessage,
-          ...(kickoffPending !== undefined ? { kickoffPending } : {}),
-          kickoffModelSelection,
-          kickoffRuntimeMode,
-          kickoffInteractionMode,
-          selectedToolIds,
-          kickoffContextAttachments,
-          ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
-        });
-      }}
+      onKickoffThread={bindProjectKickoffThread(
+        project.id,
+        activeDashboardMode,
+        onKickoffProjectThread,
+      )}
     />
   );
   const panelRevealRequest =

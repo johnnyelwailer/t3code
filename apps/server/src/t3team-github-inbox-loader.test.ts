@@ -10,7 +10,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { ServerConfig } from "./config.ts";
 import { writeStoredRepositoryList } from "./t3team-githubRepositoryListStore.ts";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import { loadGitHubInboxResponse } from "./t3team-github-inbox-loader.ts";
 import {
   accountCache,
@@ -39,7 +39,13 @@ const itLoader = (
     ),
   );
 
+const GHE_CATALOG_FLAG = "NEXI_FF_GHE_REPOSITORY_CATALOG";
+const withGheCatalogFlag = (value: string) => {
+  process.env[GHE_CATALOG_FLAG] = value;
+};
+
 afterEach(() => {
+  delete process.env[GHE_CATALOG_FLAG];
   accountCache.clear();
   inboxCache.clear();
   pullRequestContextCache.clear();
@@ -107,6 +113,7 @@ describe("loadGitHubInboxResponse repository discovery", () => {
     "falls back to the complete repository list when fast search has no matching candidate",
     () =>
       Effect.gen(function* () {
+        withGheCatalogFlag("0");
         const { api, calls } = makeFakeGitHubApi((call) => {
           if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
           if (call.operation === "t3team.github.repository-search") {
@@ -151,6 +158,85 @@ describe("loadGitHubInboxResponse repository discovery", () => {
         // Every read targets the host the request names, not a hardcoded github.com.
         expect(new Set(calls.map((call) => call.host))).toEqual(new Set(["nexplore.ghe.com"]));
       }),
+  );
+
+  itLoader("lists every repository the account reaches on a GHE host, not just title matches", () =>
+    Effect.gen(function* () {
+      const { api, calls } = makeFakeGitHubApi((call) => {
+        if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
+        if (call.operation === "t3team.github.repositories") {
+          return restOk([
+            {
+              id: 1,
+              full_name: "hive/billing-service",
+              html_url: "https://nexplore.ghe.com/hive/billing-service",
+            },
+            {
+              id: 2,
+              full_name: "pj/nexi-distribution",
+              html_url: "https://nexplore.ghe.com/pj/nexi-distribution",
+            },
+          ]);
+        }
+        return restOk({ items: [] });
+      });
+
+      const result = yield* loadGitHubInboxResponse({
+        host: "nexplore.ghe.com",
+        projectKey: "NEXI",
+        projectTitle: "Nexi Distribution",
+        discoveryMode: "repositories",
+        trigger: "user",
+      }).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+
+      expect(result.repositories.map((repository) => repository.nameWithOwner)).toEqual([
+        "hive/billing-service",
+        "pj/nexi-distribution",
+      ]);
+      expect(result.suggestedRepositoryUrls).toEqual([
+        "https://nexplore.ghe.com/pj/nexi-distribution",
+      ]);
+      expect(calls.map((call) => call.operation)).toEqual([
+        "t3team.github.account",
+        "t3team.github.repositories",
+      ]);
+    }),
+  );
+
+  itLoader("keeps the title search for a GHE host while the catalog flag is off", () =>
+    Effect.gen(function* () {
+      withGheCatalogFlag("0");
+      const { api, calls } = makeFakeGitHubApi((call) => {
+        if (call.operation === "t3team.github.account") return restOk({ login: "pj" });
+        if (call.operation === "t3team.github.repository-search") {
+          return restOk({
+            items: [
+              {
+                id: 1,
+                full_name: "pj/nexi-distribution",
+                html_url: "https://nexplore.ghe.com/pj/nexi-distribution",
+              },
+            ],
+          });
+        }
+        return restOk([]);
+      });
+
+      const result = yield* loadGitHubInboxResponse({
+        host: "nexplore.ghe.com",
+        projectKey: "NEXI",
+        projectTitle: "Nexi Distribution",
+        discoveryMode: "repositories",
+      }).pipe(Effect.provideService(GitHubApi.GitHubApi, api));
+
+      expect(result.repositories.map((repository) => repository.nameWithOwner)).toEqual([
+        "pj/nexi-distribution",
+      ]);
+      expect(calls.map((call) => call.operation)).toEqual([
+        "t3team.github.account",
+        "t3team.github.repository-search",
+      ]);
+    }),
   );
 
   itLoader("follows the repository list's next pages the way gh --paginate did", () =>

@@ -16,6 +16,8 @@
     "apps/server/__fixtures__/t3team-hostChangeRequestTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftToolUndeclared.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostWorkItemRead.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostWorkItemReadUndeclared.workflow.ts",
     "apps/server/__fixtures__/t3team-launchThread.workflow.ts",
     "apps/server/scripts/t3team-dev-entry.mjs",
     "apps/server/src/t3team-provider-tool-injection-codex-cli.ts",
@@ -82,6 +84,7 @@
     "scripts/t3team-timer-e2e-live.mjs",
     "scripts/t3team-timer-e2e-workspace.mjs",
     "t3team-additive-guard.test.mjs",
+    "t3team-rerender-gate.test.mjs",
   ],
   // Fork debt baseline (2026-09-09): dependencies declared for fork tooling that knip
   // cannot trace (string-based resolution, external runners, or not yet wired in).
@@ -108,8 +111,31 @@
     },
     "scripts": {
       // Knip loads its preprocessor through a CLI option; native verification and
-      // worktree setup (from t3.json) run directly.
-      "entry": ["knip-schemas.ts", "mobile-native-client.ts", "setup-worktree.ts"],
+      // worktree setup (from t3.json) run directly. release-desktop.yml bundles the
+      // Windows verify script with esbuild through a path knip does not trace,
+      // electron-builder loads the macOS signer by path, and mobile-e2e.ts runs
+      // agent-device's CLI by path, and mobile-behavior.ts spawns its runner by path.
+      // release-desktop.yml runs the desktop launch check through xvfb-run, which knip
+      // does not trace.
+      "entry": [
+        // These fixture scripts are injected into a browser page by path.
+        "fixtures/*/*.js",
+        "knip-schemas.ts",
+        "mobile-behavior/run.ts",
+        "mobile-native-client.ts",
+        "setup-worktree.ts",
+        "sign-macos.ts",
+        // Run by the distribution's release workflow against the built app, not imported.
+        "t3team-check-packed-imports.ts",
+        "prepare-server-compile-cache.cjs",
+        "smoke-desktop-app.ts",
+        "verify-windows-desktop-artifact.ts",
+      ],
+      "ignoreDependencies": ["agent-device", "esbuild"],
+      // The `t3` npm package's files: copied into the package, never imported.
+      // knip-schemas.test.ts writes a throwaway project to .knip-test-*, which a
+      // knip run beside it in check:changed must not report.
+      "ignore": ["npm-launcher/**", ".knip-test-*/**"],
     },
     "apps/server": {
       // Vite+ pack entries and the launcher used by installed background services.
@@ -118,6 +144,9 @@
         "src/claude-history-worker.ts!",
         "src/t3team-hostEffect.ts!",
         "src/t3team-hostSdk.ts!",
+        // Fork main imported this into t3team-workflowEngineBrokerAsk.ts but never called it; the sync
+        // lint pass removed the unused import. Kept until the retry is wired in or the file is deleted.
+        "src/t3team-workflowEngineTurnStartBusyRetry.ts",
         "src/t3team-stallProfiler.fixture.mjs",
         // Bundled recipe bodies, read as raw text (`?raw`) and scaffolded into workspaces, where
         // the recipe loader requires their top-level `export const meta`.
@@ -125,8 +154,7 @@
         "src/t3team-implementThis.workflow.ts",
         "src/t3team-livenessBeacon.fixture.mjs",
         "scripts/cli.ts",
-        "scripts/evaluate-thread-titles.ts",
-        "scripts/measure-pr-preview.ts",
+        "scripts/fetch-expo-schema.ts",
         "scripts/probe-claude-fork-local-rollback-replay.ts",
         "scripts/update-test-shard-weights.ts",
         "scripts/verify-background-live.ts",
@@ -137,7 +165,14 @@
         // the t3team-workflowEngine{DecisionCard,Reactor} integration tests, not imported.
         "__fixtures__/t3team-decisionChoice.workflow.ts",
         "__fixtures__/t3team-parallelAgentsAfterResume.workflow.ts",
+        // graphqlgen reads its config.
+        "graphql.config.ts",
+        // Upstream 063 is held, so Migrations.ts does not import it until the fork's V1 lineage
+        // cutover is confirmed done everywhere (see Migrations.ts).
+        "src/persistence/Migrations/063_DropUnusedV1Projections.ts",
       ],
+      // The generated operations export every selection's class.
+      "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.
       // undici: a bundle external (Cursor's closure) that inlined pi-coding-agent imports at
@@ -149,6 +184,13 @@
         "@t3tools/web",
         "@napi-rs/keyring",
         "undici",
+        // Imported only by distribution modules the pack compiles in (nexi-work/broker/agent); the
+        // pack plugin resolves their bare imports against this package so the bundler inlines them.
+        "ws",
+        // Same: imported by nexi-work/pack/nexplore-global/pi-mcp*.ts and pi-skills-exec.ts, which the pack
+        // compiles in. Upstream deleted the unused declaration; the pack's import check needs it.
+        "@modelcontextprotocol/sdk",
+        "ffi-rs",
       ],
     },
     "apps/desktop": {
@@ -161,6 +203,7 @@
         "src/snapShot/SnapShotAccessibilityWorker.ts!",
         "src/boot.ts!",
         "src/compileCache.ts!",
+        "src/serverCompileCache.ts!",
         "src/main.ts!",
         "src/preload.ts!",
         "src/preview-pick-preload.ts!",
@@ -186,7 +229,7 @@
       // src/t3team/storybook, which knip cannot read `stories` from, so every story file (and
       // everything only stories import) reads as unused. Keep the stories as explicit entries
       // so the gate measures real reachability again.
-      "entry": ["scripts/warm-dep-cache.ts", "src/**/*.stories.tsx"],
+      "entry": ["scripts/warm-dep-cache.ts", "src/**/*.stories.tsx", "test/fixtures/**/*.mjs"],
       // UI component modules are copied and adapted as cohesive sets. Keep their
       // named subcomponents even before they have callers; the file audit still
       // reports an entire component module when nothing imports it.
@@ -205,6 +248,10 @@
         "src/components/pullRequest/t3team-prDiffExplorer.logic.ts": ["exports"],
       },
     },
+    "apps/marketing": {
+      // `astro check` runs from the typecheck task in vite.config.ts, which knip does not read.
+      "ignoreDependencies": ["@astrojs/check"],
+    },
     "apps/mobile": {
       // Expo loads plugins and the fingerprint config by string; Metro embeds the browser entry in the native WebView.
       "entry": [
@@ -214,10 +261,13 @@
         "scripts/generate-device-stream.mts",
         "src/features/devices/device-stream.browser.ts!",
         "src/features/browser/preview-stream.browser.ts!",
+        // The overlay's whole surface (`@t3code/mobile-api`): the distribution overlay consumes it, resolved by the Metro hook.
+        "src/extensions/t3team-api.ts",
       ],
       // Fonts are configured as asset paths; Expo autolinks the native packages.
       "ignoreDependencies": [
         "@expo-google-fonts/dm-sans",
+        "@t3tools/mobile-highlights-native",
         "@t3tools/mobile-review-diff-native",
         "@t3tools/mobile-terminal-native",
       ],
@@ -226,8 +276,22 @@
       // React Native codegen discovers component specifications by filename.
       "entry": ["src/*NativeComponent.ts!"],
     },
+    "infra/task-cache": {
+      "ignore": ["vendor/**"],
+      // The bootstrap and Vite+ hook are loaded by shell/package configuration.
+      "entry": [
+        "alchemy.run.ts!",
+        "scripts/install.ts",
+        "scripts/install-ci.ts",
+        "src/runHook.ts",
+        "src/flush.ts",
+        "src/nativeRunHook.js",
+        "src/preload.mjs",
+      ],
+    },
     "infra/relay": {
-      "entry": ["alchemy.run.ts!", "src/persistence/schema.ts!"],
+      // Alchemy loads src/worker.ts as the Worker entry and reads its default export.
+      "entry": ["alchemy.run.ts!", "src/persistence/schema.ts!", "src/worker.ts!"],
     },
     "packages/*": {
       // These workspace packages are private to this monorepo.
@@ -274,6 +338,11 @@
       "includeEntryExports": true,
       "entry": ["test/fixtures/*.ts"],
       "ignoreIssues": { "src/_generated/**": ["exports", "types"] },
+    },
+    "packages/source-control-github": {
+      // graphqlgen reads its config; the generated operations export every selection's class.
+      "entry": ["graphql.config.ts", "scripts/measure-pr-preview.ts"],
+      "ignoreIssues": { "**/*.graphql.ts": ["exports", "types", "namespaceMembers"] },
     },
   },
 }

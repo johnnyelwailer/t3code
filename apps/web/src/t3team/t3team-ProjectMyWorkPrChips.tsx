@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
 
-import { WatchedPullRequestIndicator } from "~/components/pullRequest/t3team-WatchedPullRequestIndicator";
+import { MyWorkWatchedPullRequestIndicator } from "~/t3team/t3team-MyWorkWatchedPullRequestIndicator";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { pullRequestIdentityOfActivityItem } from "~/t3team/t3team-githubActivityPullRequestIdentity";
@@ -44,7 +44,7 @@ function ProjectMyWorkPrChip({ pr }: { pr: GitHubWorkActivityItem }) {
         {state}
       </Badge>
       {pr.subjectTitle ? <span className="min-w-0 truncate">{pr.subjectTitle}</span> : null}
-      {identity ? <WatchedPullRequestIndicator {...identity} /> : null}
+      {identity ? <MyWorkWatchedPullRequestIndicator {...identity} /> : null}
     </>
   );
   const label = `${pr.repository}${number ? `#${number}` : ""} ${state}: ${pr.subjectTitle ?? ""}`;

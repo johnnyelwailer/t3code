@@ -1,6 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 import { ProjectId, RunId, ScheduledTaskError, ThreadId } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
+import { afterEach, beforeEach } from "vite-plus/test";
 
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import {
@@ -78,6 +80,22 @@ const prepare = (input: {
 };
 
 describe("prepareThreadHandoff", () => {
+  beforeEach(() => replaceFeatureFlagPresetValues(new Map([["CLOUD_THREAD_HANDOFF", true]])));
+  afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
+  it.effect("refuses, without reading the thread, while thread handoff is off", () =>
+    Effect.gen(function* () {
+      replaceFeatureFlagPresetValues(new Map([["CLOUD_THREAD_HANDOFF", false]]));
+      const { effect, calls } = prepare({ shells: [null], waitForTurnEnd: true });
+      const error = yield* Effect.flip(effect);
+      assert.strictEqual(
+        error.message,
+        "Move thread to another machine is turned off on this host (Settings → Features).",
+      );
+      assert.deepStrictEqual(calls, []);
+    }),
+  );
+
   it.effect("refuses, without capturing, when the waited-for turn is still running", () =>
     Effect.gen(function* () {
       const { effect, calls } = prepare({ shells: [RUN, RUN], waitForTurnEnd: true });

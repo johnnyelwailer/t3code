@@ -19,6 +19,8 @@ export interface LiveTrigger {
   readonly recipePath: string;
   readonly workflowPath: string;
   readonly instance: RecipeTriggerInstanceRef;
+  /** The validated params the source instance is bound with (the project and its scope). */
+  readonly params: unknown;
   readonly select: RecipeTriggerSpec["select"];
   readonly key: RecipeTriggerSpec["key"];
   readonly settings: RecipeTriggerEffectiveSettings & { readonly enabled: boolean };
@@ -51,12 +53,28 @@ export const RECIPE_TRIGGER_DEFAULT_SETTINGS: RecipeTriggerEffectiveSettings = {
   dailyCap: null,
 };
 
+/** A claimed launch. `launchId` is durable (the ledger row) and is also the run id it launches. */
 export interface RecipeTriggerLaunchRequest {
+  readonly launchId: string;
   readonly projectId: string;
   readonly recipeId: string;
   readonly triggerId: string;
   readonly key: string;
   readonly args: Record<string, unknown>;
+}
+
+/** The durable launch history the limits are computed from (see the launch ledger store). */
+export interface RecipeTriggerHistory {
+  readonly inFlight: number;
+  readonly launchesInWindow: number;
+  readonly lastLaunchAtMsByKey: ReadonlyMap<string, number>;
+}
+
+/** One key's events on one signal instance, up to the newest slot the engine read. */
+export interface RecipeTriggerSlice {
+  readonly key: string;
+  readonly instance: RecipeTriggerInstanceRef;
+  readonly upToId: number;
 }
 
 /** Which signal instance the engine's claim consumes from (the live layer's first-wins takes). */
@@ -71,16 +89,28 @@ export interface RecipeTriggerProcessResult {
   /** Events processed with a `select` answer of `null` (consumed, no launch). */
   skipped: number;
   deferred: number;
-  /** `key`/`select` faults: consumed and dropped, the runner goes on. */
+  /** `select` faults (consumed) and `key` faults (left to the inbox cap); the runner goes on. */
   dropped: number;
 }
 
 /** The engine's injected ports (all deterministic in tests). */
 export interface RecipeTriggerEnginePorts {
   readonly nowMs: () => number;
-  /** Consume the key's pending events on one signal instance; `true` when at least one was taken. */
-  readonly claim: (key: string, instance: RecipeTriggerInstanceRef) => Promise<boolean>;
-  readonly launch: (request: RecipeTriggerLaunchRequest) => Promise<void>;
+  readonly history: (input: {
+    readonly recipeId: string;
+    readonly triggerId: string;
+    readonly windowStartMs: number;
+    readonly intervalStartMs: number;
+  }) => Promise<RecipeTriggerHistory>;
+  /** Consume the slice and record the pending launch atomically; false when another consumer won. */
+  readonly claim: (
+    input: RecipeTriggerSlice & { readonly request: RecipeTriggerLaunchRequest },
+  ) => Promise<boolean>;
+  /** Consume the slice with no launch (a skipped or faulting event). */
+  readonly consume: (slice: RecipeTriggerSlice) => Promise<void>;
+  readonly newLaunchId: () => string;
+  /** Start a claimed launch; the port records its outcome durably and never throws. */
+  readonly launch: (request: RecipeTriggerLaunchRequest) => void;
   readonly log?: (message: string, fields?: unknown) => void;
 }
 

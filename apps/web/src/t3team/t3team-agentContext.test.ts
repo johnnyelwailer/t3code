@@ -41,6 +41,16 @@ describe("buildAddToChatAgentContextCapabilities", () => {
     ]);
   });
 
+  it("carries the tools that fetch the item, so a consumer can reference it instead of snapshotting", () => {
+    const tools = [
+      { id: "t3_work_item_get", label: "Read work item", arguments: { issueKey: "PROJ-9" } },
+    ];
+
+    const capabilities = buildAddToChatAgentContextCapabilities(createRequest(), { tools });
+
+    expect(capabilities.tools).toEqual(tools);
+  });
+
   it("can append a pin-to-left action for unpinned sidebar items", () => {
     const request = createRequest();
     const pinnedItem = createPinnedTicket();

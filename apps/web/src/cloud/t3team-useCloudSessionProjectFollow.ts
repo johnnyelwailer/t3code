@@ -1,14 +1,19 @@
-import type { ScopedProjectRef } from "@t3tools/contracts";
+import { EnvironmentId, type CloudSession, type ScopedProjectRef } from "@t3tools/contracts";
 import { useEffect, useMemo } from "react";
 
-import { toastManager } from "~/components/ui/toast";
+import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import {
+  clearCloudProjectCloneSuggestion,
+  suggestCloudProjectClone,
+} from "./t3team-cloudProjectCloneSuggestion";
 import { useClientSettings } from "~/hooks/useSettings";
 import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
-} from "~/logicalProject";
-import { useProject } from "~/state/entities";
+} from "@t3tools/client-runtime/state/project-grouping";
+import { useProject, useProjects } from "~/state/entities";
 import { followCloudSessionProject } from "./t3team-cloudSessionProjectFollow";
+import { getCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 
 /**
  * The composer project's logical key, the same one the machine list groups by, so a project
@@ -26,26 +31,112 @@ export function useCloudSessionProjectKey(projectRef: ScopedProjectRef | null): 
   );
 }
 
+/** Every project this client can see, tagged with the machine it sits on and its logical key. */
+export function useCloudSessionMachineProjects() {
+  const projects = useProjects();
+  const grouping = selectProjectGroupingSettings(useClientSettings());
+  return useMemo(
+    () =>
+      projects.map((project) => ({
+        environmentId: String(project.environmentId),
+        projectId: project.id,
+        logicalKey: deriveLogicalProjectKeyFromSettings(project, grouping),
+      })),
+    [projects, grouping],
+  );
+}
+
+function sessionEnvironmentId(
+  sessions: readonly CloudSession[],
+  sessionId: string,
+): string | undefined {
+  const environmentId = sessions
+    .find((item) => item.sessionId === sessionId)
+    ?.environmentId?.trim();
+  return environmentId === undefined || environmentId.length === 0 ? undefined : environmentId;
+}
+
+function machineHasComposerProject(input: {
+  readonly sessionId: string;
+  readonly projectKey: string;
+  readonly sessions: readonly CloudSession[];
+  readonly projects: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly logicalKey: string;
+  }>;
+}): boolean | undefined {
+  const environmentId = sessionEnvironmentId(input.sessions, input.sessionId);
+  if (environmentId === undefined) return undefined;
+  return input.projects.some(
+    (project) => project.environmentId === environmentId && project.logicalKey === input.projectKey,
+  );
+}
+
 /**
- * Drops the cloud preference once the composer's project is no longer the one the session was
- * set up for (a queued first message goes back into the composer), and says why.
+ * When the composer project changes during pending cloud setup, keep the same machine
+ * and move the waiting thread and queued message to the new project. A project missing on
+ * that machine is offered as a clone suggestion, which the user opens the add-project dialog
+ * from; this path never opens it by itself.
  */
 export function useCloudSessionProjectFollow(input: {
   readonly scopeKey: string | null;
+  readonly draftId: string | null;
   readonly projectKey: string | null;
+  readonly projectRef: ScopedProjectRef | null;
+  readonly sessions: readonly CloudSession[];
 }): void {
-  const { scopeKey, projectKey } = input;
+  const { scopeKey, draftId, projectKey, projectRef, sessions } = input;
+  const projectsOnMachines = useCloudSessionMachineProjects();
   useEffect(() => {
     if (scopeKey === null) return;
-    const result = followCloudSessionProject(scopeKey, projectKey);
-    if (result.kind === "kept") return;
-    toastManager.add({
-      type: "info",
-      title: "Cloud session cleared",
-      description:
-        result.kind === "cleared"
-          ? `${result.label} was set up for another project, so Run on is back to this project's own machines.`
-          : "Your message is back in the composer: the project changed after the cloud session was set up for another one.",
+    const target = getCloudSessionTarget(scopeKey);
+    const sessionId = target?.sessionId;
+    const hasProject =
+      sessionId === undefined || projectKey === null
+        ? undefined
+        : machineHasComposerProject({
+            sessionId,
+            projectKey,
+            sessions,
+            projects: projectsOnMachines,
+          });
+    const suggestClone = (addSessionId: string) => {
+      if (projectRef === null) return;
+      const environmentId = sessionEnvironmentId(sessions, addSessionId);
+      if (environmentId === undefined) return;
+      suggestCloudProjectClone({
+        scopeKey,
+        projectRef,
+        targetEnvironmentId: EnvironmentId.make(environmentId),
+      });
+    };
+    const result = followCloudSessionProject(scopeKey, projectKey, {
+      draftId,
+      machineHasProject: hasProject,
+      moveThread: ({ draftId: id }) => {
+        if (projectRef === null) return;
+        const store = useComposerDraftStore.getState();
+        const key = DraftId.make(id);
+        const draft = store.getDraftSession(key);
+        if (draft == null || draft.promotedTo) return;
+        store.setDraftThreadContext(key, {
+          projectRef,
+          environmentSelection: "manual",
+          loadBalancedEnvironmentId: null,
+        });
+      },
+      addProjectToMachine: ({ sessionId: addSessionId }) => {
+        suggestClone(addSessionId);
+      },
     });
-  }, [scopeKey, projectKey]);
+    // The machine has the project (or cannot be known yet): any earlier suggestion is moot.
+    if (hasProject !== false || sessionId === undefined) {
+      if (result.kind !== "retargeted" || !result.addedProject) {
+        clearCloudProjectCloneSuggestion(scopeKey);
+      }
+      return;
+    }
+    // If the stamp already matches, still suggest once the machine environment is known.
+    if (result.kind !== "retargeted" || !result.addedProject) suggestClone(sessionId);
+  }, [scopeKey, draftId, projectKey, projectRef, sessions, projectsOnMachines]);
 }

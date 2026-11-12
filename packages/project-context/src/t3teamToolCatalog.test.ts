@@ -63,6 +63,13 @@ describe("t3teamToolCatalog", () => {
       "t3team.mywork.arrange",
       "t3team.change_request.publish",
       "t3team.project.sync_linked_repository",
+      "t3team.work_item.search",
+      "t3team.work_item.get",
+      "t3team.work_item.draft",
+      "t3team.work_item.change_set",
+      "t3team.machine.find_definitions",
+      "t3team.machine.set_source",
+      "t3team.desktop_route.request",
     ]);
   });
 
@@ -85,6 +92,8 @@ describe("t3teamToolCatalog", () => {
       "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
       "t3team.project.sync_linked_repository",
+      "t3team.machine.find_definitions",
+      "t3team.machine.set_source",
     ]);
   });
 

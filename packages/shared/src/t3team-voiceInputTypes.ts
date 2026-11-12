@@ -27,10 +27,6 @@ export interface VoiceInputOptions {
   singleUtterance?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Browser globals (typed loosely to avoid needing a DOM lib in shared)
-// ---------------------------------------------------------------------------
-
 export interface SpeechRecognitionAlternative {
   transcript: string;
   confidence: number;

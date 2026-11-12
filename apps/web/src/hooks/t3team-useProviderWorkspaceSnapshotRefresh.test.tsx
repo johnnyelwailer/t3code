@@ -89,7 +89,6 @@ describe("useProviderWorkspaceSnapshotRefresh", () => {
       instanceId: INSTANCE_ID,
       cwd: "/workspace/ies-ng",
       environmentId: ENVIRONMENT_ID,
-      revalidationKey: "",
     });
     expect(mockRefreshProviders).toHaveBeenCalledTimes(1);
     expect(mockRefreshProviders.mock.calls[0]?.[0]).toEqual({
@@ -108,7 +107,6 @@ describe("useProviderWorkspaceSnapshotRefresh", () => {
       instanceId: INSTANCE_ID,
       cwd: "/workspace/ies-ng",
       environmentId: ENVIRONMENT_ID,
-      revalidationKey: "",
     });
     expect(mockRefreshProviders).not.toHaveBeenCalled();
     rendered.unmount();
@@ -123,7 +121,6 @@ describe("useProviderWorkspaceSnapshotRefresh", () => {
       instanceId: INSTANCE_ID,
       cwd: "/workspace/ies-ng",
       environmentId: ENVIRONMENT_ID,
-      revalidationKey: "",
     });
     expect(mockRefreshProviders).toHaveBeenCalledTimes(1);
     rendered.unmount();
@@ -135,7 +132,6 @@ describe("useProviderWorkspaceSnapshotRefresh", () => {
       instanceId: null,
       cwd: null,
       environmentId: ENVIRONMENT_ID,
-      revalidationKey: "",
     });
     expect(mockRefreshProviders).not.toHaveBeenCalled();
     rendered.unmount();

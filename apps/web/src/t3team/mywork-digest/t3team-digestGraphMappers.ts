@@ -140,7 +140,7 @@ export function payloadToDigestGraph(input: {
         ticketId,
         threadId: decision.threadId,
         question: decision.question,
-        // TODO(digest): requiredRole has no server source yet — empty for now.
+        // requiredRole has no server source yet — empty for now.
         requiredRole: "",
         askedAt: decision.askedAt,
       });

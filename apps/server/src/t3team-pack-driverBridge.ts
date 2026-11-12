@@ -17,7 +17,7 @@
  * @module t3team-pack-driverBridge
  */
 import type { PackHostCapabilities, PackProviderDriverDefinition } from "@t3team/pack-api";
-import { ProviderDriverKind, type ProviderInstanceEnvironment } from "@t3tools/contracts";
+import { ProviderDriverKind, type ResolvedProviderInstanceEnvironment } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -33,6 +33,7 @@ import {
   type ProviderInstance,
 } from "@t3tools/provider-core/server/driver";
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
+import { packMcpAppSnapshotFrom } from "./t3team-pack-driverMcpApps.ts";
 import { makeOpenCodeHarnessCapability } from "./t3team-pack-driverHarness.ts";
 import { makePackProviderSnapshot } from "./t3team-pack-driverSnapshotShape.ts";
 import { bridgePackTextGeneration } from "./t3team-pack-textGenerationBridge.ts";
@@ -41,7 +42,7 @@ const errorDetail = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
 const environmentToRecord = (
-  environment: ProviderInstanceEnvironment,
+  environment: ResolvedProviderInstanceEnvironment,
 ): Record<string, string | undefined> =>
   Object.fromEntries(environment.map((entry) => [entry.name, entry.value]));
 
@@ -166,12 +167,14 @@ export const bridgePackProviderDriver = (
           driverKind,
           instanceId,
         });
+        const mcpAppSnapshot = packMcpAppSnapshotFrom(ambient);
         const orchestrationAdapter = makePackOrchestrationAdapter({
           adapter: packInstance.orchestration,
           driver: driverKind,
           instanceId,
           offerContinuation: continuationRequests.offer,
           mcpSessions,
+          ...(mcpAppSnapshot === undefined ? {} : { mcpAppSnapshot }),
         });
         const snapshot = yield* makePackProviderSnapshot({
           packInstance,

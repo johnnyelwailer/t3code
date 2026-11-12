@@ -10,6 +10,7 @@
     "vite.config.ts",
     "../../scripts/lib",
     "../../scripts/build-desktop-artifact.ts",
+    "../../scripts/update-release-package-versions.ts",
     "../../scripts/apply-web-brand-assets.ts"
   ]
 }

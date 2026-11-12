@@ -29,6 +29,7 @@ function recordingPublisher() {
   const artifacts: T3TeamThreadArtifactInput[] = [];
   const publish = makeT3TeamDraftMutationPublisher({
     threadId: "thread-1",
+    removeArtifact: () => Effect.void,
     recordArtifact: (artifact) =>
       Effect.sync(() => {
         artifacts.push(artifact);
@@ -73,6 +74,7 @@ describe("makeT3TeamDraftMutationPublisher", () => {
     Effect.gen(function* () {
       const publish = makeT3TeamDraftMutationPublisher({
         threadId: "thread-1",
+        removeArtifact: () => Effect.void,
         recordArtifact: () =>
           Effect.fail(
             new T3TeamThreadArtifactsStoreError({ operation: "upsert", cause: "thread is gone" }),

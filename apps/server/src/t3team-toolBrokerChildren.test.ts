@@ -25,6 +25,7 @@ const shell = (input: {
   readonly projectId?: string;
   readonly finishedHoursAgo?: number;
   readonly settled?: boolean;
+  readonly pinned?: boolean;
 }): OrchestrationV2ThreadShell =>
   ({
     id: ThreadId.make(input.id),
@@ -43,6 +44,7 @@ const shell = (input: {
     ),
     updatedAt: DateTime.makeUnsafe(Date.parse(NOW)),
     settledOverride: input.settled ? "settled" : null,
+    pinnedAt: input.pinned ? DateTime.makeUnsafe(Date.parse(NOW)) : null,
   }) as unknown as OrchestrationV2ThreadShell;
 
 const makeDeps = (
@@ -158,6 +160,26 @@ describe("t3team children tool", () => {
       const invalid = yield* call(deps, { op: "sweep" });
       assert.isTrue(invalid.isError);
       assert.include(invalid.text, "pass 'thread_ids'");
+    }),
+  );
+
+  it.effect("never sweeps a pinned thread, named explicitly or older than the cutoff", () =>
+    Effect.gen(function* () {
+      const { deps, settled } = makeDeps([
+        shell({ id: "thread:pinned", finishedHoursAgo: 30, pinned: true }),
+        shell({ id: "thread:plain", finishedHoursAgo: 30 }),
+      ]);
+      const explicit = yield* call(deps, { op: "sweep", thread_ids: ["thread:pinned"] });
+      assert.deepEqual(settled, []);
+      assert.deepEqual(explicit.payload.skipped, [
+        {
+          threadId: "thread:pinned",
+          title: "Title thread:pinned",
+          reason: "pinned: only the user settles a pinned thread",
+        },
+      ]);
+      yield* call(deps, { op: "sweep", all_older_than_hours: 24 });
+      assert.deepEqual(settled, ["thread:plain"]);
     }),
   );
 

@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import {
   cloudSessionDurationSeconds,
   cloudSessionElapsedSeconds,
+  cloudSessionHoldEnd,
   deriveCloudSessionPhase,
   deriveMachineStage,
 } from "./t3team-cloudSessionPhase.ts";
@@ -72,14 +73,16 @@ export function pendingCloudSession(
 const isRunSettled = (run: WorkflowRunSummary): boolean => run.status === "completed";
 
 /** `session.yml` appends this to `run-name` in broker mode; the run list shows nothing else of it. */
-const BROKER_RUN_NAME_MARKER = "· broker";
+export const BROKER_RUN_NAME_MARKER = "· broker";
 /** session.yml marks a run that is inside a project machine (#562). */
 const MACHINE_RUN_NAME_MARKER = "· machine";
 /** session.yml marks a run whose agent writes the project's machine definition. */
 const SETUP_RUN_NAME_MARKER = "· setup";
 
 /**
- * Project one provisioning run into the `CloudSession` the client renders.
+ * Project one provisioning run into the `CloudSession` the client renders. `remainingSeconds` is an
+ * upper bound: the app always dispatches the fleet's hold ceiling, so a live session ends at its
+ * hold's start plus that ceiling, and the idle check can release it sooner.
  */
 export const projectCloudSession = (
   sessionRun: WorkflowRunSummary,
@@ -106,6 +109,8 @@ export const projectCloudSession = (
       ? []
       : yield* readSteps;
     const phase = deriveCloudSessionPhase(sessionRun, steps);
+    const elapsedSeconds = cloudSessionElapsedSeconds(sessionRun, nowMs);
+    const holdEnd = cloudSessionHoldEnd(phase, sessionRun, steps, nowMs);
     const failureReason =
       phase === "failed"
         ? yield* settledFailureReason(sessionRun, readSteps, failureReasons)
@@ -125,12 +130,11 @@ export const projectCloudSession = (
       sessionId: String(sessionRun.id),
       providerKind: "github_actions",
       phase,
-      elapsedSeconds: cloudSessionElapsedSeconds(sessionRun, nowMs),
+      elapsedSeconds,
       ...(name !== undefined ? { name } : {}),
       ...(sessionRun.createdAt !== "" ? { startedAt: sessionRun.createdAt } : {}),
-      // The workflow owns the hold duration, so the server does not invent a
-      // remainder it cannot actually know.
-      remainingSeconds: null,
+      remainingSeconds: holdEnd?.remainingSeconds ?? null,
+      ...(holdEnd?.endsAt !== undefined ? { endsAt: holdEnd.endsAt } : {}),
       machineLabel,
       failureReason,
       detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,

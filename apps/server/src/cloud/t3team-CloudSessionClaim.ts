@@ -32,6 +32,10 @@ interface ClaimedEntry {
   readonly startedAtMs: number;
   /** Seen in the broker's list at least once: it came up. */
   readonly seen: boolean;
+  /** The machine's workspace: the delete flow reads the machine's identity from here. */
+  readonly workspace: string;
+  /** The machine's repository remote, from the claim. */
+  readonly repository: string;
 }
 
 export const makeClaimLedger = () => Ref.make(new Map<string, ClaimedEntry>());
@@ -75,15 +79,36 @@ export const claimStandby = (input: {
         name: input.name,
         startedAtMs: input.nowMs,
         seen: false,
+        workspace: input.workspace,
+        repository: machine.repository.url,
       }),
     );
     return runId;
   });
 
 /**
+ * The machine identity a claim carried (the delete flow's), or null when this server does not
+ * know that claim: after a restart the ledger is empty, and then the claimed session's machine
+ * cannot be identified here.
+ */
+export const claimedIdentity = (
+  ledger: ClaimLedger,
+  runId: string,
+  login: string,
+): Effect.Effect<{ readonly workspace: string; readonly repository: string } | null> =>
+  Ref.get(ledger).pipe(
+    Effect.map((map) => {
+      const entry = map.get(runId);
+      return entry === undefined || entry.login !== login ? null : entry;
+    }),
+  );
+
+/**
  * The user's claimed sessions, for the list: each claim this server made, as the broker reports
  * it (ready once it is there), still starting before that, failed if it never came up. Run ids the
- * user's own run list already has are left to it.
+ * user's own run list already has are left to it. `remainingSeconds` is always null: a claimed
+ * standby's clock started when the standby did, long before this claim, and the ledger does not
+ * know that moment, so there is no honest remainder to report.
  */
 export const claimedSessions = (input: {
   readonly ledger: ClaimLedger;

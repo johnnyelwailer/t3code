@@ -242,6 +242,6 @@ describe("StepDuration", () => {
 
   it("renders the formatted duration for a step right at the 1s threshold", () => {
     const markup = renderToStaticMarkup(<StepDuration step={resolvedStep(1_000)} />);
-    expect(markup).toContain("1.0s");
+    expect(markup).toContain(">1s<");
   });
 });

@@ -21,6 +21,11 @@ export type PackProviderModel = {
   readonly slug: string;
   readonly name: string;
   readonly isCustom?: boolean;
+  /**
+   * The provider's current default model. A child or workflow `agent()` started on this
+   * provider without a model runs it; without one it fails with "no declared default model".
+   */
+  readonly isDefault?: boolean;
 };
 
 /**
@@ -44,6 +49,12 @@ export type PackProviderSnapshot = {
    * the built-in Grok provider does the same.
    */
   readonly showInteractionModeToggle?: boolean;
+  /**
+   * Access modes the composer offers (host `RuntimeMode` ids such as `"auto"`,
+   * `"approval-required"`, `"full-access"`). Absent means every host mode. A pack
+   * that switches a mode off behind a flag omits it here.
+   */
+  readonly supportedRuntimeModes?: readonly string[];
 };
 
 export type PackTextGeneration = {

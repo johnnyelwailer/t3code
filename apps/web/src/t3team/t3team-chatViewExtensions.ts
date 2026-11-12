@@ -2,9 +2,15 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import type { HTMLAttributes, ReactNode } from "react";
 
 import type { ChatMessage } from "~/types";
-import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 
 export type TurnStartOverrideResult = boolean | "resolved-input";
+
+/** The Team project, and work item if any, a thread belongs to: what its panel offers as views. */
+export type T3TeamViewTabSource = {
+  readonly projectId: string;
+  readonly ticketId?: string;
+  readonly ticketDisplayId?: string;
+};
 
 export type ChatViewT3TeamExtensionProps = {
   readonly syntheticMessages?: ReadonlyArray<ChatMessage>;
@@ -48,14 +54,10 @@ export type ChatViewT3TeamExtensionProps = {
    * here: one queue surface, one place.
    */
   readonly composerBannerLeading?: ReactNode;
+  readonly viewTabSource?: T3TeamViewTabSource;
   readonly composerContextAttachmentSlot?: ReactNode;
   readonly composerContainerProps?: HTMLAttributes<HTMLDivElement>;
   readonly composerContainerOverlay?: ReactNode;
-  readonly composerContextAttachments?: ReadonlyArray<T3TeamContextAttachment>;
-  readonly prepareComposerContextAttachments?: () => Promise<
-    ReadonlyArray<T3TeamContextAttachment>
-  >;
-  readonly onComposerContextAttachmentsConsumed?: () => void;
   readonly onSubmitRecipeCardAction?: (action: {
     readonly cardId: string;
     readonly actionId: string;

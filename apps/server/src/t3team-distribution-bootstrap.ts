@@ -28,6 +28,7 @@ import {
   type WorkflowEphemeralConcurrencyPolicyDefinition,
   type WorkflowRepairPolicyDefinition,
 } from "@t3team/pack-api";
+import { registerPackFeatureFlagDefinitions } from "./t3team-pack-featureFlags.ts";
 import {
   decodeSetupProfileDefinition,
   decodeThemeDefinition,
@@ -36,6 +37,7 @@ import {
 
 import {
   activateDistribution,
+  distributionAlternateThemes,
   distributionAssets,
   distributionPersistence,
   distributionTheme,
@@ -44,6 +46,7 @@ import {
 
 import { registerCompiledPackPersistence } from "./t3team-compiledPackPersistence.ts";
 import { setPackAccounts } from "./account/t3team-packAccounts.ts";
+import { registerHostService } from "./t3team-hostServiceRegistry.ts";
 import { setDistributionModelPolicy } from "./t3team-configuredDefaultModelSelection.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3team-pack-aiProvider.ts";
 import { setPackColdLocalCompactionRoutes } from "./t3team-pack-coldLocalCompactionRoute.ts";
@@ -53,10 +56,7 @@ import { toPackProviderDriverDefinition } from "./t3team-pack-driverDefinition.t
 import { setPackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
 import { setPackSetupProfileOverlay } from "./t3team-pack-setupProfileOverlay.ts";
 import { setWorkflowAgentModelPolicy } from "./t3team-workflowAgentModelPolicy.ts";
-import {
-  DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS,
-  setWorkflowEphemeralConcurrencyPolicy,
-} from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
+import { setWorkflowEphemeralConcurrencyPolicy } from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
 import { setWorkflowRepairPolicy } from "./t3team-workflowRepairPolicy.ts";
 
 /**
@@ -147,6 +147,8 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
       defineAccount: (definition) => {
         accounts.push(defineAccount(definition));
       },
+      defineFeatureFlags: registerPackFeatureFlagDefinitions,
+      defineHostService: registerHostService,
       resolveAssetDataUrl: async (relativePath) => {
         const inlined = distributionAssets[relativePath];
         if (inlined) return inlined;
@@ -223,7 +225,17 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   setPackColdLocalCompactionRoutes(coldCompactionRoutes);
   if (accounts.length > 0) setPackAccounts(accounts);
   if (distributionTheme) {
-    const theme = decodeThemeDefinition(resolveThemeBrand(distributionTheme, distributionAssets));
-    setPackAppearanceOverlay({ ...theme, themeId: theme.id });
+    const decode = (raw: DistributionTheme) =>
+      decodeThemeDefinition(resolveThemeBrand(raw, distributionAssets));
+    const theme = decode(distributionTheme);
+    const alternates = distributionAlternateThemes.map((raw) => {
+      const alternate = decode(raw);
+      return { ...alternate, themeId: alternate.id };
+    });
+    setPackAppearanceOverlay({
+      ...theme,
+      themeId: theme.id,
+      ...(alternates.length > 0 ? { alternates } : {}),
+    });
   }
 };

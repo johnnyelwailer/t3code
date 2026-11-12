@@ -22,12 +22,26 @@ describe("workflowCompletionDisplayText", () => {
         "t3team-wf-result:run-1",
         JSON.stringify({ decision: "approved", markers: ["ready", "healthy"] }),
       ),
-    ).toBe("**Decision:** approved\n**Markers:** ready, healthy");
+    ).toBe("**Decision:** approved\n\n**Markers:** ready, healthy");
   });
 
   it("does not reinterpret normal assistant output", () => {
     const raw = '{"summary":"Keep this exact JSON"}';
     expect(workflowCompletionDisplayText("assistant-1", raw)).toBe(raw);
+  });
+
+  it("renders a workflow step's JSON reply for people", () => {
+    const reply = `\n\n${JSON.stringify({ apkVerified: false, gates: ["static: fail"] })}`;
+    expect(workflowCompletionDisplayText("assistant-1", reply, { workflowStepReply: true })).toBe(
+      "**Apk Verified:** false\n\n**Gates:** static: fail",
+    );
+  });
+
+  it("keeps a workflow step's prose reply unchanged", () => {
+    const prose = "Network flake again — locating the child thread:";
+    expect(workflowCompletionDisplayText("assistant-1", prose, { workflowStepReply: true })).toBe(
+      prose,
+    );
   });
 
   // GHE (Defect 1): nested objects and arrays-of-objects used to be filtered out before
@@ -85,7 +99,7 @@ it("renders a truncated frame as a size notice plus the retained text in a code 
 it("does not treat an ordinary output with a `truncated` field as a truncation frame", () => {
   const stored = frameWorkflowOutputData({ truncated: true, outputPreview: "x" });
   expect(workflowCompletionDisplayText("t3team-wf-result:run-1", stored)).toBe(
-    "**Truncated:** true\n**Output Preview:** x",
+    "**Truncated:** true\n\n**Output Preview:** x",
   );
 });
 

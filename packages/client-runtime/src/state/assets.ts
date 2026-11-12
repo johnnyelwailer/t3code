@@ -7,16 +7,18 @@ import {
   type ProjectCloneSnapshot,
   WS_METHODS,
 } from "@t3tools/contracts";
-import { mediaMimeTypeFromExtension } from "@t3tools/shared/filePreview";
+import { mediaMimeTypeFromExtension } from "@t3tools/shared/mediaPreview";
 import { isWindowsAbsolutePath } from "@t3tools/shared/path";
 import {
   getProjectFaviconResourceKey,
   isProjectFaviconFallbackUrl,
 } from "@t3tools/shared/projectFavicon";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
 import * as EnvironmentRegistry from "../connection/registry.ts";
@@ -28,6 +30,7 @@ import { createEnvironmentQueryAtomFamily } from "./runtime.ts";
 const ASSET_URL_REFRESH_INTERVAL_MS = 30 * 60_000;
 const ASSET_URL_STALE_TIME_MS = 5 * 60_000;
 const ASSET_URL_IDLE_TTL_MS = 60 * 60_000;
+export const ASSET_URL_MAX_IN_FLIGHT = 6;
 
 export class InvalidAssetCollectionKeyError extends Schema.TaggedError<InvalidAssetCollectionKeyError>()(
   "InvalidAssetCollectionKeyError",
@@ -45,7 +48,7 @@ const decodeAssetCollectionKey = Schema.decodeUnknownSync(
   Schema.Tuple([EnvironmentId, Schema.Array(AssetResource)]),
 );
 
-export function parseAssetCollectionKey(
+function parseAssetCollectionKey(
   key: string,
 ): readonly [EnvironmentId, ReadonlyArray<AssetResource>] {
   try {
@@ -55,12 +58,30 @@ export function parseAssetCollectionKey(
   }
 }
 
+let assetUrlObserver: ((url: string) => void) | null = null;
+
+/**
+ * Lets a platform see each asset URL before it reaches a consumer. The Android broker authenticates
+ * its loopback by cookie, which native HTTP clients (downloads, uploads, image and media loaders)
+ * cannot send, so the platform registers the exact signed URL it hands them.
+ */
+export function setAssetUrlObserver(observer: ((url: string) => void) | null): void {
+  assetUrlObserver = observer;
+}
+
 export function resolveAssetUrl(httpBaseUrl: string, relativeUrl: string): string | null {
+  let url: string;
   try {
-    return new URL(relativeUrl, httpBaseUrl).toString();
+    url = new URL(relativeUrl, httpBaseUrl).toString();
   } catch {
     return null;
   }
+  try {
+    assetUrlObserver?.(url);
+  } catch {
+    // An observer must never turn a good URL into a failure.
+  }
+  return url;
 }
 
 export const EMPTY_ASSET_URL_ATOM = Atom.make(AsyncResult.initial<never, never>(false)).pipe(
@@ -71,30 +92,20 @@ export type AssetUrlState =
   | { readonly _tag: "Loading" }
   | {
       readonly _tag: "Failure";
-      /** Set when the session lacks `filesystem:read`; the file itself may be fine. */
       readonly reason?: "missing-file-access";
     }
   | {
       readonly _tag: "Success";
       readonly url: string;
-      /** When the signed URL stops working, in epoch milliseconds. */
       readonly expiresAt: number;
-      /** The host path the server chose to serve, when it differs from what was asked for. */
       readonly sourcePath?: string;
-      /** Pixel size from the image header, when the server could read one. */
       readonly imageDimensions?: AssetImageDimensions;
+      readonly fileRevision?: string;
     };
 
-/** Shown in place of a host file the session lacks `filesystem:read` for. */
 export const MISSING_FILE_ACCESS_MESSAGE =
   "This connection cannot read host files. Pair again with a new link to view it.";
 
-/**
- * The state for a host file this session cannot read yet, or null when the client
- * should ask the host. The host requires `filesystem:read` for these resources, so
- * clients skip the request. A connected session without the scope gets its own
- * reason, so the UI can say to pair again instead of implying the file is gone.
- */
 export function blockedAssetUrlState(
   resource: AssetResource | null,
   fileAccess: {
@@ -113,7 +124,6 @@ export function blockedAssetUrlState(
     return null;
   }
   if (fileAccess.isPending) return { _tag: "Loading" };
-  // An error means the session check itself failed, such as when offline.
   return fileAccess.error === null
     ? { _tag: "Failure", reason: "missing-file-access" }
     : { _tag: "Failure" };
@@ -135,6 +145,7 @@ export function assetUrlStateFromResult(
     ...(result.value.imageDimensions !== undefined
       ? { imageDimensions: result.value.imageDimensions }
       : {}),
+    ...(result.value.fileRevision !== undefined ? { fileRevision: result.value.fileRevision } : {}),
   };
 }
 
@@ -145,15 +156,27 @@ export function createAssetEnvironmentAtoms<R, E>(
     readonly httpBaseUrl: string;
   } | null>,
 ) {
+  // A thread with hundreds of images asks for hundreds of URLs at once. Over a slow remote
+  // they would all wait on one socket and read as stalled, so each environment gets a few
+  // at a time. A query that is interrupted, such as by a new session, gives its slot back.
+  const mintLimits = new Map<EnvironmentId, Semaphore.Semaphore>();
+  const mint = (environmentId: EnvironmentId, input: AssetCreateUrlInput) => {
+    let limit = mintLimits.get(environmentId);
+    if (limit === undefined) {
+      limit = Semaphore.makeUnsafe(ASSET_URL_MAX_IN_FLIGHT);
+      mintLimits.set(environmentId, limit);
+    }
+    return request(WS_METHODS.assetsCreateUrl, input).pipe(limit.withPermit);
+  };
   const execute = Effect.fn("assets.createUrl")(function* (input: AssetCreateUrlInput) {
-    const result = yield* request(WS_METHODS.assetsCreateUrl, input).pipe(Effect.result);
+    const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+    const result = yield* mint(supervisor.target.environmentId, input).pipe(Effect.result);
     if (Result.isSuccess(result)) return result.success;
     const error = result.failure;
     const resource = input.resource;
     const local = localMediaEnvironment
       ? (yield* AtomRegistry.AtomRegistry).get(localMediaEnvironment)
       : null;
-    const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
     if (
       !local ||
       local.environmentId === supervisor.target.environmentId ||
@@ -168,11 +191,10 @@ export function createAssetEnvironmentAtoms<R, E>(
     )
       return yield* error;
     const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
-    const asset = yield* registry.run(
-      local.environmentId,
-      request(WS_METHODS.assetsCreateUrl, input),
-    );
-    // Callers resolve against the thread's server, so preserve the local server's origin.
+    // Map the full cause so retry defects and interruption survive.
+    const asset = yield* registry
+      .run(local.environmentId, mint(local.environmentId, input))
+      .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => error))));
     return { ...asset, relativeUrl: new URL(asset.relativeUrl, local.httpBaseUrl).href };
   });
   const createUrl = createEnvironmentQueryAtomFamily(runtime, {
@@ -210,10 +232,6 @@ export function createAssetEnvironmentAtoms<R, E>(
   };
 }
 
-/**
- * Keeps project icons visible while their environment reconnects. Each resource
- * owns its last resolved URL, including a confirmed missing-icon response.
- */
 export function createProjectFaviconUrlAtomFamily(input: {
   readonly imageCache?: ProjectFaviconCache;
   readonly createUrl: (target: {
@@ -223,7 +241,6 @@ export function createProjectFaviconUrlAtomFamily(input: {
   readonly preparedConnection: (
     environmentId: EnvironmentId,
   ) => Atom.Atom<Option.Option<{ readonly httpBaseUrl: string }>>;
-  /** The environment's tracked clones, empty when it reports none. */
   readonly projectClones?: (
     environmentId: EnvironmentId,
   ) => Atom.Atom<ReadonlyArray<ProjectCloneSnapshot>>;
@@ -272,7 +289,7 @@ export function createProjectFaviconUrlAtomFamily(input: {
     return Atom.make((get): string | null => {
       const result = get(image);
       if (isProjectFaviconFallbackUrl(get(resolvedUrl))) return null;
-      return Option.getOrElse(AsyncResult.value(result), () => cache.peek(target));
+      return AsyncResult.getOrElse(result, () => cache.peek(target));
     }).pipe(Atom.setIdleTTL(ASSET_URL_IDLE_TTL_MS));
   });
   return (target: ProjectFaviconTarget) =>

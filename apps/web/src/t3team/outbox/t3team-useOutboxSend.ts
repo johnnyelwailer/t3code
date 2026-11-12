@@ -20,6 +20,7 @@ import {
   useT3TeamWorkflowOutboxActions,
   type T3TeamOutboxBackend,
 } from "~/t3team/outbox/t3team-useWorkflowOutboxActions";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 export type EnqueueOfflineTurnStart = (turnStart: {
   readonly threadId: string;
@@ -42,9 +43,11 @@ export function useT3TeamOutboxSend(input: {
   readonly serverThreadExists: boolean;
   readonly waitingForRecipeInput: boolean;
 }) {
+  const outboxEnabled = useFeatureFlag("UI_OUTBOX");
   const enqueueOfflineTurnStart: EnqueueOfflineTurnStart = useCallback(
     async (turnStart) => {
       if (
+        !outboxEnabled ||
         !input.environmentId ||
         !input.serverThreadExists ||
         turnStart.hasAttachments ||
@@ -113,6 +116,7 @@ export function useT3TeamOutboxSend(input: {
       return enqueueT3TeamOutboxEntry(payload);
     },
     [
+      outboxEnabled,
       input.environmentId,
       input.projectId,
       input.serverThreadExists,

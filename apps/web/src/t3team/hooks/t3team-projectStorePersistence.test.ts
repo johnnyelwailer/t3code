@@ -99,7 +99,10 @@ describe("t3team project store persistence", () => {
     expect(
       readStoredProjectsFromClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredProjectsJson: JSON.stringify([persistedProject]),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedProjectsJson: JSON.stringify([persistedProject]),
+        },
       }),
     ).toEqual([persistedProject]);
   });
@@ -123,7 +126,10 @@ describe("t3team project store persistence", () => {
       CLIENT_SETTINGS_STORAGE_KEY,
       JSON.stringify({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredProjectsJson: JSON.stringify([persistedProject]),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedProjectsJson: JSON.stringify([persistedProject]),
+        },
       }),
     );
 
@@ -142,7 +148,7 @@ describe("t3team project store persistence", () => {
     await vi.waitFor(() => {
       expect(JSON.parse(localStorage.getItem(CLIENT_SETTINGS_STORAGE_KEY) ?? "null")).toMatchObject(
         {
-          t3teamStoredProjectsJson: JSON.stringify([persistedProject]),
+          t3team: { storedProjectsJson: JSON.stringify([persistedProject]) },
         },
       );
     });

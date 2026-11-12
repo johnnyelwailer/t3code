@@ -5,7 +5,7 @@ import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 
 const T3TEAM_AGENT_CONTEXT_DRAG_TYPE = "application/x-t3team-agent-context";
 
-type AgentContextDragRecord = {
+export type AgentContextDragRecord = {
   id: string;
   label: string;
   capabilities: AgentContextCapabilities;
@@ -170,10 +170,12 @@ export function T3TeamAgentContextDropOverlay({
   active,
   label,
   className,
+  labelClassName,
 }: {
   active: boolean;
   label: string;
   className?: string;
+  labelClassName?: string;
 }) {
   if (!active) {
     return null;
@@ -186,7 +188,12 @@ export function T3TeamAgentContextDropOverlay({
         className,
       )}
     >
-      <div className="absolute inset-x-3 top-3 rounded-md bg-background/92 px-2.5 py-1 text-2xs font-medium text-success-foreground backdrop-blur-sm">
+      <div
+        className={cn(
+          "absolute inset-x-3 top-3 rounded-md bg-background/92 px-2.5 py-1 text-2xs font-medium text-success-foreground backdrop-blur-sm",
+          labelClassName,
+        )}
+      >
         {label}
       </div>
     </div>

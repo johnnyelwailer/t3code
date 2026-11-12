@@ -5,14 +5,20 @@ import {
   buildT3TeamWorkItemFocusSliceFile,
   resolveT3TeamFocusSliceAttachmentIndexPath,
 } from "./t3team-context-focus-slice.ts";
-import { runT3TeamContextRefreshForeground } from "./t3team-contextRefreshForegroundRun.ts";
+import {
+  runT3TeamContextRefreshForeground,
+  type T3TeamContextRefreshRunOptions,
+} from "./t3team-contextRefreshForegroundRun.ts";
 import type { T3TeamContextRefreshSliceInput } from "./t3team-contextRefreshServiceTypes.ts";
 import { loadT3TeamContextRefreshScope } from "./t3team-contextRefreshScope.ts";
 import { logRefreshFinished, logRefreshStarted } from "./t3team-contextRefreshTelemetry.ts";
 import { writeT3TeamWorkspaceContextFiles } from "./t3team-project-workspace-context-files.ts";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 
-export function runT3TeamContextRefreshSlice(input: T3TeamContextRefreshSliceInput) {
+export function runT3TeamContextRefreshSlice(
+  input: T3TeamContextRefreshSliceInput,
+  options: T3TeamContextRefreshRunOptions = {},
+) {
   return Effect.gen(function* () {
     yield* logRefreshStarted({
       ticketKey: input.ticketKey,
@@ -29,13 +35,17 @@ export function runT3TeamContextRefreshSlice(input: T3TeamContextRefreshSliceInp
     });
     const workItemResult =
       scope.stale || input.force
-        ? yield* runT3TeamContextRefreshForeground({
-            threadId: input.threadId,
-            projectId: input.projectId,
-            workspaceRoot: input.workspaceRoot,
-            ticketKey: input.ticketKey,
-            force: input.force,
-          })
+        ? yield* runT3TeamContextRefreshForeground(
+            {
+              threadId: input.threadId,
+              projectId: input.projectId,
+              workspaceRoot: input.workspaceRoot,
+              ticketKey: input.ticketKey,
+              force: input.force,
+            },
+            undefined,
+            options,
+          )
         : {
             ok: true as const,
             status: "already_synced" as const,

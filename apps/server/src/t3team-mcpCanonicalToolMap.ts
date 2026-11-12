@@ -23,8 +23,16 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3_recipe_validate: "t3team.recipe.validate",
   t3_mywork_digest: "t3team.mywork.digest.read",
   t3_mywork_arrange: "t3team.mywork.arrange",
+  t3_current_view: "t3team.view.read",
+  t3_work_item_search: "t3team.work_item.search",
+  t3_work_item_get: "t3team.work_item.get",
+  t3_work_item_draft: "t3team.work_item.draft",
+  t3_work_item_change_set: "t3team.work_item.change_set",
   t3_change_request_publish: "t3team.change_request.publish",
   t3_linked_repository_sync: "t3team.project.sync_linked_repository",
+  t3_machine_find_definitions: "t3team.machine.find_definitions",
+  t3_machine_set_source: "t3team.machine.set_source",
+  request_desktop_route: "t3team.desktop_route.request",
 } as const;
 
 const MCP_NAME_BY_TOOL_ID: ReadonlyMap<string, string> = new Map(

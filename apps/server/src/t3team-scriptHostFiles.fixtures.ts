@@ -34,6 +34,7 @@ import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import type { ProviderFileAtRevision } from "@t3tools/source-control-core/server/t3team-fileAtRevision";
 import * as ServerSettingsService from "./serverSettings.ts";
+import type { SourceControlProvider } from "@t3tools/source-control-core/server/SourceControlProvider";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRateLimit from "@t3tools/source-control-core/server/SourceControlRateLimit";
 import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
@@ -148,7 +149,7 @@ const project = (workspaceRoot: string): OrchestrationProjectShell => ({
       remoteName: "origin",
       remoteUrl: "https://github.com/acme/app.git",
     },
-    provider: "github",
+    provider: SourceControlProviderKind.make("github"),
     displayName: "acme/app",
   },
   defaultModelSelection: null,
@@ -199,6 +200,9 @@ const scriptHost = Effect.gen(function* () {
       Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
         resolveLink: () => undefined,
         resolveHandle: () => Effect.die("Unexpected provider refinement"),
+        // Hosts resolve a remote's web host only for providers that can (SSH aliases); none of
+        // these fakes can, so the listing falls back to the remote's own host.
+        get: () => Effect.succeed({} as SourceControlProvider["Service"]),
       }),
       Layer.mock(ProjectService.ProjectService)({
         listShells: () => Effect.succeed([project(workspace)]),

@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
 import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";

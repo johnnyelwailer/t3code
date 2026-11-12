@@ -1,6 +1,7 @@
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createQueryable } from "@t3tools/project-context";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 
 import * as Effect from "effect/Effect";
 
@@ -48,6 +49,9 @@ function makeRenderContext() {
 }
 
 describe("T3TeamToolBroker allowed tool groups", () => {
+  beforeEach(() => replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFTS", true]])));
+  afterEach(() => replaceFeatureFlagPresetValues(new Map()));
+
   it("allows thread read tools and rejects disallowed write tools", async () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -267,6 +271,40 @@ describe("T3TeamToolBroker allowed tool groups", () => {
         },
       },
     });
+  });
+
+  it("refuses Jira draft mutation tools while work item drafts are turned off", async () => {
+    replaceFeatureFlagPresetValues(new Map([["WORKITEM_DETAIL_DRAFTS", false]]));
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const broker = yield* T3TeamToolBroker;
+        const binding = yield* broker.bindSession({
+          threadId,
+          toolContext: {
+            surface: "t3team",
+            tools: [
+              {
+                id: "t3team.work_item.assignee.draft_update",
+                label: "Draft work item assignee update",
+                capabilities: ["write"],
+              },
+            ],
+            state: { view: { kind: "thread", ticketDisplayId: "PROJ-42" } },
+          },
+          allowedToolGroups: ["mutation.draft"],
+        });
+
+        return yield* binding!.callTool({
+          server: "t3team",
+          tool: "t3team.work_item.assignee.draft_update",
+          arguments: { assignee_account_id: "abc-123" },
+        });
+      }).pipe(Effect.provide(makeBrokerLayer())),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("is turned off on this host");
+    expect(result.structuredContent).not.toMatchObject({ draftMutation: expect.anything() });
   });
 
   it("rejects Jira draft mutation tools when the recipe omits mutation.draft", async () => {

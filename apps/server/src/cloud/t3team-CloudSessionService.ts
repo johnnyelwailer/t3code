@@ -1,6 +1,8 @@
 import {
   type CloudSession,
   type CloudSessionCreateInput,
+  type CloudSessionDeleteInfo,
+  type CloudSessionDeleteResult,
   CloudSessionFailedError,
   type CloudSessionListResult,
 } from "@t3tools/contracts";
@@ -9,8 +11,9 @@ import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import { cancelRunRequest } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
@@ -24,10 +27,25 @@ import { sessionWorkspaceName, standbyPoolKey } from "./t3team-cloudSessionMachi
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
-import { makeSessionTag } from "./t3team-cloudSessionName.ts";
+import { isAppStartedSessionRun, makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import { offerPlainOnMachineFailure } from "./t3team-cloudSessionMachineOffer.ts";
 import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
+import { machineRepositoryAccessFor } from "./t3team-cloudMachineRepository.ts";
+import {
+  makeMachineStateOperations,
+  type MachineStateOperations,
+} from "./t3team-CloudSessionMachineState.ts";
+import {
+  findSessionForDelete,
+  type DeleteFlow,
+  type LocalProjectRef,
+} from "./t3team-CloudSessionDeleteFlow.ts";
+import { deleteCloudSession, describeCloudSessionDelete } from "./t3team-CloudSessionDeleteRun.ts";
+import * as VcsProcessModule from "../vcs/VcsProcess.ts";
+import * as ProjectServiceModule from "../project/ProjectService.ts";
+import { readFeatureFlagFromConfig } from "../t3team-featureFlagConfig.ts";
 import {
   claimStandby,
   claimedSessions,
@@ -71,6 +89,22 @@ export class CloudSessionService extends Context.Service<
     readonly cancel: (input: {
       readonly sessionId: string;
     }) => Effect.Effect<void, CloudSessionFailedError>;
+    /**
+     * What a delete would touch: the machine's repository and the projects on this server that
+     * run on it. What the confirmation dialog shows before anything is removed.
+     */
+    readonly deleteInfo: (input: {
+      readonly sessionId: string;
+    }) => Effect.Effect<CloudSessionDeleteInfo, CloudSessionFailedError>;
+    /**
+     * Delete a machine's persistent state: stop the run, save its unpushed work to a
+     * `wip/` branch, then remove the machine's resume branch and the workspace's snapshots.
+     */
+    readonly delete: (input: {
+      readonly sessionId: string;
+      /** The snapshot-only projects the user confirmed losing. */
+      readonly acknowledgedProjects?: ReadonlyArray<string> | undefined;
+    }) => Effect.Effect<CloudSessionDeleteResult, CloudSessionFailedError>;
   }
 >()("t3/cloud/t3team-CloudSessionService/CloudSessionService") {}
 
@@ -80,7 +114,6 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const minter = yield* ConnectCredentialMinter;
   const broker = yield* NexiBrokerService;
   const machines = yield* CloudSessionMachines;
-  const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
   // The GitHub-request half (run / listRunsFor / resolveLogin) lives in
@@ -99,8 +132,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
     const login = yield* gh.resolveLogin({ allowReserve: false });
     const runs = yield* gh.listRunsFor(login, { allowReserve: false });
     const nowMs = yield* Clock.currentTimeMillis;
+    // CI, e2e and flag-verification runs are dispatched under the same login but are not
+    // machines the user can work in, and they would otherwise also spend the display budget.
+    const appRuns = runs.filter((run) => isAppStartedSessionRun(run.name));
     const projected = yield* Effect.forEach(
-      runs.slice(0, SESSION_DISPLAY_LIMIT),
+      appRuns.slice(0, SESSION_DISPLAY_LIMIT),
       (run) =>
         projectCloudSession(
           run,
@@ -152,6 +188,13 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
 
   const create: CloudSessionService["Service"]["create"] = (input) =>
     Effect.gen(function* () {
+      // Listing, cancelling and claiming stay available, so sessions started earlier can be ended.
+      if (!(yield* readFeatureFlagFromConfig("CLOUD_SESSIONS"))) {
+        return yield* new CloudSessionFailedError({
+          reason: "not_configured",
+          message: "Cloud sessions are turned off on this server (Settings → Features).",
+        });
+      }
       // Resolve the creator's login up front, before any side effect: every run
       // we read afterwards is scoped to it, and if it cannot be resolved we
       // fail before writing the credential payload or dispatching.
@@ -179,10 +222,13 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           message: "Set up a machine from a project.",
         });
       }
+      // A machine that cannot be used fails with a plain session offered (`plain: true` takes it).
       const machine =
-        wantsSetup || input.projectId === undefined
+        wantsSetup || input.plain === true || input.projectId === undefined
           ? null
-          : yield* machines.resolve(input.projectId);
+          : yield* machines
+              .resolve(input.projectId)
+              .pipe(offerPlainOnMachineFailure(machines, input.projectId, broker.enabled));
       const setup =
         wantsSetup && input.projectId !== undefined
           ? yield* machines.resolveSetup(input.projectId)
@@ -200,7 +246,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           machine?.repository.name ??
           setup?.repository.name ??
           plainCheckout?.repository.name ??
-          null,
+          (plain?.kind === "workspace" ? plain.title : null),
       );
       if ((machine !== null || setup !== null) && !broker.enabled) {
         return yield* new CloudSessionFailedError({
@@ -284,7 +330,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
               repoRef,
               sessionTag,
               run: gh.runInteractive,
-              enabled: handoffEnabled,
+              enabled: yield* isSessionCredentialIssueEnabled(),
               readCredential: cloudCli.getExisting,
               mint: minter.mint,
               mintTimeout: CREATE_MINT_WAIT,
@@ -367,7 +413,108 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       );
     });
 
-  return { list, create, cancel } as const;
+  const vcs = yield* Effect.serviceOption(VcsProcessModule.VcsProcess);
+  const projects = yield* Effect.serviceOption(ProjectServiceModule.ProjectService);
+  const machineRepository = Option.isSome(vcs)
+    ? yield* machineRepositoryAccessFor(vcs.value)
+    : null;
+  const machineState = Option.isSome(vcs)
+    ? yield* makeMachineStateOperations(vcs.value, api)
+    : unavailableMachineState;
+
+  // The delete flow's view of this server's projects: titles, checkouts and origins, capped at
+  // what a confirmation can honestly list.
+  const PROJECT_PAGE_LIMIT = 100;
+  const PROJECT_PAGE_CAP = 5;
+  const listLocalProjects: DeleteFlow["listLocalProjects"] = () =>
+    Effect.gen(function* () {
+      if (Option.isNone(projects)) return [] as ReadonlyArray<LocalProjectRef>;
+      const all: LocalProjectRef[] = [];
+      let cursor = 0;
+      for (let page = 0; page < PROJECT_PAGE_CAP; page++) {
+        const result = yield* projects.value.listPage({ cursor, limit: PROJECT_PAGE_LIMIT }).pipe(
+          Effect.mapError(
+            () =>
+              new CloudSessionFailedError({
+                reason: "delete_blocked",
+                message:
+                  "This server's projects could not be listed, so the machine's work cannot be checked. Try again.",
+              }),
+          ),
+        );
+        for (const project of result.projects) {
+          all.push({
+            title: project.title,
+            workspaceRoot: project.workspaceRoot,
+            remoteUrl: project.repositoryIdentity?.locator?.remoteUrl ?? null,
+          });
+        }
+        if (result.nextCursor === null) break;
+        cursor = result.nextCursor;
+      }
+      return all;
+    });
+  const pinnedCommitFor: DeleteFlow["pinnedCommitFor"] = (root) =>
+    machineRepository === null
+      ? Effect.succeed(null)
+      : machineRepository.pinnedCommit(root).pipe(
+          // An unreadable pin means "unknown base": a needless save beats a lost one.
+          Effect.orElseSucceed(() => null),
+        );
+
+  const deleteFlow: DeleteFlow = {
+    repoRef,
+    gh,
+    claims,
+    broker,
+    machineState,
+    listLocalProjects,
+    pinnedCommitFor,
+  };
+
+  const stopDeleteOff = new CloudSessionFailedError({
+    reason: "not_configured",
+    message:
+      "Stopping and deleting cloud sessions is turned off on this server (Settings → Features).",
+  });
+
+  const deleteInfo: CloudSessionService["Service"]["deleteInfo"] = (input) =>
+    Effect.gen(function* () {
+      if (!(yield* readFeatureFlagFromConfig("CLOUD_SESSION_STOP_DELETE")))
+        return yield* stopDeleteOff;
+      const context = yield* findSessionForDelete(deleteFlow, input);
+      return yield* describeCloudSessionDelete(deleteFlow, context);
+    });
+
+  const deleteSession: CloudSessionService["Service"]["delete"] = (input) =>
+    Effect.gen(function* () {
+      if (!(yield* readFeatureFlagFromConfig("CLOUD_SESSION_STOP_DELETE")))
+        return yield* stopDeleteOff;
+      const context = yield* findSessionForDelete(deleteFlow, input);
+      return yield* deleteCloudSession(deleteFlow, context, input.acknowledgedProjects ?? []);
+    });
+
+  return { list, create, cancel, deleteInfo, delete: deleteSession } as const;
 });
+
+/** No git on this server: the cache side of a delete still works, the checkout side cannot. */
+const unavailableMachineState: MachineStateOperations = {
+  listResumeBranches: () =>
+    Effect.fail(
+      new CloudSessionFailedError({
+        reason: "delete_blocked",
+        message:
+          "Git is not available on this server, so the machine's checkout cannot be checked.",
+      }),
+    ),
+  deleteMachineCheckout: () =>
+    Effect.fail(
+      new CloudSessionFailedError({
+        reason: "delete_blocked",
+        message:
+          "Git is not available on this server, so the machine's checkout cannot be checked.",
+      }),
+    ),
+};
 
 export const layer = Layer.effect(CloudSessionService, make());

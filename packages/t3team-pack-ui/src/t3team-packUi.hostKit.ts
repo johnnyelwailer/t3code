@@ -118,7 +118,6 @@ export interface PackUiHostKit {
     element: HTMLElement | SVGElement | null,
   ) => void | (() => void);
 
-  // Navigation
   readonly useNavigation: () => PackNavigation;
 
   // Data (the pack's own store)

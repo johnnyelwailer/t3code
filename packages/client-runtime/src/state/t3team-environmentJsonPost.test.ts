@@ -41,6 +41,7 @@ function makeHarness(reply: (requestNumber: number) => Response) {
   const remoteAuthorization = RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization.of({
     authorizeBearer: () => Effect.die("unexpected"),
     authorizeDpop: () => Effect.die("unexpected"),
+    renewDpopBeforeExpiry: () => Effect.die("unexpected"),
     authorizeDpopHttp: (input) =>
       Effect.succeed({
         environmentId: TARGET.environmentId,

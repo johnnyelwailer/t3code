@@ -7,29 +7,33 @@
  * reconciler starts/stops the source instances; DRAIN (every ten seconds) lists each enabled
  * trigger's undelivered inbox events and hands them to the policy engine
  * (t3team-recipeTriggerRunnerCore.ts), which applies debounce / interval / concurrency /
- * daily-cap and launches headless runs through t3team-recipeHeadlessLaunch.ts.
+ * daily-cap and claims each launch durably; the launcher (t3team-recipeTriggerLauncher.ts) turns a
+ * claimed ledger row into a headless run and re-drives pending rows on every drain.
  */
-import { ProjectId } from "@t3tools/contracts";
+import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
+import { WorkflowTriggerLaunchStore } from "./persistence/t3team-WorkflowTriggerLaunchStore.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
-import { launchHeadlessRecipeWorkflow } from "./t3team-recipeHeadlessLaunch.ts";
+import { t3teamRandomUUID } from "./t3team-random.ts";
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 import { readRecipeTriggerSettings } from "./t3team-recipeTriggerSettings.ts";
 import { reconcileRecipeTriggerRegistrations } from "./t3team-recipeTriggerReconcile.ts";
 import { makeTriggerRunnerAmbient } from "./t3team-recipeTriggerRunnerAmbient.ts";
-import type {
-  LiveTrigger,
-  RecipeTriggerEngine,
-  RecipeTriggerLaunchRequest,
-} from "./t3team-recipeTriggerRunnerCore.ts";
+import { makeRecipeTriggerLauncher } from "./t3team-recipeTriggerLauncher.ts";
+import type { LiveTrigger } from "./t3team-recipeTriggerRunnerCore.ts";
 import { makeRecipeTriggerEngine } from "./t3team-recipeTriggerRunnerCore.ts";
+import {
+  makeTriggerEnginePorts,
+  makeTriggerLauncherPorts,
+} from "./t3team-recipeTriggerRunnerPorts.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
 
@@ -37,6 +41,12 @@ import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
 const DRAIN_TICK_MS = 10_000;
 const DRAIN_LIMIT = 50;
 const RECONCILE_EVERY_MS = 60_000;
+/** Settled ledger rows outlive the daily-cap window and the signal inbox TTL, then go. */
+const LEDGER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Read on every tick, so Settings → Features stops and resumes triggers without a restart. While
+ * off, a tick neither reconciles nor launches; events wait in the inbox for the next enabled tick. */
+const recipeTriggersEnabled = (): boolean => readFeatureFlag("ORCHESTRATION_RECIPE_TRIGGERS");
 
 export interface RecipeTriggerRunnerShape {
   readonly start: () => Effect.Effect<void, never, never>;
@@ -53,14 +63,15 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
   Effect.gen(function* () {
     const projectsStore = yield* ProjectStoreV2;
     const store = yield* WorkflowSignalStore;
+    const ledger = yield* WorkflowTriggerLaunchStore;
+    const runs = yield* WorkflowRunRepository;
     const reconcilerService = Option.getOrUndefined(
       yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
     );
     // The ambient app composition narrowed to each effect's service set (the helpers run
     // effects against that context; see t3team-recipeTriggerRunnerAmbient.ts).
-    const { runProjects, runStore, runFs, runLaunch, log } = makeTriggerRunnerAmbient(
-      yield* Effect.context<never>(),
-    );
+    const ambient = makeTriggerRunnerAmbient(yield* Effect.context<never>());
+    const { runProjects, runStore, runFs, log } = ambient;
 
     let liveTriggers: readonly LiveTrigger[] = [];
     let lastReconcileAtMs = 0;
@@ -87,60 +98,34 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
         log,
       });
       lastReconcileAtMs = DateTime.toEpochMillis(DateTime.nowUnsafe());
+      await ambient.runLedger(
+        ledger.purgeSettledBefore(
+          DateTime.formatIso(
+            DateTime.subtract(DateTime.nowUnsafe(), { milliseconds: LEDGER_RETENTION_MS }),
+          ),
+        ),
+      );
     };
 
-    const engine: RecipeTriggerEngine = makeRecipeTriggerEngine({
-      nowMs: () => DateTime.toEpochMillis(DateTime.nowUnsafe()),
-      log,
-      claim: async (key, instance) => {
-        let taken = 0;
-        for (;;) {
-          const entry = await runStore(
-            store.takeOpenInboxEntry({
-              sourceName: instance.sourceName,
-              paramsHash: instance.paramsHash,
-              signalName: instance.signalName,
-              key,
-              deliveredAt: DateTime.formatIso(DateTime.nowUnsafe()),
-            }),
-          );
-          if (Option.isNone(entry)) break;
-          taken += 1;
-          if (taken >= DRAIN_LIMIT) break;
-        }
-        return taken > 0;
-      },
-      launch: async (request: RecipeTriggerLaunchRequest) => {
-        const trigger = liveTriggers.find(
-          (c) =>
-            c.projectId === request.projectId &&
-            c.recipeId === request.recipeId &&
-            c.triggerId === request.triggerId,
-        );
-        if (trigger === undefined || trigger.modelSelection === null) {
-          throw new Error("trigger no longer registered (settings or model selection changed)");
-        }
-        await runLaunch(
-          launchHeadlessRecipeWorkflow({
-            projectId: ProjectId.make(request.projectId),
-            workspaceRoot: trigger.workspaceRoot,
-            recipePath: trigger.recipePath,
-            workflowPath: trigger.workflowPath,
-            recipe: {
-              id: trigger.recipeId,
-              ...(trigger.action === "default" ? {} : { action: trigger.action }),
-            },
-            args: request.args,
-            modelSelection: trigger.modelSelection,
-            allowedToolGroups: trigger.allowedToolGroups,
-            origin: "trigger",
-          }),
-        );
-      },
-    });
+    const launcher = makeRecipeTriggerLauncher(
+      makeTriggerLauncherPorts({ ledger, runs, ambient, liveTriggers: () => liveTriggers }),
+    );
+    const engine = makeRecipeTriggerEngine(
+      makeTriggerEnginePorts({
+        ledger,
+        ambient,
+        newLaunchId: t3teamRandomUUID,
+        launch: (request) => void launcher.launch(request),
+      }),
+    );
 
     const drain = async (): Promise<void> => {
-      for (const trigger of [...liveTriggers]) {
+      // Retries need the live trigger set, so none run before the first reconcile filled it. They
+      // are not awaited: a slow launch must not hold up the drain (`launching` dedupes overlap).
+      if (lastReconcileAtMs > 0) {
+        void launcher.retryDue().catch((error) => log("launch retry failed", String(error)));
+      }
+      for (const trigger of liveTriggers) {
         if (trigger.modelSelection === null) continue;
         const entries = await runStore(
           store.listUndeliveredInboxEntries({ ...trigger.instance, limit: DRAIN_LIMIT }),
@@ -168,6 +153,7 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
     const tick = (): void => {
       void (async () => {
         try {
+          if (!recipeTriggersEnabled()) return;
           if (
             DateTime.toEpochMillis(DateTime.nowUnsafe()) - lastReconcileAtMs >=
             RECONCILE_EVERY_MS
@@ -186,7 +172,9 @@ export const T3TeamRecipeTriggerRunnerLive = Layer.effect(
     return T3TeamRecipeTriggerRunner.of({
       start: () =>
         Effect.sync(() => {
-          void reconcile().catch((error) => log("initial reconcile failed", String(error)));
+          if (recipeTriggersEnabled()) {
+            void reconcile().catch((error) => log("initial reconcile failed", String(error)));
+          }
           timer.schedule(tick, DRAIN_TICK_MS);
         }),
       stop: () => Effect.sync(() => timer.stop()),

@@ -10,6 +10,7 @@ import { afterEach, describe, expect } from "vite-plus/test";
 
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import {
   resetDistributionModelPolicy,
@@ -33,7 +34,10 @@ const recordingInstance = (id: string, calls: Call[]): ProviderInstance => {
     },
     displayName: undefined,
     enabled: true,
-    snapshot: {} as ProviderInstance["snapshot"],
+    // The router reads each instance's snapshot to see whether the selected one is out of usage.
+    snapshot: {
+      getSnapshot: Effect.succeed({ instanceId, enabled: true }),
+    } as unknown as ProviderInstance["snapshot"],
     orchestrationAdapter: {} as ProviderInstance["orchestrationAdapter"],
     textGeneration: TextGeneration.TextGeneration.of({
       generateCommitMessage: (input) =>
@@ -67,9 +71,12 @@ const makeRouter = (instances: ReadonlyArray<ProviderInstance>) => {
       ),
     }),
     Effect.provide(
-      Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-        resolveLink: () => Effect.die("titles in this test carry their linked context"),
-      }),
+      Layer.mergeAll(
+        Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+          resolveLink: () => Effect.die("titles in this test carry their linked context"),
+        }),
+        ServerSettings.layerTest(),
+      ),
     ),
   );
 };

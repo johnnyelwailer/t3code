@@ -2,31 +2,32 @@ import type { OrchestrationV2Subagent, ServerProvider, ThreadId } from "@t3tools
 import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
 import { useMemo } from "react";
 
-import { usePrimarySettings } from "~/hooks/useSettings";
-import { useServerConfigs } from "~/state/entities";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
+import { useEnvironmentProviders } from "~/state/environments";
 import {
   type ActiveAgentEntry,
   EMPTY_ACTIVE_AGENTS,
   mergeActiveAgentsAndChildren,
 } from "~/t3team/chat/t3team-activeAgentsCore";
+import { deriveAwaitingResultEntries } from "~/t3team/chat/t3team-awaitingResultAgents";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 const NO_CHILDREN: ReadonlyArray<ProjectThread> = [];
 
-function findProvider(
-  configs: ReturnType<typeof useServerConfigs>,
+export function findProvider(
+  providersByEnvironment: ReturnType<typeof useEnvironmentProviders>,
   instanceId: string | undefined,
 ): ServerProvider | undefined {
   if (instanceId === undefined) return undefined;
-  for (const config of configs.values()) {
-    const found = config.providers.find((provider) => provider.instanceId === instanceId);
+  for (const providers of providersByEnvironment.values()) {
+    const found = providers.find((provider) => provider.instanceId === instanceId);
     if (found) return found;
   }
   return undefined;
 }
 
-function providerMark(
+export function providerMark(
   provider: ServerProvider | undefined,
   fallbackDriver?: ServerProvider["driver"],
 ): ActiveAgentEntry["provider"] {
@@ -50,10 +51,8 @@ export function useT3TeamActiveAgents(input: {
   readonly subagents: ReadonlyArray<OrchestrationV2Subagent> | undefined;
 }): readonly ActiveAgentEntry[] {
   const { threadId, subagents } = input;
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
-  const configs = useServerConfigs();
+  const activityLabelsEnabled = useActivityLabelsEnabled();
+  const providersByEnvironment = useEnvironmentProviders();
   const children = useT3TeamChildThreadRelationsStore((state) =>
     threadId === null ? undefined : state.childThreadsByParentId.get(threadId),
   );
@@ -64,23 +63,31 @@ export function useT3TeamActiveAgents(input: {
     const ownSubagents = (subagents ?? []).filter(
       (subagent) => subagent.childThreadId === null || !childIds.has(subagent.childThreadId),
     );
-    const merged = mergeActiveAgentsAndChildren({
+    const live = mergeActiveAgentsAndChildren({
       childThreads,
       subagents: projectedSubagentsToRuntime(ownSubagents),
       activityLabelsEnabled,
     });
+    // Finished delegated tasks whose result the agent has not received yet keep the row up
+    // (t3team-awaitingResultAgents.ts); a child thread still shown as live wins over its task.
+    const liveIds = new Set(live.map((entry) => entry.id));
+    const awaiting = deriveAwaitingResultEntries(subagents).filter((entry) => {
+      const task = subagents?.find((subagent) => `agent:${subagent.id}` === entry.id);
+      return !liveIds.has(entry.id) && !liveIds.has(`child:${task?.childThreadId ?? ""}`);
+    });
+    const merged = awaiting.length === 0 ? live : [...live, ...awaiting];
     if (merged.length === 0) return merged;
     return merged.map((entry) => {
       if (entry.source === "child") {
         const child = childThreads.find((thread) => `child:${thread.id}` === entry.id);
-        const provider = findProvider(configs, child?.providerInstanceId);
+        const provider = findProvider(providersByEnvironment, child?.providerInstanceId);
         const mark = providerMark(provider);
         return mark ? { ...entry, provider: mark } : entry;
       }
-      const agent = ownSubagents.find((subagent) => `agent:${subagent.id}` === entry.id);
-      const provider = findProvider(configs, agent?.providerInstanceId);
+      const agent = subagents?.find((subagent) => `agent:${subagent.id}` === entry.id);
+      const provider = findProvider(providersByEnvironment, agent?.providerInstanceId);
       const mark = providerMark(provider, agent?.driver);
       return mark ? { ...entry, provider: mark } : entry;
     });
-  }, [activityLabelsEnabled, childThreads, configs, subagents]);
+  }, [activityLabelsEnabled, childThreads, providersByEnvironment, subagents]);
 }

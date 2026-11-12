@@ -27,6 +27,7 @@ export type WorkflowTurnState =
       readonly kind: "settlement";
       readonly promptMessageId: string;
       readonly settlement: WorkflowTurnSettlement;
+      readonly draftText?: string;
     };
 
 export type WorkflowTurnReads = Pick<ThreadManagementServiceShape, "getThreadRecords">;
@@ -88,7 +89,16 @@ export const readWorkflowTurnState = (
       turnItemRunId: runId,
       turnItemTypes: ["assistant_message", "error"],
     });
-    return { kind: "settlement", promptMessageId, settlement: judgeStepRun(records, run) } as const;
+    return {
+      kind: "settlement",
+      promptMessageId,
+      settlement: judgeStepRun(records, run),
+      ...(pending.retainTurnDraft
+        ? {
+            draftText: records.messages.map((message) => message.text).join("\n\n"),
+          }
+        : {}),
+    } as const;
   }).pipe(
     // Only a thread that is gone is a definitive answer; any other read error (an SQL error under
     // load) says nothing about the step, so the caller keeps it parked and looks again.

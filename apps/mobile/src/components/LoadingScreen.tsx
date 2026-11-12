@@ -1,14 +1,14 @@
 import { StatusBar, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppActivityIndicator } from "./AppActivityIndicator";
+import { AppActivityIndicator } from "./ui/AppActivityIndicator";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 
-import { AppText as Text } from "./AppText";
+import { AppText as Text } from "./ui/AppText";
 import { BrandMark } from "./BrandMark";
+import { mobileExtensions } from "../extensions/t3team-extensions";
 
 export function LoadingScreen(props: {
   readonly message: string;
-  /** Let the enclosing pane supply the background and top inset. */
   readonly embedded?: boolean;
   readonly messagePlacement?: "above-spinner" | "below-spinner";
 }) {
@@ -23,7 +23,7 @@ export function LoadingScreen(props: {
     >
       <StatusBar barStyle={colorScheme === "dark" ? "light-content" : "dark-content"} />
       <View className="flex-1 items-center justify-center gap-5 px-6">
-        <BrandMark compact />
+        {mobileExtensions.showsLoadingBrandMark === false ? null : <BrandMark compact />}
         {messagePlacement === "above-spinner" ? (
           <Text className="font-t3-bold text-lg text-foreground">{props.message}</Text>
         ) : null}

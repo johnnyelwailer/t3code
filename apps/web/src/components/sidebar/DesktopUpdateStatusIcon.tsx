@@ -1,18 +1,24 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { CheckIcon, CircleArrowUpIcon, DownloadIcon, RotateCwIcon } from "lucide-react";
+import {
+  CircleAlertIcon,
+  CheckIcon,
+  CircleArrowUpIcon,
+  DownloadIcon,
+  RotateCwIcon,
+} from "lucide-react";
 import type { AnimationEventHandler } from "react";
 
 const DOWNLOAD_PROGRESS_RADIUS = 14;
 const DOWNLOAD_PROGRESS_CIRCUMFERENCE = 2 * Math.PI * DOWNLOAD_PROGRESS_RADIUS;
 
 export type DesktopUpdateStatusIconState =
+  | "error"
   | "idle"
   | "checking"
   | "available"
   | "downloading"
   | "downloaded"
-  // Other machines or providers have updates. Matches the server update icon
-  // in Connections settings; the download arrow stays for this app's own file.
+  | "ready"
   | "everything";
 
 function normalizeDesktopUpdateDownloadPercent(percent: number | null): number {
@@ -102,6 +108,18 @@ function DesktopUpdateDownloadedIcon() {
   );
 }
 
+function DesktopUpdateReadyIcon() {
+  return (
+    <span className="relative grid size-4 place-items-center">
+      <RotateCwIcon className="size-4" />
+      <span
+        aria-hidden="true"
+        className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary ring-2 ring-sidebar-control-surface"
+      />
+    </span>
+  );
+}
+
 export function DesktopUpdateStatusIcon({
   downloadPercent,
   isCheckAnimating,
@@ -113,11 +131,13 @@ export function DesktopUpdateStatusIcon({
   readonly onCheckAnimationIteration?: AnimationEventHandler<SVGSVGElement>;
   readonly status: DesktopUpdateStatusIconState;
 }) {
+  if (status === "error") return <CircleAlertIcon className="size-4" />;
   if (status === "available") return <DesktopUpdateAvailableIcon />;
   if (status === "downloading") {
     return <DesktopUpdateDownloadingIcon percent={downloadPercent ?? null} />;
   }
   if (status === "downloaded") return <DesktopUpdateDownloadedIcon />;
+  if (status === "ready") return <DesktopUpdateReadyIcon />;
   if (status === "everything") return <CircleArrowUpIcon className="size-4" />;
 
   return (

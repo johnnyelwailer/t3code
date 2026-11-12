@@ -55,7 +55,7 @@ replacement.
 ## Relations and metadata
 
 - Parent/child is V2 lineage: `shell.lineage.parentThreadId`, `relationshipToParent: "subagent" |
-"fork"`. Ticket and visible placement: `T3TeamChildThreadMetadata.listByChildThreadIds`
+  "fork"`. Ticket and visible placement: `T3TeamChildThreadMetadata.listByChildThreadIds`
   (`apps/server/src/t3team-childThreadMetadata.ts`); cross-environment binding: thread fact
   `environment`. `t3team.handoff.*` activities are gone.
 - `POST /api/t3team/thread/placements` keeps its shape but returns `parentThreadId` only for
@@ -98,7 +98,7 @@ context.defineCompletionWakeRenderer({
 ```
 
 - `input = {threadId, parentRunId, defaultText, tasks: [{taskId, childThreadId, title, status,
-result}]}`; `result` is the child's last assistant message.
+  result}]}`; `result` is the child's last assistant message.
 - The rendered text is stored on the wake message and is the provider's turn input. A wake whose
   task set changed while queued is rendered once more when its run starts, so a renderer may run
   twice per wake: render only from the `tasks` given, never from cached state.

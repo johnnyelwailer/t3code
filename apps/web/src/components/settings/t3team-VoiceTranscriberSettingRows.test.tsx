@@ -19,7 +19,7 @@ const DEFAULT_TRANSCRIBER = {
   modelPath: "",
   language: "auto",
   languages: "de,en",
-  silenceMs: 1500,
+  silenceMs: 600,
 };
 
 function render(transcriber = DEFAULT_TRANSCRIBER, onChange = vi.fn()) {

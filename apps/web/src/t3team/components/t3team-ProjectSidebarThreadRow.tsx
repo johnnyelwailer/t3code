@@ -8,7 +8,7 @@ import { ThreadIconPicker } from "~/components/t3team-ThreadIconPicker";
 import { useUiStateStore } from "~/uiStateStore";
 import { SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
 import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useActivityLabelsEnabled } from "~/t3team/t3team-useActivityLabelsEnabled";
 import { formatRelativeTime, resolveThreadStatusPill } from "./t3team-projectSidebarShared";
 import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
@@ -50,9 +50,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     submit: handleRenameSubmit,
   } = useThreadRowRename({ title: thread.title, onRename });
   const rowRef = useAutoScrollIntoView<HTMLAnchorElement>(state.isOpen);
-  const activityLabelsEnabled = usePrimarySettings(
-    (settings) => settings.t3teamActivityLabelsEnabled,
-  );
+  const activityLabelsEnabled = useActivityLabelsEnabled();
   const statusPill = resolveThreadStatusPill(thread, { activityLabelsEnabled });
   // GHE #201 follow-up: the row's status dot paints through the shared
   // porcelain-orb module when the pill maps onto the orb vocabulary; unmapped

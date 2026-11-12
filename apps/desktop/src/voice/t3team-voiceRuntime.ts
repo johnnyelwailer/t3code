@@ -18,7 +18,11 @@ import {
 } from "./t3team-voiceStreamService.ts";
 import { makeVoiceLogFile, type VoiceLogFile } from "./t3team-voiceLogFile.ts";
 import { makeFileVulkanDeviceMemory } from "./t3team-whisperDeviceMemory.ts";
-import { makeWhisperHost, type WhisperWorkerHandle } from "./t3team-whisperHost.ts";
+import {
+  makeWhisperHost,
+  type WhisperHost,
+  type WhisperWorkerHandle,
+} from "./t3team-whisperHost.ts";
 import { makeFileSentinel } from "./t3team-whisperSentinel.ts";
 import { downloadSileroVadModel, locateSileroVadModel } from "./t3team-whisperVadModel.ts";
 
@@ -86,6 +90,7 @@ function broadcastVoiceStream(event: DesktopVoiceStreamEvent): void {
 }
 
 let service: DesktopVoiceService | null = null;
+let whisperHost: WhisperHost | null = null;
 let streamService: DesktopVoiceStreamService | null = null;
 
 export function getDesktopVoiceService(): DesktopVoiceService {
@@ -105,6 +110,7 @@ export function getDesktopVoiceService(): DesktopVoiceService {
     log: voiceLog,
   });
   Electron.app.once("will-quit", host.dispose);
+  whisperHost = host;
   service = makeDesktopVoiceService({
     host,
     log: voiceLog,
@@ -131,6 +137,9 @@ export function getDesktopVoiceStreamService(): DesktopVoiceStreamService {
     voice: getDesktopVoiceService(),
     emit: broadcastVoiceStream,
     newSessionId: () => NodeCrypto.randomUUID(),
+    // Silero loads with the model: until the warm-up pass ran, audio waits for it ("pending").
+    detectSpeech: async (pcm16Base64) =>
+      whisperHost?.isReady() === true ? whisperHost.detectSpeech(pcm16Base64) : "pending",
     log: voiceLog,
   });
   return streamService;

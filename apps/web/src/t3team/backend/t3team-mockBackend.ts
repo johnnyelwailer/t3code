@@ -140,6 +140,7 @@ export function createMockBackend(): BackendApi {
         workspaceRoot: input.workspaceRoot,
         writtenFiles: input.files.map((file) => file.relativePath),
       }),
+      readWorkItemRecord: async (input) => ({ ok: true, item: { key: input.issueKey } }),
       refreshWorkItemContext: async (input) => ({
         ok: true,
         status: "already_synced" as const,

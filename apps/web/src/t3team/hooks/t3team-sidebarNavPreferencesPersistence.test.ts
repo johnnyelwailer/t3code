@@ -9,15 +9,18 @@ describe("sidebar nav preferences persistence", () => {
     expect(
       readStoredSidebarNavPreferencesFromClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredSidebarNavPreferencesJson: JSON.stringify({
-          "project-1": {
-            hiddenItemIds: ["project-1:jira-work-item:ticket-9"],
-            orderedItemIds: [
-              "project-1:jira-work-item:ticket-2",
-              "project-1:jira-work-item:ticket-1",
-            ],
-          },
-        }),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedSidebarNavPreferencesJson: JSON.stringify({
+            "project-1": {
+              hiddenItemIds: ["project-1:jira-work-item:ticket-9"],
+              orderedItemIds: [
+                "project-1:jira-work-item:ticket-2",
+                "project-1:jira-work-item:ticket-1",
+              ],
+            },
+          }),
+        },
       }),
     ).toEqual({
       "project-1": {
@@ -31,20 +34,23 @@ describe("sidebar nav preferences persistence", () => {
     expect(
       readStoredSidebarNavPreferencesFromClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredSidebarNavPreferencesJson: JSON.stringify({
-          "project-1": {
-            hiddenItemIds: [
-              "project-1:jira-work-item:ticket-9",
-              "project-1:jira-work-item:ticket-9",
-              "",
-            ],
-            orderedItemIds: [
-              "project-1:jira-work-item:ticket-1",
-              "project-1:jira-work-item:ticket-1",
-            ],
-          },
-          "project-2": null,
-        }),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedSidebarNavPreferencesJson: JSON.stringify({
+            "project-1": {
+              hiddenItemIds: [
+                "project-1:jira-work-item:ticket-9",
+                "project-1:jira-work-item:ticket-9",
+                "",
+              ],
+              orderedItemIds: [
+                "project-1:jira-work-item:ticket-1",
+                "project-1:jira-work-item:ticket-1",
+              ],
+            },
+            "project-2": null,
+          }),
+        },
       }),
     ).toEqual({
       "project-1": {

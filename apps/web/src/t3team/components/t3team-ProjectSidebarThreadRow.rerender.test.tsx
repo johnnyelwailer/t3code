@@ -19,15 +19,17 @@
  * selection changes.
  *
  * This test renders the real `ProjectSidebarThreadRowItem` the way the fixed
- * call sites do (primitive `isSelected` + stable handlers) and asserts that
+ * call sites do (primitive `isSelected` + stable handlers), counts each row's
+ * renders through the shared `renderCounter` helper, and asserts that
  * selecting a different thread re-renders only the two affected rows — not the
  * whole list.
  */
 import { act, memo, useMemo } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, it, vi } from "vite-plus/test";
 
 import { ProjectSidebarThreadRowItem } from "./t3team-ProjectSidebarThreadRow";
+import { renderCounter } from "~/test/t3team-renderCounter";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
@@ -43,11 +45,11 @@ function makeThread(index: number): ProjectThread {
 
 const ROW_COUNT = 12;
 
-// Counts how many times each row re-renders. The wrapper receives the SAME
-// stable props the fixed call site passes to `ProjectSidebarThreadRowItem`
-// (a primitive `isSelected` + stable handlers), so it bails out exactly when
-// the fixed row does.
-const renderCounts = new Map<string, number>();
+// The shared render counter: `CountingRow` is a memo barrier that receives only
+// referentially-stable props (the thread object and a primitive `isSelected`),
+// exactly like the fixed call site's `ProjectSidebarThreadRowItem`, so it
+// bails out exactly when the row does.
+const counter = renderCounter();
 const stableOnSelect = () => {};
 const stableOnDelete = () => {};
 const stableOnRename = () => {};
@@ -56,7 +58,7 @@ const CountingRow = memo(function CountingRow(props: {
   thread: ProjectThread;
   isSelected: boolean;
 }) {
-  renderCounts.set(props.rowId, (renderCounts.get(props.rowId) ?? 0) + 1);
+  counter.count(props.rowId);
   return (
     <ProjectSidebarThreadRowItem
       thread={props.thread}
@@ -95,35 +97,32 @@ describe("Work-lens thread selection re-render regression", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    renderCounts.clear();
+    counter.reset();
   });
 
   it("mounts every row exactly once", async () => {
     await act(async () => {
       root.render(<Harness activeThreadId="thread-0" />);
     });
+    const mounted: Record<string, number> = {};
     for (let i = 0; i < ROW_COUNT; i += 1) {
-      expect(renderCounts.get(`row-${i}`)).toBe(1);
+      mounted[`row-${i}`] = 1;
     }
+    counter.expectRerendered(mounted);
   });
 
   it("selecting a different thread re-renders only the two affected rows, not the list", async () => {
     await act(async () => {
       root.render(<Harness activeThreadId="thread-0" />);
     });
-    renderCounts.clear();
+    counter.reset();
 
     await act(async () => {
       root.render(<Harness activeThreadId="thread-1" />);
     });
 
-    const reRendered = [...renderCounts.entries()]
-      .filter(([, count]) => count > 0)
-      .map(([rowId]) => rowId)
-      .toSorted();
-
     // Pre-fix this was ALL 12 rows (["row-0".."row-11"]). The fix must keep it
     // to just the row that was selected and the row that was deselected.
-    expect(reRendered).toEqual(["row-0", "row-1"]);
+    counter.expectRerendered({ "row-0": 1, "row-1": 1 });
   });
 });

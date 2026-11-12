@@ -296,6 +296,54 @@ describe("workflow notification collapse in the timeline", () => {
   }, 10000);
 });
 
+function bareSystemNote(id: string, text: string, ext?: ChatMessage["t3teamExt"]): ChatMessage {
+  return {
+    id: MessageId.make(id),
+    role: "system",
+    text,
+    streaming: false,
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
+    runId: null,
+    ...(ext === undefined ? {} : { t3teamExt: ext }),
+  };
+}
+
+describe("a bare-text system note in the timeline", () => {
+  it("reads as quiet text, not a labelled System card, when its ext never arrived", async () => {
+    const container = await mountTimeline([
+      bareSystemNote("message-note-1", "Skipped machine setup: no toolchain needed."),
+    ]);
+
+    expect(container.textContent).toContain("Skipped machine setup: no toolchain needed.");
+    expect(container.textContent).not.toContain("System");
+  }, 10000);
+
+  it("reads as quiet text when its plan card payload does not decode", async () => {
+    const container = await mountTimeline([
+      bareSystemNote("message-note-2", "Plan: machine-setup", {
+        visibleToUser: true,
+        attachments: [
+          { kind: "view", miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE, props: {} },
+        ],
+      }),
+    ]);
+
+    expect(container.textContent).toContain("Plan: machine-setup");
+    expect(container.textContent).not.toContain("System");
+  }, 10000);
+
+  it("collapses a long bare-text note behind an expand button", async () => {
+    const container = await mountTimeline([
+      bareSystemNote("message-note-3", buildLongWorkflowReportText()),
+    ]);
+
+    expect([...container.querySelectorAll("button")].map((b) => b.textContent)).toContain(
+      "Show full message",
+    );
+  }, 10000);
+});
+
 function widgetOnlyMessage(id: string): ChatMessage {
   return {
     id: MessageId.make(id),

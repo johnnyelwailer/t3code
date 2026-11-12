@@ -13,12 +13,13 @@
  *
  * @module t3team-cloudSessionPlainProject
  */
+import { sessionRepositoryInput } from "./t3team-CloudSessionDelete.ts";
 import type { CloudSessionSetup } from "./t3team-CloudSessionMachine.ts";
 
 export type CloudSessionPlainProject =
   | { readonly kind: "checkout"; readonly checkout: CloudSessionSetup }
   /** `folder` is `plainProjectFolderName(title, projectId)` (contracts), the workflow's `project_name`. */
-  | { readonly kind: "workspace"; readonly folder: string };
+  | { readonly kind: "workspace"; readonly folder: string; readonly title: string };
 
 /** The `workflow_dispatch` inputs that hand the plain session its project. */
 export function plainProjectDispatchInputs(
@@ -29,6 +30,7 @@ export function plainProjectDispatchInputs(
     ? {
         project_repository: project.checkout.repository.url,
         project_commit: project.checkout.commit,
+        session_repository: sessionRepositoryInput(project.checkout.repository),
       }
     : { project_name: project.folder };
 }

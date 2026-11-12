@@ -15,6 +15,7 @@ import type {
   ProviderSessionId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 
 import {
   ProviderAdapterInterruptError,
@@ -30,6 +31,8 @@ import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 import { packEventsToStream } from "./t3team-pack-driverEvents.ts";
 import { type PackMcpSessions, withPackMcp } from "./t3team-pack-driverMcp.ts";
+import { makePackMcpAppCapture } from "./t3team-pack-driverMcpAppCapture.ts";
+import { makePackMcpApps, type PackMcpAppSnapshot } from "./t3team-pack-driverMcpApps.ts";
 import { makePackSessionProbes } from "./t3team-pack-driverSessionProbes.ts";
 import { makePackThreadOps } from "./t3team-pack-driverSessionThreads.ts";
 
@@ -41,6 +44,7 @@ export const makePackSessionRuntime = (input: {
   readonly driver: ProviderDriverKind;
   readonly instanceId: ProviderInstanceId;
   readonly mcpSessions: PackMcpSessions;
+  readonly mcpAppSnapshot?: PackMcpAppSnapshot;
   readonly providerSessionId: ProviderSessionId;
   readonly providerSession: OrchestrationV2ProviderSession;
   /** Completes when the session scope closes; ends the event stream. */
@@ -68,17 +72,26 @@ export const makePackSessionRuntime = (input: {
   const compact = runtime.compactThread;
   const steer = runtime.steerTurn;
   const jobControl = runtime.jobControl;
+  const mcpApps = input.mcpAppSnapshot === undefined ? undefined : runtime.mcpApps;
+  const events = packEventsToStream({
+    events: () => runtime.events(),
+    driver,
+    providerSessionId,
+    closed: input.closed,
+  });
   return {
     instanceId: input.instanceId,
     driver,
     providerSessionId,
     providerSession: input.providerSession,
-    events: packEventsToStream({
-      events: () => runtime.events(),
-      driver,
-      providerSessionId,
-      closed: input.closed,
-    }),
+    events:
+      mcpApps === undefined || input.mcpAppSnapshot === undefined
+        ? events
+        : Stream.mapEffect(
+            events,
+            makePackMcpAppCapture({ mcpApps, snapshot: input.mcpAppSnapshot, driver }),
+          ),
+    ...(mcpApps === undefined ? {} : { mcpApps: makePackMcpApps(mcpApps, driver) }),
     ...makePackSessionProbes(runtime, driver),
     ...makePackThreadOps({ runtime, driver, providerSessionId }),
     startTurn: runTurn((encoded) => runtime.startTurn(encoded)),

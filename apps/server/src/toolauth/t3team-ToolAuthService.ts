@@ -32,7 +32,7 @@ import { isTerminalPhase } from "./t3team-installFlow.ts";
 import { makeToolAuthInstallFlow } from "./t3team-installService.ts";
 import { makeToolAuthLoginFlow, type ToolAuthStartOptions } from "./t3team-loginService.ts";
 import { makeToolSingleFlight } from "./t3team-singleFlight.ts";
-import { probeStatus } from "./t3team-status.ts";
+import { probeToolStatus } from "./t3team-authSlot.ts";
 import type { ActiveSession, AuthState, ToolAuthAdapter } from "./t3team-types.ts";
 
 export type { ActiveSession };
@@ -71,6 +71,12 @@ export class ToolAuthService extends Context.Service<
     ) => Effect.Effect<AuthState, ToolAuthNotAwaitingCodeError | ToolAuthNoActiveSessionError>;
     /** Kills any active session for `tool` and re-probes its connection status. */
     readonly cancel: (tool: string) => Effect.Effect<AuthState>;
+    /**
+     * Broadcasts one state to the stream's subscribers without touching the session map. For a
+     * refusal decided before any flow starts (the `INTEGRATIONS_TOOL_AUTH` gate), which must reach
+     * every surface yet stay non-terminal so a retry still spawns.
+     */
+    readonly publish: (state: AuthState) => Effect.Effect<void>;
     /** Emits a full snapshot, then live per-tool updates; returns an unsubscribe function. */
     readonly attachStream: (
       listener: (event: ToolAuthServiceStreamEvent) => Effect.Effect<void>,
@@ -123,7 +129,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
   const listeners = new Set<(event: ToolAuthServiceStreamEvent) => Effect.Effect<void>>();
 
   const runProbe = (adapter: ToolAuthAdapter, requireProbeAnswer = false) =>
-    probeStatus(adapter, { homeDir, env, requireProbeAnswer }).pipe(
+    probeToolStatus(adapter, { homeDir, env, requireProbeAnswer }).pipe(
       Effect.provideService(ProcessRunner.ProcessRunner, processRunner),
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
@@ -185,7 +191,17 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
   // ONE claim set shared by both flows — see t3team-singleFlight.ts.
   const singleFlight = makeToolSingleFlight();
 
-  const { spawnLoginProcess, start, submitCode, cancel } = makeToolAuthLoginFlow({
+  // Login spawn now needs FileSystem and Path (configured-binary lookup and
+  // PATH+PATHEXT resolution). Capture them here and provide them, so the
+  // public service surface stays `never` and the install flow's
+  // `spawnLoginProcess` type stays satisfied.
+  const provideFsPath = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
+
+  const loginFlow = makeToolAuthLoginFlow({
     ptyAdapter: options.ptyAdapter,
     sessionsRef,
     notifyUpdate,
@@ -197,8 +213,16 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     singleFlight,
     checkBinaryAvailable,
   });
+  const spawnLoginProcess = (
+    tool: string,
+    adapter: Parameters<typeof loginFlow.spawnLoginProcess>[1],
+    account?: Parameters<typeof loginFlow.spawnLoginProcess>[2],
+  ) => provideFsPath(loginFlow.spawnLoginProcess(tool, adapter, account));
+  const start = (tool: string, options?: ToolAuthStartOptions) =>
+    provideFsPath(loginFlow.start(tool, options));
+  const { submitCode, cancel } = loginFlow;
 
-  const { install } = makeToolAuthInstallFlow({
+  const { install: installUnprovided } = makeToolAuthInstallFlow({
     ptyAdapter: options.ptyAdapter,
     sessionsRef,
     notifyUpdate,
@@ -210,6 +234,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     installTimeout,
     singleFlight,
   });
+  const install = (tool: string) => provideFsPath(installUnprovided(tool));
 
   const attachStream = (listener: (event: ToolAuthServiceStreamEvent) => Effect.Effect<void>) =>
     Effect.gen(function* () {
@@ -221,7 +246,15 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
       };
     });
 
-  return ToolAuthService.of({ list, start, install, submitCode, cancel, attachStream });
+  return ToolAuthService.of({
+    list,
+    start,
+    install,
+    submitCode,
+    cancel,
+    publish: notifyUpdate,
+    attachStream,
+  });
 });
 
 export const layer = Layer.effect(

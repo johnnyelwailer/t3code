@@ -15,6 +15,7 @@ import type { ProjectBacklogViewMode } from "~/t3team/t3team-projectBacklogPrese
 import { projectBacklogViewModes } from "~/t3team/t3team-projectBacklogPresentation";
 import type { ProjectBacklogIssueTypeFilterKey } from "~/t3team/t3team-projectBacklogUtils";
 import { projectBacklogIssueTypeFilterOptions } from "~/t3team/t3team-projectBacklogUtils";
+import { offeredBacklogViewMode, useMyWorkViewFlags } from "~/t3team/t3team-myWorkViewFlags";
 import {
   getSelectedBacklogOptionLabel,
   menuValueClassName,
@@ -43,7 +44,11 @@ export function ProjectBacklogPrimaryOptionsMenu({
   onBoardChange: (boardId: string) => void;
   onSprintChange: (sprintId: string | undefined) => void;
 }) {
-  const selectedViewLabel = getSelectedBacklogOptionLabel(projectBacklogViewModes, viewMode);
+  const viewFlags = useMyWorkViewFlags();
+  const viewModes = projectBacklogViewModes.filter(
+    (option) => offeredBacklogViewMode(option.value, viewFlags) === option.value,
+  );
+  const selectedViewLabel = getSelectedBacklogOptionLabel(viewModes, viewMode);
   const selectedIssueTypeLabel =
     visibleIssueTypes.length === projectBacklogIssueTypeFilterOptions.length
       ? "All"
@@ -79,7 +84,7 @@ export function ProjectBacklogPrimaryOptionsMenu({
               value={viewMode}
               onValueChange={(value) => onViewModeChange(value as ProjectBacklogViewMode)}
             >
-              {projectBacklogViewModes.map((option) => (
+              {viewModes.map((option) => (
                 <MenuRadioItem key={option.value} value={option.value}>
                   {option.label}
                 </MenuRadioItem>

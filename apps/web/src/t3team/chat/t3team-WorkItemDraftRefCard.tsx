@@ -8,11 +8,14 @@
  * navigates to the work item, so "it's done" and "here it is" are the same affordance.
  *
  * Presentational: it takes `onOpen` rather than routing itself, so the timeline stays router-agnostic (the
- * same shape the workflow-decision card and the actor card use for their callbacks).
+ * same shape the workflow-decision card and the actor card use for their callbacks). While
+ * `WORKITEM_DETAIL_DRAFTS` is off it is the plain summary, with no way into a review.
  */
 
 import { SquarePenIcon } from "lucide-react";
 import type { T3TeamMessageWorkItemDraftRefAttachment } from "@t3tools/contracts";
+
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 
 export type T3TeamWorkItemDraftRefOpenHandler = (input: {
   readonly projectId: string;
@@ -50,8 +53,9 @@ export function T3TeamWorkItemDraftRefCard({
 }) {
   const summary = workItemDraftRefSummary(attachment, fallbackText);
   const label = `Review the proposed ${attachment.field ?? "change"} for ${attachment.issueIdOrKey}`;
+  const reviewable = useFeatureFlag("WORKITEM_DETAIL_DRAFTS");
 
-  if (!onOpen) {
+  if (!onOpen || !reviewable) {
     return (
       <div className="space-y-1" data-work-item-draft-ref={attachment.issueIdOrKey}>
         <span className="font-medium text-foreground">{summary}</span>

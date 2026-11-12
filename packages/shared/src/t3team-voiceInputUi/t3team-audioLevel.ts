@@ -50,6 +50,7 @@ export function startVoiceBars(options: VoiceBarsOptions): () => void {
   let settled = false;
   let cssRunning: (() => void) | null = null;
   let audioRunning: (() => void) | null = null;
+  let releaseMic: (() => void) | null = null;
 
   const stopCss = (): void => {
     cssRunning?.();
@@ -64,18 +65,27 @@ export function startVoiceBars(options: VoiceBarsOptions): () => void {
   if (options.audioContext) {
     const audioCtx = options.audioContext;
     attachAudioLevel(audioCtx, barCount)
-      .then(async (frame) => {
-        if (audioCtx.state !== "running") {
-          // Suspended context produces flat analyser data (no level for the
-          // bars or the auto-send detector) — resume before it takes over.
-          await audioCtx.resume();
+      .then(async (mic) => {
+        try {
+          if (audioCtx.state !== "running") {
+            // Suspended context produces flat analyser data (no level for the
+            // bars or the auto-send detector) — resume before it takes over.
+            await audioCtx.resume();
+          }
+        } catch (error) {
+          mic.release();
+          throw error;
         }
-        return frame;
+        return mic;
       })
-      .then((frame) => {
-        if (settled) return;
+      .then((mic) => {
+        if (settled) {
+          mic.release();
+          return;
+        }
+        releaseMic = mic.release;
         stopCss();
-        audioRunning = animate(frame);
+        audioRunning = animate(mic.frame);
         options.onAudioActive?.();
       })
       .catch((error: unknown) => {
@@ -88,5 +98,22 @@ export function startVoiceBars(options: VoiceBarsOptions): () => void {
     settled = true;
     stopCss();
     stopAudio();
+    releaseMic?.();
+    releaseMic = null;
   };
+}
+
+/**
+ * Create the analyser's AudioContext, resumed because browsers may hand it out
+ * suspended (autoplay policy) and the bars never move unless it runs.
+ * Returns null when no AudioContext exists (CSS-fallback bars).
+ */
+export function openAudioContext(): AudioContext | null {
+  try {
+    const audioCtx = new AudioContext();
+    void audioCtx.resume().catch(() => {});
+    return audioCtx;
+  } catch {
+    return null;
+  }
 }

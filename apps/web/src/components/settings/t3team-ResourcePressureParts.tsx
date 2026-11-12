@@ -11,7 +11,7 @@ import type {
 
 import { formatRelativeTime } from "../../timestampFormat";
 import { Button } from "../ui/button";
-import { useRelativeTimeTick } from "./settingsLayout";
+import { useNowSecond } from "../../hooks/useNowSecond";
 import {
   availablePercent,
   canOfferStop,
@@ -20,7 +20,7 @@ import {
 } from "./t3team-ResourcePressurePanel.logic";
 
 export function Ago({ at }: { at: number }) {
-  useRelativeTimeTick();
+  useNowSecond();
   const relative = formatRelativeTime(new Date(at).toISOString());
   return (
     <span className="tabular-nums">

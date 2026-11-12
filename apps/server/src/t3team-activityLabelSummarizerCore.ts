@@ -105,7 +105,7 @@ export interface ActivityLabelSummarizerRuntime {
  * a newer label rescheduled (cancel replaced it) or a turn-end clear() ran
  * (the entry was deleted), and this late fire must not clear anything.
  */
-export function scheduleLabelTtl(runtime: ActivityLabelSummarizerRuntime, threadId: string) {
+function scheduleLabelTtl(runtime: ActivityLabelSummarizerRuntime, threadId: string) {
   const state = runtime.pending.get(threadId);
   if (!state) return;
   if (state.ttlTimer) runtime.clearTimer(state.ttlTimer);

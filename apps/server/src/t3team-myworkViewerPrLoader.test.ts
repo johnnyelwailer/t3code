@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { ChildProcessSpawner } from "effect/process";
 
-import * as GitHubApi from "@t3tools/source-control-github/server/GitHubApi";
+import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import { resetDigestViewerLoginsForTests } from "./t3team-githubViewerSearch.ts";
 import { loadViewerPrEntries, loadViewerPrRead } from "./t3team-myworkViewerPrLoader.ts";

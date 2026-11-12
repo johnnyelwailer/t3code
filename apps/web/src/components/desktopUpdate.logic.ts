@@ -2,27 +2,69 @@ import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/con
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
-const DESKTOP_RELEASE_HISTORY_URL = "https://github.com/pingdotgg/t3code/releases";
-const DESKTOP_RELEASE_TAG_URL = `${DESKTOP_RELEASE_HISTORY_URL}/tag`;
+const DEFAULT_DESKTOP_RELEASE_HOST = "github.com";
+const DEFAULT_DESKTOP_RELEASE_REPOSITORY = "pingdotgg/t3code";
+const DEFAULT_DESKTOP_RELEASE_TAG_PREFIX = "v";
+const GITHUB_REPOSITORY_SEGMENT = /^[A-Za-z0-9._-]+$/u;
+const RELEASE_HOST_SEGMENT = /^[a-z0-9.-]+$/i;
+const RELEASE_TAG_PREFIX = /^[A-Za-z0-9.-]*$/u;
 
-/**
- * The main process fills `downloadedVersion` from the updater's `update-downloaded`
- * event, which is dispatched on its own fiber. A download RPC can therefore resolve
- * before that write lands, so fall back to the version the download was started for.
- */
+function isValidRepositorySegment(value: string | undefined): value is string {
+  return (
+    value !== undefined && value !== "." && value !== ".." && GITHUB_REPOSITORY_SEGMENT.test(value)
+  );
+}
+
+function desktopReleaseRepositoryUrl(
+  repository: string | undefined,
+  host: string | undefined,
+): string {
+  const configuredRepository = repository?.trim() ?? "";
+  const [owner, name, ...extra] = configuredRepository.split("/");
+  const releaseRepository =
+    isValidRepositorySegment(owner) && isValidRepositorySegment(name) && extra.length === 0
+      ? configuredRepository
+      : DEFAULT_DESKTOP_RELEASE_REPOSITORY;
+  const configuredHost = host?.trim() ?? "";
+  const releaseHost = RELEASE_HOST_SEGMENT.test(configuredHost)
+    ? configuredHost
+    : DEFAULT_DESKTOP_RELEASE_HOST;
+  return `https://${releaseHost}/${releaseRepository}/releases`;
+}
+
+function desktopReleaseTagUrl(version: string, tagPrefix: string | undefined): string {
+  const configuredPrefix = tagPrefix?.trim() ?? "";
+  const prefix =
+    configuredPrefix !== "" && RELEASE_TAG_PREFIX.test(configuredPrefix)
+      ? configuredPrefix
+      : DEFAULT_DESKTOP_RELEASE_TAG_PREFIX;
+  return `${prefix}${encodeURIComponent(version)}`;
+}
+
+/** The download RPC can beat the updater's downloadedVersion event; fall back to the requested version. */
 export function getDesktopUpdateDownloadedVersion(state: DesktopUpdateState): string | null {
   return state.downloadedVersion ?? state.availableVersion;
 }
 
-/** Release notes for an exact downloaded build; nightly suffixes are part of the tag. */
-export function getDesktopUpdateReleaseUrl(version: string | null): string | null {
+export function getDesktopUpdateReleaseUrl(
+  version: string | null,
+  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY,
+  host: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_HOST,
+  tagPrefix: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_TAG_PREFIX,
+): string | null {
   const normalizedVersion = version?.trim();
   if (!normalizedVersion) return null;
-  return `${DESKTOP_RELEASE_TAG_URL}/v${encodeURIComponent(normalizedVersion)}`;
+  return `${desktopReleaseRepositoryUrl(repository, host)}/tag/${desktopReleaseTagUrl(
+    normalizedVersion,
+    tagPrefix,
+  )}`;
 }
 
-export function getDesktopUpdateReleaseHistoryUrl(): string {
-  return DESKTOP_RELEASE_HISTORY_URL;
+export function getDesktopUpdateReleaseHistoryUrl(
+  repository: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_REPOSITORY,
+  host: string | undefined = import.meta.env.T3CODE_DESKTOP_RELEASE_LINK_HOST,
+): string {
+  return desktopReleaseRepositoryUrl(repository, host);
 }
 
 export function resolveDesktopUpdateButtonAction(
@@ -127,4 +169,43 @@ export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {
   return (
     state.status !== "checking" && state.status !== "downloading" && state.status !== "disabled"
   );
+}
+
+/** `managedDenial` is this machine's policy refusing updates (`managedUpdatesDenial`); it wins. */
+export function getDesktopUpdateDisabledReason(
+  state: Pick<DesktopUpdateState, "enabled" | "status" | "message"> | null,
+  managedDenial?: string,
+): string | null {
+  if (managedDenial !== undefined) return managedDenial;
+  if (!state || (state.enabled && state.status !== "disabled")) return null;
+  return state.message?.trim() || "Automatic updates are not available in this build.";
+}
+
+export function getDesktopUpdateIdleTooltip(
+  state:
+    | (Pick<DesktopUpdateState, "enabled" | "status" | "message"> &
+        Partial<Pick<DesktopUpdateState, "feed" | "errorContext" | "nextCheckAt">>)
+    | null,
+  managedDenial?: string,
+) {
+  if (
+    state?.enabled &&
+    state.feed === "nexi-ghe" &&
+    state.status === "error" &&
+    state.errorContext === "check"
+  ) {
+    const next = state.nextCheckAt ? new Date(state.nextCheckAt) : null;
+    const retry =
+      next && Number.isFinite(next.getTime())
+        ? `Next automatic check: ${next.toLocaleString()}.`
+        : "The next automatic check is being scheduled.";
+    return {
+      title: "Could not check for updates",
+      detail: `${state.message ?? "The update feed did not answer."} ${retry} Click to try now.`,
+    };
+  }
+  const disabledReason = getDesktopUpdateDisabledReason(state, managedDenial);
+  return disabledReason
+    ? { title: "Updates unavailable", detail: disabledReason }
+    : { title: "Check for updates", detail: null };
 }

@@ -4,55 +4,37 @@ import { useEffect, useState } from "react";
 import type { ToolAuthState } from "@t3tools/contracts";
 
 import { cn } from "../../lib/utils";
+import { toolAuthFailureReasonFromState } from "../../state/t3team-toolAuthFailureFromError";
+import {
+  toolAuthFailureText,
+  type ToolAuthFailureKind,
+} from "../../state/t3team-toolAuthFailureMessage";
+import type { ToolAuthActionOutcome } from "../../state/t3team-toolauthActionOutcome";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { AwaitingCodePhase, AwaitingOpenPhase, InstallingPhase } from "./t3team-ToolAuthCardPhases";
+import { ToolAuthActionRow, ToolAuthFailureRow } from "./t3team-ToolAuthCardActions";
+import { useToolAuthCardAction } from "./t3team-useToolAuthCardAction";
 import type { ToolAuthToolMeta } from "./t3team-toolAuthTools";
-
-/** Dot color per phase — same token classes `providerStatus.ts` uses. */
-const PHASE_DOT_CLASS: Record<ToolAuthState["phase"], string> = {
-  idle: "bg-muted-foreground/40",
-  installing: "bg-warning",
-  starting: "bg-warning",
-  "awaiting-open": "bg-warning",
-  "awaiting-code": "bg-warning",
-  verifying: "bg-warning",
-  connected: "bg-success",
-  failed: "bg-destructive",
-  expired: "bg-destructive",
-};
-
-function expiryLabel(expiresAt: number | undefined): string | null {
-  if (expiresAt === undefined) return null;
-  const date = new Date(expiresAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return `Expires ${date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
-}
-
-/**
- * `account` and `organization` are independent, both optional, and — per the
- * one real CLI shape verified so far (`claude auth status --json`, which
- * reports only `authMethod`/`apiProvider`) — usually BOTH absent. Degrades to
- * a plain "Connected" rather than a dangling separator or an empty "Signed in
- * as ". Never presents `authMethod`/`apiProvider` as an account — those
- * describe how the tool is authenticated, not who is signed in, and this
- * summary only ever reads the two dedicated fields.
- */
-function connectedSummary(state: ToolAuthState | undefined): string {
-  const account = state?.account?.trim();
-  const organization = state?.organization?.trim();
-  if (account && organization) return `Signed in as ${account} · ${organization}`;
-  if (account) return `Signed in as ${account}`;
-  if (organization) return `Signed in · ${organization}`;
-  return "Connected";
-}
+import {
+  PHASE_DOT_CLASS,
+  connectedSummary,
+  expiryLabel,
+  toolAuthCardActionKind,
+} from "./t3team-ToolAuthCardSummary";
 
 export interface ToolAuthCardProps {
   readonly meta: ToolAuthToolMeta;
   /** `undefined` before the first snapshot arrives — rendered as `idle`. */
   readonly state: ToolAuthState | undefined;
-  readonly onConnect: () => void;
+  /** Replaces the tool's own description on the Connect prompt, e.g. on a cloud session. */
+  readonly signInDescription?: string | undefined;
+  /** How a failure sentence names the machine this runs on, e.g. `this cloud machine`. */
+  readonly machineLabel?: string | undefined;
+  /** A failure the caller already knows about, such as having no machine to run on at all. */
+  readonly failure?: ToolAuthFailureKind | undefined;
+  readonly onConnect: () => Promise<ToolAuthActionOutcome> | void;
   /**
    * Present only when the CLI is missing (the model picker's needs-install
    * case). When set, the idle and failed actions install *and* sign in as one
@@ -60,20 +42,22 @@ export interface ToolAuthCardProps {
    * against a binary that isn't there. The settings page omits it, so its
    * cards keep the plain "Connect".
    */
-  readonly onInstall?: (() => void) | undefined;
+  readonly onInstall?: (() => Promise<ToolAuthActionOutcome> | void) | undefined;
   readonly onSubmitCode: (code: string) => void;
   readonly onCancel: () => void;
 }
 
 /**
- * One tool's card in the "Connected tools" settings section. A pure,
- * props-driven presentational component (state is owned by the caller) —
- * mirrors `ProviderInstanceCard`'s split between wiring (in the settings
- * panel) and rendering (here).
+ * One tool's card in the "Connected tools" settings section. State is owned by the caller apart
+ * from the in-flight action: a click's pending and error affordances are local, because the
+ * machine may answer a request without ever touching the status stream.
  */
 export function ToolAuthCard({
   meta,
   state,
+  signInDescription,
+  machineLabel = "this machine",
+  failure,
   onConnect,
   onInstall,
   onSubmitCode,
@@ -81,10 +65,24 @@ export function ToolAuthCard({
 }: ToolAuthCardProps) {
   const phase = state?.phase ?? "idle";
   const [code, setCode] = useState("");
-  // Install-and-sign-in when the binary is missing, plain sign-in otherwise.
-  // Safe as a universal retry too: the server's install() re-checks presence
-  // first and goes straight to the login flow when the CLI is already there.
-  const primaryAction = onInstall ?? onConnect;
+  // Install-and-sign-in when the binary is missing, plain sign-in otherwise. Safe as a universal
+  // retry too: the server's install() re-checks presence first and goes straight to the login flow
+  // when the CLI is already there. An expired credential is the exception — the CLI is plainly
+  // installed, so there is nothing to install and this is a plain reconnect.
+  const action = useToolAuthCardAction({
+    action:
+      toolAuthCardActionKind(phase, state?.reason) === "connect"
+        ? onConnect
+        : (onInstall ?? onConnect),
+    phase,
+  });
+  const pendingLabel = onInstall ? "Starting install…" : "Starting sign-in…";
+  const failureReason: ToolAuthFailureKind | null =
+    action.failure ?? failure ?? toolAuthFailureReasonFromState(state);
+  const failureText =
+    failureReason === null
+      ? null
+      : toolAuthFailureText(failureReason, { label: meta.label, machine: machineLabel });
 
   useEffect(() => {
     if (phase !== "awaiting-code") setCode("");
@@ -95,7 +93,13 @@ export function ToolAuthCard({
   const titleNode = (
     <div className="flex min-w-0 items-center gap-2">
       <Icon className="size-4 shrink-0" aria-hidden />
-      <span className={cn("size-2 shrink-0 rounded-full", PHASE_DOT_CLASS[phase])} aria-hidden />
+      <span
+        className={cn(
+          "size-2 shrink-0 rounded-full",
+          PHASE_DOT_CLASS[failureReason !== null ? "failed" : phase],
+        )}
+        aria-hidden
+      />
       <h3 className="truncate text-sm font-semibold text-foreground">{meta.label}</h3>
       {phase === "expired" ? (
         <Badge variant="warning" size="sm">
@@ -110,17 +114,28 @@ export function ToolAuthCard({
       <div className="flex flex-col gap-3">
         {titleNode}
 
-        {phase === "idle" ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground/80">
-              {onInstall
-                ? `${meta.label} isn't installed in this sandbox yet. Installing it also signs you in.`
-                : meta.description}
-            </p>
-            <Button size="sm" variant="outline" className="shrink-0" onClick={primaryAction}>
-              {onInstall ? "Install and connect" : "Connect"}
-            </Button>
-          </div>
+        {failureText !== null ? (
+          <ToolAuthFailureRow
+            text={failureText}
+            retryLabel={phase === "expired" ? "Reconnect" : "Retry"}
+            pending={action.pending}
+            pendingLabel={pendingLabel}
+            onRetry={action.run}
+          />
+        ) : null}
+
+        {failureReason === null && phase === "idle" ? (
+          <ToolAuthActionRow
+            description={
+              onInstall
+                ? `${meta.label} isn't installed on ${machineLabel}. Installing it also signs you in.`
+                : (signInDescription ?? meta.description)
+            }
+            actionLabel={onInstall ? "Install and connect" : "Connect"}
+            pending={action.pending}
+            pendingLabel={pendingLabel}
+            onAction={action.run}
+          />
         ) : null}
 
         {phase === "installing" ? (
@@ -171,31 +186,6 @@ export function ToolAuthCard({
             </div>
             <Button size="sm" variant="outline" className="shrink-0" onClick={onConnect}>
               Reconnect
-            </Button>
-          </div>
-        ) : null}
-
-        {phase === "expired" ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-destructive">
-              {state?.message ?? "Your credential has expired."}
-            </p>
-            <Button size="sm" variant="outline" className="shrink-0" onClick={onConnect}>
-              Reconnect
-            </Button>
-          </div>
-        ) : null}
-
-        {phase === "failed" ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            {/* The CLI's or the package manager's own words, never a generic
-                error — a 403 from the registry and a rejected sign-in code need
-                completely different actions from the user. */}
-            <p className="whitespace-pre-line text-xs text-destructive">
-              {state?.message ?? "Sign-in failed."}
-            </p>
-            <Button size="sm" variant="outline" className="shrink-0" onClick={primaryAction}>
-              Retry
             </Button>
           </div>
         ) : null}

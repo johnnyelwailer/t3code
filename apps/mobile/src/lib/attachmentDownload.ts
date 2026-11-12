@@ -3,6 +3,7 @@ import type { Directory } from "expo-file-system";
 import type { SharingOptions } from "expo-sharing";
 
 import { beginForegroundHandoff } from "./foreground-handoff";
+import { beforeNativeFetch } from "./t3team-urlPolicy";
 import { uuidv4 } from "./uuid";
 
 const ATTACHMENT_DOWNLOAD_DIRECTORY = "t3-attachment-downloads";
@@ -160,7 +161,6 @@ async function createCachedAttachmentFile(attachment: AttachmentFileMetadata) {
   };
 }
 
-/** A readable reason for a viewer refusing a file; native rejections carry stack text. */
 export function nativeViewerErrorMessage(cause: unknown): string {
   const text = cause instanceof Error ? cause.message : String(cause);
   return /ActivityNotFound|cannot be previewed/i.test(text)
@@ -168,7 +168,6 @@ export function nativeViewerErrorMessage(cause: unknown): string {
     : "The file could not be opened. Check the connection and try again.";
 }
 
-/** Open an Android document in a viewer, retaining the cache while another app reads it. */
 export async function openAttachmentInViewer(input: {
   readonly uri: string;
   readonly attachment: AttachmentFileMetadata;
@@ -182,6 +181,8 @@ export async function openAttachmentInViewer(input: {
     if (/^(file|content):/.test(input.uri)) {
       await new File(input.uri).copy(cached.file);
     } else {
+      // Expo's downloader has its own HTTP client; a distribution may need to authorize the URL.
+      beforeNativeFetch(input.uri);
       await File.downloadFileAsync(input.uri, cached.file, { signal: input.signal });
     }
     if (input.signal.aborted) return;
@@ -216,6 +217,7 @@ export async function downloadAttachmentForPreview(input: {
       cached.preview.dispose();
       return null;
     }
+    beforeNativeFetch(input.url);
     await File.downloadFileAsync(input.url, cached.file, { signal: input.signal });
     if (input.signal.aborted) {
       cached.preview.dispose();
@@ -232,7 +234,6 @@ export async function downloadAttachmentForPreview(input: {
   }
 }
 
-/** Downloads original bytes for the native save/share sheet, including inline video responses. */
 export async function downloadAndShareAttachment(input: {
   readonly url: string;
   readonly attachment: AttachmentFileMetadata;
@@ -249,7 +250,6 @@ export async function downloadAndShareAttachment(input: {
   }
 }
 
-/** Shares a cache copy so another app never relies on the lifetime of a composer draft. */
 export async function shareLocalAttachment(input: {
   readonly uri: string;
   readonly attachment: AttachmentFileMetadata;
@@ -275,16 +275,25 @@ export async function shareLocalAttachment(input: {
   }
 }
 
-/**
- * Shares bytes made on this device (an MCP App's download) through the same
- * cache and share sheet. False when the share sheet could not be shown.
- */
+export async function writeGeneratedAttachmentFile(input: {
+  readonly bytes: Uint8Array;
+  readonly attachment: AttachmentFileMetadata;
+}): Promise<AttachmentPreviewFile> {
+  const cached = await createCachedAttachmentFile(input.attachment);
+  try {
+    await cached.file.write(input.bytes);
+    return cached.preview;
+  } catch (error) {
+    cached.preview.dispose();
+    throw error;
+  }
+}
+
 export async function shareGeneratedAttachment(input: {
   readonly bytes: Uint8Array;
   readonly attachment: AttachmentFileMetadata;
   readonly signal: AbortSignal;
 }): Promise<boolean> {
-  // An unavailable share sheet is a refusal for the caller, not a failure.
   const sharing = await availableSharing(input.signal).catch(() => null);
   if (sharing === null) return false;
   const cached = await createCachedAttachmentFile(input.attachment);

@@ -67,6 +67,14 @@ export function opSweep(
     const settleOne = (shell: OrchestrationV2ThreadShell) =>
       Effect.gen(function* () {
         if (settled.has(shell.id) || shell.settledOverride === "settled") return;
+        if (shell.pinnedAt != null) {
+          skipped.push({
+            threadId: shell.id,
+            title: shell.title,
+            reason: "pinned: only the user settles a pinned thread",
+          });
+          return;
+        }
         const state = deriveThreadRunState(shell);
         if (!isTerminalThreadRunState(state)) {
           skipped.push({

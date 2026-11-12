@@ -14,11 +14,7 @@ import {
 } from "../t3team-v2/t3team-v2Orchestrator.testkit.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
-import {
-  archivedShellStreamItemFromThreadShell,
-  buildActiveShellSnapshot,
-  shellStreamItemFromThreadShell,
-} from "./ShellStream.ts";
+import { shellStreamItemFromThreadShell } from "./ShellStream.ts";
 import { shownShell } from "./t3team-hiddenShellThreads.ts";
 
 it.layer(makeT3TeamV2TestLayer("t3team-hidden-shell-threads"))("hidden shell threads", (it) => {
@@ -43,11 +39,7 @@ it.layer(makeT3TeamV2TestLayer("t3team-hidden-shell-threads"))("hidden shell thr
       });
 
       // The navigation shell both the WS subscription and the HTTP snapshot load.
-      const snapshot = buildActiveShellSnapshot({
-        projects: [],
-        threads: yield* orchestrator.getShellSnapshot({ location: "active" }),
-        snapshotSequence: 1,
-      });
+      const snapshot = yield* orchestrator.getShellSnapshot({ location: "active" });
       const ids = snapshot.threads.map((thread) => thread.id);
       assert.notInclude(ids, author);
       assert.includeMembers(ids, [ordinary, parent, parentedLookalike]);
@@ -98,12 +90,15 @@ it.layer(makeT3TeamV2TestLayer("t3team-hidden-shell-threads"))("hidden shell thr
         ),
         author,
       );
+      // Upstream folded the archived-shell stream into the shell stream: an archived shell reads
+      // as a removal there, so a hidden author's archive delta is a removal too (never an update).
       assert.ok(authorShell);
-      assert.isNull(
-        archivedShellStreamItemFromThreadShell({
-          stored: { sequence: 9, event: { threadId: author } } as never,
+      assert.deepStrictEqual(
+        shellStreamItemFromThreadShell({
+          stored: { sequence: 9, event: { threadId: author } },
           shell: shownShell({ ...authorShell, archivedAt: authorShell.updatedAt }),
         }),
+        { kind: "thread.removed", sequence: 9, location: "active", threadId: author },
       );
     }),
   );

@@ -25,15 +25,14 @@ export function readAssigneeDraftPatch(
 }
 
 /**
- * Only "points" mode has a live control to accept into — `WorkItemEstimateControl` always writes
- * story points, never the hour-tracked original estimate — so an "hours" draft reads as `undefined`
- * here: there is nowhere in this view for it to attach to yet.
+ * Only an explicit "points" draft has a live control to accept into: `WorkItemEstimateControl` always
+ * writes story points, so "hours" or an unstated mode reads as `undefined` rather than a guess.
  */
 export function readEstimatePointsDraftPatch(
   draft: T3TeamScalarDraftMutation,
 ): number | null | undefined {
   const { patch } = draft;
-  if (patch.estimateMode === "hours") return undefined;
+  if (patch.estimateMode !== "points") return undefined;
   if (patch.estimateValue === null) return null;
   return typeof patch.estimateValue === "number" && Number.isFinite(patch.estimateValue)
     ? patch.estimateValue

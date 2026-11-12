@@ -33,7 +33,7 @@ type WhisperModule = {
 type WhisperContext = {
   readonly transcribeData: (
     audio: ArrayBuffer,
-    options: { language: string; maxLen: number; tokenTimestamps: boolean },
+    options: { language: string; maxThreads: number; maxLen: number; tokenTimestamps: boolean },
   ) => {
     readonly promise: Promise<{
       result: string;
@@ -61,26 +61,27 @@ const { addNativeLogListener, initWhisper, initWhisperVad, toggleNativeLog }: Wh
   NodeModule.createRequire(__filename)("@fugood/whisper.node");
 
 /**
- * Stricter than Silero's 0.5 default: a keyboard, a fan or a room's hum must not open a pass.
+ * Silero's own defaults (threshold 0.5, 250 ms minimum speech). Measured on this app's 16 kHz tap
+ * from a real desk mic: thresholds 0.35-0.6 gave the same 94-100% recall on speech mixed with the
+ * room, and fan noise, white or brown noise and a steady tone all came back as 0 ms of speech. A
+ * short minimum silence keeps the spans fine-grained; the session decides what a pause is.
  * Segment times come back in centiseconds (measured: 13.6 s of speech ends at t1 = 1286).
  */
 const VAD_OPTIONS: VadOptions = {
-  threshold: 0.6,
+  threshold: 0.5,
   minSpeechDurationMs: 250,
-  minSilenceDurationMs: 300,
+  minSilenceDurationMs: 100,
   speechPadMs: 30,
 };
 const VAD_TIME_UNIT_MS = 10;
 /**
  * Silero must be given a thread count: with the binding's default its detect call never returns
- * (measured on Windows with @fugood/whisper.node 1.2.0-rc.1). Silero is sequential: two threads
- * take ~0.2 s for 14 s of audio, more do not help. It runs beside whisper's GPU pass, not before.
+ * (measured on Windows with @fugood/whisper.node 1.2.0-rc.1). It is sequential: two threads take
+ * 15-100 ms per second of audio depending on load; more do not help.
  */
 const VAD_THREADS = Math.max(1, Math.min(2, NodeOS.availableParallelism()));
-/** A VAD that does not answer in time is dropped for the worker's life; whisper runs ungated. */
-const VAD_TIMEOUT_MS = 3_000;
-/** Under this much speech in a pass, whisper is not asked: it would only invent words. */
-const MIN_SPEECH_MS = 300;
+/** A call that does not answer in time is "unknown" for that call only; the next one tries again. */
+const vadTimeoutMs = (audioMs: number) => 1_000 + audioMs / 10;
 
 let context: WhisperContext | null = null;
 let vad: WhisperVadContext | null = null;
@@ -92,6 +93,8 @@ const reply = (response: WhisperWorkerResponse) => process.send?.(response);
 
 /** ggml logs arrive on another thread, usually just after `initWhisper` resolves. */
 const BACKEND_LOG_GRACE_MS = 1_000;
+const GPU_THREADS = 2;
+const CPU_THREADS = 4;
 
 async function load(request: Extract<WhisperWorkerRequest, { type: "load" }>) {
   usingGpu = false;
@@ -133,54 +136,65 @@ async function load(request: Extract<WhisperWorkerRequest, { type: "load" }>) {
   });
 }
 
-async function speechMsIn(audio: ArrayBuffer): Promise<number | undefined> {
-  if (!vad) return undefined;
+async function detectSpeech(request: Extract<WhisperWorkerRequest, { type: "vad" }>) {
+  const audio = arrayBufferOf(request.pcm16Base64);
+  if (!vad) return reply({ id: request.id, ok: true, speech: null });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const segments = await Promise.race([
     vad.detectSpeechData(audio, VAD_OPTIONS),
     new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), VAD_TIMEOUT_MS);
+      timer = setTimeout(() => resolve(null), vadTimeoutMs(audio.byteLength / 32));
     }),
   ]).finally(() => clearTimeout(timer));
-  if (segments === null) {
-    vad = null;
-    return undefined;
-  }
-  return segments.reduce(
-    (total, segment) => total + Math.max(0, segment.t1 - segment.t0) * VAD_TIME_UNIT_MS,
-    0,
-  );
+  reply({
+    id: request.id,
+    ok: true,
+    speech:
+      segments === null
+        ? null
+        : segments.map((segment) => ({
+            startMs: segment.t0 * VAD_TIME_UNIT_MS,
+            endMs: segment.t1 * VAD_TIME_UNIT_MS,
+          })),
+  });
+}
+
+/** Copies out of the pooled Buffer: the binding reads the whole ArrayBuffer it is given. */
+function arrayBufferOf(pcm16Base64: string): ArrayBuffer {
+  const pcm = Buffer.from(pcm16Base64, "base64");
+  return pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength);
 }
 
 async function transcribe(request: Extract<WhisperWorkerRequest, { type: "transcribe" }>) {
   if (!context) throw new Error("whisper model is not loaded");
-  const pcm = Buffer.from(request.pcm16Base64, "base64");
-  const audio = pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength);
-  // VAD (CPU) and whisper (GPU) run side by side so the gate adds no latency to a pass; whisper's
-  // text is thrown away when VAD heard too little speech. maxLen 1 with token timestamps makes
+  // Greedy with whisper.cpp's defaults, as the Activity Tracker runs it: temperature 0 with 0.2
+  // fallback steps, no_speech 0.6, logprob -1.0, entropy 2.4. maxLen 1 with token timestamps makes
   // every segment one token, which `joinTokenSegments` folds back into words (same text, measured).
-  const [speechMs, result] = await Promise.all([
-    request.vad === true ? speechMsIn(audio) : Promise.resolve(undefined),
-    context.transcribeData(audio, { language: request.language, maxLen: 1, tokenTimestamps: true })
-      .promise,
-  ]);
-  if (speechMs !== undefined && speechMs < MIN_SPEECH_MS) {
-    reply({ id: request.id, ok: true, text: "", speechMs: 0 });
-    return;
-  }
+  // Threads as the tracker sets them (2 on a GPU, 4 on CPU): the binding's default of 8 only adds
+  // CPU contention under a GPU pass, which made passes slow while the machine was busy.
+  const result = await context.transcribeData(arrayBufferOf(request.pcm16Base64), {
+    language: request.language,
+    maxThreads: usingGpu ? GPU_THREADS : CPU_THREADS,
+    maxLen: 1,
+    tokenTimestamps: true,
+  }).promise;
   const words = joinTokenSegments(result.segments ?? []);
   reply({
     id: request.id,
     ok: true,
     text: result.result,
     ...(result.language ? { language: result.language } : {}),
-    ...(speechMs === undefined ? {} : { speechMs: Math.round(speechMs) }),
     ...(words.length === 0 ? {} : { words }),
   });
 }
 
 process.on("message", (request: WhisperWorkerRequest) => {
-  const run = request.type === "load" ? load(request) : transcribe(request);
+  const run =
+    request.type === "load"
+      ? load(request)
+      : request.type === "vad"
+        ? detectSpeech(request)
+        : transcribe(request);
   run.catch((error: unknown) =>
     reply({
       id: request.id,

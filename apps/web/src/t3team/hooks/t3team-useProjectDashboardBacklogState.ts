@@ -1,5 +1,6 @@
 /* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import { useT3TeamPersistedRouteState } from "~/t3team/hooks/t3team-usePersistedRouteState";
+import { offeredBacklogViewMode, useMyWorkViewFlags } from "~/t3team/t3team-myWorkViewFlags";
 import {
   areProjectDashboardBacklogRouteSearchEqual,
   areProjectDashboardBacklogStatesEqual,
@@ -13,8 +14,10 @@ import {
   type ProjectDashboardBacklogState,
 } from "~/t3team/t3team-projectDashboardBacklogState";
 
+/** `state.viewMode` is the view on screen: a saved planning space whose flag is off reads as the
+ * table. */
 export function useProjectDashboardBacklogState(projectId: string) {
-  return useT3TeamPersistedRouteState({
+  const persisted = useT3TeamPersistedRouteState({
     storageKey: getProjectDashboardBacklogStorageKey(projectId),
     parseSearch: parseProjectDashboardBacklogRouteSearch,
     readPersistedState: () => readPersistedProjectDashboardBacklogState(projectId),
@@ -26,4 +29,8 @@ export function useProjectDashboardBacklogState(projectId: string) {
     areRouteSearchEqual: areProjectDashboardBacklogRouteSearchEqual,
     stripRouteSearchParams: stripProjectDashboardBacklogSearchParams,
   });
+  const viewMode = offeredBacklogViewMode(persisted.state.viewMode, useMyWorkViewFlags());
+  const state =
+    viewMode === persisted.state.viewMode ? persisted.state : { ...persisted.state, viewMode };
+  return { state, setState: persisted.setState };
 }

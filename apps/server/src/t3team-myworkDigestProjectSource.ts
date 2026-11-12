@@ -152,7 +152,7 @@ export function loadDigestProjectSource(
       .map((run) => ({
         id: run.pendingCorrelationId as string,
         threadId: run.pendingThreadId as string,
-        // TODO(digest): requiredRole has no structured source yet; the
+        // requiredRole has no structured source yet; the
         // ask payload does not carry it, the client contract expects one.
         ticketRef: resolveDigestTicketRef(
           ctx.rawTicketByThread.get(run.pendingThreadId as string),

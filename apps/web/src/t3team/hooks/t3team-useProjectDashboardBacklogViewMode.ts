@@ -7,6 +7,7 @@ import {
   resolveProjectDashboardBacklogState,
 } from "~/t3team/t3team-projectDashboardBacklogState";
 import type { ProjectBacklogViewMode } from "~/t3team/t3team-projectBacklogPresentation";
+import { offeredBacklogViewMode, useMyWorkViewFlags } from "~/t3team/t3team-myWorkViewFlags";
 import { resolveT3TeamRouteSearchTarget } from "~/t3team/t3team-routeState";
 
 /**
@@ -21,7 +22,7 @@ export function useProjectDashboardBacklogViewMode(projectId: string) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const rawSearch = useRouterState({ select: (state) => state.location.search });
   const routeTarget = useMemo(() => resolveT3TeamRouteSearchTarget(pathname), [pathname]);
-  const viewMode = useMemo(
+  const requestedViewMode = useMemo(
     () =>
       resolveProjectDashboardBacklogState({
         persisted: readPersistedProjectDashboardBacklogState(projectId),
@@ -29,6 +30,7 @@ export function useProjectDashboardBacklogViewMode(projectId: string) {
       }).viewMode,
     [projectId, rawSearch],
   );
+  const viewMode = offeredBacklogViewMode(requestedViewMode, useMyWorkViewFlags());
   const setViewMode = useCallback(
     (next: ProjectBacklogViewMode) => {
       if (!routeTarget) return;

@@ -27,6 +27,7 @@ export type {
   ModelPolicyDefinition,
   PackActivationContext,
   PackActivate,
+  PackFeatureFlagRegistration,
   PackProviderDriverRegistration,
   WorkflowAgentModelPolicyDefinition,
   WorkflowEphemeralConcurrencyPolicyDefinition,
@@ -63,3 +64,8 @@ export type {
   ResolvedPackLock,
   WorkspacePackResolution,
 } from "./t3team-packs.resolve.ts";
+export {
+  DISTRIBUTION_THEME_ENV,
+  orderedDistributionThemePaths,
+  type DistributionThemeManifest,
+} from "./t3team-packs.distributionThemes.ts";

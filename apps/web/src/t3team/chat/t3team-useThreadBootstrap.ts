@@ -7,6 +7,7 @@ import {
   type ThreadBootstrapStatus,
 } from "~/t3team/chat/t3team-runThreadBootstrapEffect";
 import type { ThreadBootstrapProgress } from "~/t3team/chat/t3team-threadBootstrapProgress";
+import { useExternalThreadBootstrapRun } from "~/t3team/chat/t3team-threadBootstrapExternalRun";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
@@ -61,6 +62,9 @@ export function useThreadBootstrap({
   // the bootstrap's first report; the view falls back to "creating" while that is pending.
   const [bootstrapProgress, setBootstrapProgress] = useState<ThreadBootstrapProgress | null>(null);
   const [retryGeneration, setRetryGeneration] = useState(0);
+  // A kickoff that sent at click time ran before this chat mounted, so the effect below plans
+  // `none` and has nothing of its own to report; its progress and outcome come from here.
+  const externalRun = useExternalThreadBootstrapRun(threadId);
   const launchAttemptRef = useRef(0);
   const threadIdRef = useRef(threadId);
   onInitialUserMessageSentRef.current = onInitialUserMessageSent;
@@ -137,8 +141,8 @@ export function useThreadBootstrap({
   ]);
 
   return {
-    bootstrapStatus,
-    bootstrapProgress,
+    bootstrapStatus: externalRun?.status ?? bootstrapStatus,
+    bootstrapProgress: externalRun?.progress ?? bootstrapProgress,
     retryThreadBootstrap,
   };
 }

@@ -104,9 +104,14 @@ export function applyT3TeamRecipeQuickStartLaunchCustomization(
       ? {
           workflow: {
             ...recipe.workflow,
-            parameters: Object.fromEntries(
-              customization.selections.map((selection) => [selection.name, selection.value]),
-            ),
+            // Merged over the recipe's own parameters, never replacing them: a recipe that carries
+            // a ticket or PR reference keeps it when the user picks an option.
+            parameters: {
+              ...recipe.workflow.parameters,
+              ...Object.fromEntries(
+                customization.selections.map((selection) => [selection.name, selection.value]),
+              ),
+            },
           },
         }
       : {}),

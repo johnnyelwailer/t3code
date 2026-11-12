@@ -34,11 +34,13 @@ export function whisperModelFileNames(model: string): readonly string[] {
   return [`ggml-${model}.bin`, `ggml-${model.replaceAll("-", "")}.bin`];
 }
 
-/** A configured large-v3 variant also accepts the other one; anything else must match exactly. */
+/**
+ * A configured `large-v3` also accepts the faster `large-v3-turbo`; anything else must match
+ * exactly. Never the other way round: `large-v3-turbo` asked for live dictation must not quietly
+ * become the 3 GB `large-v3` (30 s to load, seconds a pass).
+ */
 export function acceptableWhisperModels(model: string): readonly string[] {
-  return model.startsWith("large-v3")
-    ? [model, ...LARGE_V3_FAMILY.filter((candidate) => candidate !== model)]
-    : [model];
+  return model === "large-v3" ? [...LARGE_V3_FAMILY] : [model];
 }
 
 function activityTrackerRoot(environment: WhisperModelLocatorEnvironment): string {
@@ -80,12 +82,18 @@ const statSize = (filePath: string): number | null => {
   }
 };
 
+/**
+ * `exact` skips the large-v3 family fallback: automatic dictation asks for `large-v3-turbo` only,
+ * never the 3 GB `large-v3` (30 s to load, 0.5-3 s a pass) the activity tracker keeps for meetings.
+ */
 export function locateWhisperModel(
   config: Pick<DesktopVoiceConfig, "model">,
   environment: WhisperModelLocatorEnvironment,
+  options: { readonly exact?: boolean } = {},
 ): WhisperModelLocation | null {
   const fileSize = environment.fileSize ?? statSize;
-  for (const model of acceptableWhisperModels(config.model)) {
+  const models = options.exact === true ? [config.model] : acceptableWhisperModels(config.model);
+  for (const model of models) {
     for (const { dir, source } of whisperModelSearchDirs(environment)) {
       for (const fileName of whisperModelFileNames(model)) {
         const modelPath = NodePath.join(dir, fileName);

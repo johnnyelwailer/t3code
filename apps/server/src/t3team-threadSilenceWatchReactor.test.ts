@@ -2,8 +2,9 @@
  * The V2 silence watch core over the real fork store (in-memory SQLite) with a
  * fake target projection and a recording mailbox; time is the test clock.
  */
-import { assert, it } from "@effect/vitest";
+import { afterEach, assert, it } from "@effect/vitest";
 import { NodeId, type OrchestrationV2DomainEvent, RunId, ThreadId } from "@t3tools/contracts";
+import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -19,6 +20,8 @@ import {
   T3TeamThreadSilenceWatchStore,
   T3TeamThreadSilenceWatchStoreLive,
 } from "./t3team-threadSilenceWatchStore.ts";
+
+afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
 const WATCHER = ThreadId.make("watcher");
 const TARGET = ThreadId.make("target");
@@ -260,6 +263,24 @@ it.effect("re-arming keeps the watch id and re-reports a still-silent target; ca
         })
         .pipe(Effect.flip);
       assert.strictEqual(self, "A thread cannot watch itself.");
+    }),
+  ),
+);
+
+it.effect("with ORCHESTRATION_CHILD_THREADS off, the sweep and the event path report nothing", () =>
+  run(
+    Effect.gen(function* () {
+      const { core, sent, shells, watchTarget } = yield* setup;
+      yield* watchTarget();
+      replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_CHILD_THREADS", false]]));
+      yield* TestClock.adjust("15 minutes");
+      yield* core.sweep;
+      shells.set(TARGET, shell({ status: "failed", activityRunStatus: null }));
+      yield* core.handleEvent(event("run.updated", TARGET, { status: "failed" }, 15 * MINUTE));
+      assert.lengthOf(sent, 0);
+      replaceFeatureFlagPresetValues(new Map([["ORCHESTRATION_CHILD_THREADS", true]]));
+      yield* core.sweep;
+      assert.lengthOf(sent, 1);
     }),
   ),
 );

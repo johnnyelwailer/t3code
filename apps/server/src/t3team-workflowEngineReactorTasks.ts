@@ -108,6 +108,9 @@ export function createWorkflowReactorTaskHandler(
         if (!(yield* deps.turnRetry.releaseHeldRun(threadId, settlement.heldRunId))) return;
       }
       registry.takePending(threadId);
+      if (pending.retainTurnDraft && pending.resolveLive !== undefined) {
+        return yield* settle(pending, state.draftText ?? "");
+      }
       if (settlement.kind === "answer") {
         if (settlement.messageId !== null && deps.attributeAnswer !== undefined) {
           yield* deps.attributeAnswer({ threadId, messageId: settlement.messageId, pending });
@@ -130,6 +133,8 @@ export function createWorkflowReactorTaskHandler(
       const ext = readT3TeamMessageExtContext(message.context);
       // A widget action starts an agent turn, but is not an answer to a workflow decision.
       if (ext?.widgetReply !== undefined) return;
+      // A recipe kickoff is the input of the run it starts, never an answer to a pending ask.
+      if (ext?.recipeKickoff !== undefined) return;
       const pending = registry.peekPending(threadId);
       if (pending?.kind !== "user.input") return;
       // A structured decision reply is pinned to its ask: a reply authored for a DIFFERENT

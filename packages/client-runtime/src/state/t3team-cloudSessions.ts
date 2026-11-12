@@ -78,6 +78,23 @@ export function createCloudSessionAtoms<R, E>(
       staleTimeMs: PROJECT_MACHINE_STALE_TIME_MS,
     }),
 
+    /** Saves where a project's machine definition is read from; null resets it. One at a time per project. */
+    setProjectMachineSource: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:cloud-sessions:set-project-machine-source",
+      tag: WS_METHODS.projectMachineSetSource,
+      scheduler: commandScheduler,
+      concurrency: {
+        mode: "serial" as const,
+        key: ({
+          environmentId,
+          input,
+        }: {
+          readonly environmentId: string;
+          readonly input: { readonly projectId: string };
+        }) => JSON.stringify([environmentId, input.projectId]),
+      },
+    }),
+
     cancel: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:cloud-sessions:cancel",
       tag: WS_METHODS.cloudSessionCancel,
@@ -93,5 +110,41 @@ export function createCloudSessionAtoms<R, E>(
         }) => JSON.stringify([environmentId, input.sessionId]),
       },
     }),
+
+    /**
+     * Delete a machine's persistent state. Serial per session like cancel: a delete
+     * racing a second delete (or its own stop) must not double-push or double-remove.
+     */
+    delete: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:cloud-sessions:delete",
+      tag: WS_METHODS.cloudSessionDelete,
+      scheduler: commandScheduler,
+      concurrency: {
+        mode: "serial" as const,
+        key: ({
+          environmentId,
+          input,
+        }: {
+          readonly environmentId: string;
+          readonly input: { readonly sessionId: string };
+        }) => JSON.stringify([environmentId, input.sessionId]),
+      },
+    }),
+
+    /**
+     * What the delete confirmation shows (the machine's projects), a one-shot read asked right
+     * before the confirmation opens. A command, not a query: nothing renders its result live,
+     * so there is no state to keep fresh.
+     */
+    deleteInfo: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:cloud-sessions:delete-info",
+      tag: WS_METHODS.cloudSessionDeleteInfo,
+      scheduler: commandScheduler,
+    }),
   };
 }
+export {
+  cloudSessionDeleteConfirmation,
+  cloudSessionDeletedTitle,
+  cloudSessionSnapshotOnlyConfirmation,
+} from "./t3team-cloudSessionDeleteCopy.ts";

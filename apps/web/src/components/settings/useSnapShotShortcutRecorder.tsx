@@ -4,7 +4,7 @@ import {
   type SnapShotShortcut,
 } from "@t3tools/contracts";
 import { parseKeybindingShortcut } from "@t3tools/shared/keybindings";
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { getDesktopSnapShotBridge } from "../../lib/desktopSnapShot";
 import { setShortcutRecorderOpen } from "../../t3team/voice/t3team-shortcutRecorderGate";
 import {
@@ -31,7 +31,6 @@ const MODIFIER_CODES: Readonly<Record<SnapShotModifier, readonly [string, string
   alt: ["AltLeft", "AltRight"],
 };
 
-/** The same recorder for inline changes and config-backed setup, without saving either. */
 export function useSnapShotShortcutRecorder({
   shortcut,
   shortcutLabel,
@@ -57,12 +56,12 @@ export function useSnapShotShortcutRecorder({
   const [recording, setRecording] = useState(false);
   const [requests] = useState(createRecordingRequestTracker);
   const heldModifierCodes = useRef(new Set<string>());
-  const stopRecording = useCallback(() => {
+  const stopRecording = () => {
     requests.clear();
     heldModifierCodes.current.clear();
     setRecording(false);
     void bridge?.setSnapShotShortcutSuppressed(false).catch(() => undefined);
-  }, [bridge, requests]);
+  };
   const startRecording = async () => {
     if (!bridge || disabled) return;
     const request = requests.tryBegin();
@@ -78,10 +77,12 @@ export function useSnapShotShortcutRecorder({
       onError(error instanceof Error ? error.message : "Could not start shortcut recording.");
     }
   };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes whether a shortcut recorder is open so global shortcuts stay quiet, and clears it on unmount
   useEffect(() => {
     setShortcutRecorderOpen(recording);
     return () => setShortcutRecorderOpen(false);
   }, [recording]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases the desktop bridge's SnapShot shortcut suppression on unmount
   useEffect(
     () => () => {
       requests.clear();

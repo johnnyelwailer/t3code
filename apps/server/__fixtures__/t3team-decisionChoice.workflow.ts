@@ -3,7 +3,7 @@
 // carry the `workflow.decision` view (question + affordance) plus the resource attachment, and
 // the run completes with the chosen literal.
 import { Schema } from "effect";
-import { getArgs, getThread, now } from "@t3team/sdk";
+import { getArgs, getThread } from "@t3team/sdk";
 
 export const Inputs = Schema.Struct({ question: Schema.String });
 

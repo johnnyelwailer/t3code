@@ -10,6 +10,7 @@ import { buildTicketDetailKickoffAsideProps } from "~/t3team/t3team-TicketDetail
 import { navigateBackWithFallback } from "~/t3team/t3team-historyBack";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { WorkItemDetailHeader } from "~/t3team/workitem/t3team-WorkItemDetailHeader";
+import { NewChatHereButton } from "~/t3team/t3team-NewChatHereButton";
 import { WorkItemAgentRewriteControl } from "~/t3team/workitem/t3team-WorkItemAgentRewriteControl";
 import { useWorkItemDrafts } from "~/t3team/workitem/t3team-useWorkItemDrafts";
 import { buildWorkItemDetailMainProps } from "~/t3team/workitem/t3team-buildWorkItemDetailMainProps";
@@ -106,6 +107,17 @@ export function TicketDetailView({
         shouldInsetDesktopHeader={shouldInsetDesktopHeader}
         onBack={handleBack}
         onRefresh={() => void view.reload()}
+        actions={
+          <NewChatHereButton
+            target={{
+              kind: "work-item",
+              projectId: project.id,
+              ticketId: resolvedTicketId,
+              displayId: view.displayId,
+              ...(realTicketTitle ? { title: realTicketTitle } : {}),
+            }}
+          />
+        }
       />
 
       <TicketDetailBody

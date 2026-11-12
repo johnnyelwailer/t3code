@@ -29,8 +29,10 @@ import * as DesktopShutdown from "./DesktopShutdown.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
+import * as DesktopStartupRecovery from "./DesktopStartupRecovery.ts";
 import * as DesktopState from "./DesktopState.ts";
 import { registerDesktopStorageFlush } from "./t3team-DesktopStorageFlush.ts";
+import { registerAtlassianAssetBearer } from "./t3team-atlassianAssetBearer.ts";
 import * as DesktopRemoteUpdates from "../updates/DesktopRemoteUpdates.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopSnapShot from "../snapShot/DesktopSnapShot.ts";
@@ -39,6 +41,7 @@ import { configureDesktopVoiceLog } from "../voice/t3team-voiceRuntime.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { pinnedBackendPortFromDefine } from "./t3team-isolatedInstance.ts";
 
 const makeDesktopRunId = Crypto.Crypto.pipe(
   Effect.flatMap((crypto) => crypto.randomUUIDv4()),
@@ -65,11 +68,12 @@ export {
  * Console — always lands on a listening server instead of the port the scan happened to pick.
  * Dev builds and self-hosted builds leave this undefined and keep the sequential scan.
  */
-declare const __DESKTOP_PIN_BACKEND_PORT__: boolean | undefined;
-const PIN_DESKTOP_BACKEND_PORT =
+declare const __DESKTOP_PIN_BACKEND_PORT__: boolean | number | undefined;
+// t3team: the define is `true` (the default port) or a port number for an isolated instance.
+const PIN_DESKTOP_BACKEND_PORT: boolean | number =
   typeof __DESKTOP_PIN_BACKEND_PORT__ === "undefined"
     ? false
-    : __DESKTOP_PIN_BACKEND_PORT__ === true;
+    : (pinnedBackendPortFromDefine(__DESKTOP_PIN_BACKEND_PORT__) ?? false);
 
 const { logInfo: logBootstrapInfo, logWarning: logBootstrapWarning } =
   DesktopObservability.makeComponentLogger("desktop-bootstrap");
@@ -83,11 +87,13 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
 ): Effect.fn.Return<
   void,
   never,
+  | DesktopEnvironment.DesktopEnvironment
   | DesktopShutdown.DesktopShutdown
   | DesktopState.DesktopState
   | ElectronApp.ElectronApp
   | ElectronDialog.ElectronDialog
 > {
+  const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const shutdown = yield* DesktopShutdown.DesktopShutdown;
   const state = yield* DesktopState.DesktopState;
   const electronApp = yield* ElectronApp.ElectronApp;
@@ -103,7 +109,7 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
   const wasQuitting = yield* Ref.getAndSet(state.quitting, true);
   if (!wasQuitting) {
     yield* electronDialog.showErrorBox(
-      "T3 Code failed to start",
+      `${environment.displayName} failed to start`,
       `Stage: ${stage}\n${message}${detail}`,
     );
   }
@@ -114,10 +120,8 @@ const handleFatalStartupError = Effect.fn("desktop.startup.handleFatalStartupErr
 const fatalStartupCause = <E>(stage: string, cause: Cause.Cause<E>) =>
   handleFatalStartupError(stage, Cause.pretty(cause)).pipe(Effect.andThen(Effect.failCause(cause)));
 
-export const stopAllPoolInstances = Effect.fn("desktop.app.stopAllPoolInstances")(
+const stopAllPoolInstances = Effect.fn("desktop.app.stopAllPoolInstances")(
   function* (): Effect.fn.Return<void, never, DesktopBackendPool.DesktopBackendPool> {
-    // Stop every backend in the pool with a timeout to guarantee the quit
-    // path makes progress even if a backend hangs during teardown.
     const pool = yield* DesktopBackendPool.DesktopBackendPool;
     const instances = yield* pool.list;
     yield* Effect.forEach(
@@ -139,8 +143,6 @@ const bootstrap = Effect.gen(function* () {
   yield* logBootstrapInfo("bootstrap start");
 
   const settings = yield* desktopSettings.get;
-  // The renderer is served from the bundled client (or Vite in development)
-  // rather than through the local backend, so the window can open without one.
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
@@ -220,24 +222,25 @@ const bootstrap = Effect.gen(function* () {
   }
 
   if (!(yield* Ref.get(state.quitting))) {
-    // The main window waits for the primary backend. In wsl-only mode that is
-    // the WSL backend, which can be slow to cold-boot — show a "Connecting to
-    // WSL" splash immediately so the app feels responsive instead of presenting
-    // no window until WSL is ready. (Dual mode opens fast off the Windows
-    // primary, so no splash there.)
     if (settings.wslOnly === true && settings.wslBackendEnabled === true) {
       yield* desktopWindow.showConnectingSplash;
     }
     yield* primaryBackend.start;
     yield* logBootstrapInfo("bootstrap backend start requested");
+    // WSL-only fallback can change the primary endpoint before readiness.
+    const config = yield* primaryBackend.currentConfig;
+    if (
+      !environment.isDevelopment &&
+      !settings.wslOnly &&
+      Option.isSome(config) &&
+      Option.isNone(config.value.preflightFailure)
+    ) {
+      yield* desktopWindow.ensureMain;
+    }
     yield* appActivation.start.pipe(
       Effect.tap(() => logBootstrapInfo("desktop app control socket ready")),
       Effect.catch((error) => logStartupError("desktop app control socket unavailable", { error })),
     );
-    // Bring up the WSL backend if the user previously enabled it. The
-    // primary is already starting; reconcile fires off the WSL register
-    // in parallel rather than blocking primary readiness on a possibly
-    // slow first wsl.exe spawn.
     yield* Effect.forkScoped(wslBackend.reconcile);
   }
 }).pipe(Effect.withSpan("desktop.bootstrap"));
@@ -306,6 +309,8 @@ const startup = Effect.gen(function* () {
   yield* logStartupInfo("app ready");
   // t3team: commit renderer localStorage (composer drafts) to disk regularly and before quit.
   yield* registerDesktopStorageFlush();
+  // t3team: the renderer's `<img>`s of the Atlassian media proxy need its bearer (no cookie there).
+  yield* registerAtlassianAssetBearer();
   if (environment.platform === "linux") {
     const selectedBackend = yield* safeStorage.selectedStorageBackend;
     yield* logStartupInfo("safe storage ready", {
@@ -317,6 +322,7 @@ const startup = Effect.gen(function* () {
   yield* applicationMenu.configure;
   yield* updates.configure;
   yield* DesktopRemoteUpdates.listen;
+  yield* DesktopStartupRecovery.listen;
   yield* linuxUrlHandler.register;
   yield* bootstrap.pipe(Effect.catchCause((cause) => fatalStartupCause("bootstrap", cause)));
 }).pipe(Effect.withSpan("desktop.startup"));
@@ -331,11 +337,7 @@ const scopedProgram = Effect.scoped(
     const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
 
     yield* Effect.addFinalizer(() =>
-      // Stop every backend in the pool, not just the primary. The
-      // electronApp.quit() path can race ahead of the layer-scope
-      // cascade, so leaving the WSL instance for its parent scope
-      // finalizer means it gets hard-killed by the OS instead of
-      // receiving SIGTERM + grace.
+      // Quit can outrun layer finalizers; stop pooled backends here so they receive SIGTERM before OS teardown.
       stopAllPoolInstances().pipe(
         Effect.ensuring(rendererHistory.shutdown),
         Effect.ensuring(shutdown.markComplete),

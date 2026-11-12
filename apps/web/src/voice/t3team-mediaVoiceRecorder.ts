@@ -3,6 +3,19 @@ import type { VoiceRecorder } from "@t3tools/client-runtime/voice-input";
 
 import type { VoicePcmTap } from "./t3team-voicePcmTap";
 
+/**
+ * Chromium's WebRTC capture processing: noise suppression and echo cancellation (so the speakers'
+ * own audio is not dictated), mono, but no gain control, unlike `audio: true` (the Activity
+ * Tracker's). Measured on Phil's mic, AGC lifted voices across the room from 0.02-0.05 to 0.07-0.25,
+ * as loud as the speaker, which erases the level that tells the speaker apart (near-field gate).
+ */
+const DICTATION_AUDIO: MediaTrackConstraints = {
+  channelCount: 1,
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: false,
+};
+
 /** Browser recorder behind the client-runtime `VoiceRecorder` seam; `uri` is a blob URL after stop. */
 export class MediaVoiceRecorder implements VoiceRecorder {
   uri: string | null = null;
@@ -23,7 +36,7 @@ export class MediaVoiceRecorder implements VoiceRecorder {
   async prepareToRecordAsync(): Promise<void> {
     this.uri = null;
     this.chunks = [];
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: DICTATION_AUDIO });
     this.recorder = new MediaRecorder(this.stream);
     this.recorder.ondataavailable = (event) => this.chunks.push(event.data);
     try {

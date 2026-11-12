@@ -2,6 +2,7 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
+import type { HostServiceRegistration } from "@t3team/pack-api";
 
 import type { LoadedAiProviderDefinition } from "./t3team-packs.aiProvider.ts";
 import type { WorkspacePackManifest } from "./t3team-packs.manifest.ts";
@@ -71,6 +72,20 @@ export type ColdLocalCompactionRouteRegistration = {
   readonly enabled: boolean;
 };
 
+/** A pack feature flag; mirrors `@t3team/pack-api` `PackFeatureFlagDefinition`. */
+export type PackFeatureFlagRegistration = {
+  readonly key: string;
+  readonly group: string;
+  readonly subgroup?: string;
+  readonly label: string;
+  readonly description: string;
+  readonly defaultEnabled: boolean;
+  readonly requiresRestart: boolean;
+  readonly envAliases?: readonly string[];
+  /** `YYYY-MM-DD` the switch first shipped; Settings → Features marks it New for 30 days. */
+  readonly addedOn?: string;
+};
+
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {
   readonly maxActiveSteps: number | "unlimited";
 };
@@ -90,7 +105,7 @@ export type AccountRegistration = {
   readonly signInResource: string;
 };
 
-export type PackActivationContext = {
+export type PackActivationContext = HostServiceRegistration & {
   readonly pack: { readonly directory: string; readonly manifest: WorkspacePackManifest };
   readonly defineAgentProvider: (definition: LoadedAiProviderDefinition) => void;
   readonly defineProviderDriver: (definition: PackProviderDriverRegistration) => void;
@@ -109,6 +124,7 @@ export type PackActivationContext = {
   ) => void;
   /** Requires the `account:<id>` capability. */
   readonly defineAccount: (definition: AccountRegistration) => void;
+  readonly defineFeatureFlags: (definitions: ReadonlyArray<PackFeatureFlagRegistration>) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };
 export type PackActivate = (context: PackActivationContext) => void | Promise<void>;

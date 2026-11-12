@@ -45,6 +45,7 @@ describe("pack appearance", () => {
     // The whole point of the unification: colors upstream owns are NOT painted here any more.
     // `primary` now reaches the app as the theme library's `messageAction` role.
     expect(css).not.toContain("--primary:");
+    expect(css).not.toContain("data-composer-send-button");
     expect(document.documentElement.dataset.themeId).toBe(t3teamPackThemeId("nexplore"));
     const installed = getCustomThemes().find((theme) => theme.id === t3teamPackThemeId("nexplore"));
     expect(installed?.variants?.light?.messageAction).toBe(toCanonicalThemeColor("#f05a00"));
@@ -152,10 +153,14 @@ describe("pack appearance", () => {
           sidebar: "#fafafa",
           sidebarRowHover: "#eeeeee",
           success: "#0a7f2e",
+          cardForeground: "#1c1772",
           sidebarHeaderBackground: "linear-gradient(90deg, #f05a00, #ff8a3d)",
         },
         dark: {
           sidebar: "#111111",
+          primaryText: "#e5e0ff",
+          primaryActionBackground: "linear-gradient(135deg, #4c3cf6 45%, #f05a0a 140%)",
+          primaryActionShadow: "0 4px 14px rgba(76,60,246,.4)",
           sidebarHeaderBackground: "url(https://packs.example/header.png)",
         },
       },
@@ -171,17 +176,51 @@ describe("pack appearance", () => {
     const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
     expect(css).not.toContain("--sidebar:");
     expect(css).toContain("--success:#0a7f2e");
-    // Tokens upstream DERIVES inside `html[data-theme-id]` must be emitted at that specificity or
-    // they lose the cascade silently: `:root` is (0,1,0) against the theme block's (0,1,1), and
-    // `data-theme-id` is always present once a theme is selected.
-    expect(css).toContain("html[data-theme-id]{");
-    expect(css).not.toMatch(/:root\{[^}]*--card-foreground/);
+    // Colors are scoped to the pack's own theme: a user-chosen theme stays untouched.
+    expect(css).toContain('html[data-theme-id="t3team-pack-nexplore"]{');
+    expect(css).not.toContain("html[data-theme-id]{");
+    // Derived overrides must reach upstream's (0,2,1) theme block in light as well as dark.
+    expect(css).toMatch(
+      /html:not\(\.dark\)\[data-theme-id="t3team-pack-nexplore"\]\{[^}]*--card-foreground/,
+    );
+    expect(css).not.toMatch(/html\[data-theme-id="t3team-pack-nexplore"\]\{[^}]*--card-foreground/);
+    expect(css).not.toMatch(/:root\{[^}]*--(?:success|card-foreground|t3team-primary-text)/);
     expect(css).toContain(
       "--t3team-sidebar-header-background:linear-gradient(90deg, #f05a00, #ff8a3d)",
     );
     expect(css).toContain(
       "--t3team-sidebar-header-background:url(https://packs.example/header.png)",
     );
+    // Primary-coloured text is independent of the button fill, per appearance.
+    expect(css).toMatch(
+      /html\.dark\[data-theme-id="t3team-pack-nexplore"\]\{[^}]*--t3team-primary-text:#e5e0ff/,
+    );
+    // The send-button rule exists only for the appearance that sets it, and only while enabled.
+    expect(css).toContain(
+      'html.dark[data-theme-id="t3team-pack-nexplore"] [data-composer-send-button]:enabled{' +
+        "background-image:linear-gradient(135deg, #4c3cf6 45%, #f05a0a 140%);box-shadow:0 4px 14px rgba(76,60,246,.4)}",
+    );
+    expect(css).not.toMatch(/html:not\(\.dark\)\[[^\]]*\] \[data-composer-send-button\]/);
+
+    // A user who picks another theme gets that theme whole: no pack colour rule matches.
+    const root = document.documentElement;
+    root.classList.add("dark");
+    root.dataset.themeId = "t3-chat";
+    const colorRules = [
+      ...((document.getElementById("t3team-pack-theme") as HTMLStyleElement).sheet?.cssRules ?? []),
+    ].filter(
+      (rule): rule is CSSStyleRule => "selectorText" in rule && rule.selectorText !== ":root",
+    );
+    expect(colorRules.length).toBeGreaterThan(0);
+    for (const rule of colorRules) {
+      const htmlPart = rule.selectorText.split(" ")[0] ?? "";
+      if (htmlPart.startsWith("html")) expect(root.matches(htmlPart)).toBe(false);
+    }
+    root.dataset.themeId = t3teamPackThemeId("nexplore");
+    expect(colorRules.some((rule) => root.matches(rule.selectorText.split(" ")[0] ?? ""))).toBe(
+      true,
+    );
+    root.classList.remove("dark");
   });
 
   it("swaps the favicon to the brand mark and restores it on reset", () => {
@@ -205,5 +244,56 @@ describe("pack appearance", () => {
     expect(document.getElementById("t3team-pack-favicon")).toBeNull();
     expect(original.isConnected).toBe(true);
     original.remove();
+  });
+
+  it("installs alternate themes beside the default and selects only the default", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore-orange",
+      name: "Nexplore Orange",
+      colors: { light: { primary: "#f05a0a" }, dark: { primary: "#f05a0a" } },
+      alternates: [
+        {
+          themeId: "nexplore",
+          name: "Nexplore",
+          colors: { light: { primary: "#4c3cf6" }, dark: { primary: "#4c3cf6" } },
+        },
+      ],
+    });
+    const ids = getCustomThemes().map((theme) => theme.id);
+    expect(ids).toContain(t3teamPackThemeId("nexplore-orange"));
+    expect(ids).toContain(t3teamPackThemeId("nexplore"));
+    expect(readThemePreference()).toBe(t3teamPackThemeId("nexplore-orange"));
+    expect(document.getElementById("t3team-pack-theme")?.textContent).toContain(
+      `[data-theme-id="${t3teamPackThemeId("nexplore")}"]`,
+    );
+  });
+
+  it("turns the selected pill solid only where the accent is too pale for a tint", () => {
+    applyT3TeamPackAppearance({
+      themeId: "nexplore-lila",
+      name: "Nexplore Lila",
+      colors: {
+        light: { primary: "#e5e0ff", background: "#faf9fb", card: "#ffffff" },
+        dark: { primary: "#e5e0ff", background: "#17181c", card: "#1e2024" },
+      },
+      alternates: [
+        {
+          themeId: "nexplore",
+          name: "Nexplore",
+          colors: {
+            light: { primary: "#4c3cf6", background: "#faf9fb", card: "#ffffff" },
+            dark: { primary: "#4c3cf6", background: "#17181c", card: "#1e2024" },
+          },
+        },
+      ],
+    });
+    const css = document.getElementById("t3team-pack-theme")?.textContent ?? "";
+    const lila = `[data-theme-id="${t3teamPackThemeId("nexplore-lila")}"]`;
+    const signalblau = `[data-theme-id="${t3teamPackThemeId("nexplore")}"]`;
+    expect(css).toContain(
+      `html:not(.dark)${lila} [data-t3team-pill-selected]{background-color:var(--primary)`,
+    );
+    expect(css).not.toContain(`html.dark${lila} [data-t3team-pill-selected]`);
+    expect(css).not.toContain(`${signalblau} [data-t3team-pill-selected]`);
   });
 });

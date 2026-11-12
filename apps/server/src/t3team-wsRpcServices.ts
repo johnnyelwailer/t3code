@@ -25,15 +25,19 @@ import type * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import type * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import type * as EnvironmentTheme from "./environmentTheme.ts";
 import type * as GitWorkflowService from "./git/GitWorkflowService.ts";
+import type * as GuestShareService from "./guest/GuestShareService.ts";
 import type * as Keybindings from "./keybindings.ts";
 import type * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import type * as OtlpEndpointCheck from "./observability/OtlpEndpointCheck.ts";
 import type * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
+import type * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
+import type * as PeerLinks from "./peer/PeerLinks.ts";
 import type * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import type * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import type * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import type * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import type * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
+import type * as CommandOutputHub from "./orchestration-v2/CommandOutputHub.ts";
 import type * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import type * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
 import type * as PreviewManager from "./preview/Manager.ts";
@@ -46,11 +50,13 @@ import type * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import type * as ProjectEnrichmentService from "./project/ProjectEnrichmentService.ts";
 import type * as ProjectFaviconResolver from "./project/ProjectFaviconResolver.ts";
 import type * as ProjectService from "./project/ProjectService.ts";
+import type * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
 import type * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import type * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import type * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
 import type * as AntigravityInstallation from "./provider/AntigravityInstallation.ts";
 import type * as CodexInstallation from "./provider/CodexInstallation.ts";
+import type * as DocumentText from "./provider/DocumentText.ts";
 import type * as ModelManifest from "./provider/ModelManifest.ts";
 import type * as ProviderAuthService from "./provider/ProviderAuthService.ts";
 import type * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
@@ -63,14 +69,18 @@ import type * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.t
 import type * as ReviewService from "./review/ReviewService.ts";
 import type * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import type * as SecretRequests from "./secrets/SecretRequests.ts";
+import type * as GitHubRest from "@t3tools/source-control-github/server/GitHubRest";
 import type * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import type * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import type * as ServerSettings from "./serverSettings.ts";
 import type * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import type * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
+import type * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import type * as StorageCleanup from "./storageCleanup.ts";
 import type * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+import type * as TriageService from "./triage/TriageService.ts";
 import type * as TerminalManager from "./terminal/Manager.ts";
+import type * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import type * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import type * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import type * as UsageService from "./usage/UsageService.ts";
@@ -83,6 +93,9 @@ import type * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-regis
 import type * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import type * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import type * as RelayClient from "@t3tools/shared/relayClient";
+import type * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
+import type * as NpmRelease from "./cloud/npmRelease.ts";
+import type * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
 import type * as Crypto from "effect/Crypto";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
@@ -91,6 +104,7 @@ import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import type { CloudSessionService } from "./cloud/t3team-CloudSessionService.ts";
 import type { ProjectMachineDiscovery } from "./project/t3team-ProjectMachineDiscovery.ts";
 import type { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import type { FeatureFlags } from "./t3team-FeatureFlags.ts";
 
 export type WsRpcHandlerServices =
   | AcpRegistrySupport.AcpRegistryCatalog
@@ -104,19 +118,29 @@ export type WsRpcHandlerServices =
   | ChildProcessSpawner.ChildProcessSpawner
   | CloudSessionService
   | CodexInstallation.CodexInstallation
+  | CommandOutputHub.CommandOutputHub
   | Crypto.Crypto
+  | DatabaseStorage.DatabaseStorage
   | DeviceService.DeviceService
+  | DocumentText.DocumentText
+  | PeerLinkRequests.PeerLinkRequests
+  | PeerLinks.PeerLinks
+  | ScratchThreadPromotion.ScratchThreadPromotion
+  | SourceControlSignIn.SourceControlSignIn
   | DirectEndpoints.DirectEndpoints
   | EnvironmentAuth.EnvironmentAuth
   | EnvironmentTheme.EnvironmentThemeService
   | ExternalLauncher.ExternalLauncher
   | FileSystem.FileSystem
   | GitWorkflowService.GitWorkflowService
+  | GuestShareService.GuestShareService
   | HostResources.HostResources
   | Keybindings.Keybindings
   | ManagedProjectFolders.ManagedProjectFolders
   | McpAppRequests.McpAppRequests
   | ModelManifest.ModelManifest
+  | NpmRelease.NpmRelease
+  | NativeChildWorkQuery.NativeChildWorkQuery
   | OrchestrationEventStore.OrchestrationEventStore
   | Orchestrator.OrchestratorV2
   | OtlpEndpointCheck.OtlpEndpointCheck
@@ -146,10 +170,13 @@ export type WsRpcHandlerServices =
   | RemoteOpenTargets.RemoteOpenTargets
   | RepositoryIdentityResolver.RepositoryIdentityResolver
   | ResourcePressureMonitor
+  | FeatureFlags
   | ResourceTelemetry.ResourceTelemetry
   | ReviewService.ReviewService
   | ScheduledTasks.ScheduledTaskService
   | SecretRequests.SecretRequests
+  | SecretResolver.SecretResolver
+  | GitHubRest.GitHubRest
   | ServerConfig.ServerConfig
   | ServerEnvironment.ServerEnvironment
   | ServerLifecycleEvents.ServerLifecycleEvents
@@ -168,6 +195,7 @@ export type WsRpcHandlerServices =
   | ThreadSearch.ThreadSearch
   | ToolAuthService.ToolAuthService
   | TraceDiagnostics.TraceDiagnostics
+  | TriageService.TriageService
   | UsageLimitSources.UsageLimitSources
   | UsageService.UsageService
   | VcsProvisioningService.VcsProvisioningService

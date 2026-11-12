@@ -91,8 +91,17 @@ export const T3TeamForkModelSelection = Schema.Struct({
 });
 export type T3TeamForkModelSelection = typeof T3TeamForkModelSelection.Type;
 
+/** The recipe a user attached to this message in the composer; the message started its run. */
+export const T3TeamMessageRecipeKickoff = Schema.Struct({
+  recipeId: TrimmedNonEmptyString,
+  title: Schema.String,
+  workflowPath: Schema.optional(Schema.String),
+});
+export type T3TeamMessageRecipeKickoff = typeof T3TeamMessageRecipeKickoff.Type;
+
 export const T3TeamMessageExt = Schema.Struct({
   author: Schema.optional(T3TeamMessageAuthor),
+  recipeKickoff: Schema.optional(T3TeamMessageRecipeKickoff),
   displayText: Schema.optional(Schema.String),
   visibleToUser: Schema.optional(Schema.Boolean),
   visibleToAgent: Schema.optional(Schema.Boolean),

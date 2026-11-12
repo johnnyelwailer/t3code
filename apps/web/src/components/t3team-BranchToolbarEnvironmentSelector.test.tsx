@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { type CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { act } from "react";
+
+import { CLOUD_SESSION_CREATING_ID } from "~/cloud/t3team-cloudSessionTargetLogic";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
@@ -309,6 +311,72 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onCreateCloudSession).not.toHaveBeenCalled();
   });
 
+  describe("New cloud session is an optimistic selection", () => {
+    const old: CloudSession = {
+      sessionId: "session-0834",
+      providerKind: "github_actions",
+      phase: "ready",
+      elapsedSeconds: 3600,
+      remainingSeconds: null,
+      machineLabel: "ubuntu-slim",
+      failureReason: null,
+      detailsUrl: null,
+    };
+    const creating = { sessionId: CLOUD_SESSION_CREATING_ID, label: "New cloud session" };
+    const text = () => liveContainer?.textContent ?? "";
+
+    it("selects the new entry at once, and the old session is not the selected one", () => {
+      mountSelector({
+        onCreateCloudSession: () => {},
+        cloudSessionCreatePending: true,
+        pendingCloudSessions: [old],
+        selectedCloudSession: creating,
+        cloudSessionSelectionStatus: "requesting",
+      });
+      expect(testState.selectProps?.value).toBe(`__cloud-session:${CLOUD_SESSION_CREATING_ID}`);
+      const entries = liveContainer?.querySelectorAll("[data-run-on-selected-session]") ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.textContent).toContain("New cloud session");
+      expect(entries[0]?.textContent).toContain("Getting a machine ready");
+      // The request's progress lives in the selected entry, never in a row of its own.
+      expect(text()).not.toMatch(/Requesting a machine|Asking the fleet/);
+      expect(text()).not.toContain("Selected · ");
+    });
+
+    it("hands the selection to the session's own row once the run is listed: one selected entry", () => {
+      const fresh: CloudSession = { ...old, sessionId: "session-new", phase: "preparing" };
+      mountSelector({
+        onCreateCloudSession: () => {},
+        pendingCloudSessions: [fresh, old],
+        selectedCloudSession: { sessionId: "session-new", label: "polassist" },
+        cloudSessionSelectionStatus: "provisioning",
+      });
+      expect(liveContainer?.querySelector("[data-run-on-selected-session]")).toBeNull();
+      expect(text().match(/Selected · /g)).toHaveLength(1);
+    });
+
+    it("keeps a failed create selected as shut down with Retry, and never reverts", () => {
+      const onCreateCloudSession = vi.fn();
+      mountSelector({
+        onCreateCloudSession,
+        pendingCloudSessions: [old],
+        selectedCloudSession: creating,
+        cloudSessionSelectionStatus: "createFailed",
+      });
+      expect(testState.selectProps?.value).toBe(`__cloud-session:${CLOUD_SESSION_CREATING_ID}`);
+      const entry = liveContainer?.querySelector("[data-run-on-selected-session]");
+      expect(entry?.textContent).toContain("Shut down");
+      expect(text()).not.toMatch(/Failed · at/);
+      const retry = Array.from(entry?.querySelectorAll("button") ?? []).find(
+        (button) => button.textContent === "Retry",
+      );
+      act(() => {
+        retry?.click();
+      });
+      expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("wires menu open/close to the polling callback", () => {
     const onCloudMenuOpenChange = vi.fn();
     renderSelector({ onCreateCloudSession: () => {}, onCloudMenuOpenChange });
@@ -428,7 +496,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onCloudMenuOpenChange).toHaveBeenLastCalledWith(false);
   });
 
-  it("shows the most recent failed session read-only with its reason", () => {
+  it("shows the most recent failed session as shut down with Retry, without the step that broke", () => {
     mountSelector({
       onCreateCloudSession: () => {},
       pendingCloudSessions: [
@@ -455,7 +523,15 @@ describe("BranchToolbarEnvironmentSelector", () => {
       ],
     });
 
-    expect(markupContainsFailedRow()).toBe(true);
+    // Failed sessions look like shut-down ones: "Shut down", resume on send, no reason and no x.
+    expect(markupContainsFailedRow()).toBe(false);
+    expect(liveContainer?.textContent).toContain("Shut down");
+    expect(liveContainer?.textContent).not.toMatch(/Failed · at/);
+    expect(liveContainer?.querySelector('[aria-label="Dismiss"]')).toBeNull();
+    const retry = Array.from(liveContainer?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent === "Retry",
+    );
+    expect(retry).toBeDefined();
   });
 
   it("does not pulse the icon of a failed row", () => {
@@ -476,7 +552,8 @@ describe("BranchToolbarEnvironmentSelector", () => {
     });
 
     expect(liveContainer?.querySelector(".animate-pulse")).toBeNull();
-    expect(liveContainer?.textContent).toContain("Failed");
+    expect(liveContainer?.textContent).toContain("Shut down");
+    expect(liveContainer?.textContent).not.toContain("Failed");
   });
 });
 
@@ -627,7 +704,7 @@ describe("BranchToolbarEnvironmentSelector — Move to (started thread, panel)",
     clearCloudSessionTarget(THREAD_SCOPE);
   });
 
-  // The project follow drops a target set up for another project, so the create must record it.
+  // Create may stamp a project; checkout still binds from the composer key at queue time.
   it("tags a draft's creating target with the composer's project", () => {
     mountCreate({ envLocked: false });
     expect(getCloudSessionTarget(THREAD_SCOPE)?.projectKey).toBe(COMPOSER_PROJECT_KEY);

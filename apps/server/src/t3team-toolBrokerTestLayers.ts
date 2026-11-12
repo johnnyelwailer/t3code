@@ -42,6 +42,8 @@ export interface BrokerLayerOptions {
   readonly onArtifact?: (artifact: T3TeamThreadArtifactInput) => void;
   /** Provides `t3team.change_request.publish` a publisher; absent, the tool is not wired. */
   readonly changeRequestPublisher?: T3TeamChangeRequestPublisher["Service"];
+  /** The test project's work-source binding (default: none, like a local project). */
+  readonly projectSource?: OrchestrationProjectShell["source"];
 }
 
 const threadId = ThreadId.make("thread-1");
@@ -133,7 +135,15 @@ const v2Fakes = (dispatch: TestDispatch, options: BrokerLayerOptions) =>
     }),
     Layer.mock(ProjectStoreV2)({
       getShell: (id) =>
-        Effect.succeed(id === projectId ? Option.some(testBrokerProject) : Option.none()),
+        Effect.succeed(
+          id === projectId
+            ? Option.some(
+                options.projectSource === undefined
+                  ? testBrokerProject
+                  : { ...testBrokerProject, source: options.projectSource },
+              )
+            : Option.none(),
+        ),
     }),
     Layer.mock(T3TeamThreadFactsStore)({ list: () => Effect.succeed([]) }),
     // Widgets and draft mutations are recorded as thread artifacts; accept every write.

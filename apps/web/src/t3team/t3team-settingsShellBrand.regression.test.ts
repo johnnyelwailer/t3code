@@ -3,28 +3,39 @@
  * Static regression guard: the Settings shell must brand itself from the pack,
  * like the thread sidebar, not with upstream's hard-wired "T3 Code" wordmark.
  *
- * `AppSidebarLayout` renders its own sidebar header on `/settings`. Upstream's
+ * Settings used to render its own sidebar header on `/settings`, and upstream's
  * `SidebarChromeHeader` there spells "T3" + "Code" literally, so a Nexi Work
- * build showed "T3 Code" as soon as the user opened Settings. The fix renders
- * the Team header (`InboxHeader` → `ProjectSidebarHeader`, fed by the pack's
- * `labels.appName`), the one branding source the rest of the chrome uses.
- * Upstream syncs rewrite this file, which is why the wiring is pinned here.
+ * build showed "T3 Code" as soon as the user opened Settings. Settings is now a modal
+ * (`AppRouteModal`) over the main app shell, so the only sidebar header on screen is the main
+ * sidebar's, and the Team header (`InboxHeader` -> `ProjectSidebarHeader`, fed by the pack's
+ * `labels.appName`) is the one branding source the rest of the chrome uses. Upstream syncs
+ * rewrite these files, which is why the wiring is pinned here.
  */
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
-const LAYOUT_PATH = NodePath.resolve(import.meta.dirname, "../components/AppSidebarLayout.tsx");
+const read = (relative: string) =>
+  NodeFS.readFileSync(NodePath.resolve(import.meta.dirname, relative), "utf8");
 
 describe("Settings shell branding regression guard", () => {
-  const source = NodeFS.readFileSync(LAYOUT_PATH, "utf8");
-
-  it("renders the Team header on the settings branch", () => {
-    expect(source).toMatch(/isOnSettings \? \([\s\S]*?<InboxHeader \/>[\s\S]*?<SettingsSidebarNav/);
+  it("renders the Team header in the sidebar that stays visible under the settings modal", () => {
+    expect(read("../components/AppSidebarLayout.tsx")).toMatch(/<ThreadSidebar\b/);
+    expect(read("../components/Sidebar.tsx")).toMatch(/<InboxHeader \/>/);
   });
 
-  it("no longer renders upstream's T3 Code chrome header", () => {
-    expect(source).not.toMatch(/<SidebarChromeHeader\b/);
+  it("opens settings as a modal over the shell instead of with a header of its own", () => {
+    const settings = read("../routes/_chat.settings.tsx");
+    expect(settings).toMatch(/<AppRouteModal label="Settings">/);
+    expect(settings).not.toMatch(/<InboxHeader\b|<SidebarChromeHeader\b|<T3Wordmark\b/);
+  });
+
+  it("no longer renders upstream's T3 Code chrome header anywhere in the shell", () => {
+    expect(read("../components/AppSidebarLayout.tsx")).not.toMatch(/<SidebarChromeHeader\b/);
+    expect(read("../components/Sidebar.tsx")).not.toMatch(/<SidebarChromeHeader\b/);
+    expect(read("../components/settings/SettingsSidebarNav.tsx")).not.toMatch(
+      /<SidebarChromeHeader\b/,
+    );
   });
 });

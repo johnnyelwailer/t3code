@@ -23,6 +23,7 @@ import { LinkedRepositorySyncModal } from "~/t3team/components/t3team-LinkedRepo
 import { LinkedRepositoryBranchControl } from "~/t3team/components/t3team-LinkedRepositoryBranchControl";
 import { useLinkedRepositoryBranches } from "~/t3team/hooks/t3team-useLinkedRepositoryBranches";
 import { useServerConfig } from "~/t3team/t3team-serverState";
+import { readServerFeatureFlag, readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 
 export function ManageProjectRepositoriesDialog({
   project,
@@ -39,7 +40,14 @@ export function ManageProjectRepositoriesDialog({
     workspaceRoot: project.workspace?.rootPath,
     enabled: true,
   });
-  const mainRepositoryEnabled = useServerConfig()?.mainRepository === true;
+  const serverConfig = useServerConfig();
+  const mainRepositoryEnabled = readServerFeatureFlagOr(
+    serverConfig,
+    "MAIN_REPOSITORY",
+    serverConfig?.mainRepository === true,
+  );
+  // Off: repositories are still linked and saved; the sync view and sync status go away.
+  const syncEnabled = readServerFeatureFlag(serverConfig, "PROJECT_LINKED_REPOSITORIES");
   // An adopted workspace repository is the project workspace itself, not a linked repository.
   const currentMain = readMainRepositoryFromProject(project);
   const initialMainUrl = currentMain?.status === "adopted" ? null : (currentMain?.url ?? null);
@@ -108,7 +116,7 @@ export function ManageProjectRepositoriesDialog({
         aria-label="Linked repositories"
         className="flex h-full w-full max-w-6xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
       >
-        {syncView.visible ? (
+        {syncEnabled && syncView.visible ? (
           <LinkedRepositorySyncModal
             steps={syncView.steps}
             onContinueInBackground={syncView.hide}
@@ -134,12 +142,14 @@ export function ManageProjectRepositoriesDialog({
               linkedUrls={linkedRepositoryUrls}
               onToggle={toggleRepository}
               onLinkMany={linkRepositories}
-              renderLinkedStatus={(url) => (
-                <LinkedRepositorySyncStatusLine
-                  entry={syncStatus.byUrl.get(url)}
-                  onSync={syncStatus.syncNow}
-                />
-              )}
+              renderLinkedStatus={(url) =>
+                syncEnabled ? (
+                  <LinkedRepositorySyncStatusLine
+                    entry={syncStatus.byUrl.get(url)}
+                    onSync={syncStatus.syncNow}
+                  />
+                ) : null
+              }
               renderLinkedControls={(url) => (
                 <LinkedRepositoryBranchControl
                   workspaceRoot={project.workspace?.rootPath}

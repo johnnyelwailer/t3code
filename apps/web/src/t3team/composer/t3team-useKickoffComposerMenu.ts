@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { ProviderInteractionMode, ServerProvider } from "@t3tools/contracts";
 import {
   resolveProviderSkillsForCwd,
@@ -6,7 +6,7 @@ import {
 } from "@t3tools/client-runtime/providerSkills";
 
 import type { ComposerTrigger } from "~/composer-logic";
-import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
+import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditorTiptap";
 import { useProviderWorkspaceSnapshotRefresh } from "~/hooks/t3team-useProviderWorkspaceSnapshotRefresh";
 import { useT3TeamKickoffWorkspaceScopes } from "~/t3team/composer/t3team-kickoffPathSearchScope";
 import { T3TEAM_COMPOSER_BUILT_IN_SLASH_COMMANDS } from "~/t3team/composer/t3team-composerMenuItems";
@@ -42,13 +42,16 @@ export function useT3TeamKickoffComposerMenu(input: T3TeamKickoffComposerMenuInp
   // Skills and slash commands are workspace-scoped (the repo's `.claude/skills`, `.agents/skills`):
   // resolve them for the project's workspace and keep its snapshot scanned, as the thread composer
   // does for its `gitCwd`.
-  useProviderWorkspaceSnapshotRefresh({
+  const refreshWorkspaceSnapshotOnTyping = useProviderWorkspaceSnapshotRefresh({
     provider: provider ?? null,
     instanceId: provider?.instanceId ?? null,
     cwd: providerWorkspace.cwd,
     environmentId: providerWorkspace.environmentId,
-    revalidationKey: input.text,
   });
+  // Typing after the snapshot's TTL has lapsed is when the `/` menu next needs fresh skills.
+  useEffect(() => {
+    refreshWorkspaceSnapshotOnTyping();
+  }, [input.text, refreshWorkspaceSnapshotOnTyping]);
   const skills = useMemo(
     () => (provider ? resolveProviderSkillsForCwd(provider, providerWorkspace.cwd) : []),
     [provider, providerWorkspace.cwd],

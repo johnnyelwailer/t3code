@@ -24,7 +24,7 @@ import type { T3TeamMyWorkDigestProjectInput } from "./t3team-myworkDigestTypes.
  * (t3team-atlassian-mirrorSyncLanes.ts); one project's own digest walks in the foreground.
  */
 export function kickDigestMirrorSync(
-  project: T3TeamMyWorkDigestProjectInput,
+  project: Pick<T3TeamMyWorkDigestProjectInput, "account" | "externalProjectId">,
   lane: MirrorSyncLane = "foreground",
 ) {
   return Effect.gen(function* () {

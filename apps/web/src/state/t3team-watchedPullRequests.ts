@@ -7,7 +7,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { EMPTY_T3TEAM_THREAD_FACTS } from "@t3tools/client-runtime/state/thread-facts";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { threadPullRequestKeyOf } from "@t3tools/shared/threadPullRequests";
+import { threadPullRequestKeyOf } from "@t3tools/client-runtime/thread-pull-requests";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { createContext, useCallback, useContext } from "react";

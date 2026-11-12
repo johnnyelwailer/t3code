@@ -23,7 +23,7 @@ import type { WorkflowStepKind } from "./t3team-sdk.workflowShape.ts";
 function workflowRefLabel(
   ts: typeof TsApi,
   node: TsApi.Node | undefined,
-  sf: TsApi.SourceFile,
+  _sf: TsApi.SourceFile,
 ): string | null {
   if (node === undefined || !ts.isCallExpression(node)) return null;
   const callee = node.expression;

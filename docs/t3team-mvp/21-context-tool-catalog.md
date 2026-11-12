@@ -198,6 +198,9 @@ t3team.project.attach_context_bundle
 t3team.project.refresh_context_bundle
 t3team.project.list_linked_repositories
 t3team.project.sync_linked_repository
+t3team.machine.find_definitions
+t3team.machine.set_source
+t3team.desktop_route.request
 t3team.project.open_dashboard_mode
 t3team.project.open_linked_repository_manager
 t3team.project.refresh_integrations
@@ -212,6 +215,26 @@ Notes:
   Linked repositories sync on demand: the bootstrap only records them, and
   `context/linked-repositories.json` lists each with its checkout state. The agent clones or
   fetches the one it needs; delegating into an uncloned linked repository clones it too.
+- `t3team.machine.find_definitions` is implemented (MCP `t3_machine_find_definitions`). It is
+  read-only: it looks for `.nexi/machine.json` and devcontainer definitions in the project's own
+  and linked repositories (default branch, other branches, open and recently closed pull
+  requests) so a machine-setup agent proposes an existing one instead of asking for a repository
+  and branch. It is a direct MCP tool like `t3_linked_repository_sync`, not a broker tool, and
+  honors `CLOUD_PROJECT_MACHINE`.
+- `t3team.machine.set_source` is implemented (MCP `t3_machine_set_source`). The machine-setup agent
+  proposes the repository and branch that `find_definitions` found. The tool proves the proposal
+  (the repository is readable and the branch holds a usable definition, read like a cloud session
+  reads it) and posts ONE `t3_ask_user` question: "Use this machine definition" or "Keep the
+  default". Its question id is `machine-source:v1:<base64url JSON of the setting>`. The tool never
+  saves: the setting lives on the user's own environment, so the web client saves it there when
+  the user accepts, and the answer reaches the agent as the user's next message.
+- `t3team.desktop_route.request` is implemented (MCP `request_desktop_route`), opt-in behind the
+  `AGENTS_DESKTOP_ROUTE` flag. A cloud-session agent whose connection to one host failed asks the
+  user to let that host be reached through their own computer. The tool checks the target is one
+  plain token and posts ONE `t3_ask_user` question: once, for this session, always for this host, or
+  not. Its question id is `desktop-route:v1:<base64url JSON of the proposal>` and the first line is
+  derived from it alone. The tool never grants: the user's desktop web client makes the grant on
+  its own host service when they accept, and the answer reaches the agent as the user's next message.
 - `create_context_bound_thread` creates a thread under the current project or view.
 - `t3team.project.refresh_context_bundle` is implemented. It rebuilds the lightweight
   project context bundle (`work-items/index.json` plus summary JSON) from the current backlog
@@ -383,12 +406,61 @@ t3team.mywork.digest.read
 t3team.mywork.arrange
 ```
 
+Implemented: read-only work-item queries (group `integration.read`; MCP `t3_work_item_search`,
+`t3_work_item_get`). Both answer for the calling thread's own project binding only, there is no
+project argument, and a JQL or a key that would leave the project is conjoined away or refused. They
+exist only while a usable Atlassian account is bound to that project in this environment: without
+one they are absent from `tools/list` and from a workflow's host tools, and a stale call answers
+"Jira is not connected in this environment. Continue without it." They are offered by that account
+state alone, not by the thread's synced tool context (`/mcp` threads carry none); drafts and writes
+still need the tool context. `get` asks the tracker whether the key is in the project before it
+returns any mirrored content or comments, returns the newest 50 comments with `commentsTruncated`,
+and `links[].issueKey` / `parentKey` may be keys outside the project (key and relation text only).
+Both answers carry an optional `freshness: { source, syncedAt?, stale? }`: `syncedAt` is the mirror's last
+successful catch-up (absent for a live answer), `stale` is true when the mirror has failed since. `get`
+answers from the tracker's row when it is newer than the mirror row, so a lagging mirror cannot hand back
+an old description.
+
+```text
+t3team.work_item.search
+t3team.work_item.get
+```
+
 Draft mutation tools should reuse item-level tools when the target is a Jira work item:
 
 ```text
 t3team.work_item.assignee.draft_update
 t3team.work_item.estimate.draft_update
 t3team.work_item.status.draft_update
+```
+
+Implemented: thread agents reach those draft tools over `/mcp` through ONE tool,
+`t3_work_item_draft` (`t3team.work_item.draft`, group `mutation.draft`), whose `op`
+(description, comment, assignee, estimate, status, subtask_create, link_add) selects the canonical
+draft tool; the canonical `*.draft_*` ids stay workflow-body host tools and are not on `/mcp`
+themselves. Link removal has no op: a removal names a link id, which no thread-readable provider
+result carries, so the project scope cannot be checked; it stays a workflow-body tool.
+
+It adds the gates that can hold on `/mcp`: a usable Atlassian account bound to the thread's project
+and the `WORKITEM_DETAIL_DRAFTS` flag (otherwise absent from `tools/list`; a stale call is answered
+by the not-connected or the feature refusal), `issue_id` is required and must be a work item key,
+every key the draft names (target, link end, subtask parent) must be in the bound project (checked
+live), and `publishDraft` is the calling thread's own. It is a write-class tool: a read-only MCP
+client is refused. A recipe's `allowedToolGroups` is NOT enforced on `/mcp`, which binds without
+one for every tool; the group applies to a recipe-launched workflow body. The result is a draft
+artifact the user reviews in the UI; nothing is written to the tracker.
+
+The bulk form is `t3_work_item_change_set` (`t3team.work_item.change_set`, same group, gates and
+write class): a `title` and 1 to 25 `operations`, each exactly a `t3_work_item_draft` argument
+object. All or nothing: one invalid operation or foreign key publishes nothing. Over `/mcp` a
+structurally malformed operation is rejected by the tool's input schema before the broker (one
+schema error); the per-index list in the answer covers the broker-level failures (an operation
+that does not build, or a work item outside the project). See Epic 35 for the artifacts it
+publishes.
+
+```text
+t3team.work_item.draft
+t3team.work_item.change_set
 ```
 
 Examples:

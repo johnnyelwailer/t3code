@@ -35,7 +35,7 @@ describe("whisper model detection", () => {
 
   it("finds the activity tracker model under ACTIVITY_TRACKER_DATA_DIR", () => {
     const found = locateWhisperModel(
-      { model: "large-v3-turbo" },
+      { model: "large-v3" },
       environment(
         { "E:/ActivityTracker/models/whisper/ggml-largev3.bin": 3 * GB },
         { env: { ACTIVITY_TRACKER_DATA_DIR: "E:/ActivityTracker" } },
@@ -46,6 +46,13 @@ describe("whisper model detection", () => {
     expect(found?.modelPath.replaceAll("\\", "/")).toBe(
       "E:/ActivityTracker/models/whisper/ggml-largev3.bin",
     );
+  });
+
+  it("never lets a large-v3-turbo request become the full large-v3", () => {
+    const env = { ACTIVITY_TRACKER_DATA_DIR: "E:/ActivityTracker" };
+    const files = { "E:/ActivityTracker/models/whisper/ggml-largev3.bin": 3 * GB };
+    expect(locateWhisperModel({ model: "large-v3-turbo" }, environment(files, { env }))).toBeNull();
+    expect(acceptableWhisperModels("large-v3")).toEqual(["large-v3-turbo", "large-v3"]);
   });
 
   it("falls back to the default per-platform app root without the override", () => {

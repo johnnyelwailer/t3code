@@ -2,11 +2,21 @@
 
 import type { EnvironmentId, ToolAuthToolId } from "@t3tools/contracts";
 
+import {
+  useSignInDescriptionForEnvironment,
+  useToolAuthMachineLabel,
+} from "../../cloud/t3team-cloudMachineSignIn";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
+import { resolveToolAuthEnvironmentId } from "../../state/t3team-toolauthActions";
+import { useToolAuthEnvironmentAvailability } from "../../t3team/t3team-useToolAuthEnvironmentFlag";
 import { ToolAuthCard } from "../settings/t3team-ToolAuthCard";
+import { ToolAuthUnavailableNotice } from "../settings/t3team-ToolAuthUnavailableNotice";
 import { toolAuthMetaForTool } from "../settings/t3team-toolAuthTools";
+import { ModelPickerSignInRefreshNotice } from "./t3team-ModelPickerSignInRefreshNotice";
+import { reconcileToolAuthWithProvider } from "./t3team-reconcileToolAuthWithProvider";
+import { useProviderRefreshAfterSignIn } from "./t3team-useProviderRefreshAfterSignIn";
 
 export interface ModelPickerProviderConnectPanelProps {
   /** The instance the user selected in the picker sidebar. */
@@ -19,7 +29,7 @@ export interface ModelPickerProviderConnectPanelProps {
    * every connect/install act on that machine, not on the primary: a thread on a cloud session must
    * not show (or change) this computer's CLI login. Defaults to the primary environment.
    */
-  readonly environmentId?: EnvironmentId | undefined;
+  readonly environmentId?: EnvironmentId | null | undefined;
 }
 
 /**
@@ -35,15 +45,36 @@ export interface ModelPickerProviderConnectPanelProps {
  * settings pane — narrower card, no outer settings-list chrome.
  */
 export function ModelPickerProviderConnectPanel({
+  entry,
   tool,
   readiness,
   environmentId: threadEnvironmentId,
 }: ModelPickerProviderConnectPanelProps) {
   const meta = toolAuthMetaForTool(tool);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const environmentId = threadEnvironmentId ?? primaryEnvironmentId;
+  const environmentId = resolveToolAuthEnvironmentId(threadEnvironmentId, primaryEnvironmentId);
   const states = useToolAuthStates(environmentId);
-  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
+  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId, {
+    instanceId: entry.instanceId,
+  });
+  const signInDescription = useSignInDescriptionForEnvironment(environmentId);
+  const machineLabel = useToolAuthMachineLabel(environmentId);
+  const availability = useToolAuthEnvironmentAvailability(environmentId);
+  // Same source as Settings: if the provider probe says unauthenticated, do not keep a stale
+  // "connected" tool-auth phase on the card (that is what made the menu say "Signed in").
+  const toolAuthState = reconcileToolAuthWithProvider(
+    states.get(meta.tool),
+    entry.snapshot.auth.status,
+  );
+  // The re-check fires on the raw stream, not the reconciled card state: right after a sign-in the
+  // stream is `connected` while the provider snapshot still holds the pre-login probe, so the
+  // reconciled card reads `expired` until this very re-check answers with the new probe.
+  const refreshAfterSignIn = useProviderRefreshAfterSignIn({
+    environmentId,
+    instanceId: entry.instanceId,
+    signedIn: states.get(meta.tool)?.phase === "connected",
+  });
+  const missingEnvironment = environmentId === null && readiness === "needsInstall";
 
   // Top-aligned, not centred: the card is short and the picker's list area is
   // tall, so centring left a big dead gap above it that read as a broken panel.
@@ -58,13 +89,27 @@ export function ModelPickerProviderConnectPanel({
           the same `useToolAuthStates` subscription. So there is no separate
           "installed, now connect" step to render, and no second button.
         */}
-        <ToolAuthCard
-          meta={meta}
-          state={states.get(meta.tool)}
-          onConnect={onConnect}
-          onInstall={readiness === "needsInstall" ? onInstall : undefined}
-          onSubmitCode={onSubmitCode}
-          onCancel={onCancel}
+        {availability === "disabled" ? (
+          <ToolAuthUnavailableNotice meta={meta} machineLabel={machineLabel} />
+        ) : (
+          <ToolAuthCard
+            meta={meta}
+            state={toolAuthState}
+            signInDescription={signInDescription}
+            machineLabel={machineLabel}
+            failure={missingEnvironment ? "noEnvironment" : undefined}
+            onConnect={onConnect}
+            onInstall={readiness === "needsInstall" ? onInstall : undefined}
+            onSubmitCode={onSubmitCode}
+            onCancel={onCancel}
+          />
+        )}
+        <ModelPickerSignInRefreshNotice
+          displayName={entry.displayName}
+          status={refreshAfterSignIn.status}
+          error={refreshAfterSignIn.error}
+          onRetry={refreshAfterSignIn.retry}
+          onSignIn={onConnect}
         />
       </div>
     </div>

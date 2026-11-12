@@ -25,7 +25,7 @@ const run = (toolArgs: unknown, withReader = true) =>
   Effect.runPromise(
     callT3TeamReadMessageTool({
       tool: "t3team.thread.read_message",
-      scopeLabel: "for this thread.",
+      scopeLabel: "for this thread",
       toolArgs,
       threadId: currentThreadId,
       ...(withReader

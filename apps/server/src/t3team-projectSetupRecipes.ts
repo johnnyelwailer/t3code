@@ -7,6 +7,7 @@ import {
 import { renderBundledRecipeModule } from "./t3team-projectSetupRecipeModule.ts";
 import { descriptionRewriteSetupFiles } from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
 import { workItemDeliverySetupFiles } from "./t3team-projectSetupWorkItemDeliveryRecipes.ts";
+import { offeredRecipes } from "./t3team-workItemDeliveryRecipesFlag.ts";
 
 function renderBundledRecipePrompt(
   recipe: ReturnType<typeof listBundledT3TeamRecipes>[number],
@@ -22,7 +23,8 @@ function bundledRecipeWorkflowFiles(recipeId: string): ReadonlyArray<T3TeamProje
 }
 
 export function renderBundledRecipeSetupFiles(): ReadonlyArray<T3TeamProjectSetupFile> {
-  return listBundledT3TeamRecipes().flatMap((recipe): ReadonlyArray<T3TeamProjectSetupFile> => {
+  const bundledRecipes = offeredRecipes(listBundledT3TeamRecipes());
+  return bundledRecipes.flatMap((recipe): ReadonlyArray<T3TeamProjectSetupFile> => {
     const workflowFiles = bundledRecipeWorkflowFiles(recipe.id);
     return [
       {

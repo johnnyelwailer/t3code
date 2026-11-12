@@ -5,7 +5,7 @@ import {
   createVoiceStreamSession,
   type VoiceStreamTranscription,
 } from "./t3team-voiceStreamSession.ts";
-import { FRAME_MS, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
+import { FRAME_MS, fakeSilero, ROOM, SPEECH, tone } from "./t3team-voiceTestAudio.ts";
 
 function setup(
   options: { language?: string; silenceMs?: number; isWorkerReady?: () => boolean } = {},
@@ -20,6 +20,7 @@ function setup(
       calls.push({ language, samples: pcm16FromBase64(pcm16Base64).length });
       return new Promise((resolve) => pending.push(resolve));
     },
+    detect: fakeSilero,
     emit: (event) => events.push(event),
     log: vi.fn(),
     ...(options.isWorkerReady ? { isWorkerReady: options.isWorkerReady } : {}),
@@ -86,16 +87,21 @@ describe("createVoiceStreamSession", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("stops partials only after three slow passes in a row", async () => {
-    const { calls, feed, settle } = setup();
+  it("stops partials only after three slow passes in a row, across utterances", async () => {
+    const { calls, pending, feed, settle } = setup();
     feed(ROOM, 600);
     for (let pass = 1; pass <= 3; pass += 1) {
+      const before = calls.length;
       feed(SPEECH, 2500);
-      while (calls.length < pass) feed(SPEECH, 500);
+      expect(calls).toHaveLength(before + 1);
       await settle(ok("slow", "en", 9_000));
+      feed(ROOM, 1_300);
+      await settle(ok("final"));
     }
-    feed(SPEECH, 60_000);
-    expect(calls).toHaveLength(3);
+    const before = calls.length;
+    feed(SPEECH, 10_000);
+    expect(calls).toHaveLength(before);
+    expect(pending).toHaveLength(0);
   });
 
   it("judges a partial by its pass time, not the time it waited for a cold model", async () => {

@@ -52,12 +52,10 @@ describe("reduceVoiceUi", () => {
       phase("transcribing", 3_000),
       { type: "commit", text: "open the board", now: 3_400 },
       phase("idle", 3_401),
-      { type: "tier", tier: "control" },
     ]);
     expect(committed).toMatchObject({
       state: "committed",
       heardText: "open the board",
-      tier: "control",
       startedAtMs: 1_000,
       endedAtMs: 3_000,
     });
@@ -68,12 +66,10 @@ describe("reduceVoiceUi", () => {
     const heard = run([
       phase("recording", 1_000),
       { type: "commit", text: "open the board", now: 3_400 },
-      { type: "tier", tier: "control" },
     ]);
     expect(heard).toMatchObject({
       state: "recording",
       heardText: "open the board",
-      tier: "control",
       startedAtMs: 1_000,
       endedAtMs: null,
     });
@@ -93,10 +89,6 @@ describe("reduceVoiceUi", () => {
         { type: "commit", text: "the rest", now: 7_000 },
       ]),
     ).toMatchObject({ state: "committed", heardText: "the rest", endedAtMs: 5_000 });
-  });
-
-  it("ignores a tier that arrives after the heard moment settled", () => {
-    expect(reduceVoiceUi(IDLE_VOICE_UI, { type: "tier", tier: "control" })).toEqual(IDLE_VOICE_UI);
   });
 
   it("returns to idle when a recording is cancelled", () => {

@@ -16,6 +16,7 @@ import { isWatchedOpenLink } from "~/state/t3team-watchedPullRequests.logic";
 import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
+import { reportRecipeLaunchFailure } from "~/t3team/t3team-launchFailureFeedback";
 import { stopThreadCascade } from "~/t3team/chat/t3team-useStopCascade";
 import type { RunTogglePending } from "~/t3team/t3team-recipeRunToggleState";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
@@ -26,13 +27,7 @@ const STARTING_GRACE_MS = 20_000;
 /** A launch fact stamped slightly before the click (server clock) still belongs to it. */
 const LAUNCH_CLOCK_SKEW_MS = 60_000;
 
-function failed(title: string, error: unknown, fallback: string) {
-  toastManager.add({
-    type: "error",
-    title,
-    description: error instanceof Error ? error.message : fallback,
-  });
-}
+const failed = reportRecipeLaunchFailure;
 
 export function useRecipeRunToggleActions(input: {
   readonly recipe: T3TeamSidecarRecipeQuickStart | null;

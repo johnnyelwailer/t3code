@@ -18,6 +18,8 @@ export type DigestClaim = {
   readonly threadTitle: string;
   readonly ticketId: string;
   readonly agent: string;
+  /** The thread's provider instance, when known; the badge style resolves its icon from it. */
+  readonly providerInstanceId?: string;
   readonly lastActivityAt: string;
   /** Where the claiming thread lives, so the dot can link to it. */
   readonly threadUrl?: string;

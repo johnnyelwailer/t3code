@@ -9,11 +9,15 @@
  * The reference defaults to "disabled" so code that builds the V2 runtime without the server
  * wiring (tests, other hosts) keeps upstream behaviour; `server.ts` provides
  * `turnInactivityPolicyLive`, which reads `ProviderInstance.turnInactivityTimeoutSeconds` and
- * falls back to `DEFAULT_TURN_INACTIVITY_TIMEOUT_MS`.
+ * falls back to `DEFAULT_TURN_INACTIVITY_TIMEOUT_MS`, unless `AGENTS_TURN_WATCHDOG` is off.
  *
  * @module t3team-turnInactivityPolicy
  */
 import type { ProviderInstanceId, RuntimeRequestId, ThreadId } from "@t3tools/contracts";
+import {
+  readFeatureFlag,
+  type ReadFeatureFlagEnv,
+} from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -65,6 +69,13 @@ export const budgetFromSeconds = (seconds: number | undefined): number =>
     ? Math.round(seconds * 1000)
     : DEFAULT_TURN_INACTIVITY_TIMEOUT_MS;
 
+/** A run's budget, or `null` (no watchdog) while `AGENTS_TURN_WATCHDOG` is off; read per run. */
+export const budgetWhenWatchdogEnabled = (
+  seconds: number | undefined,
+  readEnv?: ReadFeatureFlagEnv,
+): number | null =>
+  readFeatureFlag("AGENTS_TURN_WATCHDOG", readEnv) ? budgetFromSeconds(seconds) : null;
+
 export const turnInactivityPolicyLive = Layer.effect(
   TurnInactivityPolicy,
   Effect.gen(function* () {
@@ -75,7 +86,9 @@ export const turnInactivityPolicyLive = Layer.effect(
         instances
           .getInstance(instanceId)
           .pipe(
-            Effect.map((instance) => budgetFromSeconds(instance?.turnInactivityTimeoutSeconds)),
+            Effect.map((instance) =>
+              budgetWhenWatchdogEnabled(instance?.turnInactivityTimeoutSeconds),
+            ),
           ),
       isRuntimeRequestPending: (threadId, requestId) =>
         projections.getRuntimeRequest(threadId, requestId).pipe(
