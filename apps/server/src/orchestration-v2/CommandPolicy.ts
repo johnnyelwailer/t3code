@@ -255,6 +255,8 @@ export interface CommandPolicyV2Shape {
   readonly decideSteeringExecution: (
     input: CapabilityCheckInput & {
       readonly forceRestart?: boolean;
+      /** Restart when the provider can; otherwise steer the running turn. */
+      readonly preferRestart?: boolean;
     },
   ) => Effect.Effect<SteeringExecutionPolicyV2, CommandPolicyV2Error>;
   readonly ensureInterrupt: (
@@ -315,13 +317,17 @@ const ensureQueuedMessages: CommandPolicyV2Shape["ensureQueuedMessages"] = (inpu
       );
 
 const decideSteeringExecution: CommandPolicyV2Shape["decideSteeringExecution"] = (input) => {
-  if (!input.forceRestart && input.capabilities.turns.supportsActiveSteering) {
+  const canRestart =
+    input.capabilities.turns.supportsInterrupt &&
+    input.capabilities.turns.supportsSteeringByInterruptRestart;
+  if (
+    !input.forceRestart &&
+    input.capabilities.turns.supportsActiveSteering &&
+    !(input.preferRestart === true && canRestart)
+  ) {
     return Effect.succeed("active_steering");
   }
-  if (
-    input.capabilities.turns.supportsInterrupt &&
-    input.capabilities.turns.supportsSteeringByInterruptRestart
-  ) {
+  if (canRestart) {
     return Effect.succeed("interrupt_restart");
   }
   return Effect.fail(

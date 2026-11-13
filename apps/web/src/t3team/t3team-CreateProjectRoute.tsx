@@ -14,6 +14,10 @@ import { CreateProjectConnectPanel } from "~/t3team/t3team-CreateProjectConnectP
 import { CreateProjectPage } from "~/t3team/t3team-CreateProjectPage";
 import { CreateProjectSetupFooter } from "~/t3team/t3team-CreateProjectSetupFooter";
 import { CreateProjectSetupStep } from "~/t3team/t3team-CreateProjectSetupStep";
+import {
+  OpeningExistingProject,
+  OpenExistingProjectRedirect,
+} from "~/t3team/t3team-OpenExistingProjectRedirect";
 
 /** Repository discovery only runs while the set-up screen is on, so it lives in its own component. */
 function SetupScreen({
@@ -52,12 +56,20 @@ export function CreateProjectRoute({
 }) {
   const flow = useCreateProjectFlow(onCreated);
   const { entry, catalogState, navigation } = flow;
-  // While a create runs the set-up screen stays put, even if the URL moves under it (browser Back):
-  // the create is not cancellable, and a different screen would hide what is happening.
+  // While a create runs we keep the chosen entry until the record exists and we leave:
+  // the set-up / discovery screen unmounts so a picker render loop cannot peg the app,
+  // and there is no blocking progress view — Add opens the project as soon as it exists.
   const lastEntryRef = useRef(entry);
   if (entry) lastEntryRef.current = entry;
-  const shownEntry = entry ?? (flow.creating ? lastEntryRef.current : null);
+  // Opening an already-added project must not mount Setup (or its discovery hooks) while
+  // navigating away — that pair was a standing open effect on a still-mounted page.
+  const leavingForExisting = flow.pendingOpenId ?? flow.deepLinkExistingId;
+  const shownEntry =
+    leavingForExisting !== null ? null : (entry ?? (flow.creating ? lastEntryRef.current : null));
   const dismissible = !flow.creating;
+  const notice =
+    flow.openError ??
+    (flow.projectMissing ? "That project is no longer available. Pick another." : undefined);
 
   return (
     <CreateProjectPage
@@ -85,7 +97,14 @@ export function CreateProjectRoute({
         ) : null
       }
     >
-      {shownEntry ? (
+      {flow.pendingOpenId !== null ? (
+        <OpeningExistingProject />
+      ) : flow.deepLinkExistingId !== null ? (
+        <OpenExistingProjectRedirect
+          projectId={flow.deepLinkExistingId}
+          open={navigation.openProject}
+        />
+      ) : shownEntry && flow.creating ? null : shownEntry ? (
         <SetupScreen flow={flow} entry={shownEntry} />
       ) : flow.resolvingProject ? (
         <div className="space-y-3 pt-4">
@@ -97,14 +116,12 @@ export function CreateProjectRoute({
         <CreateProjectChooseStep
           catalogState={catalogState}
           boundProjectIds={flow.boundProjectIds}
-          notice={
-            flow.projectMissing ? "That project is no longer available — pick another." : undefined
-          }
+          notice={notice}
           connectPanel={<CreateProjectConnectPanel refreshCatalog={catalogState.refresh} />}
           onChoose={({ entry: chosen, existingProjectId }) =>
             existingProjectId === null
               ? navigation.chooseProject(chosen)
-              : navigation.openProject(existingProjectId)
+              : flow.openExisting(existingProjectId)
           }
         />
       )}

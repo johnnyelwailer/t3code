@@ -14,6 +14,7 @@ import {
 import {
   applyMainRepositoryAutoDetection,
   applyMainRepositorySwitchToProject,
+  detectMainRepositoryUrl,
   readMainRepositoryFromProject,
 } from "~/t3team/hooks/t3team-projectMainRepository";
 
@@ -163,5 +164,84 @@ describe("project main repository (client)", () => {
       }),
     );
     expect(readLinkedRepositoryUrlsFromProject(rebooted)).toEqual([ALPHA, BETA]);
+  });
+
+  it("makes the only linked repository the main workspace even when it has no state dir", async () => {
+    const setMainRepository = vi.fn(async () => switched);
+    const calls: Array<string> = [];
+    const next = await applyMainRepositoryAutoDetection({
+      backend: backendWith(setMainRepository, calls),
+      project: project(),
+      bootstrap: bootstrap({
+        linkedRepositories: [{ url: ALPHA, localPath: ALPHA_CHECKOUT, status: "not-cloned" }],
+      }),
+    });
+    expect(setMainRepository).toHaveBeenCalledWith({
+      projectId: "project-1",
+      url: ALPHA,
+      selection: "detected",
+    });
+    expect(calls).toEqual([`sync ${ALPHA}`, "switch"]);
+    expect(next.workspace?.rootPath).toBe(ALPHA_CHECKOUT);
+  });
+
+  it("does not auto-detect when several repositories are linked and none have project state", async () => {
+    const setMainRepository = vi.fn(async () => switched);
+    await applyMainRepositoryAutoDetection({
+      backend: backendWith(setMainRepository),
+      project: project(),
+      bootstrap: bootstrap(),
+    });
+    expect(setMainRepository).not.toHaveBeenCalled();
+  });
+
+  it("does not override an explicit user or adopted main on an existing project", async () => {
+    const setMainRepository = vi.fn(async () => switched);
+    const existing = (status: "user" | "adopted") =>
+      project({
+        agentReferences: {
+          linkedRepositories: [{ url: ALPHA, localPath: ALPHA_CHECKOUT }],
+          mainRepository: { url: ALPHA, localPath: ALPHA_CHECKOUT, status },
+        },
+      });
+    for (const status of ["user", "adopted"] as const) {
+      setMainRepository.mockClear();
+      await applyMainRepositoryAutoDetection({
+        backend: backendWith(setMainRepository),
+        project: existing(status),
+        bootstrap: bootstrap({
+          linkedRepositories: [{ url: ALPHA, localPath: ALPHA_CHECKOUT, status: "cloned" }],
+        }),
+      });
+      expect(setMainRepository).not.toHaveBeenCalled();
+    }
+  });
+
+  it("picks a single state-dir candidate over a single-linked-URL fallback, and nothing when several candidates exist", () => {
+    expect(
+      detectMainRepositoryUrl({
+        candidates: [{ url: ALPHA }],
+        linkedUrls: [ALPHA, BETA],
+      }),
+    ).toBe(ALPHA);
+    expect(
+      detectMainRepositoryUrl({
+        candidates: [{ url: ALPHA }, { url: BETA }],
+        linkedUrls: [ALPHA, BETA],
+      }),
+    ).toBeUndefined();
+    expect(
+      detectMainRepositoryUrl({
+        candidates: [],
+        linkedUrls: [ALPHA],
+      }),
+    ).toBe(ALPHA);
+    expect(
+      detectMainRepositoryUrl({
+        candidates: [],
+        linkedUrls: [ALPHA],
+        existingMain: { status: "user" },
+      }),
+    ).toBeUndefined();
   });
 });

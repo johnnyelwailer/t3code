@@ -37,6 +37,7 @@ import {
   type CloudQueuedTurn,
 } from "./t3team-cloudSessionQueueSend";
 import type { CloudQueuedSendCardInput } from "./t3team-cloudSessionSetupModel";
+import { displayCloudQueuedFailureMessage } from "./t3team-cloudSessionFailureDisplay";
 import type { CloudSetupSessionSource } from "./t3team-useCloudSessionSetupCard";
 import {
   currentCloudProjectWait,
@@ -140,7 +141,12 @@ export function useCloudSessionComposerGate(input: {
         "aria-hidden": true,
       }),
       title: view.title,
-      description: stepFacts.queued.failureMessage ?? notice?.text ?? stepFacts.queued.sessionLabel,
+      description:
+        (stepFacts.queued.failureMessage !== undefined
+          ? displayCloudQueuedFailureMessage(stepFacts.queued.failureMessage, recoveryActions)
+          : null) ??
+        notice?.text ??
+        stepFacts.queued.sessionLabel,
       actions: createElement(CloudQueuedSendBannerActions, {
         onRetry: canRetry ? retryQueuedSend : restart,
         recoveryActions,

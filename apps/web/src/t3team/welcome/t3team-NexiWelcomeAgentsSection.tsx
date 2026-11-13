@@ -30,7 +30,6 @@ export type NexiWelcomeAgentsSectionProps = {
   readonly onInstall: (tool: WelcomeAgentTool) => void;
   readonly onSignIn: (tool: WelcomeAgentTool) => void;
   readonly onCopyAndOpenTool: (tool: WelcomeAgentTool) => void;
-  readonly onOpenProviderSetup: (instanceId: string) => void;
 };
 
 function toolForRow(row: WelcomeAgentRowModel): WelcomeAgentTool | null {
@@ -48,7 +47,6 @@ export function NexiWelcomeAgentsSection({
   onInstall,
   onSignIn,
   onCopyAndOpenTool,
-  onOpenProviderSetup,
 }: NexiWelcomeAgentsSectionProps) {
   return (
     <>
@@ -130,14 +128,7 @@ export function NexiWelcomeAgentsSection({
         const dispatched = dispatchWelcomeAgentAction(row.action, {
           onInstall,
           onSignIn,
-          onOpenProviderSetup,
         });
-        const label =
-          row.action.kind === "openProviderSetup" &&
-          row.state !== "install" &&
-          row.state !== "missing"
-            ? "Sign in"
-            : (dispatched?.label ?? "Open");
 
         return (
           <WelcomeItem
@@ -154,7 +145,7 @@ export function NexiWelcomeAgentsSection({
             }
             action={
               dispatched ? (
-                <SecondaryAction onClick={dispatched.run}>{label}</SecondaryAction>
+                <SecondaryAction onClick={dispatched.run}>{dispatched.label}</SecondaryAction>
               ) : undefined
             }
           />

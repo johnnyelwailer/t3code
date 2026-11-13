@@ -14,7 +14,7 @@ import { inspectRemoteProjectStateOnDefaultBranch } from "./t3team-linkedRemoteP
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 
 describe("inspectRemoteProjectStateOnDefaultBranch", () => {
-  it.effect("reports committed .nexi entries from ls-tree (committed-only)", () => {
+  it.effect("reports committed .agents/nexi entries from ls-tree (committed-only)", () => {
     const calls: Array<ReadonlyArray<string>> = [];
     const vcs = Layer.succeed(VcsProcess, {
       run: (input) =>
@@ -30,10 +30,10 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
               stderrTruncated: false,
             };
           }
-          if (op.includes("ls-tree") && op.includes(".nexi")) {
+          if (op.includes("ls-tree") && op.includes(".agents/nexi")) {
             return {
               exitCode: 0 as never,
-              stdout: ".nexi/context/a.json\n.nexi/machine.json\n",
+              stdout: ".agents/nexi/context/a.json\n.agents/nexi/machine.json\n",
               stderr: "",
               stdoutTruncated: false,
               stderrTruncated: false,
@@ -66,6 +66,86 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
       expect(result.committedOnly).toBe(true);
       expect(result.source).toBe("remote");
       expect(calls.some((args) => args.includes("ls-tree"))).toBe(true);
+    }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
+  });
+
+  it.effect("falls back to committed .nexi entries when .agents/nexi is empty", () => {
+    const ok = (stdout: string, exitCode = 0) => ({
+      exitCode: exitCode as never,
+      stdout,
+      stderr: "",
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+    const vcs = Layer.succeed(VcsProcess, {
+      run: (input) =>
+        Effect.sync(() => {
+          const op = input.args.join(" ");
+          if (op.includes("fetch")) return ok("");
+          if (op.includes("ls-tree") && op.includes(".agents/nexi")) return ok("", 128);
+          if (op.includes("ls-tree") && op.includes(".nexi")) {
+            return ok(".nexi/context/a.json\n");
+          }
+          return ok("main");
+        }),
+    });
+    const sourceControl = Layer.succeed(SourceControlRepositoryService, {
+      prepareClone: () =>
+        Effect.succeed({
+          cloneUrl: "https://example.test/acme/repo.git",
+          remoteUrl: "https://example.test/acme/repo.git",
+          destinationPath: "/tmp/unused",
+          repository: null,
+        }),
+    } as never);
+    return Effect.gen(function* () {
+      const result = yield* inspectRemoteProjectStateOnDefaultBranch(
+        "https://example.test/acme/repo.git",
+      );
+      expect(result.hasProjectStateDir).toBe(true);
+      expect(result.entryCount).toBe(1);
+      expect(result.stateDirName).toBe(".nexi");
+    }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
+  });
+
+  it.effect("prefers .agents/nexi when more than one state dir is present on the remote", () => {
+    const ok = (stdout: string) => ({
+      exitCode: 0 as never,
+      stdout,
+      stderr: "",
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+    const vcs = Layer.succeed(VcsProcess, {
+      run: (input) =>
+        Effect.sync(() => {
+          const op = input.args.join(" ");
+          if (op.includes("fetch")) return ok("");
+          if (op.includes("ls-tree") && op.includes(".agents/nexi")) {
+            return ok(".agents/nexi/context/new.json\n");
+          }
+          if (op.includes("ls-tree") && op.includes(".nexi")) {
+            return ok(".nexi/context/old.json\n");
+          }
+          return ok("main");
+        }),
+    });
+    const sourceControl = Layer.succeed(SourceControlRepositoryService, {
+      prepareClone: () =>
+        Effect.succeed({
+          cloneUrl: "https://example.test/acme/repo.git",
+          remoteUrl: "https://example.test/acme/repo.git",
+          destinationPath: "/tmp/unused",
+          repository: null,
+        }),
+    } as never);
+    return Effect.gen(function* () {
+      const result = yield* inspectRemoteProjectStateOnDefaultBranch(
+        "https://example.test/acme/repo.git",
+      );
+      expect(result.hasProjectStateDir).toBe(true);
+      expect(result.stateDirName).toBe(".agents/nexi");
+      expect(result.entryCount).toBe(1);
     }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
   });
 
