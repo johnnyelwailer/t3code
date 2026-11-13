@@ -4,6 +4,7 @@ import {
   getBundledT3TeamRecipe,
   getT3TeamProfile,
   listBundledT3TeamRecipes,
+  offeredBundledRecipes,
   resolveEnabledSkillPackIds,
   toRecipeProfileContext,
 } from "@t3tools/t3team-skill-packs";
@@ -14,6 +15,7 @@ import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecip
 import { offeredContextStarters } from "~/t3team/t3team-contextStarters";
 import { useContextStartersEnabled } from "~/t3team/t3team-contextStartersFlag";
 import { useOfferedRecipes } from "~/t3team/t3team-offeredRecipes";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { buildAvailableContextKeys } from "~/t3team/t3team-sidecarRecipeContextKeys";
 import { buildPinnedQuickStartSelection } from "~/t3team/t3team-sidecarRecipeDiscoveryMapping";
 import {
@@ -43,8 +45,10 @@ export type {
 
 export { buildProjectRecipeDiscoveryRequest } from "~/t3team/t3team-sidecarRecipeRenderContext";
 
+/** `bundledExamples` is the `BUNDLED_RECIPE_EXAMPLES` flag; off (the default) keeps only the authoring entry. */
 export function buildT3TeamSidecarRecipeQuickStarts(
   input: T3TeamSidecarRecipeInput,
+  bundledExamples = false,
 ): ReadonlyArray<T3TeamSidecarRecipeQuickStart> {
   const profile = getT3TeamProfile(input.profileId);
   const enabledSkillPacks = resolveEnabledSkillPackIds({ profile });
@@ -54,7 +58,7 @@ export function buildT3TeamSidecarRecipeQuickStarts(
   const availableContextKeys = buildAvailableContextKeys(input);
   const templateValues = buildBundledRecipeTemplateValues(input);
   const launchContext = buildT3TeamActionRecipeLaunchContext(renderContext);
-  const matches = matchRecipes(listBundledT3TeamRecipes(), {
+  const matches = matchRecipes(offeredBundledRecipes(listBundledT3TeamRecipes(), bundledExamples), {
     activeProject: input.project,
     selectedResource: null,
     resourceKind: input.resourceKind ?? null,
@@ -142,9 +146,10 @@ export function useT3TeamSidecarRecipeDiscovery(
   readonly status: RecipeDiscoveryStatus;
 } {
   const membershipKey = buildT3TeamSidecarRecipeMembershipKey(input);
+  const bundledExamples = useFeatureFlag("BUNDLED_RECIPE_EXAMPLES");
   const fallbackQuickStarts = useMemo(
-    () => buildT3TeamSidecarRecipeQuickStarts(input),
-    [membershipKey],
+    () => buildT3TeamSidecarRecipeQuickStarts(input, bundledExamples),
+    [membershipKey, bundledExamples],
   );
   const workspaceRoot = input.project.workspace?.rootPath;
   const discoveryRequest = useMemo(

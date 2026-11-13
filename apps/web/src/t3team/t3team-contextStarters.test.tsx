@@ -95,10 +95,18 @@ describe("contextual starters behind CONTEXT_STARTERS", () => {
     expect(markup).toContain("no-chat-tab");
   });
 
-  it("restores the starters and the Chat tab when the flag is on", () => {
-    const markup = renderEntryPoints({ CONTEXT_STARTERS: true });
+  it("restores the starters and the Chat tab when both flags are on", () => {
+    const markup = renderEntryPoints({ CONTEXT_STARTERS: true, BUNDLED_RECIPE_EXAMPLES: true });
 
     expect(markup).toContain("explain-selected-work");
+    expect(markup).toContain(">chat-tab<");
+  });
+
+  it("restores only the authoring entry and the Chat tab when the examples flag stays off", () => {
+    const markup = renderEntryPoints({ CONTEXT_STARTERS: true });
+
+    expect(markup).toContain(">manage-project-recipes<");
+    expect(markup).not.toContain("explain-selected-work");
     expect(markup).toContain(">chat-tab<");
   });
 

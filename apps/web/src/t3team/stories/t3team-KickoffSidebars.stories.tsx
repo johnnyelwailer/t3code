@@ -30,42 +30,51 @@ function createProject(profileId: string, title: string): ProjectShellProject {
 const productProject = createProject("product-partner", "Project Alpha");
 const engineeringProject = createProject("engineering-copilot", "Project Alpha");
 
-const projectDashboardRecipes = buildT3TeamSidecarRecipeQuickStarts({
-  surface: "project.dashboard",
-  project: productProject,
-  profileId: "product-partner",
-  selectedWorkLabel: productProject.title,
-  dashboardMode: "backlog",
-  currentViewSummary: {
-    itemCount: 7,
-    bugCount: 2,
-    primaryBugLabel: "ALPHA-78",
-    primaryItemLabel: "ALPHA-34",
+const projectDashboardRecipes = buildT3TeamSidecarRecipeQuickStarts(
+  {
+    surface: "project.dashboard",
+    project: productProject,
+    profileId: "product-partner",
+    selectedWorkLabel: productProject.title,
+    dashboardMode: "backlog",
+    currentViewSummary: {
+      itemCount: 7,
+      bugCount: 2,
+      primaryBugLabel: "ALPHA-78",
+      primaryItemLabel: "ALPHA-34",
+    },
+    availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
   },
-  availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
-});
+  true,
+);
 
-const ticketDetailRecipes = buildT3TeamSidecarRecipeQuickStarts({
-  surface: "workitem.detail.sidepanel",
-  project: engineeringProject,
-  profileId: "engineering-copilot",
-  selectedWorkLabel: "ALPHA-42",
-  selectedWorkTitle: "Stabilize import retries",
-  resourceKind: "ticket",
-  jiraIssueType: "Bug",
-  availableContextKeys: ["project.summary", "ticket.summary"],
-});
+const ticketDetailRecipes = buildT3TeamSidecarRecipeQuickStarts(
+  {
+    surface: "workitem.detail.sidepanel",
+    project: engineeringProject,
+    profileId: "engineering-copilot",
+    selectedWorkLabel: "ALPHA-42",
+    selectedWorkTitle: "Stabilize import retries",
+    resourceKind: "ticket",
+    jiraIssueType: "Bug",
+    availableContextKeys: ["project.summary", "ticket.summary"],
+  },
+  true,
+);
 
-const storyDetailRecipes = buildT3TeamSidecarRecipeQuickStarts({
-  surface: "workitem.detail.sidepanel",
-  project: engineeringProject,
-  profileId: "engineering-copilot",
-  selectedWorkLabel: "ALPHA-51",
-  selectedWorkTitle: "Export the backlog as CSV",
-  resourceKind: "ticket",
-  jiraIssueType: "Story",
-  availableContextKeys: ["project.summary", "ticket.summary"],
-});
+const storyDetailRecipes = buildT3TeamSidecarRecipeQuickStarts(
+  {
+    surface: "workitem.detail.sidepanel",
+    project: engineeringProject,
+    profileId: "engineering-copilot",
+    selectedWorkLabel: "ALPHA-51",
+    selectedWorkTitle: "Export the backlog as CSV",
+    resourceKind: "ticket",
+    jiraIssueType: "Story",
+    availableContextKeys: ["project.summary", "ticket.summary"],
+  },
+  true,
+);
 
 function KickoffRecipePreview() {
   return (
