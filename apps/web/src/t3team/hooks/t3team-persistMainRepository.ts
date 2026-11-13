@@ -3,7 +3,7 @@
  * list. The chosen checkout is synced if needed, then switched with `selection: "user"`.
  * Used by the one-click Make main path (and by an auto-promote that can persist immediately).
  */
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useBackend } from "~/t3team/backend/t3team-index";
@@ -67,45 +67,36 @@ export function usePersistMainRepository(input: {
 } {
   const backend = useBackend();
   const [state, setState] = useState(() => initialMainOptimisticState(input.initialMainUrl));
-  const stateRef = useRef(state);
-  stateRef.current = state;
-  const projectRef = useRef(input.project);
-  projectRef.current = input.project;
-  const onUpdatedRef = useRef(input.onProjectUpdated);
-  onUpdatedRef.current = input.onProjectUpdated;
-  const backendRef = useRef(backend);
-  backendRef.current = backend;
 
-  const persist = useCallback(async (nextUrl: string | null, revertOnFailure = true) => {
-    if (isMainPersistPending(stateRef.current)) return;
-    const backendNow = backendRef.current;
+  const persist = async (nextUrl: string | null, revertOnFailure = true) => {
+    if (isMainPersistPending(state)) return;
     setState((current) => beginMainPersist(current, nextUrl, revertOnFailure));
-    if (!backendNow) {
+    if (!backend) {
       setState((current) => failMainPersist(current));
       return;
     }
     try {
       const next = await persistProjectMainRepository({
-        backend: backendNow,
-        project: projectRef.current,
+        backend,
+        project: input.project,
         url: nextUrl,
       });
-      onUpdatedRef.current(next);
+      input.onProjectUpdated(next);
       setState((current) => completeMainPersist(current, nextUrl));
     } catch {
       setState((current) => failMainPersist(current));
     }
-  }, []);
+  };
 
-  const setLocal = useCallback((nextUrl: string | null) => {
+  const setLocal = (nextUrl: string | null) => {
     setState((current) => setMainLocally(current, nextUrl));
-  }, []);
+  };
 
-  const retry = useCallback(() => {
-    const url = retryMainPersistUrl(stateRef.current);
+  const retry = () => {
+    const url = retryMainPersistUrl(state);
     if (url === undefined) return;
-    void persist(url, stateRef.current.revertOnFailure);
-  }, [persist]);
+    void persist(url, state.revertOnFailure);
+  };
 
   return { state, persist, setLocal, retry };
 }

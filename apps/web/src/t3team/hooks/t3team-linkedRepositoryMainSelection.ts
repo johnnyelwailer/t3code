@@ -1,17 +1,6 @@
 /**
- * Main-repository selection for the linked-repositories dialog.
- *
- * Rules, including option A when the main repository is unlinked:
- * - The first repository that becomes linked (the list was empty) is the main one.
- * - An existing main stays as long as it is still linked. Clicking "Make main" on another
- *   linked row replaces it.
- * - When the main repository is unlinked and others remain, the first remaining linked
- *   repository (list order) becomes main. When none remain, there is no main: a local
- *   workspace will be created.
- * - Opening a dialog on an existing project that already has linked repositories and no
- *   main does not auto-promote one; the user picks with "Make main", or a local workspace
- *   is used. Auto-detection for a newly created project is a separate path
- *   (`applyMainRepositoryAutoDetection`) and never overrides an explicit user choice.
+ * First new link becomes main; unlinking main promotes the next remaining
+ * repo (or none). An existing project with no main is not auto-promoted.
  */
 
 export function resolveMainRepositoryUrl(input: {
