@@ -101,11 +101,7 @@ describe("retired bundled recipe copies behind BUNDLED_RECIPE_EXAMPLES", () => {
             context: ticketContext(),
           });
           const offered = discovered.recipes.map((recipe) => recipe.id).toSorted();
-          assert.deepStrictEqual(offered, [
-            "manage-project-recipes",
-            "my-new-recipe",
-            "show-only-assigned-to-me",
-          ]);
+          assert.deepStrictEqual(offered, ["manage-project-recipes", "my-new-recipe"]);
 
           const listed = yield* listProjectRecipesForAgent({ workspaceRoot });
           const listedIds = listed.recipes.map((recipe) => recipe.id).toSorted();
