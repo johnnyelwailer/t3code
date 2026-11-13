@@ -44,6 +44,13 @@ import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { pinnedBackendPortFromDefine } from "./t3team-isolatedInstance.ts";
+import * as ElectronTheme from "../electron/ElectronTheme.ts";
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
+import {
+  pickGuardEnvironment,
+  runDesktopHomeGuard,
+  wrapGuardBrowserWindow,
+} from "../backend/t3team-oldAppGuardBoot.ts";
 
 const makeDesktopRunId = Crypto.Crypto.pipe(
   Effect.flatMap((crypto) => crypto.randomUUIDv4()),
@@ -229,6 +236,30 @@ const bootstrap = Effect.gen(function* () {
     if (settings.wslOnly === true && settings.wslBackendEnabled === true) {
       yield* desktopWindow.showConnectingSplash;
     }
+    // t3team: if the daily Nexi app still holds the shared home, show a quit-and-retry
+    // screen and do not start a second server or run the home takeover until it quits.
+    const electronTheme = yield* ElectronTheme.ElectronTheme;
+    const electronWindow = yield* ElectronWindow.ElectronWindow;
+    const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    yield* Effect.promise(() =>
+      runDesktopHomeGuard({
+        environment: pickGuardEnvironment(environment),
+        shouldUseDarkColors,
+        createWindow: (options) =>
+          runPromise(
+            electronWindow.create(
+              options as Parameters<(typeof electronWindow)["create"]>[0],
+              { auxiliary: true },
+            ),
+          ).then((created) => {
+            created.once("ready-to-show", () => {
+              if (!created.isDestroyed()) created.show();
+            });
+            return wrapGuardBrowserWindow(created as never);
+          }),
+      }),
+    );
     yield* primaryBackend.start;
     yield* logBootstrapInfo("bootstrap backend start requested");
     // WSL-only fallback can change the primary endpoint before readiness.

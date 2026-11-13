@@ -20,6 +20,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 import { explicitBackendHome, isolatedBackendChildEnv } from "../app/t3team-isolatedInstance.ts";
 import { resolveDesktopBaseDir } from "../app/DesktopStatePaths.ts";
 import { migrateNexiHome, writeNexiIdentityMarker } from "./t3team-homeMigration.ts";
+import { oldAppIsRunningOnHome, pickGuardEnvironment } from "./t3team-oldAppGuardBoot.ts";
 import serverPackageJson from "../../../server/package.json" with { type: "json" };
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
@@ -650,15 +651,19 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       joinPath: environment.path.join,
       t3Home: Option.none(),
     });
+    // t3team: never copy or adopt the shared home while the daily Nexi app still holds it.
+    const homeOccupied = explicitT3Home === undefined && oldAppIsRunningOnHome(pickGuardEnvironment(environment));
     const resolvedHomeDir =
       explicitT3Home ??
-      migrateLegacyHomeIfNeeded({
-        legacyDir: defaultLegacyHome,
-        brandedDir: brandedHomeDir,
-        join: environment.path.join,
-        stamp: `${input.bootstrapToken.slice(0, 8)}`,
-      });
-    if (hasBundledPacks || environment.isolatedInstance) {
+      (homeOccupied
+        ? brandedHomeDir
+        : migrateLegacyHomeIfNeeded({
+            legacyDir: defaultLegacyHome,
+            brandedDir: brandedHomeDir,
+            join: environment.path.join,
+            stamp: `${input.bootstrapToken.slice(0, 8)}`,
+          }));
+    if ((hasBundledPacks || environment.isolatedInstance) && !homeOccupied) {
       writeNexiIdentityMarker(
         resolvedHomeDir,
         {

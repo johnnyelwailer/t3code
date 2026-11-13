@@ -1,3 +1,4 @@
+import { createElement, type CSSProperties } from "react";
 import type { Decorator, Preview } from "@storybook/react";
 
 // The app's main stylesheet first, as main.tsx loads it: its @theme defines the type scale
@@ -9,14 +10,43 @@ import "~/t3team/t3team-index.css";
 import "~/t3team/storybook/t3team-storybook-canvas.css";
 
 /*
- * The app's dark theme is driven by a `.dark` class on an ancestor (see the
- * @custom-variant in t3team-index.css); the app bootstrap that normally adds
- * it does not run on the Storybook canvas. Honor the `theme` global
- * (globals=theme:dark) so both themes can be verified here.
+ * Apply `.dark` on html, body, and a wrapper. Honor globals.theme, and a "Dark"
+ * story name when the toolbar global is unset, so Dark stories do not render light.
  */
+const storyIsDark = (context: {
+  readonly globals?: Record<string, unknown>;
+  readonly parameters?: { readonly theme?: unknown; readonly globals?: { readonly theme?: unknown } };
+  readonly name?: string;
+  readonly story?: string;
+  readonly id?: string;
+}): boolean => {
+  const globalTheme = context.globals?.theme ?? context.parameters?.globals?.theme ?? context.parameters?.theme;
+  if (globalTheme === "dark") return true;
+  if (globalTheme === "light") return false;
+  const name = `${context.name ?? ""} ${context.story ?? ""} ${context.id ?? ""}`;
+  return /Dark/.test(name);
+};
+
 const themeDecorator: Decorator = (Story, context) => {
-  document.documentElement.classList.toggle("dark", context.globals.theme === "dark");
-  return Story({});
+  const isDark = storyIsDark(context);
+  if (typeof document !== "undefined") {
+    const root = document.documentElement;
+    root.classList.toggle("dark", isDark);
+    root.style.colorScheme = isDark ? "dark" : "light";
+    document.body.classList.toggle("dark", isDark);
+    document.body.style.colorScheme = isDark ? "dark" : "light";
+    document.body.style.background = isDark ? "#000000" : "#ffffff";
+  }
+  const style: CSSProperties = {
+    minHeight: "100%",
+    colorScheme: isDark ? "dark" : "light",
+    background: isDark ? "#000000" : "#ffffff",
+  };
+  return createElement(
+    "div",
+    { className: isDark ? "dark h-full min-h-full" : "h-full min-h-full", style, "data-story-theme": isDark ? "dark" : "light" },
+    createElement(Story),
+  );
 };
 
 const preview: Preview = {
