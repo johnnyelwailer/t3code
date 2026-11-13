@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -8,6 +8,7 @@ import { useT3TeamProjectSetupProfile } from "~/t3team/t3team-projectSetupProfil
 import { parseT3TeamRouteSearch } from "~/t3team/t3team-routeState";
 
 import { mapBoundProjectIds } from "./t3team-createProjectCatalogRows";
+import { decideOpenExisting, isProjectKnown } from "./t3team-openExistingCreateProject";
 import { useCreateProjectNavigation } from "./t3team-createProjectNavigation";
 import { useCreateProjectSubmit } from "./t3team-useCreateProjectSubmit";
 import { useJiraProjectCatalogState } from "./t3team-useJiraProjectCatalogState";
@@ -34,22 +35,41 @@ export function useCreateProjectFlow(onCreated: (project: ProjectShellProject) =
   // current (see t3team-workProfileChooser.ts).
   const setupProfileId = useT3TeamProjectSetupProfile();
   const { state: submitState, submit } = useCreateProjectSubmit(projectKey);
+  const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | undefined>();
 
   const entry = projectKey
     ? (catalogState.catalog.find((candidate) => candidate.entryKey === projectKey) ?? null)
     : null;
   const existingProjectId = entry ? (boundProjectIds.get(entry.entryKey) ?? null) : null;
-  // A deep link to a project the app already has is that project, not a second copy of it.
-  const { openProject } = navigation;
-  useEffect(() => {
-    if (existingProjectId !== null && submitState.kind === "idle") openProject(existingProjectId);
-  }, [existingProjectId, openProject, submitState.kind]);
+
+  const deepLinkExistingId =
+    existingProjectId !== null && submitState.kind === "idle" ? existingProjectId : null;
+
+  const openExisting = (projectId: string) => {
+    const decision = decideOpenExisting({
+      existingProjectId: projectId,
+      projectKnown: isProjectKnown(projectId, appProjects),
+    });
+    if (decision.action === "error") {
+      setOpenError(decision.message);
+      setPendingOpenId(null);
+      return;
+    }
+    if (decision.action === "open") {
+      setOpenError(undefined);
+      setPendingOpenId(decision.projectId);
+      // Navigate in the handler (a click or Add on a project already in the app), not
+      // in a standing effect: that effect retriggered when the page stayed mounted.
+      navigation.openProject(decision.projectId);
+    }
+  };
 
   const create = async () => {
     if (!entry) return;
     // Already in the app (the project list had not caught up when the form opened): open it.
     if (existingProjectId !== null) {
-      openProject(existingProjectId);
+      openExisting(existingProjectId);
       return;
     }
     const project = await submit({
@@ -70,8 +90,14 @@ export function useCreateProjectFlow(onCreated: (project: ProjectShellProject) =
       !catalogState.loading &&
       catalogState.error === null &&
       catalogState.connected === true,
+    /** A click already requested the leave; show "Opening…" (do not navigate again). */
+    pendingOpenId,
+    /** A deep link named a project the app already has; the page performs a mount-once leave. */
+    deepLinkExistingId,
     /** The chosen project is already in the app and is being opened rather than set up again. */
-    openingExisting: existingProjectId !== null && submitState.kind === "idle",
+    openingExisting: pendingOpenId !== null || deepLinkExistingId !== null,
+    openExisting,
+    openError,
     /** A deep link names a project and the catalog is still being read. */
     resolvingProject: Boolean(projectKey) && entry === null && catalogState.loading,
     catalogState,
