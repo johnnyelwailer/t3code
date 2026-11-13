@@ -229,7 +229,7 @@ describe("MessagesTimeline work rows", () => {
           ...Array.from({ length: 12 }, (_, index) =>
             message(`Earlier context ${index}`, {}, `context-${index}`),
           ),
-          message("Progress details\n\n".repeat(50), { role: "assistant", runId }, "progress"),
+          message("Progress\n\n".repeat(39), { role: "assistant", runId }, "progress"),
           message("Done", { role: "assistant", runId }, "final"),
         ]}
       />,
