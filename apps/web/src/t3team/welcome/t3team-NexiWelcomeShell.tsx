@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
 import { isElectron } from "~/env";
@@ -7,6 +7,8 @@ import {
   welcomeTitleBarHeaderClass,
   welcomeTitleTextClass,
 } from "./t3team-welcomeTitleBar";
+import { T3TEAM_WINDOW_CHROME_SAFE_CLASS } from "~/t3team/t3team-windowChromeSafe";
+import { cn, isMacPlatform } from "~/lib/utils";
 
 /**
  * The welcome setup owns the whole window. `narrow` is the phone-width story frame.
@@ -28,6 +30,11 @@ export function WelcomePageShell({
 }) {
   const resolvedPlatform = platform ?? (typeof navigator === "undefined" ? "" : navigator.platform);
   const align = welcomeTitleAlign(resolvedPlatform);
+  // Same 90px as useT3TeamMacosTitlebarInsetStyle, from the platform prop so
+  // tests and screenshots can opt in without a desktop bridge.
+  const macosTitlebarInsetStyle: CSSProperties | undefined = isMacPlatform(resolvedPlatform)
+    ? ({ "--workspace-controls-left": "90px" } as CSSProperties)
+    : undefined;
 
   if (narrow) {
     return (
@@ -49,8 +56,12 @@ export function WelcomePageShell({
       className="fixed inset-0 z-40 flex flex-col bg-sidebar text-foreground"
       data-nexi-welcome=""
       data-welcome-title-align={align}
+      style={macosTitlebarInsetStyle}
     >
-      <WorkspacePageHeader electron={isElectron} className={welcomeTitleBarHeaderClass(align)}>
+      <WorkspacePageHeader
+        electron={isElectron}
+        className={cn(T3TEAM_WINDOW_CHROME_SAFE_CLASS, welcomeTitleBarHeaderClass(align))}
+      >
         {title ? <span className={welcomeTitleTextClass(align)}>{title}</span> : null}
       </WorkspacePageHeader>
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both" data-welcome-scroll="">

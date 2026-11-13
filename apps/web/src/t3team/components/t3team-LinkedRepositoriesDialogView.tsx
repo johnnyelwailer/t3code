@@ -16,6 +16,8 @@ import { LinkedRepositoryRows } from "~/t3team/components/t3team-LinkedRepositor
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Card } from "~/t3team/components/ui/t3team-card";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
+import { cn } from "~/lib/utils";
+import { T3TEAM_WINDOW_CHROME_SAFE_CLASS } from "~/t3team/t3team-windowChromeSafe";
 
 export type LinkedRepositoriesDialogViewProps = {
   readonly projectTitle: string;
@@ -65,7 +67,12 @@ export function LinkedRepositoriesDialogView({
       aria-label="Linked repositories"
       className="flex h-full w-full max-w-6xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
     >
-      <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+      <header
+        className={cn(
+          "flex items-start justify-between gap-3 px-5 pt-5 pb-3",
+          T3TEAM_WINDOW_CHROME_SAFE_CLASS,
+        )}
+      >
         <div className="min-w-0 space-y-1.5">
           <h2 className="text-base font-semibold">Linked repositories</h2>
           <p className="truncate text-xs text-muted-foreground">

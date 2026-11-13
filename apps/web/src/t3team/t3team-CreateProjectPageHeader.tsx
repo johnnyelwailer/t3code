@@ -2,6 +2,8 @@ import { X } from "lucide-react";
 
 import { ProjectAvatar } from "~/t3team/components/t3team-ProjectAvatar";
 import { Button } from "~/t3team/components/ui/t3team-button";
+import { cn } from "~/lib/utils";
+import { T3TEAM_WINDOW_CHROME_SAFE_CLASS } from "~/t3team/t3team-windowChromeSafe";
 import type { JiraCatalogProject } from "~/t3team/hooks/t3team-jiraProjectCatalog.logic";
 
 export type CreateProjectPageHeaderEntry = Pick<
@@ -20,7 +22,12 @@ export function CreateProjectPageHeader({
   dismissible: boolean;
 }) {
   return (
-    <div className="relative flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
+    <div
+      className={cn(
+        "relative flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6",
+        T3TEAM_WINDOW_CHROME_SAFE_CLASS,
+      )}
+    >
       {entry ? (
         <div className="flex min-w-0 items-center gap-3">
           <ProjectAvatar
