@@ -101,11 +101,19 @@ describe("retired bundled recipe copies behind BUNDLED_RECIPE_EXAMPLES", () => {
             context: ticketContext(),
           });
           const offered = discovered.recipes.map((recipe) => recipe.id).toSorted();
-          assert.deepStrictEqual(offered, ["manage-project-recipes", "my-new-recipe"]);
+          assert.deepStrictEqual(offered, [
+            "manage-project-recipes",
+            "my-new-recipe",
+            "show-only-assigned-to-me",
+          ]);
 
           const listed = yield* listProjectRecipesForAgent({ workspaceRoot });
           const listedIds = listed.recipes.map((recipe) => recipe.id).toSorted();
-          assert.deepStrictEqual(listedIds, ["manage-project-recipes", "my-new-recipe"]);
+          assert.deepStrictEqual(listedIds, [
+            "manage-project-recipes",
+            "my-new-recipe",
+            "show-only-assigned-to-me",
+          ]);
           expect(listedIds.some((id) => retired.has(id))).toBe(false);
 
           // By-path launch does not go through discovery: the module still imports and resolves.

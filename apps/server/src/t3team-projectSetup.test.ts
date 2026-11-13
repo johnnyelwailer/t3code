@@ -32,13 +32,13 @@ describe("resolveT3TeamProjectSetupProfileId", () => {
 describe("renderT3TeamProjectSetupFiles", () => {
   afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
-  it("scaffolds only the authoring entry and the Rewrite control's recipe while BUNDLED_RECIPE_EXAMPLES is off (the default)", () => {
+  it("scaffolds only the authoring entry, the backlog filter and the Rewrite control's recipe while BUNDLED_RECIPE_EXAMPLES is off (the default)", () => {
     const recipeDirs = renderT3TeamProjectSetupFiles()
       .map((file) => file.relativePath)
       .filter((path) => path.startsWith(`${T3TEAM_PROJECT_RECIPES_ROOT}/`))
       .map((path) => path.split("/").slice(-2, -1)[0]);
     expect(new Set(recipeDirs.filter((dir) => dir !== "recipes"))).toEqual(
-      new Set(["manage-project-recipes", "describe-rewrite"]),
+      new Set(["manage-project-recipes", "show-only-assigned-to-me", "describe-rewrite"]),
     );
   });
 

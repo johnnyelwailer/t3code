@@ -24,10 +24,11 @@ describe("bundled recipe examples", () => {
     expect(offeredBundledRecipes(all, true)).toBe(all);
   });
 
-  it("scaffolds the authoring entry and the recipe the Rewrite control launches while off", () => {
+  it("scaffolds the offered entries and the recipe the Rewrite control launches while off", () => {
     expect(ids(scaffoldedBundledRecipes(all, false)).toSorted()).toEqual([
       "describe-rewrite",
       "manage-project-recipes",
+      "show-only-assigned-to-me",
     ]);
     expect(scaffoldedBundledRecipes(all, true)).toBe(all);
   });
