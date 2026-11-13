@@ -4588,8 +4588,8 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const packagedEnvSourceDirs =
     options.packsDir !== undefined
       ? [path.join(options.packsDir, "..", "vendor", "t3code"), repoRoot]
-      // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
-      : process.env.T3CODE_DISTRIBUTION?.trim()
+      : // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
+        process.env.T3CODE_DISTRIBUTION?.trim()
         ? [repoRoot]
         : [];
   let includePackagedEnvFiles = false;
