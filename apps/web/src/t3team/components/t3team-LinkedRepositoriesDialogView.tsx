@@ -8,12 +8,11 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
-import { parseRepositoryLabel } from "~/t3team/components/t3team-linkedRepositories";
 import {
   LinkedRepositoriesHelp,
   LinkedRepositoriesWorkspaceBanner,
 } from "~/t3team/components/t3team-LinkedRepositoriesHelp";
-import { LinkedRepositoryMainMarker } from "~/t3team/components/t3team-LinkedRepositoryMainMarker";
+import { LinkedRepositoryRows } from "~/t3team/components/t3team-LinkedRepositoryRows";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Card } from "~/t3team/components/ui/t3team-card";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
@@ -174,76 +173,4 @@ export function LinkedRepositoriesDialogView({
   );
 }
 
-export function LinkedRepositoryRows({
-  linkedUrls,
-  mainRepositoryUrl,
-  onMakeMain,
-  onUnlink,
-  disabled,
-  pendingMainUrl,
-  mainError,
-  onRetryMain,
-}: {
-  readonly linkedUrls: ReadonlyArray<string>;
-  readonly mainRepositoryUrl: string | null;
-  readonly onMakeMain: (url: string) => void;
-  readonly onUnlink?: ((url: string) => void) | undefined;
-  readonly disabled?: boolean | undefined;
-  readonly pendingMainUrl?: string | null | undefined;
-  readonly mainError?: { readonly url: string | null; readonly message: string } | null | undefined;
-  readonly onRetryMain?: (() => void) | undefined;
-}) {
-  if (linkedUrls.length === 0) {
-    return (
-      <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-        No repositories are linked yet.
-      </p>
-    );
-  }
-  return (
-    <ul className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-2">
-      {linkedUrls.map((url) => {
-        const label = parseRepositoryLabel(url);
-        const slash = label.indexOf("/");
-        const owner = slash < 0 ? "" : label.slice(0, slash + 1);
-        const repo = slash < 0 ? label : label.slice(slash + 1);
-        const isMain = url === mainRepositoryUrl;
-        return (
-          <li
-            key={url}
-            className="flex min-w-0 flex-col rounded-lg border border-primary/60 bg-primary/5 p-3"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="min-w-0 text-sm leading-snug break-words">
-                <span className="text-muted-foreground">{owner}</span>
-                <span className="font-medium">{repo}</span>
-              </p>
-              {onUnlink ? (
-                <button
-                  type="button"
-                  className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
-                  onClick={() => onUnlink(url)}
-                  disabled={disabled}
-                  aria-label={`Unlink ${label}`}
-                >
-                  Unlink
-                </button>
-              ) : null}
-            </div>
-            <div className="mt-2">
-              <LinkedRepositoryMainMarker
-                isMain={isMain}
-                onMakeMain={() => onMakeMain(url)}
-                disabled={disabled}
-                pending={pendingMainUrl === url}
-                error={mainError?.url === url ? mainError.message : null}
-                onRetry={mainError?.url === url ? onRetryMain : undefined}
-                repositoryLabel={label}
-              />
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
+export { LinkedRepositoryRows } from "~/t3team/components/t3team-LinkedRepositoryRows";
