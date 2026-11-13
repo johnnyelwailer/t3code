@@ -29,6 +29,11 @@ export function T3TeamDesktopRouteQuestion(props: {
   const submitted = useRef(false);
   const { answers, onSubmit } = props;
   const questionId = props.question.id;
+  const onSubmitRef = useRef(onSubmit);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps onSubmitRef pointing at the latest submit handler
+  useEffect(() => {
+    onSubmitRef.current = onSubmit;
+  }, [onSubmit]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- submits once the draft state holds the tapped answer
   useEffect(() => {
     if (chosen === null || submitted.current) return;
@@ -39,7 +44,7 @@ export function T3TeamDesktopRouteQuestion(props: {
       submitted.current = false;
       setChosen(null);
     };
-    void onSubmit().then((result) => {
+    void onSubmitRef.current().then((result) => {
       const ok =
         typeof result === "object" &&
         result !== null &&
@@ -47,7 +52,7 @@ export function T3TeamDesktopRouteQuestion(props: {
         result._tag === "Success";
       if (!ok) reset();
     }, reset);
-  }, [chosen, answers, questionId, onSubmit]);
+  }, [chosen, answers, questionId]);
   return (
     <T3TeamDesktopRouteCard
       card={props.card}

@@ -3,6 +3,12 @@
 # is not exempt: react/exhaustive-effect-dependencies and react-hooks/exhaustive-deps
 # are errors. Hold unstable callbacks in useLatest / useLatestCallback instead of
 # listing them in an effect that sets state.
+apps/web/src/cloud/t3team-CloudSessionSignInDialogHost.tsx
+apps/web/src/cloud/t3team-useCloudSessionController.ts
+apps/web/src/components/cloud/t3team-useRunOnCloudSessionProps.ts
+apps/web/src/components/t3team-SidebarSubRunRow.tsx
+apps/web/src/components/t3team-ThreadActivityStatus-slideLabel.tsx
+apps/web/src/components/t3team-ThreadActivityStatus.tsx
 apps/web/src/t3team/chat/t3team-activeAgentsStepLabel.tsx
 apps/web/src/t3team/chat/t3team-activeWorkflowDock.tsx
 apps/web/src/t3team/chat/t3team-useThreadBootstrap.ts

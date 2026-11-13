@@ -774,10 +774,9 @@ export default defineConfig({
         },
       },
       {
-        // t3team: render-loop guards. Must stay after the compiler-pending exemption, which
-        // turns exhaustive-effect-dependencies off — the #923 freeze lived in a pending file
-        // that exemption had silenced. Callbacks in an effect that setStates go in a ref
-        // (`useLatest` / `useLatestCallback`), not in the dependency list.
+        // t3team render-loop guards. Must stay after the compiler-pending exemption
+        // (that turns exhaustive-effect-dependencies off). Callbacks in a setState
+        // effect belong in a useLatest ref, not in the dependency list.
         files: [
           "apps/web/src/t3team/**/*.{ts,tsx}",
           "apps/*/src/**/t3team-*.{ts,tsx}",
