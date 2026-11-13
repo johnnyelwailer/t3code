@@ -62,8 +62,6 @@ function ComposerDictation(props: {
               pendingAction={null}
               isRunning={props.running ?? true}
               canInterrupt={props.running ?? true}
-              showPlanFollowUpPrompt={false}
-              promptHasText={(props.draft ?? "").length > 0}
               isSendBusy={false}
               sendDisabledReason={null}
               isEnvironmentUnavailable={false}
@@ -71,7 +69,6 @@ function ComposerDictation(props: {
               hasSendableContent={(props.draft ?? "").length > 0}
               onPreviousPendingQuestion={() => undefined}
               onInterrupt={() => undefined}
-              onImplementPlanInNewThread={() => undefined}
             />
           </div>
         </div>

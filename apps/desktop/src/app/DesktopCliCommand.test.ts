@@ -12,6 +12,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopCliShim from "./DesktopCliShim.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
+import { cliShimMarker } from "./t3team-cliIdentity.ts";
 
 const environmentFor = (
   path: Path.Path,
@@ -153,7 +154,7 @@ it.layer(NodeServices.layer)("DesktopCliCommand", (it) => {
         const upgradedHome = yield* fs.makeTempDirectoryScoped();
         const leftFile = path.join(upgradedHome, ".t3", left);
         yield* fs.makeDirectory(path.dirname(leftFile), { recursive: true });
-        yield* fs.writeFileString(leftFile, `#!/bin/sh\n# ${DesktopCliShim.MARKER}\n`);
+        yield* fs.writeFileString(leftFile, `#!/bin/sh\n# ${cliShimMarker(false)}\n`);
         const upgraded = yield* commandIn({ home: upgradedHome, env });
         yield* upgraded.installOnFirstLaunch;
         const upgradedLink = path.join(upgradedHome, ".local", "bin", "t3");

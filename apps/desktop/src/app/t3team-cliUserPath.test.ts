@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { unixCandidates } from "./DesktopCliCommand.ts";
+import { knownLocations } from "./DesktopCliCommand.ts";
 import {
   NEXI_CLI_PATH_SNIPPET_BEGIN,
   NEXI_CLI_PATH_SNIPPET_END,
@@ -68,13 +68,13 @@ describe("ensureUnixPathSnippet / removeUnixPathSnippet", () => {
   });
 });
 
-describe("unixCandidates on macOS", () => {
-  it("prefers Homebrew and /usr/local, then falls back to ~/.local/bin, and never mentions t3", () => {
-    assert.deepEqual(unixCandidates("/Users/p", "darwin"), [
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
+describe("knownLocations on macOS", () => {
+  it("looks in the user folders first, then an old Homebrew or /usr/local link", () => {
+    assert.deepEqual(knownLocations("/Users/p", "darwin"), [
       "/Users/p/.local/bin",
       "/Users/p/bin",
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
     ]);
   });
 });

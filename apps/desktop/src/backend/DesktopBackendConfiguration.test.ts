@@ -103,10 +103,8 @@ function layerEnvironment(
 
 const restoreEnv = (name: string, value: string | undefined) => {
   if (value === undefined) {
-    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
     delete process.env[name];
   } else {
-    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork test isolates the host environment
     process.env[name] = value;
   }
 };
