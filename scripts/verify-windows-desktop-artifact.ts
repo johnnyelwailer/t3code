@@ -14,10 +14,6 @@ import {
   resolveDesktopProductName,
   verifyWindowsPackagedRuntime,
 } from "./build-desktop-artifact.ts";
-import {
-  resolveWindowsPackagingIdentity,
-  windowsPackagedExecutableFileName,
-} from "./lib/t3team-windowsPackagingIdentity.ts";
 
 const verifyWindowsDesktopArtifactCli = Command.make("verify-windows-desktop-artifact", {
   appDir: Flag.String("app-dir").pipe(
@@ -32,14 +28,9 @@ const verifyWindowsDesktopArtifactCli = Command.make("verify-windows-desktop-art
   Command.withDescription("Verify a Windows desktop artifact's packaged natives load."),
   Command.withHandler(({ appDir, arch, buildVersion, verbose }) =>
     Effect.gen(function* () {
-      const productName = resolveDesktopProductName(buildVersion);
-      const winIdentity = resolveWindowsPackagingIdentity({
-        env: process.env,
-        productName,
-      });
       yield* verifyWindowsPackagedRuntime({
         packagedAppDir: appDir,
-        appExecutableName: windowsPackagedExecutableFileName(winIdentity, productName),
+        appExecutableName: `${resolveDesktopProductName(buildVersion)}.exe`,
         targetArch: arch,
         verbose,
       });
