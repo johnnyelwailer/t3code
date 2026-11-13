@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - build-time script derives the NSIS GUID with node:crypto.
 /**
  * Isolated Nexi: own package name (install dir), exe, NSIS GUID, publisher,
  * and nexi-work://. Unisolated (replace/upstream) builds stay t3code.
