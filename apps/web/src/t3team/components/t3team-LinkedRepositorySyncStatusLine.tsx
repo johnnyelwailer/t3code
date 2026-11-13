@@ -46,7 +46,7 @@ export function LinkedRepositorySyncStatusLine({
       </span>
       {onSync && !isLinkedRepositorySyncActive(entry) ? (
         <Button size="xs" variant="link" disabled={starting} onClick={syncNow}>
-          Sync now
+          {entry.status === "failed" || entry.error ? "Retry" : "Sync now"}
         </Button>
       ) : null}
     </span>

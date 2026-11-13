@@ -9,7 +9,17 @@ import {
   type ComposerPromptEditorHandle,
 } from "~/components/ComposerPromptEditorTiptap";
 
-function DraftComposer({ value, richText = false }: { value: string; richText?: boolean }) {
+const PLACEHOLDER = "Frag nach Status, Tickets oder Pull Requests im Projekt";
+
+function DraftComposer({
+  value,
+  richText = false,
+  placeholder = "",
+}: {
+  value: string;
+  richText?: boolean;
+  placeholder?: string;
+}) {
   const [cursor, setCursor] = useState(value.length);
   const editorRef = createRef<ComposerPromptEditorHandle>();
   return (
@@ -22,7 +32,7 @@ function DraftComposer({ value, richText = false }: { value: string; richText?: 
         contextRecords={new Map()}
         skills={[]}
         disabled={false}
-        placeholder=""
+        placeholder={placeholder}
         onChange={(nextValue, nextCursor) => setCursor(nextCursor)}
         onPaste={() => {}}
       />
@@ -87,6 +97,18 @@ describe("composer voice ghost", () => {
       "Check the releaseopen the board",
     );
     expect(serializeEditorDoc(editorIn(screen.container).state.doc).value).toBe(before);
+  });
+
+  it("hides the placeholder while the ghost fills an empty draft, and restores it after", async () => {
+    await using screen = await render(<DraftComposer value="" placeholder={PLACEHOLDER} />);
+    await expect.element(screen.getByText(PLACEHOLDER)).toBeVisible();
+    await screen.getByTestId("set-ghost").click();
+    expect(screen.container.querySelector(".composer-voice-ghost")?.textContent).toBe(
+      "open the board",
+    );
+    await expect.element(screen.getByText(PLACEHOLDER)).not.toBeInTheDocument();
+    await screen.getByTestId("clear-ghost").click();
+    await expect.element(screen.getByText(PLACEHOLDER)).toBeVisible();
   });
 
   it("re-renders the span for each successive partial", async () => {

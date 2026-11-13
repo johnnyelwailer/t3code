@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 
 import { useT3TeamPackAppearance } from "../../t3team/t3team-packAppearance";
 import { useT3TeamWorkProfileChooserEnabled } from "../../t3team/t3team-workProfileChooser";
+import { useNexiWelcomeEnabled } from "../../t3team/welcome/t3team-useNexiWelcomeEnabled";
 import { T3TeamProjectSetupProfileSelect } from "./t3team-ProjectSetupProfileSelect";
 import { Button } from "../ui/button";
 
@@ -13,6 +14,7 @@ export function T3TeamProjectSetupSetting() {
   // works with the developer profile — so the picker would be a control with no decision behind
   // it. The rest of the section (reopening the setup wizard) stands on its own.
   const workProfileChooserEnabled = useT3TeamWorkProfileChooserEnabled();
+  const nexiWelcome = useNexiWelcomeEnabled();
 
   return (
     <div className="mb-8 space-y-4 rounded-xl border bg-card/50 p-4">
@@ -47,10 +49,10 @@ export function T3TeamProjectSetupSetting() {
           variant="outline"
           className="w-full justify-center sm:w-fit"
           onClick={() => {
-            void navigate({
-              to: "/t3team",
-              search: { setup: "welcome" },
-            });
+            // With the welcome page as the setup, reopening it means that page, full window.
+            void navigate(
+              nexiWelcome ? { to: "/welcome" } : { to: "/t3team", search: { setup: "welcome" } },
+            );
           }}
         >
           Reopen initial setup

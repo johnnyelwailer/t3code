@@ -6,10 +6,12 @@
  */
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ProjectId, ThreadId, type CloudSession } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { setCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
+import type { CloudSessionCreateOptions } from "./t3team-useCloudSessionCreate";
 import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
 import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
@@ -71,7 +73,7 @@ function park() {
   });
 }
 
-type Options = { plain?: boolean; onCreated?: (s: CloudSession) => void; onFailed?: () => void };
+type Options = CloudSessionCreateOptions;
 
 /** A create the test answers by hand; `started: false` is a create that refused to start. */
 function create(started = true) {
@@ -194,7 +196,7 @@ describe("Start a plain session", () => {
   it("(d) a failed create leaves the parked send untouched and the action available again", () => {
     const c = create();
     start(c);
-    c.last().onFailed?.();
+    c.last().onFailed?.({ cause: Cause.fail("create-failed") });
     expect(getDraftCloudQueuedSend(draftId)).toMatchObject({
       sessionId: OLD,
       failureKind: "project_not_resolved",

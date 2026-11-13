@@ -6,8 +6,9 @@ import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts"
 
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
-import { cloudProjectWaitDetail } from "./t3team-cloudProjectWaitPresentation";
+import { cloudProjectWaitParkedMessage } from "./t3team-cloudProjectWaitPresentation";
 import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { CLOUD_SESSION_CREATE_FAILED_TITLE } from "./t3team-cloudSessionFailure";
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
 export const CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE =
@@ -38,21 +39,22 @@ export type CloudQueuedSendFlushAction =
     };
 
 export interface CloudQueuedSendFailure {
-  readonly kind: "project_not_resolved" | "session_ended";
+  readonly kind: "project_not_resolved" | "session_ended" | "create_failed";
   /** The classifier's reason (`CloudProjectWaitReason`) for `project_not_resolved`. */
   readonly reason: string | null;
   readonly environmentId: string | null;
 }
 
-/** The words of a send that gave up waiting for its project; the message is kept. */
-function cloudProjectNotResolvedMessage(wait: CloudProjectWait): string {
-  return `The project did not appear on the cloud machine in time. ${cloudProjectWaitDetail(wait)}. Your message is kept: retry, send it in the machine's own project, start a plain session, or cancel to edit it.`;
-}
-
 export function decideCloudQueuedSendFlush(input: {
   readonly queued: CloudQueuedSend;
   /** The in-memory Run-on target of this draft, when this window still has it. */
-  readonly target: { readonly sessionId: string; readonly label: string } | null;
+  readonly target: {
+    readonly sessionId: string;
+    readonly label: string;
+    readonly createFailed?: boolean;
+    readonly createFailureMessage?: string;
+    readonly createFailureReason?: string;
+  } | null;
   readonly session: CloudSession | null;
   readonly connectFailure: { readonly sessionId: string; readonly message: string } | null;
   /** The session's machine is a connected environment on this client. */
@@ -83,9 +85,28 @@ export function decideCloudQueuedSendFlush(input: {
     if (input.target === null) {
       return { kind: "fail", message: CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE, retryable: true };
     }
-    return input.target.sessionId === CLOUD_SESSION_CREATING_ID
-      ? { kind: "wait" }
-      : { kind: "resolve-session", sessionId: input.target.sessionId, label: input.target.label };
+    if (input.target.sessionId === CLOUD_SESSION_CREATING_ID) {
+      // A failed create used to wait forever here: the sentinel was still present, and the
+      // flusher never saw `createFailed`, so the setup card stayed on "Queued".
+      if (input.target.createFailed === true) {
+        return {
+          kind: "fail",
+          message: input.target.createFailureMessage ?? CLOUD_SESSION_CREATE_FAILED_TITLE,
+          retryable: true,
+          failure: {
+            kind: "create_failed",
+            reason: input.target.createFailureReason ?? null,
+            environmentId: null,
+          },
+        };
+      }
+      return { kind: "wait" };
+    }
+    return {
+      kind: "resolve-session",
+      sessionId: input.target.sessionId,
+      label: input.target.label,
+    };
   }
   // The list can lag a fresh create; the next poll brings it.
   if (session === null) return { kind: "wait" };
@@ -126,7 +147,7 @@ export function decideCloudQueuedSendFlush(input: {
     // A project that has not appeared by the bound is a typed, kept failure, not a wait.
     return {
       kind: "fail",
-      message: cloudProjectNotResolvedMessage(wait),
+      message: cloudProjectWaitParkedMessage(wait),
       retryable: true,
       failure: { kind: "project_not_resolved", reason: wait.reason, environmentId },
     };

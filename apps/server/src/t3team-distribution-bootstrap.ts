@@ -37,6 +37,7 @@ import {
 
 import {
   activateDistribution,
+  distributionAlternateThemes,
   distributionAssets,
   distributionPersistence,
   distributionTheme,
@@ -224,7 +225,17 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   setPackColdLocalCompactionRoutes(coldCompactionRoutes);
   if (accounts.length > 0) setPackAccounts(accounts);
   if (distributionTheme) {
-    const theme = decodeThemeDefinition(resolveThemeBrand(distributionTheme, distributionAssets));
-    setPackAppearanceOverlay({ ...theme, themeId: theme.id });
+    const decode = (raw: DistributionTheme) =>
+      decodeThemeDefinition(resolveThemeBrand(raw, distributionAssets));
+    const theme = decode(distributionTheme);
+    const alternates = distributionAlternateThemes.map((raw) => {
+      const alternate = decode(raw);
+      return { ...alternate, themeId: alternate.id };
+    });
+    setPackAppearanceOverlay({
+      ...theme,
+      themeId: theme.id,
+      ...(alternates.length > 0 ? { alternates } : {}),
+    });
   }
 };

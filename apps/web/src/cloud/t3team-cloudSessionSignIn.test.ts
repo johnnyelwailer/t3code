@@ -8,6 +8,7 @@ import { toastManager } from "~/components/ui/toast";
 
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 import {
+  acceptCloudSessionSignInOffer,
   clearCloudSessionSignIn,
   requestCloudSessionSignIn,
   toolAuthStateIsForHost,
@@ -22,7 +23,7 @@ afterEach(() => {
 });
 
 describe("reportCloudSessionCreateFailure", () => {
-  it("starts the gh sign-in instead of an error when gh is not signed in, and keeps the retry", () => {
+  it("offers Sign in instead of a toast or a dialog, and opens the dialog only on a click", () => {
     const toast = vi.spyOn(toastManager, "add");
     const retry = vi.fn();
     reportCloudSessionCreateFailure(
@@ -35,11 +36,15 @@ describe("reportCloudSessionCreateFailure", () => {
       retry,
     );
     expect(toast).not.toHaveBeenCalled();
+    expect(useCloudSessionSignInStore.getState().request).toBeNull();
+    expect(useCloudSessionSignInStore.getState().offer).not.toBeNull();
+    expect(acceptCloudSessionSignInOffer()).toBe(true);
+    expect(useCloudSessionSignInStore.getState().offer).toBeNull();
     useCloudSessionSignInStore.getState().request?.retry();
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  it("signs in to the host the failure names, which can differ from the default login host", () => {
+  it("names the host the failure named on the offer, which can differ from the default login host", () => {
     const toast = vi.spyOn(toastManager, "add");
     reportCloudSessionCreateFailure(
       failure({
@@ -51,10 +56,11 @@ describe("reportCloudSessionCreateFailure", () => {
       () => {},
     );
     expect(toast).not.toHaveBeenCalled();
-    expect(useCloudSessionSignInStore.getState().request?.host).toBe("ghe.session-host.example");
+    expect(useCloudSessionSignInStore.getState().request).toBeNull();
+    expect(useCloudSessionSignInStore.getState().offer?.host).toBe("ghe.session-host.example");
   });
 
-  it("opens the sign-in for the repository's host instead of a toast, and keeps the retry", () => {
+  it("offers Sign in for the repository's host instead of a toast or a dialog, and keeps the retry", () => {
     const toast = vi.spyOn(toastManager, "add");
     const retry = vi.fn();
     reportCloudSessionCreateFailure(
@@ -67,9 +73,10 @@ describe("reportCloudSessionCreateFailure", () => {
       retry,
     );
     expect(toast).not.toHaveBeenCalled();
-    const request = useCloudSessionSignInStore.getState().request;
-    expect(request?.host).toBe("github.com");
-    request?.retry();
+    expect(useCloudSessionSignInStore.getState().request).toBeNull();
+    expect(useCloudSessionSignInStore.getState().offer?.host).toBe("github.com");
+    expect(acceptCloudSessionSignInOffer()).toBe(true);
+    useCloudSessionSignInStore.getState().request?.retry();
     expect(retry).toHaveBeenCalledOnce();
   });
 

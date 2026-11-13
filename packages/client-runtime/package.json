@@ -71,6 +71,10 @@
       "types": "./src/t3team-runPromptCopy.ts",
       "default": "./src/t3team-runPromptCopy.ts"
     },
+    "./t3team-turnReports": {
+      "types": "./src/t3team-turnReports.ts",
+      "default": "./src/t3team-turnReports.ts"
+    },
     "./t3team-environmentFilter": {
       "types": "./src/t3team-environmentFilter.ts",
       "default": "./src/t3team-environmentFilter.ts"

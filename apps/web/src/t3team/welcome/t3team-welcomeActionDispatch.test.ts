@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { ProviderInstanceId } from "@t3tools/contracts";
 
 import {
   dispatchWelcomeAccountAction,
@@ -10,8 +9,7 @@ describe("dispatchWelcomeAgentAction", () => {
   it("routes Claude/Codex install and sign-in to ToolAuth handlers", () => {
     const onInstall = vi.fn();
     const onSignIn = vi.fn();
-    const onOpenProviderSetup = vi.fn();
-    const handlers = { onInstall, onSignIn, onOpenProviderSetup };
+    const handlers = { onInstall, onSignIn };
 
     dispatchWelcomeAgentAction({ kind: "toolAuthInstall", tool: "claude" }, handlers)?.run();
     dispatchWelcomeAgentAction({ kind: "toolAuthSignIn", tool: "codex" }, handlers)?.run();
@@ -19,27 +17,14 @@ describe("dispatchWelcomeAgentAction", () => {
     expect(onSignIn).toHaveBeenCalledWith("codex");
   });
 
-  it("routes Cursor/other setup through openProviderSetup", () => {
-    const onOpenProviderSetup = vi.fn();
-    const instanceId = ProviderInstanceId.make("cursor-1");
-    dispatchWelcomeAgentAction(
-      { kind: "openProviderSetup", instanceId },
-      { onInstall: vi.fn(), onSignIn: vi.fn(), onOpenProviderSetup },
-    )?.run();
-    expect(onOpenProviderSetup).toHaveBeenCalledWith(instanceId);
-  });
-
   it("returns null for ready/disabled rows with no button", () => {
     expect(
-      dispatchWelcomeAgentAction(
-        { kind: "none" },
-        { onInstall: vi.fn(), onSignIn: vi.fn(), onOpenProviderSetup: vi.fn() },
-      ),
+      dispatchWelcomeAgentAction({ kind: "none" }, { onInstall: vi.fn(), onSignIn: vi.fn() }),
     ).toBeNull();
     expect(
       dispatchWelcomeAgentAction(
         { kind: "disabled", reason: "unavailable" },
-        { onInstall: vi.fn(), onSignIn: vi.fn(), onOpenProviderSetup: vi.fn() },
+        { onInstall: vi.fn(), onSignIn: vi.fn() },
       ),
     ).toBeNull();
   });

@@ -173,6 +173,8 @@ describe("a drop on a thread of another environment", () => {
     read.release({ item: { key: "PROJ-9" } });
 
     await vi.waitFor(() => expect(queued(threadId)[0]?.syncStatus).toBe("synced"));
-    expect(queued(threadId)[0]?.contextText).toContain("Cached copy: .nexi/context/threads/");
+    expect(queued(threadId)[0]?.contextText).toContain(
+      "Cached copy: .agents/nexi/context/threads/",
+    );
   });
 });

@@ -186,7 +186,7 @@ const makeGithubMock = (
             created_at: "2026-09-14T12:00:00Z",
             updated_at: "2026-09-14T12:00:01Z",
             html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
-            name: options.runName ?? `hive/nx-nexi [main] [${tag}]`,
+            name: options.runName ?? `hive/nx-nexi [main] [${tag ?? "s999"}]`,
             actor: { login, id: 1283972 },
           },
         }),
@@ -234,7 +234,7 @@ const makeGithubMock = (
                   created_at: "2026-09-14T12:00:00Z",
                   updated_at: "2026-09-14T12:00:01Z",
                   html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
-                  name: options.runName ?? `hive/nx-nexi [main] [${tag}]`,
+                  name: options.runName ?? `hive/nx-nexi [main] [${tag ?? "s999"}]`,
                   actor: { login, id: 1283972 },
                 },
               ],
@@ -515,6 +515,22 @@ const providersFor = (
 };
 
 describe("CloudSessionService.list per-user isolation", () => {
+  it.effect("leaves CI and verification runs of the same login out of the user's list", () =>
+    Effect.gen(function* () {
+      const { rest, graphql } = makeGithubMock({
+        runName: "nexi-session [flag-verify-1284-102018] · ws flag-verify-1284",
+      });
+      const providers = providersFor(rest, graphql);
+      const result = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.list),
+        Effect.provide(
+          Layer.mergeAll(CloudSessionService.layer.pipe(Layer.provide(providers)), providers),
+        ),
+      );
+      assert.equal(result.sessions.length, 0);
+    }),
+  );
+
   it.effect("scopes the list to the caller's login via the server-side actor filter", () =>
     Effect.gen(function* () {
       const { calls, rest, graphql } = makeGithubMock();

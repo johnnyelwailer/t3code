@@ -28,6 +28,19 @@ const numbers = (list: ReadonlyArray<number>) => list.map((n) => `#${n}`).join("
 
 type Found = MachineDefinitionCandidate & { readonly hash: string };
 
+const pointerKind = (
+  path: string | null,
+): ".agents/nexi/machine.json" | ".nexi/machine.json" | ".t3team/machine.json" | "devcontainer" => {
+  if (
+    path === ".agents/nexi/machine.json" ||
+    path === ".nexi/machine.json" ||
+    path === ".t3team/machine.json"
+  ) {
+    return path;
+  }
+  return "devcontainer";
+};
+
 const candidateOf = (repository: string, planned: PlannedRef, machine: ScannedMachine): Found => {
   const pointer = machine.machineFilePath !== null;
   const path = machine.machineFilePath ?? machine.devcontainerPath;
@@ -36,7 +49,7 @@ const candidateOf = (repository: string, planned: PlannedRef, machine: ScannedMa
     ref: planned.ref,
     where: planned.where,
     path,
-    kind: pointer ? ".nexi/machine.json" : "devcontainer",
+    kind: pointerKind(machine.machineFilePath),
     author: planned.author,
     summary: pointer
       ? `${path} (devcontainer ${machine.devcontainerPath}) on ${planned.describe}`

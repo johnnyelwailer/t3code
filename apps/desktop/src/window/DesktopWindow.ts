@@ -17,7 +17,7 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
-import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
+import { getDesktopUrl } from "../electron/t3team-desktopScheme.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
@@ -378,7 +378,9 @@ export const make = Effect.gen(function* () {
   // t3team: detached-surface windows are second views onto the app, never its main window —
   // a dock click, a menu action or the activation broker must reach the real one.
   const detachedSurfaceWindows = makeDetachedSurfaceWindows({
-    applicationUrl: getDesktopUrl(environment.isDevelopment),
+    applicationUrl: getDesktopUrl(environment.isDevelopment, {
+      isolatedInstance: environment.isolatedInstance,
+    }),
     preloadPath: environment.preloadPath,
     backgroundColor: () =>
       getInitialWindowBackgroundColor(Electron.nativeTheme.shouldUseDarkColors),
@@ -481,7 +483,9 @@ export const make = Effect.gen(function* () {
   > {
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
     yield* previewManager.getBrowserSession();
-    const applicationUrl = getDesktopUrl(environment.isDevelopment);
+    const applicationUrl = getDesktopUrl(environment.isDevelopment, {
+      isolatedInstance: environment.isolatedInstance,
+    });
     const iconPaths = yield* assets.iconPaths;
     const iconOption = getIconOption(iconPaths, environment.platform);
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;

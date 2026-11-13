@@ -58,6 +58,10 @@
     "apps/web/src/t3team/t3team-projectContextPayload.ts",
     "apps/web/src/t3team/t3team-projectDashboardKanbanMatrix.browser.tsx",
     "apps/web/src/t3team/t3team-useProjectDashboardState.ts",
+    // Parked until the welcome Role, GitHub, and cloud/phone actions work (hive/nx-nexi#1359).
+    "apps/web/src/t3team/welcome/t3team-NexiWelcomeCloudPhoneSection.tsx",
+    "apps/web/src/t3team/welcome/t3team-NexiWelcomeGitHubRow.tsx",
+    "apps/web/src/t3team/welcome/t3team-NexiWelcomeRoleSection.tsx",
     "packages/t3team-sdk/src/__fixtures__/t3team-sdk.callRef.workflow.ts",
     "packages/t3team-sdk/src/__fixtures__/t3team-sdk.capabilityBad.workflow.ts",
     "packages/t3team-sdk/src/__fixtures__/t3team-sdk.capabilityOk.workflow.ts",
@@ -80,6 +84,7 @@
     "scripts/t3team-context-refresh-e2e-workspace.mjs",
     "scripts/t3team-desktop-asar-dts-afterpack-utils.cjs",
     "scripts/t3team-desktop-asar-dts-afterpack.cjs",
+    "scripts/t3team-hot-file-check.mjs",
     "scripts/t3team-timer-e2e-live-lib.mjs",
     "scripts/t3team-timer-e2e-live.mjs",
     "scripts/t3team-timer-e2e-workspace.mjs",

@@ -20,6 +20,9 @@ import * as Schema from "effect/Schema";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import { explicitBackendHome, isolatedBackendChildEnv } from "../app/t3team-isolatedInstance.ts";
+import { resolveDesktopBaseDir } from "../app/DesktopStatePaths.ts";
+import { migrateNexiHome, writeNexiIdentityMarker } from "./t3team-homeMigration.ts";
+import { oldAppIsRunningOnHome, pickGuardEnvironment } from "./t3team-oldAppGuardBoot.ts";
 import serverPackageJson from "../../../server/package.json" with { type: "json" };
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
@@ -123,97 +126,12 @@ const WSL_FORWARDED_ENV_NAMES = [
 
 const WSL_SERVER_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
-/**
- * A SQLite file this small has a header and no user data. A real workspace DB
- * is orders of magnitude larger, so this cleanly separates "the branded home
- * was created by a launch that found nothing" from "the branded home is in
- * use". Deliberately generous: 8 KiB is two SQLite pages.
- */
-const EMPTY_STATE_DB_MAX_BYTES = 8 * 1024;
-
-const fileSizeOrZero = (candidate: string): number => {
-  try {
-    return NodeFS.statSync(candidate).size;
-  } catch {
-    return 0;
-  }
-};
-
-/**
- * Size of a home's state database: `statev2.sqlite` is the live one on V2, and
- * `state.sqlite` is the V1 database (still the only one in a home V2 never opened).
- */
-const stateBytes = (userdataDir: string, join: (first: string, ...segments: string[]) => string) =>
-  Math.max(
-    fileSizeOrZero(join(userdataDir, "statev2.sqlite")),
-    fileSizeOrZero(join(userdataDir, "state.sqlite")),
-  );
-
-/**
- * `~/.t3` is a symlink to the branded home on machines that moved their state there by hand. A
- * string comparison calls those different, and the move below would then rename the live home's
- * contents into a second home. A symlinked legacy dir is never a pre-branding home, and neither
- * is one that resolves to the branded dir.
- */
-const legacyIsBrandedHome = (legacyDir: string, brandedDir: string): boolean => {
-  try {
-    if (NodeFS.lstatSync(legacyDir).isSymbolicLink()) return true;
-    return NodeFS.realpathSync(legacyDir) === NodeFS.realpathSync(brandedDir);
-  } catch {
-    return false;
-  }
-};
-
-/**
- * Move a pre-branding home (`~/.t3`) into the branded one, once.
- *
- * A build with bundled packs stores state under
- * `<appData>/<userDataDirName>`, while an unbundled build uses `~/.t3`. Before
- * this migration existed, installing a branded build over an existing install
- * silently started with a BLANK workspace: the old database was never opened,
- * never migrated, and never surfaced — the app simply looked wiped.
- *
- * The move is a rename, so on the normal same-volume case it is instant even
- * with large `worktrees/` trees. Anything that already exists in the branded
- * home is left untouched, so a real branded workspace can never be clobbered.
- * A blank state DB left behind by such a first launch does not block adoption
- * — it is moved aside rather than deleted, because discarding user-adjacent
- * data on startup is never the right default.
- *
- * Returns the directory the backend should actually use. On any failure
- * (cross-device rename, permissions) it returns the legacy directory so the
- * user keeps a working app instead of an empty one.
- */
 export const migrateLegacyHomeIfNeeded = (input: {
   readonly legacyDir: string;
   readonly brandedDir: string;
   readonly join: (first: string, ...segments: string[]) => string;
   readonly stamp: string;
-}): string => {
-  const { legacyDir, brandedDir, join, stamp } = input;
-  if (legacyDir === brandedDir) return brandedDir;
-  if (legacyIsBrandedHome(legacyDir, brandedDir)) return brandedDir;
-
-  if (stateBytes(join(legacyDir, "userdata"), join) === 0) return brandedDir;
-
-  const brandedUserdata = join(brandedDir, "userdata");
-  if (stateBytes(brandedUserdata, join) > EMPTY_STATE_DB_MAX_BYTES) return brandedDir;
-
-  try {
-    NodeFS.mkdirSync(brandedDir, { recursive: true });
-    if (NodeFS.existsSync(brandedUserdata)) {
-      NodeFS.renameSync(brandedUserdata, `${brandedUserdata}.empty-${stamp}`);
-    }
-    for (const entry of NodeFS.readdirSync(legacyDir)) {
-      const target = join(brandedDir, entry);
-      if (NodeFS.existsSync(target)) continue;
-      NodeFS.renameSync(join(legacyDir, entry), target);
-    }
-    return brandedDir;
-  } catch {
-    return legacyDir;
-  }
-};
+}): string => migrateNexiHome(input).home;
 
 const nodeBinDirOf = (nodePath: string): string => {
   const lastSlash = nodePath.lastIndexOf("/");
@@ -718,9 +636,10 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       ? environment.path.join(environment.serverRoot, "apps/server/dist/t3team-bin.mjs")
       : environment.backendEntryPath;
 
-    const brandedHomeDir = hasBundledPacks
-      ? environment.path.join(environment.appDataDirectory, environment.userDataDirName)
-      : environment.baseDir;
+    const brandedHomeDir =
+      hasBundledPacks || environment.isolatedInstance
+        ? environment.path.join(environment.appDataDirectory, environment.userDataDirName)
+        : environment.baseDir;
 
     const explicitT3Home = explicitBackendHome({
       isolatedInstance: environment.isolatedInstance,
@@ -728,14 +647,36 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       envHome: process.env.T3CODE_HOME,
     });
     // An explicit T3CODE_HOME is an operator decision and is never migrated.
+    // Isolated builds still consider ~/.t3 as a copy source when it belongs to Nexi;
+    // environment.baseDir is already the branded home, so it cannot be the source.
+    const defaultLegacyHome = resolveDesktopBaseDir({
+      homeDirectory: environment.homeDirectory,
+      joinPath: environment.path.join,
+      t3Home: Option.none(),
+    });
+    // t3team: never copy or adopt the shared home while the daily Nexi app still holds it.
+    const homeOccupied =
+      explicitT3Home === undefined && oldAppIsRunningOnHome(pickGuardEnvironment(environment));
     const resolvedHomeDir =
       explicitT3Home ??
-      migrateLegacyHomeIfNeeded({
-        legacyDir: environment.baseDir,
-        brandedDir: brandedHomeDir,
-        join: environment.path.join,
-        stamp: `${input.bootstrapToken.slice(0, 8)}`,
-      });
+      (homeOccupied
+        ? brandedHomeDir
+        : migrateLegacyHomeIfNeeded({
+            legacyDir: defaultLegacyHome,
+            brandedDir: brandedHomeDir,
+            join: environment.path.join,
+            stamp: `${input.bootstrapToken.slice(0, 8)}`,
+          }));
+    if ((hasBundledPacks || environment.isolatedInstance) && !homeOccupied) {
+      writeNexiIdentityMarker(
+        resolvedHomeDir,
+        {
+          product: "nexi-work",
+          productName: environment.displayName,
+        },
+        environment.path.join,
+      );
+    }
 
     const bootstrap = {
       mode: "desktop" as const,
@@ -778,6 +719,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         ...isolatedBackendChildEnv({
           isolatedInstance: environment.isolatedInstance,
           home: resolvedHomeDir,
+          appId: environment.appId,
         }),
         ELECTRON_RUN_AS_NODE: "1",
         // Secure corporate-CA fallback. Unlike NODE_TLS_REJECT_UNAUTHORIZED=0,

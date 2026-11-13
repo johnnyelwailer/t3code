@@ -16,6 +16,8 @@ import { trimmedString } from "./DesktopConfig.ts";
 import { resolveDesktopAppBranding } from "./DesktopEnvironment.ts";
 import { renderUrlHandlerDesktopEntry } from "./DesktopLinuxUrlHandler.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
+import { getDesktopScheme } from "../electron/t3team-desktopScheme.ts";
+import { readEarlyPackagedBranding } from "./t3team-earlyPackagedBranding.ts";
 
 export interface DesktopPreReadyCommandLineReader {
   readonly hasSwitch: (switchName: string) => boolean;
@@ -34,6 +36,21 @@ function readCommandLineSwitchValue(
   return value.length > 0 ? value : null;
 }
 
+function packagedBrandingFromProcess():
+  | DesktopEarlyElectronStartup.EarlyPackagedBranding
+  | undefined {
+  const resourcesPath =
+    typeof process.resourcesPath === "string" && process.resourcesPath.length > 0
+      ? process.resourcesPath
+      : undefined;
+  return readEarlyPackagedBranding(
+    resourcesPath,
+    (path) => NodeFS.readFileSync(path, "utf8"),
+    (path) => NodeFS.existsSync(path),
+    NodePath.posix.join,
+  );
+}
+
 export const resolveEarlyLinuxElectronOptionsFromProcess = (
   homeDirectory: string,
 ): DesktopEarlyElectronStartup.EarlyLinuxElectronOptions =>
@@ -42,6 +59,7 @@ export const resolveEarlyLinuxElectronOptionsFromProcess = (
     homeDirectory,
     joinPath: NodePath.posix.join,
     readFileString: (path) => NodeFS.readFileSync(path, "utf8"),
+    packagedBranding: packagedBrandingFromProcess(),
   });
 
 export class DesktopPreReadyElectronOptions extends Context.Service<
@@ -82,6 +100,7 @@ export const make = Effect.gen(function* () {
           NodeFS.mkdirSync(NodePath.posix.dirname(path), { recursive: true });
           NodeFS.writeFileSync(path, value, "utf8");
         },
+        packagedBranding: packagedBrandingFromProcess(),
       });
       // The portal also requires a valid desktop entry. An AppImage update may
       // have removed the executable referenced by the previous launch's entry.
@@ -127,7 +146,9 @@ export const make = Effect.gen(function* () {
                   () => linuxDesktopEntryConfig.appImagePath,
                 ),
               ) ?? process.execPath,
-            scheme: ElectronProtocol.getDesktopScheme(linux.isDevelopment),
+            scheme: getDesktopScheme(linux.isDevelopment, {
+              isolatedInstance: linux.isolatedInstance,
+            }),
             ...(iconPath === undefined ? {} : { iconPath }),
           }),
           "utf8",

@@ -111,7 +111,10 @@ export function failDraftCloudQueuedSend(
   messageId: string,
   failureMessage: string,
   retryable: boolean,
-  failure?: { readonly kind: "project_not_resolved"; readonly reason: string | null },
+  failure?: {
+    readonly kind: "project_not_resolved" | "create_failed";
+    readonly reason: string | null;
+  },
 ): void {
   updateDraftCloudQueuedSend(draftId, messageId, (queued) => ({
     ...queued,

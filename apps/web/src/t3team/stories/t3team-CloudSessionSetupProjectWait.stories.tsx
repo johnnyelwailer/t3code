@@ -13,6 +13,7 @@ import {
   type CloudProjectWaitInput,
   classifyCloudProjectWait,
 } from "~/cloud/t3team-cloudProjectWait";
+import { cloudProjectWaitParkedMessage } from "~/cloud/t3team-cloudProjectWaitPresentation";
 import { decodeCloudQueuedSend } from "~/cloud/t3team-cloudQueuedSendModel";
 
 function session(overrides: Partial<CloudSession>): CloudSession {
@@ -100,6 +101,7 @@ function projectStepStory(wait: CloudProjectWait, waitingSeconds: number): Story
       frozenElapsedSeconds: 600 + waitingSeconds,
       frozenNowMs: STORY_PROJECT_STARTED_MS + waitingSeconds * 1000,
       onCancel: () => {},
+      onRestartWait: () => {},
     },
   };
 }
@@ -111,13 +113,13 @@ const LISTED_ELSEWHERE = [
 /** Connected, and the app has not received any project list from the machine yet. */
 export const ProjectWaitingForList: Story = projectStepStory(projectWait({}), 6);
 
-/** The machine lists other projects but not the draft's folder: what is expected, after 40 s. */
+/** The machine lists other projects but not the draft's folder: the status sentence, after 40 s. */
 export const ProjectNotListedExpected: Story = projectStepStory(
   projectWait({ projects: LISTED_ELSEWHERE }),
   40,
 );
 
-/** The same wait after 10 minutes: the unmet condition and a diagnostic to copy. */
+/** The same wait after 10 minutes: Retry, and the diagnostic behind a closed "Details". */
 export const ProjectNotListedSlow: Story = projectStepStory(
   projectWait({ projects: LISTED_ELSEWHERE }),
   637,
@@ -165,3 +167,29 @@ export const ProjectScratchOpening: Story = projectStepStory(
   projectWait({ scratch: true, composer: null }),
   25,
 );
+
+/** The wait ran out: the message is saved, Retry leads and everything else is behind the "⋯". */
+export const ProjectNotResolved: Story = {
+  args: {
+    facts: {
+      session: session({ phase: "ready", elapsedSeconds: 800, detailsUrl: "https://example.test" }),
+      machineConnected: true,
+      delivery: "queued",
+      queued: {
+        ...STORY_QUEUED!,
+        failureMessage: cloudProjectWaitParkedMessage(projectWait({ projects: LISTED_ELSEWHERE })),
+        retryable: true,
+        failureKind: "project_not_resolved",
+        failureReason: "project-not-listed",
+      },
+      sendFailure: cloudProjectWaitParkedMessage(projectWait({ projects: LISTED_ELSEWHERE })),
+    },
+    frozenElapsedSeconds: 800,
+    onCancel: () => {},
+    onRetry: () => {},
+    recoveryActions: [
+      { id: "machine-project", label: "Send in the machine's project", onClick: () => {} },
+      { id: "plain-session", label: "Start a plain session", onClick: () => {} },
+    ],
+  },
+};

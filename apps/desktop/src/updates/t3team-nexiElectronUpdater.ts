@@ -1,10 +1,11 @@
 // @effect-diagnostics nodeBuiltinImport:off - the updater is chosen once, before the Effect runtime has a service for it.
 /**
- * Which electron-updater instance the desktop uses. Upstream builds and every non-live flavor keep
- * electron-updater's own (NsisUpdater on Windows, Squirrel's MacUpdater on a signed Mac build). The
- * live flavor on macOS gets {@link NexiMacUpdater}: Squirrel.Mac rejects the ad hoc signature of our
- * builds. On Windows the stock NsisUpdater stays, and `installDirectory` is never set, so it runs
- * `<installer> --updated /S --force-run` and the installer reuses the existing install location.
+ * Which electron-updater instance the desktop uses. Upstream builds and flavors that do not
+ * replace the installed app (the nightlies) keep electron-updater's own (NsisUpdater on Windows,
+ * Squirrel's MacUpdater on a signed Mac build). The in-place flavors (`live` historically, now
+ * also `stable`) on macOS get {@link NexiMacUpdater}: Squirrel.Mac rejects the ad hoc signature of
+ * our builds. On Windows the stock NsisUpdater stays, and `installDirectory` is never set, so it
+ * runs `<installer> --updated /S --force-run` and the installer reuses the existing install location.
  */
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";

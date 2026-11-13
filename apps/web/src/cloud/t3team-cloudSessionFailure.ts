@@ -5,7 +5,7 @@ import type * as Cause from "effect/Cause";
 import { toastManager } from "~/components/ui/toast";
 
 import { cloudSessionFailureDescription } from "./t3team-cloudSessionFailureDescription";
-import { requestCloudSessionSignIn } from "./t3team-cloudSessionSignIn";
+import { offerCloudSessionSignIn } from "./t3team-cloudSessionSignIn";
 
 /** The title for a create failure nothing more specific is known about. */
 export const CLOUD_SESSION_CREATE_FAILED_TITLE = "Could not start a cloud session.";
@@ -57,10 +57,47 @@ export function cloudSessionCreateFailureToast(result: { readonly cause: Cause.C
 }
 
 /**
- * A create that failed only because gh is not signed in to a host it needs (the session host, or
- * the project's repository host) does not end in a toast: the app signs in to THAT host — the one
- * the failure names — and then `retry` (the same create). Anything else is a toast, as is a
- * sign-in for another host while one is already open.
+ * One line for the setup card: the remedy when we have one, otherwise the description.
+ * The card already titles the failure itself ("Setup didn't finish").
+ */
+export function cloudSessionCreateFailureInline(result: {
+  readonly cause: Cause.Cause<unknown>;
+}): string {
+  const { title, description } = cloudSessionCreateFailureToast(result);
+  if (title === CLOUD_SESSION_CREATE_FAILED_TITLE) return description;
+  return title;
+}
+
+/** The typed reason and GitHub host, when the create failed as a `CloudSessionFailedError`. */
+export function cloudSessionCreateFailureFacts(result: { readonly cause: Cause.Cause<unknown> }): {
+  readonly reason?: string;
+  readonly host?: string;
+} {
+  const failure = squashAtomCommandFailure(result);
+  if (!isCloudSessionFailed(failure)) return {};
+  return {
+    ...(failure.reason === undefined ? {} : { reason: failure.reason }),
+    ...(typeof failure.host === "string" && failure.host !== "" ? { host: failure.host } : {}),
+  };
+}
+
+const SIGN_IN_REASONS: ReadonlySet<string> = new Set([
+  "broker_sign_in_required",
+  "connect_sign_in_required",
+  "unauthorized",
+  "repository_sign_in_required",
+]);
+
+/** True when the next step is for the user to sign in, so the card can offer a Sign-in action. */
+export function isCloudSessionSignInFailure(reason: string | null | undefined): boolean {
+  return reason != null && SIGN_IN_REASONS.has(reason);
+}
+
+/**
+ * A create that failed only because gh is not signed in to a host it needs does not end in a
+ * toast and does not open a dialog: the setup card (or an inline CTA) offers Sign in for THAT
+ * host, and the dialog opens only when the user clicks it (InvNoAutoDialog). Anything else is a
+ * toast, as is a sign-in for another host while one is already open.
  */
 export function reportCloudSessionCreateFailure(
   result: { readonly cause: Cause.Cause<unknown> },
@@ -87,7 +124,7 @@ export function reportCloudSessionCreateFailure(
     isCloudSessionFailed(failure) &&
     (failure.reason === "unauthorized" || failure.reason === "repository_sign_in_required")
   ) {
-    if (requestCloudSessionSignIn(retry, failure.host)) return;
+    if (offerCloudSessionSignIn(retry, failure.host)) return;
   }
   toastManager.add({ type: "error", ...cloudSessionCreateFailureToast(result) });
 }

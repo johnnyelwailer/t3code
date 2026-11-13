@@ -18,7 +18,11 @@ export function formatCloudSetupRemaining(seconds: number): string {
 /** What assistive tech hears: changes with the step, never with the clock. */
 export function cloudSetupAnnouncement(model: CloudSetupModel): string {
   if (model.stage === "ready") return "Your cloud session is ready.";
-  if (model.stage === "failed") return "Cloud session setup failed.";
+  if (model.stage === "failed") {
+    return model.keptWaiting
+      ? "Still setting up. Your message is saved."
+      : "Cloud session setup failed.";
+  }
   // The step list already names the current step; keep the live region short.
   if (model.delivery === "sending") return "Sending your message.";
   return model.activity;
@@ -28,9 +32,12 @@ export function cloudSetupAnnouncement(model: CloudSetupModel): string {
 export function cloudSetupReadyNote(model: CloudSetupModel): string {
   if (model.delivery === "sending") return "Your message is sending.";
   if (model.delivery === "queued") {
-    return model.session?.phase === "ready"
+    if (model.session?.phase !== "ready")
+      return "Your message will send when the session is ready.";
+    // The machine is up but still connecting: "now" would contradict the wait note below.
+    return model.projectWait === null
       ? "Your message will send now."
-      : "Your message will send when the session is ready.";
+      : "Your message sends as soon as the machine is ready.";
   }
   return model.machineConnected
     ? "Everything is in place. Send your first message to start."

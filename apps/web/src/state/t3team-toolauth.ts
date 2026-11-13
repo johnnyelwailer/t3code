@@ -79,9 +79,10 @@ function reportMissingToolAuthEnvironment(label: string, action: string) {
 export function useToolAuthActions(
   meta: ToolAuthToolMeta,
   targetEnvironmentId?: EnvironmentId | null,
-  options?: { readonly hostname?: string | undefined },
+  options?: { readonly hostname?: string | undefined; readonly instanceId?: string | undefined },
 ) {
   const hostname = options?.hostname;
+  const instanceId = options?.instanceId;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const environmentId = resolveToolAuthEnvironmentId(targetEnvironmentId, primaryEnvironmentId);
   const start = useAtomCommand(toolAuthEnvironment.start, { reportFailure: false });
@@ -117,10 +118,14 @@ export function useToolAuthActions(
     return runAction("connect", () =>
       start({
         environmentId,
-        input: { tool: meta.tool, ...(hostname === undefined ? {} : { hostname }) },
+        input: {
+          tool: meta.tool,
+          ...(hostname === undefined ? {} : { hostname }),
+          ...(instanceId === undefined ? {} : { instanceId }),
+        },
       }),
     );
-  }, [environmentId, hostname, meta.label, meta.tool, runAction, start]);
+  }, [environmentId, hostname, instanceId, meta.label, meta.tool, runAction, start]);
 
   /**
    * One click for "install it and sign me in". The server installs, re-probes,

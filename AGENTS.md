@@ -284,4 +284,5 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 
 ## Additional tips
 
+- Hot files and fork-seam rules for the upstream redesign stack: `docs/UPSTREAM-ALIGNMENT.md` — thin hooks only in hot files, logic in `t3team-*` files; run `node scripts/t3team-hot-file-check.mjs` before pushing.
 - Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.

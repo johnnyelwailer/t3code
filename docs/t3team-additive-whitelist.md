@@ -677,3 +677,24 @@ A draft can wait for an environment the catalog does not list yet (a cloud sessi
 ## Composer forwards the ready-provider flag (2026-11-10, #656)
 
 - `apps/web/src/components/chat/useComposerProviderModel.ts` — ChatComposer passes `AGENTS_PREFER_READY_PROVIDER` into this hook, which was dropping it. The hook forwards the flag into `resolveComposerProviderSelection` and omits it when undefined. Claude stays selected in that function; the preference itself stays in `t3team-readyProviderPreference.ts`. Two lines.
+
+## Isolated Nexi Work identity seams (2026-11-13, #918)
+
+Thin hooks so an isolated Nexi Work instance can run next to t3code. All identity logic lives in `t3team-` modules; these files only call those modules or pass an optional field.
+
+- `apps/desktop/src/electron/ElectronProtocol.ts` — registers the `nexi-work` privileged scheme via `isolatedDesktopSchemePrivileges` before Electron is ready. `getDesktopScheme` / `getDesktopUrl` stay the upstream 1-arg forms.
+- `apps/desktop/src/app/DesktopClerk.ts`, `DesktopLegacyLocalStorage.ts`, `DesktopLifecycle.ts`, `DesktopLinuxUrlHandler.ts`, `DesktopPreReadyPlatform.ts` — call `t3team-desktopScheme` (and, for early Linux, `t3team-earlyPackagedBranding`) with `environment.isolatedInstance` or packaged branding. Optional `packagedBranding` on early-settings input is the seam for the isolated home.
+- `apps/desktop/src/app/DesktopEarlyElectronStartup.ts` — optional `packagedBranding` / `appDataDirectory` fields; `resolveEarlyDesktopSettingsPath` and `resolveEarlyLinuxElectronOptions` call `t3team-earlyPackagedBranding`. `resolveLinuxDesktopEntryName` stays the upstream 1-arg form.
+- `apps/desktop/src/app/DesktopCliShim.ts` — optional `isolatedInstance` / `appId` on `renderCliShim`; names, marker and env vars come from `t3team-cliIdentity`.
+- `apps/desktop/src/wsl/DesktopWslEnvironment.ts` — optional `runtimeParent` on the install/prune/invalidate scripts (default `$HOME/.t3/wsl-runtime`); the layer passes `wslRuntimeParentExpression` from `t3team-wslRuntimeParent`.
+- `apps/server/src/cloud/bootService.ts` — optional `BootServiceIdentity` on unit/plist render and the managers, defaulting to `resolveBootServiceIdentity` from `t3team-bootServiceIdentity`.
+- `apps/server/src/cloud/serviceProtection.ts`, `apps/server/src/serverOwnership.ts`, `apps/server/src/cli/update.ts` — read the unit/plist/launchd names from `resolveBootServiceIdentity`.
+- `packages/project-context/src/t3teamProjectStateDir.ts` and its test — thin re-export of `t3team-projectStateDir` (`.agents/nexi` default, lookup order, machine-pointer helpers). The test only asserts the re-export.
+
+## Daily-app home guard (2026-11-13, rc.20)
+
+rc.20 takes over `nexi-work` as the upgrade, but must not run the home or profile takeover or start a second server while the daily Nexi app (`com.t3tools.t3code`, port 3773) is still using that folder. Detection, the quit-and-retry screen, and the retry loop live in `t3team-oldApp*` modules. These upstream files only call those modules.
+
+- `apps/desktop/src/app/DesktopApp.ts` — before `primaryBackend.start`, run `runDesktopHomeGuard`: if the daily app is detected, show the inline quit-and-retry screen and wait for Retry to see it gone; then continue the normal boot. A few lines, already on the whitelist.
+- `apps/desktop/src/app/DesktopUserData.ts` — skip `migrateNexiProfile` when `detectOldAppSync` reports the daily app on the adjacent Nexi home, so the Chromium-profile copy does not run against a live profile. Already on the whitelist.
+- `apps/desktop/src/backend/DesktopBackendConfiguration.ts` — if the daily app still holds the home, do not call `migrateLegacyHomeIfNeeded` and do not write the identity marker. Defense in depth; bootstrap already waits for the home to be free. Already on the whitelist.

@@ -191,7 +191,17 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
   // ONE claim set shared by both flows — see t3team-singleFlight.ts.
   const singleFlight = makeToolSingleFlight();
 
-  const { spawnLoginProcess, start, submitCode, cancel } = makeToolAuthLoginFlow({
+  // Login spawn now needs FileSystem and Path (configured-binary lookup and
+  // PATH+PATHEXT resolution). Capture them here and provide them, so the
+  // public service surface stays `never` and the install flow's
+  // `spawnLoginProcess` type stays satisfied.
+  const provideFsPath = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+    );
+
+  const loginFlow = makeToolAuthLoginFlow({
     ptyAdapter: options.ptyAdapter,
     sessionsRef,
     notifyUpdate,
@@ -203,8 +213,16 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     singleFlight,
     checkBinaryAvailable,
   });
+  const spawnLoginProcess = (
+    tool: string,
+    adapter: Parameters<typeof loginFlow.spawnLoginProcess>[1],
+    account?: Parameters<typeof loginFlow.spawnLoginProcess>[2],
+  ) => provideFsPath(loginFlow.spawnLoginProcess(tool, adapter, account));
+  const start = (tool: string, options?: ToolAuthStartOptions) =>
+    provideFsPath(loginFlow.start(tool, options));
+  const { submitCode, cancel } = loginFlow;
 
-  const { install } = makeToolAuthInstallFlow({
+  const { install: installUnprovided } = makeToolAuthInstallFlow({
     ptyAdapter: options.ptyAdapter,
     sessionsRef,
     notifyUpdate,
@@ -216,6 +234,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     installTimeout,
     singleFlight,
   });
+  const install = (tool: string) => provideFsPath(installUnprovided(tool));
 
   const attachStream = (listener: (event: ToolAuthServiceStreamEvent) => Effect.Effect<void>) =>
     Effect.gen(function* () {

@@ -1,12 +1,11 @@
 import type { GitHubRepositoryCandidate } from "~/t3team/backend/t3team-githubBackendTypes";
-import { parseRepositoryLabel } from "~/t3team/components/t3team-linkedRepositories";
+import { parseRepositoryParts } from "~/t3team/components/t3team-linkedRepositories";
 import type { RepositoryPickerEntry } from "~/t3team/components/t3team-RepositoryPickerRow";
 
 /** A repository only known by its URL (linked or suggested but not in the catalog). */
 export function entryFromUrl(url: string): RepositoryPickerEntry {
-  const label = parseRepositoryLabel(url);
-  const slash = label.indexOf("/");
-  return { url, host: slash < 0 ? label : label.slice(0, slash), name: label.slice(slash + 1) };
+  const { host, name } = parseRepositoryParts(url);
+  return { url, host, name };
 }
 
 /**

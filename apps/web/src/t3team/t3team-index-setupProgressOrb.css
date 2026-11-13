@@ -15,6 +15,9 @@
 .t3team-setup-card[data-state="failed"] .t3team-setup-orb {
   --t3team-setup-orb-color: var(--destructive);
 }
+.t3team-setup-card[data-calm="true"] .t3team-setup-orb {
+  --t3team-setup-orb-color: var(--muted-foreground);
+}
 .t3team-setup-card[data-state="ready"] .t3team-setup-orb {
   --t3team-setup-orb-color: var(--success);
 }
