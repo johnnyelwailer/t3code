@@ -1,11 +1,11 @@
 import {
   DEVCONTAINER_CANDIDATE_PATHS,
-  PROJECT_MACHINE_FILE_PATH,
   ProjectMachineFile,
   RepositoryRelativePath,
   type ProjectMachineDefinition,
   type ProjectMachineRejectedCandidate,
 } from "@t3tools/contracts";
+import { projectMachineFilePathLookupOrder } from "@t3tools/project-context/t3teamProjectStateDir";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -79,18 +79,26 @@ export const scanDefinition = Effect.fn("projectMachine.scanDefinition")(functio
       rejected: [{ repository: input.repository, path: candidatePath, reason: error.reason }],
     } satisfies ProjectMachineScan);
 
-  const pointerRead = yield* read(PROJECT_MACHINE_FILE_PATH).pipe(Effect.result);
-  if (pointerRead._tag === "Failure") {
-    if (pointerRead.failure._tag === "RemoteUnavailable") return yield* pointerRead.failure;
-    return yield* rejectedAt(PROJECT_MACHINE_FILE_PATH)(pointerRead.failure);
+  let pointer: { readonly path: string; readonly contents: string } | null = null;
+  for (const candidatePath of projectMachineFilePathLookupOrder()) {
+    const pointerRead = yield* read(candidatePath).pipe(Effect.result);
+    if (pointerRead._tag === "Failure") {
+      if (pointerRead.failure._tag === "RemoteUnavailable") return yield* pointerRead.failure;
+      return yield* rejectedAt(candidatePath)(pointerRead.failure);
+    }
+    if (pointerRead.success !== null) {
+      pointer = pointerRead.success;
+      break;
+    }
   }
-  const pointer = pointerRead.success;
   if (pointer !== null) {
+    const found = pointer;
+    const pointerPath = found.path;
     return yield* Effect.gen(function* () {
-      const decoded = decodeMachineFile(pointer.contents);
+      const decoded = decodeMachineFile(found.contents);
       if (decoded._tag === "Failure") {
         return yield* new Rejected({
-          reason: `${PROJECT_MACHINE_FILE_PATH} is not a valid machine file.`,
+          reason: `${pointerPath} is not a valid machine file.`,
         });
       }
       const machine = decoded.success;
@@ -100,16 +108,16 @@ export const scanDefinition = Effect.fn("projectMachine.scanDefinition")(functio
           {
             repository: input.repository,
             devcontainerPath: files[0]?.path ?? machine.devcontainer,
-            machineFilePath: PROJECT_MACHINE_FILE_PATH,
+            machineFilePath: pointerPath,
             healthCheck: machine.healthCheck ?? null,
             secrets: machine.secrets ?? [],
-            hash: hashDefinitionFiles([pointer, ...files]),
-            files: [pointer.path, ...files.map((f) => f.path)],
+            hash: hashDefinitionFiles([found, ...files]),
+            files: [found.path, ...files.map((f) => f.path)],
           },
         ],
         rejected: [],
       } satisfies ProjectMachineScan;
-    }).pipe(Effect.catchTags({ Rejected: rejectedAt(PROJECT_MACHINE_FILE_PATH) }));
+    }).pipe(Effect.catchTags({ Rejected: rejectedAt(pointerPath) }));
   }
 
   const nested = yield* input.reader.nestedPaths;

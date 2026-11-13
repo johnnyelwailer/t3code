@@ -1181,6 +1181,8 @@ export interface DesktopBridge {
   /** Reads http(s) media in the main process, outside renderer CORS and CSP; null on network failure. */
   readMedia: (url: string) => Promise<DesktopMediaRead | null>;
   openSystemSettings: (pane: SystemSettingsPane) => Promise<boolean>;
+  /** Opens macOS Privacy & Security. Optional so older mocks still type-check. */
+  openPrivacySecurity?: () => Promise<boolean>;
   checkSystemPermission: (pane: SystemSettingsPane) => Promise<boolean>;
   probeRemoteEditors: () => Promise<readonly EditorId[]>;
   pasteAsText: () => Promise<void>;
@@ -1294,6 +1296,7 @@ export interface LocalApi {
   shell: {
     openExternal: (url: string) => Promise<void>;
     openSystemSettings: (pane: SystemSettingsPane) => Promise<void>;
+    openPrivacySecurity?: () => Promise<void>;
   };
   contextMenu: {
     show: <T extends string>(

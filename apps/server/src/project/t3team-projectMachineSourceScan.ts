@@ -6,6 +6,7 @@
  * @module t3team-projectMachineSourceScan
  */
 import type { ProjectMachineSourceReadout } from "@t3tools/contracts";
+import { projectMachineCheckedLocations } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 
 import { machineRepositoryFromRemote } from "../cloud/t3team-cloudSessionMachineNames.ts";
@@ -17,7 +18,7 @@ import { OWN_REPOSITORY } from "./t3team-projectMachineOwnership.ts";
 
 type ScanRemote = Effect.Success<typeof makeRemoteMachineCache>;
 
-const CHECKED = ".nexi/machine.json, .devcontainer/devcontainer.json and .devcontainer.json";
+const CHECKED = projectMachineCheckedLocations();
 
 /** The user chose a source that is not the project's default; the default scan stays as it was. */
 export function isCustomSource(

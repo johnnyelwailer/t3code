@@ -105,6 +105,26 @@ export function ProjectScopePillsRow({ settings, updateSettings }: T3TeamSetting
   );
 }
 
+export function PrivacySecurityRow() {
+  if (typeof navigator === "undefined") return null;
+  if (!/Mac/i.test(navigator.platform) && !/Mac OS X/i.test(navigator.userAgent)) return null;
+  const open = () => {
+    const opener = window.desktopBridge?.openPrivacySecurity;
+    if (opener) void opener();
+  };
+  return (
+    <SettingsRow
+      {...searchableSetting("privacy-security")}
+      description="Opens System Settings → Privacy & Security so you can allow Nexi Work."
+      control={
+        <Button size="sm" variant="outline" onClick={open}>
+          Open Privacy & Security
+        </Button>
+      }
+    />
+  );
+}
+
 export function AboutLicensesRow() {
   return (
     <SettingsRow
@@ -164,5 +184,14 @@ export const T3TEAM_SETTINGS_ROWS: readonly T3TeamSettingsRow[] = [
     label: "Open source licenses",
     searchTerms: [],
     component: AboutLicensesRow,
+  },
+  {
+    slot: "legal",
+    key: "privacySecurity",
+    anchorId: "privacy-security",
+    to: "/settings/about",
+    label: "Privacy & Security",
+    searchTerms: ["system settings gatekeeper open anyway microphone screen recording"],
+    component: PrivacySecurityRow,
   },
 ];

@@ -4,6 +4,9 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 
+import { migrateNexiProfile } from "../backend/t3team-homeMigration.ts";
+import { detectOldAppSync } from "../backend/t3team-oldAppPresence.ts";
+
 export class DesktopUserDataInitializationError extends Schema.TaggedError<DesktopUserDataInitializationError>()(
   "DesktopUserDataInitializationError",
   {
@@ -39,7 +42,32 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     /** t3team: set for an isolated instance, which owns its Chromium profile and instance lock. */
     readonly isolatedProfileDir?: string | undefined;
   }) {
-    if (input.isolatedProfileDir !== undefined) return input.isolatedProfileDir;
+    if (input.isolatedProfileDir !== undefined) {
+      const path = yield* Path.Path;
+      const adjacentNexiHome = path.dirname(input.isolatedProfileDir);
+      const sharedNames = input.isDevelopment
+        ? (["t3code-dev", "T3 Code (Dev)"] as const)
+        : (["t3code-v2", "T3 Code (Alpha)", "t3code"] as const);
+      // t3team: do not copy a Chromium profile while the daily Nexi app still holds this home.
+      const oldAppRunning = detectOldAppSync({
+        homes: [adjacentNexiHome],
+        join: path.join,
+        selfPids: [process.pid],
+      }).running;
+      if (!oldAppRunning) {
+        for (const name of sharedNames) {
+          migrateNexiProfile({
+            sourceProfileDir: path.join(input.appDataDirectory, name),
+            destinationProfileDir: input.isolatedProfileDir,
+            join: path.join,
+            stamp: "profile",
+            adjacentNexiHome,
+            platform: input.platform,
+          });
+        }
+      }
+      return input.isolatedProfileDir;
+    }
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const names = input.isDevelopment

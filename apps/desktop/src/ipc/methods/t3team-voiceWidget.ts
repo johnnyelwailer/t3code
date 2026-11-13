@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import * as Electron from "electron";
 
 import * as DesktopEnvironment from "../../app/DesktopEnvironment.ts";
-import { getDesktopUrl } from "../../electron/ElectronProtocol.ts";
+import { getDesktopUrl } from "../../electron/t3team-desktopScheme.ts";
 import { microphoneSettingsUrl } from "../../voice/t3team-microphoneSettingsUrl.ts";
 import { getVoiceWidgetService } from "../../voice/t3team-voiceWidgetRuntime.ts";
 import * as IpcChannels from "../channels.ts";
@@ -22,7 +22,9 @@ class MicrophoneSettingsUnavailableError extends Schema.TaggedError<MicrophoneSe
 const widgetService = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   return getVoiceWidgetService({
-    applicationUrl: getDesktopUrl(environment.isDevelopment),
+    applicationUrl: getDesktopUrl(environment.isDevelopment, {
+      isolatedInstance: environment.isolatedInstance,
+    }),
     preloadPath: environment.preloadPath,
   });
 });

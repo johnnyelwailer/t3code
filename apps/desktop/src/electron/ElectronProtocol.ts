@@ -12,6 +12,8 @@ import * as Scope from "effect/Scope";
 
 import * as Electron from "electron";
 
+import { isolatedDesktopSchemePrivileges } from "./t3team-desktopScheme.ts";
+
 export const DESKTOP_HOST = "app";
 const DESKTOP_PRODUCTION_SCHEME = "t3code";
 const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
@@ -132,6 +134,7 @@ function registerDesktopSchemePrivilegesSync(): void {
         stream: true,
       },
     },
+    ...isolatedDesktopSchemePrivileges(),
   ]);
 }
 

@@ -15,7 +15,9 @@ vi.mock("~/t3team/backend/t3team-environmentWorkflowBackend", () => ({
   postToEnvironment: vi.fn(async () => ({})),
 }));
 vi.mock("~/t3team/t3team-contextAttachmentSyncPersist", () => ({
-  persistContextAttachmentPayload: vi.fn(async () => ".nexi/context/misc/p/item/entrypoint.json"),
+  persistContextAttachmentPayload: vi.fn(
+    async () => ".agents/nexi/context/misc/p/item/entrypoint.json",
+  ),
 }));
 
 const SOURCE = "env-local" as EnvironmentId;
@@ -34,7 +36,7 @@ function request(overrides: Partial<AddToChatRequest> = {}): AddToChatRequest {
     payload: async () => ({
       kind: "t3team-directory-bundle",
       dedupeKey: "project-1:PROJ-9:work-item",
-      bundleRootRelativePath: ".nexi/context/PROJ-9",
+      bundleRootRelativePath: ".agents/nexi/context/PROJ-9",
       files: [],
       fileReferences: [],
     }),
@@ -61,7 +63,7 @@ describe("writeContextCache", () => {
       backend: BACKEND,
     });
 
-    expect(path).toBe(".nexi/context/threads/thread-1/project-1-proj-9-work-item.json");
+    expect(path).toBe(".agents/nexi/context/threads/thread-1/project-1-proj-9-work-item.json");
     expect(postToEnvironment).toHaveBeenCalledOnce();
     const [environmentId, route, body] = vi.mocked(postToEnvironment).mock.calls[0]!;
     expect(environmentId).toBe(REMOTE);
@@ -105,7 +107,7 @@ describe("writeContextCache", () => {
       backend: BACKEND,
     });
 
-    expect(path).toBe(".nexi/context/misc/p/item/entrypoint.json");
+    expect(path).toBe(".agents/nexi/context/misc/p/item/entrypoint.json");
     expect(postToEnvironment).not.toHaveBeenCalled();
   });
 
