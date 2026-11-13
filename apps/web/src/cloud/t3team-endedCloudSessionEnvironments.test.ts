@@ -6,7 +6,10 @@ import {
 import { type CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { endedCloudSessionEnvironmentIds } from "./t3team-endedCloudSessionEnvironments";
+import {
+  endedCloudSessionEnvironmentIds,
+  isThreadCloudSessionEnded,
+} from "./t3team-endedCloudSessionEnvironments";
 
 const saved = (environmentId: string, target: ConnectionCatalogEntry["target"]) => ({
   environmentId: EnvironmentId.make(environmentId),
@@ -62,5 +65,66 @@ describe("endedCloudSessionEnvironmentIds", () => {
       }),
     );
     expect(endedCloudSessionEnvironmentIds([laptop], [session("s1", "cancelled")]).size).toBe(0);
+  });
+});
+
+describe("isThreadCloudSessionEnded", () => {
+  const env = EnvironmentId.make("env-stopped");
+  const entry = broker("env-stopped", "s-stopped").entry;
+  const stopped = [session("s-stopped", "stopped")];
+
+  it("is ended when the supervisor already parked on session_ended, even with no session list", () => {
+    expect(
+      isThreadCloudSessionEnded({
+        parkedOnSessionEnded: true,
+        environmentId: env,
+        entry: null,
+        sessions: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("is ended when the session list says this environment's session stopped, even if the last failure still looks like a refused sign-in", () => {
+    expect(
+      isThreadCloudSessionEnded({
+        parkedOnSessionEnded: false,
+        environmentId: env,
+        entry,
+        sessions: stopped,
+      }),
+    ).toBe(true);
+  });
+
+  it("is not ended when the session is only offline, or missing from a bounded list", () => {
+    expect(
+      isThreadCloudSessionEnded({
+        parkedOnSessionEnded: false,
+        environmentId: env,
+        entry,
+        sessions: [session("s-stopped", "ready")],
+      }),
+    ).toBe(false);
+    expect(
+      isThreadCloudSessionEnded({
+        parkedOnSessionEnded: false,
+        environmentId: env,
+        entry,
+        sessions: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("is not ended while a new live session already serves the workspace", () => {
+    expect(
+      isThreadCloudSessionEnded({
+        parkedOnSessionEnded: false,
+        environmentId: env,
+        entry,
+        sessions: [
+          session("s-stopped", "stopped"),
+          { ...session("s-next", "ready"), environmentId: "env-stopped" } as CloudSession,
+        ],
+      }),
+    ).toBe(false);
   });
 });

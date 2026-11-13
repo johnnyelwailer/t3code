@@ -8,12 +8,12 @@ import { useServerConfig } from "~/t3team/t3team-serverState";
 import { readServerFeatureFlagOr } from "~/t3team/t3team-useFeatureFlag";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import { useEnvironments } from "~/state/environments";
+import { applyCloudSessionCreateFailure } from "~/cloud/t3team-applyCloudSessionCreateFailure";
 import { getCloudSessionLocal } from "~/cloud/t3team-cloudSessionLocalStore";
 import {
   beginCloudSessionCreate,
   clearCloudSessionTarget,
   type CloudSessionCreateOptions,
-  failCloudSessionCreate,
   resolveCloudSessionCreating,
   selectCloudSessionTarget,
   useCloudSessionTarget,
@@ -173,7 +173,11 @@ export function useT3TeamRunOnCloudSessionProps(
           onCreate(
             cloudSessionProject?.projectId,
             scopeKey !== null && options?.selectAsTarget !== false
-              ? { onFailed: () => failCloudSessionCreate(scopeKey) }
+              ? {
+                  // A first message waiting on this create must leave "Queued" at once, with
+                  // the reason and Retry on the card; skip the toast so it is not also shouted.
+                  onFailed: (result) => applyCloudSessionCreateFailure(scopeKey, result),
+                }
               : undefined,
           ),
       ),

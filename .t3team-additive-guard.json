@@ -873,6 +873,7 @@
     "apps/server/src/serverOwnership.ts",
     "packages/project-context/src/t3teamProjectStateDir.ts",
     "packages/project-context/src/t3teamProjectStateDir.test.ts",
+    ".github/workflows/pr-size.yml",
     "apps/web/src/components/chat/threadDetailsItems.ts",
     "apps/web/src/components/chat/threadDetailsItems.test.ts"
   ],
@@ -972,7 +973,8 @@
     "scripts/setup-git-hooks.mjs",
     "t3team-additive-guard.mjs",
     "apps/web/src/t3team/packs/t3team-kit-fixture-pack/distribution.json",
-    "apps/web/src/t3team/packs/t3team-kit-fixture-pack/pack.json"
+    "apps/web/src/t3team/packs/t3team-kit-fixture-pack/pack.json",
+    "docs/UPSTREAM-ALIGNMENT.md"
   ],
   "baseRef": "upstream/main",
   "forkBaselineRef": "t3team/fork-baseline-20261102b",

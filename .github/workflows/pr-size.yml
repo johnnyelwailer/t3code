@@ -293,3 +293,64 @@ jobs:
             core.info(
               `PR #${issueNumber}: ${nonTestChangedLines} non-test lines, ${testChangedLines} test lines, ${changedLines} effective lines -> ${nextLabelName} (${classification})`,
             );
+
+            // t3team hot-file warning: surfaces large additions to files the upstream
+            // redesign stack (#28839..#28845) rewrites. WARNING ONLY — never fails the build.
+            // The list is data-only (paths + a threshold); it is read from the base checkout,
+            // or from the PR head as passive git data before it lands on the base.
+            let hotFileConfig = null;
+            try {
+              hotFileConfig = JSON.parse(
+                require("node:fs").readFileSync(
+                  require("node:path").join(process.cwd(), "scripts/t3team-hot-files.json"),
+                  "utf8",
+                ),
+              );
+            } catch {
+              try {
+                hotFileConfig = JSON.parse(
+                  execFileSync(
+                    "git",
+                    ["show", `${resolvedHeadSha}:scripts/t3team-hot-files.json`],
+                    { encoding: "utf8" },
+                  ),
+                );
+              } catch {
+                hotFileConfig = null;
+              }
+            }
+            if (hotFileConfig?.files?.length) {
+              const hotNumstat = execFileSync(
+                "git",
+                [...diffArgs],
+                { encoding: "utf8" },
+              );
+              const hotHits = new Map();
+              for (const line of hotNumstat.split("\n")) {
+                if (!line.trim()) continue;
+                const [additionsRaw, , pathRaw] = line.split("\t");
+                const additions =
+                  additionsRaw === "-" ? 0 : Number.parseInt(additionsRaw, 10) || 0;
+                if (!pathRaw || additions === 0) continue;
+                const paths = pathRaw.includes(" => ")
+                  ? pathRaw.split(" => ").map((part) => part.trim())
+                  : [pathRaw];
+                for (const path of paths) {
+                  if (hotFileConfig.files.includes(path)) {
+                    hotHits.set(path, (hotHits.get(path) ?? 0) + additions);
+                  }
+                }
+              }
+              const threshold = hotFileConfig.thresholdAddedLines ?? 30;
+              const over = [...hotHits.entries()].filter(([, added]) => added > threshold);
+              for (const [path, added] of over) {
+                core.warning(
+                  `t3team hot-file: ${path} gains ${added} lines (> ${threshold}). Hot files take thin hooks only — move new logic into a t3team-* file (docs/UPSTREAM-ALIGNMENT.md).`,
+                );
+              }
+              core.info(
+                over.length === 0
+                  ? `t3team hot-file: ok (${hotHits.size} hot files touched, all within the ${threshold}-line added-lines budget).`
+                  : `t3team hot-file: ${over.length} of ${hotHits.size} touched hot file(s) exceed the ${threshold}-line added-lines budget.`,
+              );
+            }
