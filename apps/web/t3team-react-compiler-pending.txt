@@ -41,6 +41,7 @@ apps/web/src/components/settings/ConnectionsSettings.tsx
 apps/web/src/components/settings/t3team-AgentInstructionsSetting.tsx
 apps/web/src/components/settings/t3team-ResourcePressurePanel.tsx
 apps/web/src/components/settings/t3team-ToolAuthCard.tsx
+apps/web/src/components/settings/t3team-VoiceHotkeySettingRow.tsx
 apps/web/src/components/settings/t3team-useJiraAccountStatuses.ts
 apps/web/src/components/sidebar/t3team-SidebarProjectScopePicker.tsx
 apps/web/src/components/sidebar/t3team-SidebarProjectScopePills.tsx
@@ -146,6 +147,7 @@ apps/web/src/t3team/hooks/t3team-useHydrateThreadPlacements.ts
 apps/web/src/t3team/hooks/t3team-useHydrateThreadPlacementsEffect.test.tsx
 apps/web/src/t3team/hooks/t3team-useJiraProjectCatalog.ts
 apps/web/src/t3team/hooks/t3team-useJiraProjectCatalogState.ts
+apps/web/src/t3team/hooks/t3team-useLatest.ts
 apps/web/src/t3team/hooks/t3team-useLinkedRepositoryBranches.ts
 apps/web/src/t3team/hooks/t3team-useLinkedRepositorySelection.test.tsx
 apps/web/src/t3team/hooks/t3team-useLinkedRepositorySelection.ts
@@ -309,6 +311,15 @@ apps/web/src/t3team/t3team-useScratchHomeChat.ts
 apps/web/src/t3team/t3team-useThreadResourceCleanup.ts
 apps/web/src/t3team/t3team-useTicketKickoffInjectedContextAttachments.ts
 apps/web/src/t3team/t3team-useUpstreamRouteBridge.ts
+apps/web/src/t3team/voice/surface/t3team-VoiceClock.tsx
+apps/web/src/t3team/voice/surface/t3team-VoiceTranscript.tsx
+apps/web/src/t3team/voice/surface/t3team-useExpandPresence.ts
+apps/web/src/t3team/voice/surface/t3team-useVoiceUiPublisher.ts
+apps/web/src/t3team/voice/t3team-DesktopVoiceSession.tsx
+apps/web/src/t3team/voice/t3team-VoiceComposerDock.tsx
+apps/web/src/t3team/voice/t3team-VoiceWidgetStage.tsx
+apps/web/src/t3team/voice/t3team-WebVoiceSession.tsx
+apps/web/src/t3team/voice/t3team-useVoiceCommit.ts
 apps/web/src/t3team/workitem/adf/t3team-AdfMediaNodes.tsx
 apps/web/src/t3team/workitem/adf/t3team-AdfRenderer.tsx
 apps/web/src/t3team/workitem/adf/t3team-AdfTableNodes.tsx
@@ -337,13 +348,3 @@ apps/web/src/t3team/workitem/t3team-useWorkItemFieldDraftAccept.test.tsx
 apps/web/src/t3team/workitem/t3team-useWorkItemFieldMutation.test.tsx
 apps/web/src/t3team/workitem/t3team-useWorkItemFieldMutation.ts
 apps/web/src/t3team/workitem/t3team-useWorkItemLayoutMode.ts
-apps/web/src/components/settings/t3team-VoiceHotkeySettingRow.tsx
-apps/web/src/t3team/voice/surface/t3team-VoiceClock.tsx
-apps/web/src/t3team/voice/surface/t3team-VoiceTranscript.tsx
-apps/web/src/t3team/voice/surface/t3team-useExpandPresence.ts
-apps/web/src/t3team/voice/surface/t3team-useVoiceUiPublisher.ts
-apps/web/src/t3team/voice/t3team-DesktopVoiceSession.tsx
-apps/web/src/t3team/voice/t3team-VoiceComposerDock.tsx
-apps/web/src/t3team/voice/t3team-VoiceWidgetStage.tsx
-apps/web/src/t3team/voice/t3team-WebVoiceSession.tsx
-apps/web/src/t3team/voice/t3team-useVoiceCommit.ts

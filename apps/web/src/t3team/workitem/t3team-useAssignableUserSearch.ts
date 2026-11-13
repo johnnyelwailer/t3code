@@ -1,4 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
+import { useLatest } from "~/t3team/hooks/t3team-useLatest";
 
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
 import { useDebouncedValue } from "~/t3team/workitem/t3team-useDebouncedValue";
@@ -19,6 +20,7 @@ export function useAssignableUserSearch(input: {
   readonly onClose: () => void;
 }) {
   const { search, open, onSelect, onClose } = input;
+  const searchRef = useLatest(search);
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 250);
   const [results, setResults] = useState<ReadonlyArray<AtlassianAssignableUser>>([]);
@@ -32,7 +34,7 @@ export function useAssignableUserSearch(input: {
     setSearchLoading(true);
     setSearchError(null);
 
-    search(debouncedQuery.trim() || undefined)
+    searchRef.current(debouncedQuery.trim() || undefined)
       .then((users) => {
         if (cancelled) return;
         setResults(users);
@@ -48,7 +50,7 @@ export function useAssignableUserSearch(input: {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, open, search]);
+  }, [debouncedQuery, open, searchRef]);
 
   function handleQueryKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useLatest } from "./t3team-useLatest";
 import { AsyncResult } from "effect/reactivity";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { sourceControlEnvironment } from "~/state/sourceControl";
@@ -40,8 +41,7 @@ export function useGitHubAuthProbe(params: {
     setGithubAccount,
     setAuthenticatedHosts,
   } = params;
-  const onAuthenticatedRef = useRef(onAuthenticated);
-  onAuthenticatedRef.current = onAuthenticated;
+  const onAuthenticatedRef = useLatest(onAuthenticated);
 
   const environmentId = usePrimaryEnvironmentId();
   // A probe runs on mount and on Recheck, both asking because gh may have changed since: the
@@ -50,14 +50,13 @@ export function useGitHubAuthProbe(params: {
     reportFailure: false,
     refresh: true,
   });
-  // The runner's identity is not stable from this uncompiled hook (inline options, compiler
-  // pending). A dep on it retriggers the probe on every render; the effect setStates
-  // (setLoadingAuth, onAuthenticated → setCatalog), which re-renders, which retriggers —
-  // a tight loop that pegs the renderer while Add stays on "Adding…".
-  const discoverSourceControlRef = useRef(discoverSourceControl);
-  discoverSourceControlRef.current = discoverSourceControl;
+  // The runner's identity is not stable from this uncompiled hook (inline options). A dep
+  // on the runner retriggers the probe on every render; the effect setStates, which
+  // re-renders, which retriggers — a tight loop that freezes the window. Hold the runner
+  // in a latest-ref (stable object) and list the ref, not the runner, in the deps.
+  const discoverSourceControlRef = useLatest(discoverSourceControl);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps GitHub auth and the repository catalog in step with gh, once per mount or Recheck, not on every render
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps GitHub auth and the catalog in step with gh, once per mount or Recheck, not on every render
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -69,58 +68,62 @@ export function useGitHubAuthProbe(params: {
             setAuthStatus("unknown");
             setAuthDetail("Server environment is unavailable.");
           }
-          return;
-        }
-        const discoveryResult = await discoverSourceControlRef.current({
-          environmentId,
-          input: {},
-        });
-        if (AsyncResult.isFailure(discoveryResult)) {
-          if (!cancelled) {
-            setAuthStatus("unknown");
-            setAuthDetail("Failed to inspect GitHub auth.");
-          }
-          return;
-        }
-        const discovery = discoveryResult.value;
-        if (cancelled) return;
-        const auth = parseGitHubAuth(discovery);
-        writeIntegrationCache("github:auth", {
-          githubHost: auth.host ?? "github.com",
-          ...(auth.account ? { githubAccount: auth.account } : {}),
-          authStatus: auth.status,
-          ...(auth.detail ? { authDetail: auth.detail } : {}),
-          accounts: auth.accounts,
-        });
-        setAuthStatus(auth.status);
-        setAuthDetail(auth.detail);
-        setGithubHost(auth.host ?? "github.com");
-        setGithubAccount(auth.account);
-        setAuthenticatedHosts(auth.accounts);
-        if (auth.status === "authenticated" || auth.accounts.length > 0) {
-          await onAuthenticatedRef.current({
-            host: auth.host ?? "github.com",
-            account: auth.account,
-            accounts: auth.accounts,
+        } else {
+          const discoveryResult = await discoverSourceControlRef.current({
+            environmentId,
+            input: {},
           });
+          if (AsyncResult.isFailure(discoveryResult)) {
+            if (!cancelled) {
+              setAuthStatus("unknown");
+              setAuthDetail("Failed to inspect GitHub auth.");
+            }
+          } else {
+            const discovery = discoveryResult.value;
+            if (!cancelled) {
+              const auth = parseGitHubAuth(discovery);
+              writeIntegrationCache("github:auth", {
+                githubHost: auth.host ?? "github.com",
+                ...(auth.account ? { githubAccount: auth.account } : {}),
+                authStatus: auth.status,
+                ...(auth.detail ? { authDetail: auth.detail } : {}),
+                accounts: auth.accounts,
+              });
+              setAuthStatus(auth.status);
+              setAuthDetail(auth.detail);
+              setGithubHost(auth.host ?? "github.com");
+              setGithubAccount(auth.account);
+              setAuthenticatedHosts(auth.accounts);
+              if (auth.status === "authenticated" || auth.accounts.length > 0) {
+                await onAuthenticatedRef.current({
+                  host: auth.host ?? "github.com",
+                  account: auth.account,
+                  accounts: auth.accounts,
+                });
+              }
+            }
+          }
         }
       } catch (error) {
         if (!cancelled) {
           setAuthStatus("unknown");
           setAuthDetail(error instanceof Error ? error.message : "Failed to inspect GitHub auth.");
         }
-      } finally {
-        if (!cancelled) setLoadingAuth(false);
       }
+      // No `finally`: the compiler cannot lower try/finally. This runs on every path,
+      // including the catch, which is what the finally used to do.
+      if (!cancelled) setLoadingAuth(false);
     };
     void run();
     return () => {
       cancelled = true;
     };
   }, [
-    // discoverSourceControl is read from a ref: a dep on it would restore the render loop.
+    discoverSourceControlRef,
     enabled,
     environmentId,
+    onAuthenticatedRef,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Recheck token: changing it re-runs the probe on purpose; the effect does not read the key
     refreshKey,
     setAuthDetail,
     setAuthStatus,

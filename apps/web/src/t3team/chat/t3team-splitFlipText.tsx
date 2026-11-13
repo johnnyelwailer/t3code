@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLatest } from "~/t3team/hooks/t3team-useLatest";
 
 /**
  * SplitFlipText — the production 3D status roll as a reusable primitive.
@@ -36,10 +37,12 @@ export function SplitFlipText({
 }) {
   const [shown, setShown] = useState(text);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
+  const shouldFlipRef = useLatest(shouldFlip);
+  const onPhaseChangeRef = useLatest(onPhaseChange);
 
   useEffect(() => {
-    onPhaseChange?.(phase);
-  }, [phase]);
+    onPhaseChangeRef.current?.(phase);
+  }, [onPhaseChangeRef, phase]);
 
   useEffect(() => {
     if (text === shown) {
@@ -48,14 +51,14 @@ export function SplitFlipText({
       if (phase !== "in") setPhase("idle");
       return;
     }
-    if (shouldFlip && !shouldFlip(shown, text)) {
+    if (shouldFlipRef.current && !shouldFlipRef.current(shown, text)) {
       if (phase === "idle") setShown(text); // quiet swap, no roll
       // Mid-roll: let the current roll settle; the effect re-runs when
       // the phase returns to idle and picks the new text up then.
       return;
     }
     if (phase === "idle") setPhase("out");
-  }, [text, shown, phase, shouldFlip]);
+  }, [text, shown, phase, shouldFlipRef]);
 
   useEffect(() => {
     if (phase === "out") {

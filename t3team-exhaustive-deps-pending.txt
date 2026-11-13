@@ -1,0 +1,50 @@
+# Pre-existing t3team exhaustive-deps violations, justified until each file is cleaned.
+# This list may only shrink (t3team-exhaustive-deps-ratchet.test.mjs). New t3team code
+# is not exempt: react/exhaustive-effect-dependencies and react-hooks/exhaustive-deps
+# are errors. Hold unstable callbacks in useLatest / useLatestCallback instead of
+# listing them in an effect that sets state.
+apps/web/src/t3team/chat/t3team-activeAgentsStepLabel.tsx
+apps/web/src/t3team/chat/t3team-activeWorkflowDock.tsx
+apps/web/src/t3team/chat/t3team-useThreadBootstrap.ts
+apps/web/src/t3team/chat/t3team-useWidgetBlockController.ts
+apps/web/src/t3team/components/media/t3team-ImageLightbox.tsx
+apps/web/src/t3team/components/t3team-LinkedRepositoryBranchControl.tsx
+apps/web/src/t3team/components/t3team-ProjectAvatar.tsx
+apps/web/src/t3team/components/t3team-ProjectSidebarThreadRow-rowItem.tsx
+apps/web/src/t3team/composer/t3team-useKickoffComposerMenu.ts
+apps/web/src/t3team/hooks/t3team-useHydratePinnedSidebarItems.ts
+apps/web/src/t3team/hooks/t3team-useHydrateThreadPlacements.ts
+apps/web/src/t3team/hooks/t3team-usePersistedRouteState.ts
+apps/web/src/t3team/hooks/t3team-useProjectBacklogLoader.ts
+apps/web/src/t3team/hooks/t3team-useProjectBacklogTableGroupState.ts
+apps/web/src/t3team/hooks/t3team-useProjectIssues.ts
+apps/web/src/t3team/hooks/t3team-useProjectMyWork.ts
+apps/web/src/t3team/hooks/t3team-useProjectStore-syncEffects.ts
+apps/web/src/t3team/hooks/t3team-useSidecarComposition.ts
+apps/web/src/t3team/hooks/t3team-useTicketAgentContext.ts
+apps/web/src/t3team/hooks/t3team-useTicketDetail.ts
+apps/web/src/t3team/mywork-digest/t3team-useMyWorkDigestGraph.ts
+apps/web/src/t3team/outbox/t3team-useOutboxDrain.ts
+apps/web/src/t3team/outbox/t3team-useOutboxSend.ts
+apps/web/src/t3team/planning-space/t3team-planningSpaceEngineEffects.ts
+apps/web/src/t3team/planning-space/t3team-planningSpacePointerEffect.ts
+apps/web/src/t3team/planning-space/t3team-usePlanningSpaceController.ts
+apps/web/src/t3team/planning-space/t3team-usePlanningSpaceControllerRefs.ts
+apps/web/src/t3team/t3team-OpenExistingProjectRedirect.tsx
+apps/web/src/t3team/t3team-ProjectDashboardBacklogView.tsx
+apps/web/src/t3team/t3team-ProjectDashboardKickoffAside.tsx
+apps/web/src/t3team/t3team-ResizableRightSidebarLayout.tsx
+apps/web/src/t3team/t3team-TicketDetailKickoffAside.tsx
+apps/web/src/t3team/t3team-TicketKickoffComposer.tsx
+apps/web/src/t3team/t3team-serverState.ts
+apps/web/src/t3team/t3team-sidecarRecipes.ts
+apps/web/src/t3team/t3team-useBundledSidecarRecipeLaunch.ts
+apps/web/src/t3team/t3team-useKanbanZoomGesture.ts
+apps/web/src/t3team/t3team-useKickoffWorkItemRef.ts
+apps/web/src/t3team/t3team-useProjectBacklogTableRowDraft.ts
+apps/web/src/t3team/voice/surface/t3team-VoiceTranscript.tsx
+apps/web/src/t3team/voice/surface/t3team-useVoiceCanvas.ts
+apps/web/src/t3team/voice/surface/t3team-useVoiceUiPublisher.ts
+apps/web/src/t3team/workitem/adf/t3team-AdfRenderer.tsx
+packages/shared/src/t3team-voiceInputUi/t3team-useVoiceInput.ts
+packages/shared/src/t3team-voiceInputUi/t3team-useVoiceInputControls.ts

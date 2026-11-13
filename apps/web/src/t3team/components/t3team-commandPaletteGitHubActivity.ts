@@ -1,6 +1,7 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { AsyncResult } from "effect/reactivity";
 import { useEffect, useState } from "react";
+import { useLatest } from "~/t3team/hooks/t3team-useLatest";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { sourceControlEnvironment } from "~/state/sourceControl";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
@@ -45,6 +46,9 @@ export function useCommandPaletteGitHubActivity(
   const discoverSourceControl = useAtomQueryRunner(sourceControlEnvironment.discovery, {
     reportFailure: false,
   });
+  // Same runner as the add-project freeze: a new identity every render. Hold it in a
+  // latest-ref and omit it from the effect deps.
+  const discoverSourceControlRef = useLatest(discoverSourceControl);
   const [githubActivityItems, setGitHubActivityItems] = useState<
     ReadonlyArray<ProjectGitHubActivitySearchItem>
   >([]);
@@ -76,7 +80,7 @@ export function useCommandPaletteGitHubActivity(
 
       let host = cached?.host ?? "github.com";
       if (environmentId !== null) {
-        const discoveryResult = await discoverSourceControl({
+        const discoveryResult = await discoverSourceControlRef.current({
           environmentId,
           input: {},
         });
@@ -133,7 +137,7 @@ export function useCommandPaletteGitHubActivity(
     return () => {
       cancelled = true;
     };
-  }, [backend, discoverSourceControl, enabled, environmentId, open, projects]);
+  }, [backend, discoverSourceControlRef, enabled, environmentId, open, projects]);
 
   return githubActivityItems;
 }

@@ -1,5 +1,6 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { useDeferredValue, useEffect, useState } from "react";
+import { useLatest } from "~/t3team/hooks/t3team-useLatest";
 import { UserPlus } from "lucide-react";
 
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
@@ -33,6 +34,7 @@ export function ProjectBacklogRowAssigneeCell({
   const [assigneeLoading, setAssigneeLoading] = useState(false);
   const [assigneeError, setAssigneeError] = useState<unknown>(null);
   const deferredAssigneeQuery = useDeferredValue(assigneeQuery);
+  const onSearchAssignableUsersRef = useLatest(onSearchAssignableUsers);
 
   useEffect(() => {
     if (!assigneeOpen) return;
@@ -40,7 +42,7 @@ export function ProjectBacklogRowAssigneeCell({
     setAssigneeLoading(true);
     setAssigneeError(null);
 
-    void onSearchAssignableUsers(ticket, deferredAssigneeQuery)
+    void onSearchAssignableUsersRef.current(ticket, deferredAssigneeQuery)
       .then((users) => {
         if (cancelled) return;
         setAssignableUsers(users);
@@ -57,7 +59,7 @@ export function ProjectBacklogRowAssigneeCell({
     return () => {
       cancelled = true;
     };
-  }, [assigneeOpen, deferredAssigneeQuery, onSearchAssignableUsers, ticket]);
+  }, [assigneeOpen, deferredAssigneeQuery, onSearchAssignableUsersRef, ticket]);
 
   const resolvedAssigneeLabel = ticket.assignee ?? "Unassigned";
 
