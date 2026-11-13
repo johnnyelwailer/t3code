@@ -216,6 +216,9 @@ import {
 import {
   CloudSessionCancelInputSchema,
   CloudSessionCreateInputSchema,
+  CloudSessionDeleteInfoSchema,
+  CloudSessionDeleteInputSchema,
+  CloudSessionDeleteResultSchema,
   CloudSessionFailedError,
   CloudSessionListResultSchema,
   CloudSessionSchema,
@@ -638,6 +641,8 @@ export const WS_METHODS = {
   cloudSessionList: "cloud.session.list",
   cloudSessionCreate: "cloud.session.create",
   cloudSessionCancel: "cloud.session.cancel",
+  cloudSessionDelete: "cloud.session.delete",
+  cloudSessionDeleteInfo: "cloud.session.deleteInfo",
   projectMachineDiscover: "cloud.projectMachine.discover",
   projectMachineSetSource: "cloud.projectMachine.setSource",
 
@@ -1158,6 +1163,18 @@ const WsCloudSessionCreateRpc = Rpc.make(WS_METHODS.cloudSessionCreate, {
 const WsCloudSessionCancelRpc = Rpc.make(WS_METHODS.cloudSessionCancel, {
   payload: CloudSessionCancelInputSchema,
   success: Schema.Void,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionDeleteRpc = Rpc.make(WS_METHODS.cloudSessionDelete, {
+  payload: CloudSessionDeleteInputSchema,
+  success: CloudSessionDeleteResultSchema,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionDeleteInfoRpc = Rpc.make(WS_METHODS.cloudSessionDeleteInfo, {
+  payload: CloudSessionDeleteInputSchema,
+  success: CloudSessionDeleteInfoSchema,
   error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
 });
 
@@ -2361,6 +2378,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsCloudSessionListRpc,
   WsCloudSessionCreateRpc,
   WsCloudSessionCancelRpc,
+  WsCloudSessionDeleteRpc,
+  WsCloudSessionDeleteInfoRpc,
   WsProjectMachineDiscoverRpc,
   WsProjectMachineSetSourceRpc,
   WsPullRequestsListRpc,

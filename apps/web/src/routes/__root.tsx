@@ -22,6 +22,7 @@ import { AddProjectToMachineDialogHost } from "../components/AddProjectToMachine
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { DevReplayHost } from "../components/DevReplayHost";
 import { FirstRunGate } from "../components/onboarding/FirstRunGate";
+import { useNexiWelcomeEnabled } from "../t3team/welcome/t3team-useNexiWelcomeEnabled";
 import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
@@ -169,6 +170,8 @@ function RootRouteBranch() {
   const primaryEnvironmentAuthenticated = authGateState.status === "authenticated";
   // A sync IPC read; the setting only changes across a relaunch.
   const [localEnvironmentDisabled] = useState(isLocalEnvironmentDisabled);
+  // t3team: the Nexi welcome page owns the whole window; upstream's wizard sits beside the sidebar.
+  const nexiWelcome = useNexiWelcomeEnabled();
   // Once true, stays true: a visit to /welcome means the bootstrap already chose a route.
   const [returningFromWelcome, setReturningFromWelcome] = useState(pathname === "/welcome");
   if (pathname === "/welcome" && !returningFromWelcome) setReturningFromWelcome(true);
@@ -204,9 +207,13 @@ function RootRouteBranch() {
         <CloudSessionSignInDialogHost />
         <GuestShareDialogHost />
         <CommandPalette>
-          <AppSidebarLayout>
+          {nexiWelcome ? (
             <Outlet />
-          </AppSidebarLayout>
+          ) : (
+            <AppSidebarLayout>
+              <Outlet />
+            </AppSidebarLayout>
+          )}
         </CommandPalette>
       </>
     );

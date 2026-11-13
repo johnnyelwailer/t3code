@@ -14,7 +14,7 @@ import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
-export const EnvironmentAppearance = Schema.Struct({
+const EnvironmentAppearanceFields = {
   themeId: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
   productName: Schema.optionalKey(TrimmedNonEmptyString),
@@ -58,6 +58,16 @@ export const EnvironmentAppearance = Schema.Struct({
       glassOpacity: Schema.optionalKey(Schema.Number),
     }),
   ),
+};
+
+/** A pack theme the user can switch to; it carries no alternates of its own. */
+export const EnvironmentAlternateAppearance = Schema.Struct(EnvironmentAppearanceFields);
+export type EnvironmentAlternateAppearance = typeof EnvironmentAlternateAppearance.Type;
+
+export const EnvironmentAppearance = Schema.Struct({
+  ...EnvironmentAppearanceFields,
+  /** Further selectable themes of the distribution; the fields above are its default theme. */
+  alternates: Schema.optionalKey(Schema.Array(EnvironmentAlternateAppearance)),
 });
 export type EnvironmentAppearance = typeof EnvironmentAppearance.Type;
 

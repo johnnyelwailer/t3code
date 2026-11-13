@@ -1,11 +1,12 @@
-import { LoaderCircleIcon, MicIcon, SquareIcon } from "lucide-react";
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 
 import { toastManager } from "~/components/ui/toast";
-import { Button } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useDesktopVoiceInput } from "~/voice/t3team-useDesktopVoiceInput";
 import { voicePreparingLabel } from "~/voice/t3team-voiceModelProgress";
+import {
+  DesktopComposerVoiceControl,
+  dictationGhostText,
+} from "./t3team-DesktopComposerVoiceControl";
 import { voiceStreamStatusText } from "./t3team-voiceStreamStatusText";
 
 export interface DesktopVoiceInputHandle {
@@ -31,7 +32,7 @@ export function DesktopComposerVoiceInput({
   readonly className?: string;
   readonly ref?: Ref<DesktopVoiceInputHandle>;
 }) {
-  const { available, state, downloadPercent, stream, toggle } = useDesktopVoiceInput(
+  const { available, state, downloadPercent, stream, toggle, cancel } = useDesktopVoiceInput(
     onTranscript,
     (message) => toastManager.add({ type: "error", title: "Voice input", description: message }),
     sessionKey,
@@ -42,8 +43,9 @@ export function DesktopComposerVoiceInput({
   useEffect(() => {
     onPartialRef.current = onPartial;
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes the ghost into the ProseMirror view
   useEffect(() => {
-    onPartialRef.current?.(phase === "recording" ? stream.partial : "");
+    onPartialRef.current?.(dictationGhostText(phase, stream.partial));
   }, [phase, stream.partial]);
 
   useEffect(() => {
@@ -53,43 +55,23 @@ export function DesktopComposerVoiceInput({
   }, [phase, error]);
 
   if (!available) return null;
-  const busy = phase === "preparing" || phase === "transcribing";
   const label =
-    phase === "recording"
-      ? "Stop recording"
-      : phase === "preparing"
-        ? voicePreparingLabel(downloadPercent)
-        : phase === "transcribing"
-          ? "Transcribing"
-          : "Dictate";
+    phase === "preparing"
+      ? voicePreparingLabel(downloadPercent)
+      : phase === "transcribing"
+        ? "Transcribing"
+        : "Dictate";
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className={className}
-              disabled={disabled || busy}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={toggle}
-              aria-label={label}
-            />
-          }
-        >
-          {busy ? (
-            <LoaderCircleIcon className="animate-spin" />
-          ) : phase === "recording" ? (
-            <SquareIcon className="fill-current text-destructive" />
-          ) : (
-            <MicIcon />
-          )}
-        </TooltipTrigger>
-        <TooltipPopup>{label}</TooltipPopup>
-      </Tooltip>
+      <DesktopComposerVoiceControl
+        phase={phase}
+        label={label}
+        disabled={disabled}
+        onToggle={toggle}
+        onCancel={cancel}
+        {...(className !== undefined ? { className } : {})}
+      />
       <span role="status" className="sr-only">
         {voiceStreamStatusText(phase, stream.partial, stream.writing)}
       </span>

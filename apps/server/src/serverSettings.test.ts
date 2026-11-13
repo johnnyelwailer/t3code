@@ -2453,7 +2453,7 @@ it.layer(NodeServices.layer)("server settings under a managed policy", (it) => {
       yield* fs.writeFileString(
         config.settingsPath,
         JSON.stringify({
-          defaultRuntimeMode: "auto",
+          defaultRuntimeMode: "full-access",
           projectSettingsOverrides: {
             [raised]: { defaultRuntimeMode: "full-access" },
             [supervised]: { defaultRuntimeMode: "approval-required" },
@@ -2474,7 +2474,7 @@ it.layer(NodeServices.layer)("server settings under a managed policy", (it) => {
 
       yield* service.updateSettings({ defaultAutoPull: true });
       const stored = JSON.parse(yield* fs.readFileString(config.settingsPath));
-      assert.equal(stored.defaultRuntimeMode, "auto");
+      assert.equal(stored.defaultRuntimeMode, "full-access");
       assert.equal(stored.projectSettingsOverrides[raised].defaultRuntimeMode, "full-access");
     }).pipe(
       Effect.provide(

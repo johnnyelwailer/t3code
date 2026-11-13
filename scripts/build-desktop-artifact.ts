@@ -8,6 +8,7 @@ import {
   t3teamFillPackagedAtlassianEnv,
 } from "./lib/t3team-packaged-env.ts";
 import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
@@ -68,6 +69,14 @@ import {
   T3TeamIsolatedBuildError,
   t3codeProtocolClaims,
 } from "./lib/t3team-isolatedInstanceEnv.ts";
+import {
+  renderLinuxMetainfoXml,
+  resolveLinuxPackagingIdentity,
+} from "./lib/t3team-linuxPackagingIdentity.ts";
+import {
+  resolveWindowsPackagingIdentity,
+  windowsNsisOptions,
+} from "./lib/t3team-windowsPackagingIdentity.ts";
 import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
@@ -3219,6 +3228,7 @@ interface PackagedDesktopBrandingResource {
   readonly linuxDesktopEntryName: string;
   readonly linuxWmClass: string;
   readonly isolatedInstance?: true;
+  readonly appId?: string;
 }
 
 interface BuildConfigOptions {
@@ -3250,6 +3260,24 @@ interface BuildConfigOptions {
   // t3team: release flavor (lib/t3team-releaseFlavor.ts).
   readonly flagPresetStaged?: boolean | undefined;
   readonly appId?: string | undefined;
+  readonly linuxMetainfoPath?: string | undefined;
+}
+
+/**
+ * Staged package.json `name` is electron-builder's one-click per-user NSIS
+ * install-folder (`APP_FILENAME` ← `sanitizedName`). Isolated Windows must
+ * use `nexi-work`; every other platform and every unisolated Windows build
+ * keep the historical `t3code` / `T3 Tools` identity.
+ */
+export function resolveStagedPackageNameAndAuthor(
+  platform: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): { readonly name: string; readonly author: string } {
+  if (platform !== "win") {
+    return { name: "t3code", author: "T3 Tools" };
+  }
+  const identity = resolveWindowsPackagingIdentity({ env });
+  return { name: identity.packageName, author: identity.author };
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -3272,6 +3300,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     arch,
     flagPresetStaged = false,
     appId = DESKTOP_APP_ID,
+    linuxMetainfoPath,
   } = options;
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
   // Artifact file names are derived from the resolved product name, not hardcoded:
@@ -3466,9 +3495,33 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.toolsets = { appimage: "1.0.3" };
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    const linuxIdentity = resolveLinuxPackagingIdentity({
+      appId,
+      productNameOverride,
+    });
+    let metainfoSource = linuxMetainfoPath;
+    if (linuxIdentity.branded && metainfoSource === undefined) {
+      const staged = path.join(NodeOS.tmpdir(), `desktop-metainfo-${linuxIdentity.metainfoId}.xml`);
+      NodeFS.writeFileSync(
+        staged,
+        renderLinuxMetainfoXml({
+          appId: linuxIdentity.metainfoId,
+          productName: resolvedProductName,
+          executableName: linuxIdentity.executableName,
+          desktopEntryName: linuxIdentity.desktopEntryName,
+        }),
+      );
+      metainfoSource = staged;
+    }
+    if (metainfoSource === undefined) {
+      metainfoSource = path.join(
+        repoRoot,
+        "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml",
+      );
+    }
     buildConfig.linux = {
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: "t3code",
+      executableName: linuxIdentity.executableName,
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
@@ -3476,15 +3529,15 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       protocols: [...t3codeProtocolClaims(process.env)],
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: linuxIdentity.startupWmClass,
         },
       },
     };
     buildConfig.deb = {
       // FPM runs outside the staged app directory, so source paths must be absolute.
       fpm: [
-        `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
-        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code/copyright`,
+        `${metainfoSource}=/usr/share/metainfo/${linuxIdentity.metainfoId}.metainfo.xml`,
+        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/${linuxIdentity.docDir}/copyright`,
       ],
       // Debian 13 and Ubuntu 24.04 use 64-bit-time names; retain old-name fallbacks.
       depends: [
@@ -3504,11 +3557,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "win") {
+    const winIdentity = resolveWindowsPackagingIdentity({
+      env: process.env,
+      appId,
+      productName: resolvedProductName,
+    });
     buildConfig.npmRebuild = false;
-    buildConfig.nsis = {
-      differentialPackage: true,
-      include: "apps/desktop/resources/installer.nsh",
-    };
+    buildConfig.nsis = windowsNsisOptions(winIdentity);
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",
@@ -3517,6 +3572,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // Resource editing sets product icons even when code signing is disabled.
       signAndEditExecutable: true,
     };
+    if (winIdentity.isolated) {
+      if (winIdentity.executableName !== undefined) {
+        winConfig.executableName = winIdentity.executableName;
+      }
+      winConfig.protocols = [...winIdentity.protocols];
+    }
     if (signed && (yield* HostProcess.Platform) === "win32") {
       winConfig.azureSignOptions = yield* AzureTrustedSigningOptionsConfig;
     } else if (signed) {
@@ -4559,6 +4620,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       legacyUserDataDirName: options.productName,
       linuxDesktopEntryName: `${slug}.desktop`,
       linuxWmClass: slug,
+      appId: resolveDesktopAppId(process.env),
       ...isolatedBrandingFields(process.env),
     };
     yield* fs.writeFileString(
@@ -4664,8 +4726,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       : undefined;
   // One stamp per build: shared by the artifact file names and the emitted CHANGELOG-<stamp>.md.
   const artifactTimestamp = formatArtifactTimestamp(DateTime.toDate(yield* DateTime.now));
+  const stagedIdentity = resolveStagedPackageNameAndAuthor(options.platform, process.env);
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: stagedIdentity.name,
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
@@ -4677,7 +4740,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       "T3 Code is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.",
     license: "MIT",
     homepage: "https://t3.codes",
-    author: "T3 Tools",
+    author: stagedIdentity.author,
     main: "apps/desktop/dist-electron/boot.cjs",
     build: yield* createBuildConfig({
       platform: options.platform,

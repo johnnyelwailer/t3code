@@ -64,8 +64,12 @@ import { useCloudSessionComposerGate } from "~/cloud/t3team-useCloudSessionCompo
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
 import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { useCloudQueuedSendOptimisticMessage } from "~/cloud/t3team-useCloudQueuedSendOptimisticMessage";
+import { CloudSessionSetupFooter } from "~/cloud/t3team-cloudSessionSetupFooter";
 import { CloudSessionSetupHost } from "~/cloud/t3team-CloudSessionSetupHost";
 import { useCloudSessionSetupCard } from "~/cloud/t3team-useCloudSessionSetupCard";
+import { useCloudProjectCloneBanner } from "~/cloud/t3team-useCloudProjectCloneBanner";
+import { applyCloudSessionBannerPolicy } from "~/cloud/t3team-cloudSessionBannerPolicy";
+import { useCloudSessionVisibleStatus } from "~/cloud/t3team-useCloudSessionVisibleStatus";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
@@ -215,6 +219,7 @@ import {
   providerInstanceEntriesFor,
   resolveProjectDefaultProviderModelSelection,
   shouldShowInstanceBadge,
+  getDefaultProviderInstanceModel,
 } from "../providerInstances";
 import {
   useClientSettings,
@@ -336,6 +341,7 @@ import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEn
 import { useRightPanelSurfaceClose } from "../hooks/useRightPanelSurfaceClose";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { modelFallbackBannerItem } from "./chat/ComposerUsageLimits";
+import { providerFallbackBannerItem } from "./chat/t3team-providerFallbackBanner";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import {
@@ -1391,18 +1397,19 @@ export default function ChatView(props: ChatViewProps) {
     activeProject?.id ?? null,
   );
   const activeThreadModelInstanceId = activeThread?.modelSelection.instanceId;
-  const { selectedProviderEntry, requestedDriverKind } = resolveComposerProviderSelection({
-    entries: providerInstanceEntries,
-    candidateInstanceIds: [
-      selectedProviderByThreadId,
-      activeRuntime?.providerInstanceId,
-      activeThreadModelInstanceId,
-      activeProjectDefaultModelSelection?.instanceId,
-    ],
-    lockedProvider,
-    lockedInstanceId: activeRuntime?.providerInstanceId ?? activeThreadModelInstanceId,
-    preferReadyProvider: readServerFeatureFlag(serverConfig, "AGENTS_PREFER_READY_PROVIDER"),
-  });
+  const { selectedProviderEntry, requestedDriverKind, providerFallback } =
+    resolveComposerProviderSelection({
+      entries: providerInstanceEntries,
+      candidateInstanceIds: [
+        selectedProviderByThreadId,
+        activeRuntime?.providerInstanceId,
+        activeThreadModelInstanceId,
+        activeProjectDefaultModelSelection?.instanceId,
+      ],
+      lockedProvider,
+      lockedInstanceId: activeRuntime?.providerInstanceId ?? activeThreadModelInstanceId,
+      preferReadyProvider: readServerFeatureFlag(serverConfig, "AGENTS_PREFER_READY_PROVIDER"),
+    });
   const selectedProvider = selectedProviderEntry?.driverKind ?? requestedDriverKind;
   const activeProviderInstanceId = selectedProviderEntry?.instanceId ?? null;
   const activeProviderStatus = selectedProviderEntry?.snapshot ?? null;
@@ -1800,6 +1807,11 @@ export default function ChatView(props: ChatViewProps) {
     null,
     DismissedFallbackWindowSchema,
   );
+  // Per thread, not persisted: a provider that comes back (the CLI gets installed) must stop
+  // claiming a fallback, and a new thread must not inherit someone else's dismissal.
+  const [dismissedProviderFallbackId, setDismissedProviderFallbackId] = useState<string | null>(
+    null,
+  );
   const providerStatusBannerKey = getProviderStatusBannerKey(activeProviderStatus);
   const [dismissedProviderStatusBannerKey, setDismissedProviderStatusBannerKey] = useState<
     string | null
@@ -1815,6 +1827,9 @@ export default function ChatView(props: ChatViewProps) {
     !shouldSuppressT3TeamProviderStatus({
       status: activeProviderStatus,
       isTurnInProgress: isWorking,
+      onRemoteEnvironment:
+        providerEnvironmentId !== undefined &&
+        providerEnvironmentId !== primaryEnvironment?.environmentId,
       ...(activeRuntime?.providerInstanceId
         ? { activeTurnInstanceId: activeRuntime.providerInstanceId }
         : {}),
@@ -1960,13 +1975,25 @@ export default function ChatView(props: ChatViewProps) {
     scopeKey: draftId ?? routeThreadKey,
     projectRef: activeProjectRef,
   });
+  // t3team: the project is missing on the cloud machine — offered inline, never auto-opened.
+  const cloudProjectCloneBannerItem = useCloudProjectCloneBanner(draftId ?? routeThreadKey);
   const cloudSetupCard = useCloudSessionSetupCard({
     draftId: draftId ?? null,
     scopeKey: draftId ?? routeThreadKey,
     projectRef: activeProjectRef,
     gate: cloudSessionComposerGate,
   });
-  const cloudSetupElement = cloudSetupCard ? <CloudSessionSetupHost {...cloudSetupCard} /> : null;
+  const cloudVisibleStatus = useCloudSessionVisibleStatus({
+    environmentId,
+    setupCard: cloudSetupCard,
+    createPending: cloudSessionComposerGate.cloud.createPending,
+    cloneSuggested: cloudProjectCloneBannerItem !== null,
+  });
+  const cloudSetupElement = cloudSetupCard ? (
+    <CloudSessionSetupFooter>
+      <CloudSessionSetupHost {...cloudSetupCard} />
+    </CloudSessionSetupFooter>
+  ) : null;
   useCloudQueuedSendOptimisticMessage({ draftId: draftId ?? null, setOptimisticUserMessages });
   const canInterruptRunningThread =
     (canOperateThread &&
@@ -2753,7 +2780,7 @@ export default function ChatView(props: ChatViewProps) {
     threadId: activeThreadId,
     projection: serverProjection,
   });
-  const composerBannerItems = (() => {
+  const rawComposerBannerItems = (() => {
     const fallbackSelection = draftFallback?.selection;
     const defaultSelection =
       draftDefaultModelSelection ??
@@ -2799,16 +2826,43 @@ export default function ChatView(props: ChatViewProps) {
             }),
           ]
         : [];
+    // The allowed automatic provider swaps, shown as such. Never silent: see
+    // t3team-providerSelectionFallback.ts.
+    const providerFallbackItems: ComposerBannerStackItem[] =
+      providerFallback !== null &&
+      providerFallback.requestedInstanceId !== dismissedProviderFallbackId
+        ? [
+            providerFallbackBannerItem({
+              fallback: providerFallback,
+              onUseRequested: () =>
+                onProviderModelSelectStable(
+                  providerFallback.requestedInstanceId,
+                  getDefaultProviderInstanceModel(
+                    providerStatuses,
+                    providerFallback.requestedInstanceId,
+                  ) ?? "",
+                ),
+              onDismiss: () => setDismissedProviderFallbackId(providerFallback.requestedInstanceId),
+            }),
+          ]
+        : [];
     const limitRecoveryItems = [limitRecoveryBanner, providerRetryBanner].filter((i) => i !== null);
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
-    const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
+    const projectCloneItems = [projectCloneBannerItem, cloudProjectCloneBannerItem].filter(
+      (item) => item !== null,
+    );
+    // The setup card already owns this send's progress; a second strip above the composer
+    // repeats "Sending to cloud session…" while the card is on screen.
     const cloudBindItems =
-      cloudSessionComposerGate.bannerItem === null ? [] : [cloudSessionComposerGate.bannerItem];
+      cloudSetupCard !== null || cloudSessionComposerGate.bannerItem === null
+        ? []
+        : [cloudSessionComposerGate.bannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...cloudBindItems,
         ...feedbackBannerItems,
         ...fallbackItems,
+        ...providerFallbackItems,
         ...limitRecoveryItems,
         ...usageLimitsItems,
         ...projectCloneItems,
@@ -2819,6 +2873,7 @@ export default function ChatView(props: ChatViewProps) {
       ...cloudBindItems,
       ...feedbackBannerItems,
       ...fallbackItems,
+      ...providerFallbackItems,
       ...limitRecoveryItems,
       ...usageLimitsItems,
       ...projectCloneItems,
@@ -2836,6 +2891,10 @@ export default function ChatView(props: ChatViewProps) {
       }),
     ];
   })() as ComposerBannerStackItem[];
+  const composerBannerItems = applyCloudSessionBannerPolicy(
+    rawComposerBannerItems,
+    cloudVisibleStatus,
+  );
 
   if (
     terminalUiLaunchContext !== null &&

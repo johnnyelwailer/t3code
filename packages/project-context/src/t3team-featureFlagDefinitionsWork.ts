@@ -109,6 +109,15 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: false,
     addedOn: "2026-09-14",
   },
+  CLOUD_SESSION_STOP_DELETE: {
+    group: "Cloud & machines",
+    subgroup: "Cloud sessions",
+    label: "Stop and delete cloud sessions",
+    description:
+      "Stop and delete a cloud machine from its row and the thread's machine menu. Stop keeps the workspace; delete saves unpushed work to a wip/ branch, then removes the machine's snapshots and resume branch. Off: sessions end only by their own time.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
   CLOUD_THREAD_HANDOFF: {
     group: "Cloud & machines",
     subgroup: "Handoff",
@@ -123,7 +132,7 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     subgroup: "Project machines",
     label: "Project machines",
     description:
-      "Cloud sessions start from the project's committed machine definition (.nexi/machine.json). Off: a plain session machine.",
+      "Cloud sessions start from the project's committed machine definition (.agents/nexi/machine.json). Off: a plain session machine.",
     defaultEnabled: false,
     requiresRestart: false,
   },

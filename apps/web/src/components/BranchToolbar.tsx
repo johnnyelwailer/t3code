@@ -708,7 +708,11 @@ export const BranchToolbar = memo(function BranchToolbar({
   // t3team: the "Run on" menu's cloud entries (shared with the thread details panel).
   // scopeKey owns the optimistic cloud preference across thread navigation.
   const cloudSessionScopeKey = draftId ?? scopedThreadKey(threadRef);
-  const cloudSessions = useT3TeamRunOnCloudSessionProps(activeProjectRef, cloudSessionScopeKey);
+  const cloudSessions = useT3TeamRunOnCloudSessionProps(
+    activeProjectRef,
+    cloudSessionScopeKey,
+    draftId,
+  );
   const handleEnvironmentChange = useCallback(
     (nextEnvironmentId: EnvironmentId) => {
       clearCloudSessionTargetIfLocal(

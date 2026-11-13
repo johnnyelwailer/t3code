@@ -1,9 +1,10 @@
 /**
  * Client side of the project main repository: reading it from a shell project, applying a
  * server switch (the workspace root moves to the main repository's checkout), and the
- * auto-detection rule — exactly one linked clone carrying a project state dir becomes the main
- * repository; several are left for the user to pick. The server refuses a detected switch over
- * an explicit user choice, so detection never overrides the user.
+ * auto-detection rule — exactly one state-dir candidate, or otherwise exactly one linked
+ * repository (even with no state dir yet), becomes the main workspace. Several candidates or
+ * several linked repositories are left for the user to pick. The server refuses a detected
+ * switch over an explicit user choice, so detection never overrides the user.
  */
 import type { ProjectMainRepositoryCandidate } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -14,9 +15,10 @@ import type {
   ProjectWorkspaceBootstrapResult,
 } from "~/t3team/backend/t3team-types";
 import { waitForLinkedRepositoryReady } from "~/t3team/hooks/t3team-waitForLinkedRepositoryReady";
-import type {
-  MainRepositoryReference,
-  ProjectAgentReferences,
+import {
+  readLinkedRepositoryUrlsFromProject,
+  type MainRepositoryReference,
+  type ProjectAgentReferences,
 } from "~/t3team/hooks/t3team-createProjectBootstrap";
 
 function readRecord(value: unknown): Record<string, unknown> {
@@ -78,16 +80,43 @@ export function applyMainRepositorySwitchToProject(
   };
 }
 
-/** Applies auto-detection after a bootstrap: clones the one detected candidate, then switches to
- * it. Best-effort: a failed clone or switch keeps the project. */
+/**
+ * The URL auto-detection should switch to, if any. Exactly one state-dir candidate wins
+ * (existing rule). Otherwise exactly one linked repository becomes the main workspace even
+ * when it has no state dir yet. An explicit user (or adopted) main is never overridden.
+ */
+export function detectMainRepositoryUrl(input: {
+  readonly candidates: ReadonlyArray<{ readonly url: string }>;
+  readonly linkedUrls: ReadonlyArray<string>;
+  readonly existingMain?: { readonly status?: string } | undefined;
+}): string | undefined {
+  const status = input.existingMain?.status;
+  if (status === "user" || status === "adopted") return undefined;
+  if (input.candidates.length === 1) return input.candidates[0]?.url;
+  if (input.candidates.length > 1) return undefined;
+  return input.linkedUrls.length === 1 ? input.linkedUrls[0] : undefined;
+}
+
+/** Applies auto-detection after a bootstrap: clones the one detected repository, then switches
+ * to it. Best-effort: a failed clone or switch keeps the project. */
 export async function applyMainRepositoryAutoDetection(input: {
   readonly backend: BackendApi;
   readonly project: ProjectShellProject;
   readonly bootstrap: ProjectWorkspaceBootstrapResult;
 }): Promise<ProjectShellProject> {
   const candidates = input.bootstrap.mainRepositoryCandidates ?? [];
-  const detected = candidates.length === 1 ? candidates[0] : undefined;
-  if (!detected) return input.project;
+  const linkedFromBootstrap = (input.bootstrap.linkedRepositories ?? []).map((entry) => entry.url);
+  const linkedUrls =
+    linkedFromBootstrap.length > 0
+      ? linkedFromBootstrap
+      : readLinkedRepositoryUrlsFromProject(input.project);
+  const detectedUrl = detectMainRepositoryUrl({
+    candidates,
+    linkedUrls,
+    existingMain: readMainRepositoryFromProject(input.project),
+  });
+  if (!detectedUrl) return input.project;
+  const detected = { url: detectedUrl };
   try {
     // The main repository syncs by default (linked ones on demand): the switch needs its checkout,
     // which a candidate found on its remote does not have yet.

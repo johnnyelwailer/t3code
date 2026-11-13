@@ -41,10 +41,7 @@ export function useGitHubAuthProbe(params: {
     setAuthenticatedHosts,
   } = params;
   const onAuthenticatedRef = useRef(onAuthenticated);
-
-  useEffect(() => {
-    onAuthenticatedRef.current = onAuthenticated;
-  }, [onAuthenticated]);
+  onAuthenticatedRef.current = onAuthenticated;
 
   const environmentId = usePrimaryEnvironmentId();
   // A probe runs on mount and on Recheck, both asking because gh may have changed since: the
@@ -53,7 +50,14 @@ export function useGitHubAuthProbe(params: {
     reportFailure: false,
     refresh: true,
   });
+  // The runner's identity is not stable from this uncompiled hook (inline options, compiler
+  // pending). A dep on it retriggers the probe on every render; the effect setStates
+  // (setLoadingAuth, onAuthenticated → setCatalog), which re-renders, which retriggers —
+  // a tight loop that pegs the renderer while Add stays on "Adding…".
+  const discoverSourceControlRef = useRef(discoverSourceControl);
+  discoverSourceControlRef.current = discoverSourceControl;
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps GitHub auth and the repository catalog in step with gh, once per mount or Recheck, not on every render
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -67,7 +71,7 @@ export function useGitHubAuthProbe(params: {
           }
           return;
         }
-        const discoveryResult = await discoverSourceControl({
+        const discoveryResult = await discoverSourceControlRef.current({
           environmentId,
           input: {},
         });
@@ -114,7 +118,7 @@ export function useGitHubAuthProbe(params: {
       cancelled = true;
     };
   }, [
-    discoverSourceControl,
+    // discoverSourceControl is read from a ref: a dep on it would restore the render loop.
     enabled,
     environmentId,
     refreshKey,

@@ -51,7 +51,7 @@ const facts = (over: Partial<CloudQueuedSendStepFacts>): CloudQueuedSendStepFact
 });
 
 describe("cloud queued send steps", () => {
-  it("walks Queued → Machine → Server start → Connect → Project ready → Sent", () => {
+  it("walks Queued → Machine → Server → Connect → Project → Provider → Sent", () => {
     const step = (over: Partial<CloudQueuedSendStepFacts>) =>
       resolveCloudQueuedSendStepId(facts(over));
     expect(step({})).toBe("queued");
@@ -61,9 +61,23 @@ describe("cloud queued send steps", () => {
     // Ready but the machine has not reported in: connecting, not a project gap (408).
     expect(step({ session: session("ready") })).toBe("connect");
     expect(step({ session: session("ready"), machineConnected: true })).toBe("project");
-    expect(step({ session: session("ready"), machineConnected: true, flushing: true })).toBe(
-      "sent",
-    );
+    expect(
+      step({
+        session: session("ready"),
+        machineConnected: true,
+        projectReady: true,
+        providerReady: false,
+      }),
+    ).toBe("provider");
+    expect(
+      step({
+        session: session("ready"),
+        machineConnected: true,
+        projectReady: true,
+        providerReady: true,
+        flushing: true,
+      }),
+    ).toBe("sent");
   });
 
   it("shows the live machine stage, per-step elapsed and the session's own estimate", () => {
@@ -81,6 +95,7 @@ describe("cloud queued send steps", () => {
       ["server", "pending", null],
       ["connect", "pending", null],
       ["project", "pending", null],
+      ["provider", "pending", null],
       ["sent", "pending", null],
     ]);
     expect(view.steps[1]?.detail).toBe("Installing Nexi");
@@ -114,9 +129,9 @@ describe("cloud queued send steps", () => {
       );
     const early = onProject(115);
     expect(early.currentStepId).toBe("project");
-    expect(early.title).toBe("Waiting for the cloud machine to send its project list…");
+    expect(early.title).toBe("Connecting to the cloud machine…");
     expect(early.steps.find((step) => step.id === "project")?.detail).toBe(
-      "Waiting for the cloud machine to send its project list",
+      "Connecting to the cloud machine",
     );
     expect(early.projectWait?.level).toBe("waiting");
     expect(onProject(140).projectWait?.level).toBe("expected");

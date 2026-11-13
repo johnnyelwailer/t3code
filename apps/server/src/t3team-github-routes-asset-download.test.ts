@@ -6,6 +6,7 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
 import * as GitHubCredentials from "@t3tools/source-control-github/server/GitHubCredentials";
+import * as BuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import { downloadGitHubAsset } from "./t3team-github-routes-asset-download.ts";
 import { makeFakeGitHubApi, restOk } from "./t3team-githubRestApi.fixtures.ts";
 
@@ -39,6 +40,7 @@ describe("downloadGitHubAsset", () => {
       }).pipe(
         Effect.provideService(HttpClient.HttpClient, recordingClient(seen)),
         Effect.provideService(GitHubApi.GitHubApi, api),
+        Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
       );
 
       expect(seen).toEqual(["Bearer gh-token"]);
@@ -62,6 +64,7 @@ describe("downloadGitHubAsset", () => {
       }).pipe(
         Effect.provideService(HttpClient.HttpClient, recordingClient(seen)),
         Effect.provideService(GitHubApi.GitHubApi, api),
+        Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
       );
       yield* downloadGitHubAsset({
         host: "nexplore.ghe.com",
@@ -69,6 +72,7 @@ describe("downloadGitHubAsset", () => {
       }).pipe(
         Effect.provideService(HttpClient.HttpClient, recordingClient(seen)),
         Effect.provideService(GitHubApi.GitHubApi, api),
+        Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
       );
 
       expect(credentialHosts).toEqual(["github.com", "nexplore.ghe.com"]);
@@ -89,6 +93,7 @@ describe("downloadGitHubAsset", () => {
       }).pipe(
         Effect.provideService(HttpClient.HttpClient, recordingClient(seen)),
         Effect.provideService(GitHubApi.GitHubApi, api),
+        Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
       );
 
       expect(seen).toEqual([undefined]);
@@ -107,6 +112,7 @@ describe("downloadGitHubAsset", () => {
       }).pipe(
         Effect.provideService(HttpClient.HttpClient, recordingClient(seen)),
         Effect.provideService(GitHubApi.GitHubApi, api),
+        Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
       );
 
       expect(seen).toEqual([undefined]);
@@ -145,6 +151,7 @@ describe("downloadGitHubAsset", () => {
       }).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.provideService(GitHubApi.GitHubApi, api),
+        Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
       );
 
       expect(seen).toEqual([
@@ -177,6 +184,7 @@ describe("downloadGitHubAsset", () => {
         downloadGitHubAsset({ host: "github.com", url: "https://github.com/a" }).pipe(
           Effect.provideService(HttpClient.HttpClient, client),
           Effect.provideService(GitHubApi.GitHubApi, api),
+          Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
         ),
       );
 
@@ -200,6 +208,7 @@ describe("downloadGitHubAsset", () => {
       yield* downloadGitHubAsset({ host: "github.com", url: "http://github.com/a" }).pipe(
         Effect.provideService(HttpClient.HttpClient, client),
         Effect.provideService(GitHubApi.GitHubApi, api),
+        Effect.provideService(BuiltInDrivers.SourceControlDrivers, []),
       );
 
       expect(seen).toEqual([undefined]);

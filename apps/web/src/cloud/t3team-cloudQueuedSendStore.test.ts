@@ -93,6 +93,9 @@ describe("queued cloud send on the persisted draft", () => {
     });
     retryDraftCloudQueuedSend(draftId);
     expect(getDraftCloudQueuedSend(draftId)).toEqual(queued);
+    // A second click on Retry has nothing parked to restart, so it leaves the send alone.
+    retryDraftCloudQueuedSend(draftId, { sendInMachineProject: true });
+    expect(getDraftCloudQueuedSend(draftId)).toEqual(queued);
 
     expect(cancelDraftCloudQueuedSend(draftId)).toEqual(queued);
     expect(getDraftCloudQueuedSend(draftId)).toBeNull();

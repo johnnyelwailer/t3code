@@ -80,6 +80,8 @@ function subscribe(listener: () => void) {
 export function useAccounts(): AccountsSnapshot & {
   readonly signIn: (accountId: string) => void;
   readonly signOut: (accountId: string) => void;
+  /** Reads the accounts again; starts no sign-in. */
+  readonly retry: () => void;
   /** Copies the device code and opens the issuer's code page (when the issuer has one). */
   readonly openVerification: (accountId: string) => void;
 } {
@@ -105,6 +107,7 @@ export function useAccounts(): AccountsSnapshot & {
     ...current,
     signIn: useCallback((accountId: string) => run(() => accountsApi.signIn(accountId)), []),
     signOut: useCallback((accountId: string) => run(() => accountsApi.signOut(accountId)), []),
+    retry: useCallback(() => run(() => Promise.resolve()), []),
     openVerification,
   };
 }
@@ -120,6 +123,7 @@ export function useAccount(accountId: string | null) {
     error: accounts.error,
     signIn: () => accountId !== null && accounts.signIn(accountId),
     signOut: () => accountId !== null && accounts.signOut(accountId),
+    retry: accounts.retry,
     openVerification: () => accountId !== null && accounts.openVerification(accountId),
   };
 }

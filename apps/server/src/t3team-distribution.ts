@@ -9,6 +9,7 @@
  * code path regardless of how the value arrived.
  */
 import type { PackActivate } from "@t3team/pack-api";
+import { DISTRIBUTION_THEME_ENV, orderedDistributionThemePaths } from "@t3team/packs";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -27,6 +28,7 @@ export type DistributionTheme = Record<string, unknown>;
 
 const DistributionManifestJson = Schema.Struct({
   theme: Schema.optional(Schema.String),
+  themes: Schema.optional(Schema.Array(Schema.String)),
   branding: Schema.optional(
     Schema.Struct({
       productName: Schema.optional(Schema.String),
@@ -51,6 +53,7 @@ const decodeDistributionTheme = Schema.decodeEffect(
  */
 async function readDistributionFromEnv(): Promise<{
   theme?: DistributionTheme;
+  alternateThemes?: ReadonlyArray<DistributionTheme>;
   branding?: DistributionBranding;
 }> {
   const result = await Effect.runPromise(
@@ -65,16 +68,27 @@ async function readDistributionFromEnv(): Promise<{
         ).pipe(Effect.option),
       );
       if (manifest === undefined) return {};
-      const out: { theme?: DistributionTheme; branding?: DistributionBranding } = {};
-      if (manifest.theme !== undefined && manifest.theme !== "") {
+      const out: {
+        theme?: DistributionTheme;
+        alternateThemes?: ReadonlyArray<DistributionTheme>;
+        branding?: DistributionBranding;
+      } = {};
+      const themes: DistributionTheme[] = [];
+      for (const themePath of orderedDistributionThemePaths(
+        manifest,
+        process.env[DISTRIBUTION_THEME_ENV],
+      )) {
         const theme = Option.getOrUndefined(
-          yield* decodeDistributionTheme(
-            yield* fs.readFileString(path.join(dir, manifest.theme)),
-          ).pipe(Effect.option),
+          yield* decodeDistributionTheme(yield* fs.readFileString(path.join(dir, themePath))).pipe(
+            Effect.option,
+          ),
         );
         if (theme === undefined) return {};
-        out.theme = theme;
+        themes.push(theme);
       }
+      const [defaultTheme, ...alternateThemes] = themes;
+      if (defaultTheme !== undefined) out.theme = defaultTheme;
+      if (alternateThemes.length > 0) out.alternateThemes = alternateThemes;
       if (manifest.branding !== undefined) {
         const branding = manifest.branding;
         out.branding = {
@@ -105,6 +119,9 @@ export const activateDistribution: PackActivate | undefined = undefined;
 export const distributionAssets: Readonly<Record<string, string>> = {};
 /** The distribution's theme, or `undefined` when no distribution was built in. */
 export const distributionTheme: DistributionTheme | undefined = dist.theme;
+/** The distribution's further selectable themes beside `distributionTheme`; empty when none. */
+export const distributionAlternateThemes: ReadonlyArray<DistributionTheme> =
+  dist.alternateThemes ?? [];
 /** Distribution branding (product name, icon, home dir), or `undefined` when no distribution. */
 export const distributionBranding: DistributionBranding | undefined = dist.branding;
 

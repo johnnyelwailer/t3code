@@ -59,6 +59,10 @@ vi.mock("../../state/environments", () => ({
 }));
 vi.mock("../../cloud/t3team-cloudMachineSignIn", () => ({
   useSignInDescriptionForEnvironment: () => null,
+  useToolAuthMachineLabel: () => "this cloud machine",
+}));
+vi.mock("~/t3team/t3team-useToolAuthEnvironmentFlag", () => ({
+  useToolAuthEnvironmentAvailability: () => "enabled",
 }));
 vi.mock("../../state/server", () => ({ serverEnvironment: { refreshProviders: "refresh" } }));
 vi.mock("../../state/use-atom-command", () => ({
@@ -85,6 +89,14 @@ const codexSnapshot: ServerProvider = {
   skills: [],
 };
 const [codex] = deriveProviderInstanceEntries([codexSnapshot]);
+// The pre-login probe: the account is not signed in yet, so the provider snapshot still says so
+// even after the CLI sign-in stream flips to `connected`.
+const codexLapsed: ServerProvider = {
+  ...codexSnapshot,
+  installed: true,
+  auth: { status: "unauthenticated" },
+};
+const [codexLapsedEntry] = deriveProviderInstanceEntries([codexLapsed]);
 
 function setup(refresh: "pending" | "settled" | "failed" = "settled") {
   harness.state.current = new Map();
@@ -145,6 +157,28 @@ describe("model picker connect panel journey", () => {
     });
   });
 
+  it("a sign-in on top of a stale unauthenticated probe re-checks the provider, card still says expired", async () => {
+    setup();
+    await using screen = await render(
+      <ModelPickerProviderConnectPanel
+        entry={codexLapsedEntry!}
+        tool="codex"
+        readiness="needsAuth"
+        environmentId={cloud}
+      />,
+      { router: false },
+    );
+    await phase({ phase: "connected", account: "pj@example.com" });
+    // The provider probe still says unauthenticated, so the card must not claim Signed in…
+    await expect.element(screen.getByText("Expired")).toBeInTheDocument();
+    // …but the raw stream signed in, so the machine is asked to re-check this instance once.
+    expect(harness.state.refresh).toHaveBeenCalledTimes(1);
+    expect(harness.state.refresh).toHaveBeenCalledWith({
+      environmentId: cloud,
+      input: { instanceId: codexInstance },
+    });
+  });
+
   it("a re-check that leaves the provider not ready offers a retry, not a dead end", async () => {
     setup();
     await using screen = await render(panel, { router: false });
@@ -167,13 +201,14 @@ describe("model picker connect panel journey", () => {
     await expect.element(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
   });
 
-  it("a failed install shows the installer's message and retries the install", async () => {
+  it("a failed install says so in plain words, hides npm's own text, and retries the install", async () => {
     setup();
     await using screen = await render(panel, { router: false });
-    await phase({ phase: "failed", message: "npm ERR! 403 Forbidden" });
+    await phase({ phase: "failed", reason: "installFailed", message: "npm ERR! 403 Forbidden" });
     await expect
-      .element(screen.getByText("npm ERR! 403 Forbidden", { exact: false }))
+      .element(screen.getByText("Installing Codex on this cloud machine", { exact: false }))
       .toBeInTheDocument();
+    expect(screen.container.textContent).not.toContain("npm ERR!");
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(harness.state.install).toHaveBeenCalledTimes(1);
     expect(harness.state.refresh).not.toHaveBeenCalled();
@@ -183,7 +218,7 @@ describe("model picker connect panel journey", () => {
     setup();
     await using screen = await render(panel, { router: false });
     await phase({ phase: "expired", message: "The code expired." });
-    await expect.element(screen.getByText("The code expired.")).toBeInTheDocument();
+    await expect.element(screen.getByText("has expired", { exact: false })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Reconnect" }));
     expect(harness.state.connect).toHaveBeenCalledTimes(1);
     expect(harness.state.refresh).not.toHaveBeenCalled();

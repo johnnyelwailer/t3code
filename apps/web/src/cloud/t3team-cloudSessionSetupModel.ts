@@ -3,7 +3,7 @@ import type { CloudSession } from "@t3tools/contracts";
 import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSessionSplit";
 import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotResolvedActions";
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
-import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { isProjectNotResolved, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
 import {
   presentCloudQueuedSendProgress,
   type CloudQueuedSendStepFacts,
@@ -16,6 +16,8 @@ export interface CloudQueuedSendCardInput {
   readonly onCancel: () => void;
   /** Null when retrying cannot help (the session ended). */
   readonly onRetry: (() => void) | null;
+  /** Starts the "Project ready" wait over while the message is still waiting for it. */
+  readonly onRestartWait?: () => void;
   /** The extra ways out of a send that gave up waiting for its project; empty otherwise. */
   readonly recoveryActions?: ReadonlyArray<CloudQueuedSendRecoveryAction>;
 }
@@ -32,6 +34,8 @@ export interface CloudSetupFacts {
   readonly session: CloudSession | null;
   readonly machineConnected: boolean;
   readonly projectReady?: boolean;
+  /** After project checkout: composer-selected provider installed and signed in. */
+  readonly providerReady?: boolean;
   readonly projectWait?: CloudProjectWait | null | undefined;
   readonly queued?: CloudQueuedSend | undefined;
   readonly delivery?: CloudSetupDelivery;
@@ -55,6 +59,8 @@ export interface CloudSetupModel {
   readonly failureReason: string | null;
   readonly detailsUrl: string | null;
   readonly title: string;
+  /** A kept message that only ran out of waiting: shown calmly, not as a broken setup. */
+  readonly keptWaiting: boolean;
 }
 
 export const CLOUD_SETUP_NOT_SEEN_NOTE =
@@ -69,6 +75,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
     {
       ...facts,
       projectReady: facts.projectReady ?? false,
+      ...(facts.providerReady === undefined ? {} : { providerReady: facts.providerReady }),
       flushing: delivery === "sending",
     },
     0,
@@ -95,6 +102,7 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
   const currentStep =
     steps.find((step) => step.id === view.currentStepId) ?? steps.at(-1) ?? fallback;
   const terminal = session !== null && isTerminalCloudSessionPhase(session.phase);
+  const keptWaiting = facts.queued !== undefined && isProjectNotResolved(facts.queued);
   return {
     stage,
     session,
@@ -114,10 +122,14 @@ export function buildCloudSessionSetup(facts: CloudSetupFacts): CloudSetupModel 
       : null,
     detailsUrl: failed ? (session?.detailsUrl ?? null) : null,
     title: failed
-      ? "Setup didn't finish"
+      ? // A kept message that only ran out of waiting is not a broken setup; it can still go out.
+        keptWaiting
+        ? "Still setting up"
+        : "Setup didn't finish"
       : stage === "ready"
         ? "Your cloud session is ready"
         : "Setting up your cloud session",
+    keptWaiting: failed && keptWaiting,
   };
 }
 
@@ -155,5 +167,7 @@ export function cloudSetupRecovery(input: {
 }): { readonly retry: boolean; readonly tryAgain: boolean } {
   const dead =
     input.lost || (input.session !== null && isTerminalCloudSessionPhase(input.session.phase));
-  return { retry: input.canRetry && !dead, tryAgain: !input.hasQueued && dead };
+  // A dead session always offers a fresh one, queued message or not: without it the card's only
+  // action is "Cancel message", which throws away work the new session could still carry.
+  return { retry: input.canRetry && !dead, tryAgain: dead };
 }

@@ -1,0 +1,40 @@
+# Fail when tracked paths would clash on macOS or Windows: two names that differ
+# only by case, two module files in one directory whose names differ only by case
+# once the extension is removed (the #879 class), or a relative import specifier
+# whose case does not match the tracked file.
+#
+# Standalone, no install, no artifacts. A slow or broken ci.yml run cannot mask this.
+# Locally:
+#   node scripts/t3team-check-case-collisions.mjs --imports
+#   node --test scripts/t3team-check-case-collisions.test.mjs
+name: Case collisions
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: t3team-case-collisions-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  case-collisions:
+    name: Case collisions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Prove the check fails on a synthetic collision
+        run: node --test scripts/t3team-check-case-collisions.test.mjs
+
+      - name: Check this tree
+        run: node scripts/t3team-check-case-collisions.mjs --imports

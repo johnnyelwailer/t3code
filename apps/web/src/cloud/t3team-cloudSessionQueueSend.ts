@@ -20,6 +20,8 @@ export function queueCloudSessionSendIfNeeded(input: {
   readonly draftId: string | null;
   readonly turn: CloudQueuedTurn;
   readonly sessions: readonly CloudSession[];
+  /** Composer project at send time — confirms selection for checkout on the machine. */
+  readonly projectKey?: string | null;
   readonly now?: () => Date;
 }): CloudQueuedSend | null {
   if (input.draftId === null) return null;
@@ -28,13 +30,14 @@ export function queueCloudSessionSendIfNeeded(input: {
   const session = input.sessions.find((item) => item.sessionId === target.sessionId);
   if (session !== undefined && isTerminalCloudSessionPhase(session.phase)) return null;
   // A ready, synced session still queues: the app-level flusher sends it within a tick, on the
-  // same path as one that is still provisioning.
+  // same path as one that is still provisioning. Project bind uses the composer key at queue
+  // time (confirmed selection), not an earlier create stamp.
   const createdAt = (input.now?.() ?? new Date()).toISOString();
   const queued: CloudQueuedSend = {
     ...input.turn,
     sessionId: target.sessionId,
     sessionLabel: target.label,
-    projectKey: target.projectKey,
+    projectKey: input.projectKey !== undefined ? input.projectKey : target.projectKey,
     createdAt,
     stepStartedAt: { queued: createdAt },
   };
