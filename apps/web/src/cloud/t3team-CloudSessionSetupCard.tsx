@@ -18,6 +18,7 @@ import { presentCloudProjectWaitAt } from "./t3team-cloudProjectWaitClock";
 import { StepList } from "./t3team-CloudSessionSetupParts";
 import { CloudSessionSetupProviderAuth } from "./t3team-CloudSessionSetupProviderAuth";
 import type { CloudQueuedSendRecoveryAction } from "./t3team-cloudProjectNotResolvedActions";
+import { displayCloudQueuedFailureMessage } from "./t3team-cloudSessionFailureDisplay";
 import { useCloudProjectWaitNow } from "./t3team-useCloudProjectWaitNow";
 import { useCloudSetupElapsedSeconds } from "./t3team-useCloudSetupElapsedSeconds";
 
@@ -79,7 +80,10 @@ export function CloudSessionSetupCard({
   const projectWait = presentCloudProjectWaitAt(model.projectWait, facts.queued, projectWaitNow);
   const subtitle = cloudSetupSubtitle({
     failed,
-    failureReason: model.failureReason,
+    failureReason:
+      model.failureReason == null
+        ? null
+        : displayCloudQueuedFailureMessage(model.failureReason, recoveryActions ?? []),
     stage: model.stage,
     notSeen: model.notSeen,
     activity: model.activity,
