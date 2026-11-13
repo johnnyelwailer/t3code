@@ -42,7 +42,7 @@ export function presentProjectMachine(
   }
   return {
     label: "Machine needs fixing",
-    detail: `${broken.path}: ${broken.reason}`,
+    detail: `${broken.path}: ${broken.reason} A new session starts plain until it is fixed.`,
     tone: "warning",
   };
 }

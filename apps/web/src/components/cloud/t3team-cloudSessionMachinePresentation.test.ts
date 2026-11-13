@@ -34,15 +34,15 @@ describe("presentProjectMachine", () => {
     ).toBeNull();
   });
 
-  it("warns about a broken definition instead of promising a plain session", () => {
+  it("warns about a broken definition and says a new session starts plain until it is fixed", () => {
     const hint = presentProjectMachine({
       status: { _tag: "None" },
       candidates: [],
-      rejected: [{ repository: ".", path: ".nexi/machine.json", reason: "is not valid." }],
+      rejected: [{ repository: ".", path: ".agents/nexi/machine.json", reason: "is not valid." }],
     });
     expect(hint).toEqual({
       label: "Machine needs fixing",
-      detail: ".nexi/machine.json: is not valid.",
+      detail: ".agents/nexi/machine.json: is not valid. A new session starts plain until it is fixed.",
       tone: "warning",
     });
   });
