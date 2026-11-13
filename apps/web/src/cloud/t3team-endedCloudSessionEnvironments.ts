@@ -45,13 +45,9 @@ export function endedCloudSessionEnvironmentIds(
 }
 
 /**
- * Whether a thread should treat its environment as an ended cloud session: either the supervisor
- * already parked the connection on `session_ended`, or the session list shows that this
- * environment's session has stopped, cancelled or failed and no live session serves it.
- *
- * The second path covers old threads whose last failure still looks like a refused sign-in
- * ("did not accept this device"): the ended-session banner must replace that, and Reconnect must
- * not stay on the generic unavailable banner.
+ * Parked on `session_ended`, or the session list shows this environment's session stopped and
+ * no live one serves it. The list path covers old threads whose last failure still reads as a
+ * refused sign-in; the generic Reconnect banner must not stay.
  */
 export function isThreadCloudSessionEnded(input: {
   readonly parkedOnSessionEnded: boolean;
