@@ -107,11 +107,19 @@ export function LinkedRepositorySyncModal({
   onContinueInBackground,
   onDone,
   onBack,
+  continueLabel = "Continue in background",
+  doneLabel = "Done",
+  backLabel = "Back to repositories",
+  closeLabel = "Close",
 }: {
   readonly steps: ReadonlyArray<SyncStep>;
   readonly onContinueInBackground: () => void;
   readonly onDone: () => void;
   readonly onBack: () => void;
+  readonly continueLabel?: string;
+  readonly doneLabel?: string;
+  readonly backLabel?: string;
+  readonly closeLabel?: string;
 }) {
   const failed = steps.some((step) => step.state === "failed");
   const progress = describeSyncProgress(steps);
@@ -153,14 +161,14 @@ export function LinkedRepositorySyncModal({
         {failed ? (
           <>
             <Button variant="ghost" onClick={onBack}>
-              Back to repositories
+              {backLabel}
             </Button>
-            <Button onClick={onDone}>Close</Button>
+            <Button onClick={onDone}>{closeLabel}</Button>
           </>
         ) : progress ? (
-          <Button onClick={onContinueInBackground}>Continue in background</Button>
+          <Button onClick={onContinueInBackground}>{continueLabel}</Button>
         ) : (
-          <Button onClick={onDone}>Done</Button>
+          <Button onClick={onDone}>{doneLabel}</Button>
         )}
       </footer>
     </div>
