@@ -6,6 +6,7 @@ import { turnItemIsWorkspacePreparation } from "@t3tools/client-runtime/state/tu
 import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
 import { isHiddenT3TeamFramingMessage } from "@t3tools/client-runtime/state/message-framing";
+import { t3teamFeedReportIds } from "./t3team-turnReports";
 import { isLiveSubagentTurnItem } from "@t3tools/client-runtime/state/subagentRuntime";
 import { extractToolActivityPresentation } from "@t3tools/client-runtime/work-log/tool-presentation";
 import {
@@ -1173,6 +1174,7 @@ function deriveThreadFeedRunFolds(
         )
         .map((entry) => entry.id),
     );
+    for (const reportId of t3teamFeedReportIds(group.entries)) hiddenEntryIds.delete(reportId);
     const firstEntry = group.entries[0];
     const firstHiddenEntry = group.entries.find((entry) => hiddenEntryIds.has(entry.id));
     const lastEntry = group.entries.at(-1);

@@ -11,6 +11,8 @@ export const ToolAuthFailureReason = Schema.Literals([
   "featureDisabled",
   /** The CLI binary is not on PATH and no install was attempted. */
   "notInstalled",
+  /** The account's configured binary path is missing or not a usable file. */
+  "configuredBinaryMissing",
   /** The package manager ran and the binary still is not there. */
   "installFailed",
   /** The install was killed after `ToolAuthService`'s install timeout. */

@@ -38,6 +38,16 @@ export function createLocalApi(): LocalApi {
           throw new Error("Unable to open System Settings.");
         }
       },
+      openPrivacySecurity: async () => {
+        const opener = window.desktopBridge?.openPrivacySecurity;
+        if (!opener) {
+          throw new Error("Unable to open Privacy & Security.");
+        }
+        const opened = await opener();
+        if (!opened) {
+          throw new Error("Unable to open Privacy & Security.");
+        }
+      },
     },
     contextMenu: {
       show: async <T extends string>(

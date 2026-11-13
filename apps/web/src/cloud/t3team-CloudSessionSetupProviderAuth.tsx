@@ -64,6 +64,7 @@ export function CloudSessionSetupProviderAuth(props: {
   return (
     <ProviderAuthCard
       environmentId={environmentId}
+      instanceId={instanceId}
       tool={tool}
       needsInstall={gate?.kind === "needsInstall" || provider?.installed === false}
     />
@@ -72,14 +73,17 @@ export function CloudSessionSetupProviderAuth(props: {
 
 function ProviderAuthCard(props: {
   readonly environmentId: EnvironmentId;
+  readonly instanceId: string;
   readonly tool: ToolAuthToolId;
   /** One click installs and signs in; a plain Connect cannot succeed against a missing binary. */
   readonly needsInstall: boolean;
 }) {
-  const { environmentId, tool, needsInstall } = props;
+  const { environmentId, instanceId, tool, needsInstall } = props;
   const meta = toolAuthMetaForTool(tool);
   const states = useToolAuthStates(environmentId);
-  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId);
+  const { onConnect, onInstall, onSubmitCode, onCancel } = useToolAuthActions(meta, environmentId, {
+    instanceId,
+  });
   const signInDescription = useSignInDescriptionForEnvironment(environmentId);
   const machineLabel = useToolAuthMachineLabel(environmentId);
   const availability = useToolAuthEnvironmentAvailability(environmentId);

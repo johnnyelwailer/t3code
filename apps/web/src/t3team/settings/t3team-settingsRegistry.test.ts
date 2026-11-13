@@ -21,6 +21,7 @@ describe("t3team settings registry", () => {
       ["display", "t3team.activityLabels", "live-activity-labels"],
       ["display", "t3team.projectScopePills", "project-scope-pills"],
       ["legal", "openSourceLicenses", "open-source-licenses"],
+      ["legal", "privacySecurity", "privacy-security"],
     ]);
   });
 
