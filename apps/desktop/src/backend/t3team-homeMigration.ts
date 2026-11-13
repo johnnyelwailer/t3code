@@ -8,11 +8,11 @@ import { DateTime } from "effect";
  * A SQLite file this small has a header and no user data. A real workspace DB
  * is orders of magnitude larger. 8 KiB is two SQLite pages.
  */
-export const EMPTY_STATE_DB_MAX_BYTES = 8 * 1024;
+const EMPTY_STATE_DB_MAX_BYTES = 8 * 1024;
 
-export const NEXI_IDENTITY_MARKER_NAME = "nexi-identity.json";
-export const MIGRATION_STAMP_NAME = "migration-stamp.json";
-export const MIGRATION_STATUS_NAME = "migration-status.json";
+const NEXI_IDENTITY_MARKER_NAME = "nexi-identity.json";
+const MIGRATION_STAMP_NAME = "migration-stamp.json";
+const MIGRATION_STATUS_NAME = "migration-status.json";
 
 const PROFILE_SKIP_NAMES = new Set([
   "LOCK",
@@ -54,7 +54,7 @@ export interface MigrationStatus {
   readonly warning?: string | undefined;
 }
 
-export function fileSizeOrZero(candidate: string): number {
+function fileSizeOrZero(candidate: string): number {
   try {
     return NodeFS.statSync(candidate).size;
   } catch {
@@ -62,17 +62,17 @@ export function fileSizeOrZero(candidate: string): number {
   }
 }
 
-export const stateBytes = (userdataDir: string, join: JoinPath): number =>
+const stateBytes = (userdataDir: string, join: JoinPath): number =>
   Math.max(
     fileSizeOrZero(join(userdataDir, "statev2.sqlite")),
     fileSizeOrZero(join(userdataDir, "state.sqlite")),
   );
 
-export function isRealStateDb(userdataDir: string, join: JoinPath): boolean {
+function isRealStateDb(userdataDir: string, join: JoinPath): boolean {
   return stateBytes(userdataDir, join) > EMPTY_STATE_DB_MAX_BYTES;
 }
 
-export function isNexiUserDataDirName(name: string): boolean {
+function isNexiUserDataDirName(name: string): boolean {
   const base = name.trim().toLowerCase();
   return base === "nexi-work" || base.startsWith("nexi-work-");
 }
@@ -206,7 +206,7 @@ function writeStamp(destDir: string, stamp: MigrationStamp, join: JoinPath): str
   return path;
 }
 
-export function writeMigrationStatus(dir: string, status: MigrationStatus, join: JoinPath): void {
+function writeMigrationStatus(dir: string, status: MigrationStatus, join: JoinPath): void {
   const userdata = NodeFS.existsSync(join(dir, "userdata")) ? join(dir, "userdata") : dir;
   NodeFS.mkdirSync(userdata, { recursive: true });
   const path = join(userdata, MIGRATION_STATUS_NAME);
@@ -243,7 +243,7 @@ function shouldSkipName(name: string, skip: ReadonlySet<string>): boolean {
   return skip.has(name) || name.startsWith("userdata.empty-") || name === MIGRATION_STAMP_NAME;
 }
 
-export function copyTreeNoOverwrite(input: {
+function copyTreeNoOverwrite(input: {
   readonly source: string;
   readonly destination: string;
   readonly join: JoinPath;
