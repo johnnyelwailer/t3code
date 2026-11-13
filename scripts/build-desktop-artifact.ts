@@ -74,6 +74,10 @@ import {
   resolveLinuxPackagingIdentity,
 } from "./lib/t3team-linuxPackagingIdentity.ts";
 import {
+  resolveWindowsPackagingIdentity,
+  windowsNsisOptions,
+} from "./lib/t3team-windowsPackagingIdentity.ts";
+import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
@@ -3259,6 +3263,23 @@ interface BuildConfigOptions {
   readonly linuxMetainfoPath?: string | undefined;
 }
 
+/**
+ * Staged package.json `name` is electron-builder's one-click per-user NSIS
+ * install-folder (`APP_FILENAME` ← `sanitizedName`). Isolated Windows must
+ * use `nexi-work`; every other platform and every unisolated Windows build
+ * keep the historical `t3code` / `T3 Tools` identity.
+ */
+export function resolveStagedPackageNameAndAuthor(
+  platform: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): { readonly name: string; readonly author: string } {
+  if (platform !== "win") {
+    return { name: "t3code", author: "T3 Tools" };
+  }
+  const identity = resolveWindowsPackagingIdentity({ env });
+  return { name: identity.packageName, author: identity.author };
+}
+
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   options: BuildConfigOptions,
 ) {
@@ -3539,11 +3560,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "win") {
+    const winIdentity = resolveWindowsPackagingIdentity({
+      env: process.env,
+      appId,
+      productName: resolvedProductName,
+    });
     buildConfig.npmRebuild = false;
-    buildConfig.nsis = {
-      differentialPackage: true,
-      include: "apps/desktop/resources/installer.nsh",
-    };
+    buildConfig.nsis = windowsNsisOptions(winIdentity);
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",
@@ -3552,6 +3575,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // Resource editing sets product icons even when code signing is disabled.
       signAndEditExecutable: true,
     };
+    if (winIdentity.isolated) {
+      if (winIdentity.executableName !== undefined) {
+        winConfig.executableName = winIdentity.executableName;
+      }
+      winConfig.protocols = [...winIdentity.protocols];
+    }
     if (signed && (yield* HostProcess.Platform) === "win32") {
       winConfig.azureSignOptions = yield* AzureTrustedSigningOptionsConfig;
     } else if (signed) {
@@ -4700,8 +4729,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       : undefined;
   // One stamp per build: shared by the artifact file names and the emitted CHANGELOG-<stamp>.md.
   const artifactTimestamp = formatArtifactTimestamp(DateTime.toDate(yield* DateTime.now));
+  const stagedIdentity = resolveStagedPackageNameAndAuthor(options.platform, process.env);
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: stagedIdentity.name,
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
@@ -4713,7 +4743,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       "T3 Code is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.",
     license: "MIT",
     homepage: "https://t3.codes",
-    author: "T3 Tools",
+    author: stagedIdentity.author,
     main: "apps/desktop/dist-electron/boot.cjs",
     build: yield* createBuildConfig({
       platform: options.platform,

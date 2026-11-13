@@ -76,4 +76,74 @@ it.layer(NodeServices.layer)("isolated Nexi CLI command", (it) => {
       expect(yield* fs.exists(upstream)).toBe(true);
     }).pipe(Effect.scoped),
   );
+
+  it.effect("on macOS, puts nexi on PATH via ~/.local/bin and a removable zprofile snippet, never touching t3", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped();
+      const baseDir = path.join(home, "Library", "Application Support", "nexi-work");
+      const localBin = path.join(home, ".local", "bin");
+      const upstream = path.join(localBin, "t3");
+      yield* fs.makeDirectory(localBin, { recursive: true });
+      yield* fs.writeFileString(upstream, "#!/bin/sh\n# upstream t3\n", { mode: 0o755 });
+      const previousPath = process.env.PATH;
+      // ~/.local/bin is typically not on a Mac GUI app's PATH.
+      process.env.PATH = "/usr/bin:/bin";
+      try {
+        const command = yield* commandIn({
+          home,
+          baseDir,
+          isolatedInstance: true,
+        });
+        const link = path.join(localBin, "nexi");
+        const installed = yield* command.install;
+        expect(installed.installedPath).toBe(link);
+        expect(yield* fs.readLink(link)).toBe(path.join(baseDir, "bin", "nexi"));
+        expect(yield* fs.readFileString(upstream)).toBe("#!/bin/sh\n# upstream t3\n");
+        expect(yield* fs.exists(path.join(localBin, "t3"))).toBe(true);
+        const zprofile = yield* fs.readFileString(path.join(home, ".zprofile"));
+        expect(zprofile).toContain("nexi-work-cli-path:begin");
+        expect(zprofile).toContain(localBin);
+        expect(zprofile).not.toContain("t3code");
+        // Idempotent.
+        const again = yield* command.install;
+        expect(again.installedPath).toBe(link);
+        expect(yield* fs.readFileString(path.join(home, ".zprofile"))).toBe(zprofile);
+        expect((yield* command.uninstall).installedPath).toBeNull();
+        expect(yield* fs.exists(link)).toBe(false);
+        expect(yield* fs.exists(upstream)).toBe(true);
+        expect(yield* fs.readFileString(path.join(home, ".zprofile"))).not.toContain(
+          "nexi-work-cli-path:begin",
+        );
+      } finally {
+        process.env.PATH = previousPath;
+      }
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("on macOS, does not write a profile snippet when the bin dir is already on PATH", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped();
+      const baseDir = path.join(home, "Library", "Application Support", "nexi-work");
+      const localBin = path.join(home, ".local", "bin");
+      yield* fs.makeDirectory(localBin, { recursive: true });
+      const previousPath = process.env.PATH;
+      process.env.PATH = `${localBin}:/usr/bin:/bin`;
+      try {
+        const command = yield* commandIn({
+          home,
+          baseDir,
+          isolatedInstance: true,
+        });
+        yield* command.install;
+        expect(yield* fs.exists(path.join(home, ".zprofile"))).toBe(false);
+        expect(yield* fs.exists(path.join(localBin, "nexi"))).toBe(true);
+      } finally {
+        process.env.PATH = previousPath;
+      }
+    }).pipe(Effect.scoped),
+  );
 });

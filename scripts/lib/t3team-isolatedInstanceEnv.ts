@@ -47,7 +47,11 @@ export function resolveAtlassianCallbackPorts(env: Env): readonly number[] | und
       .split(",")
       .map((part) => parsePort("T3CODE_DESKTOP_ATLASSIAN_CALLBACK_PORTS", part.trim()));
   }
-  return resolvePinnedBackendPort(env) === undefined ? undefined : [DEFAULT_PINNED_BACKEND_PORT];
+  // When the explicit list is unset, a pinned build's return address is the
+  // port it actually listens on (live 3783, a nightly 3774, unflavored 3773).
+  // Never fall back to a hardcoded 3773/3774 while the backend is on another port.
+  const pinned = resolvePinnedBackendPort(env);
+  return pinned === undefined ? undefined : [pinned];
 }
 
 export function isIsolatedInstanceBuild(env: Env): boolean {

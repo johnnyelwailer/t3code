@@ -122,12 +122,10 @@ export function migrateNexiProfile(input: {
       join,
     );
     writeNexiIdentityMarker(destinationProfileDir, { product: "nexi-work", at }, join);
+    // Windows DPAPI unlocks a copied Local State for the same user; this stamp
+    // is "copied", not Electron's live backend. macOS Keychain stays "unknown".
     const safeStorage: MigrationStatus["safeStorage"] =
-      input.platform === "win32"
-        ? "windows-local-state"
-        : input.platform === "darwin"
-          ? "unknown"
-          : "copied";
+      input.platform === "darwin" ? "unknown" : "copied";
     const warning =
       safeStorage === "unknown"
         ? "Nexi Work could not carry your encrypted sign-in onto this app identity. Your projects and threads are intact. Please sign in again."

@@ -20,6 +20,7 @@ import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as PreviewPasskeys from "../preview/Passkeys.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopBackendPort from "./DesktopBackendPort.ts";
+import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopLegacyLocalStorage from "./DesktopLegacyLocalStorage.ts";
 import * as DesktopLifecycle from "./DesktopLifecycle.ts";
@@ -310,6 +311,24 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
+  // Isolated packaged Nexi: put `nexi` on PATH on first launch (idempotent; never clobbers `t3`).
+  // The launchd/systemd boot service is still only installed by `nexi service install`, not here.
+  if (environment.isPackaged && environment.isolatedInstance) {
+    const cli = yield* DesktopCliCommand.DesktopCliCommand;
+    yield* Effect.forkScoped(
+      cli.install.pipe(
+        Effect.tap((state) =>
+          logStartupInfo("cli command path prepared", {
+            installedPath: state.installedPath,
+            onPath: state.onPath,
+          }),
+        ),
+        Effect.catch((error) =>
+          logStartupInfo("cli command path not prepared", { message: error.message }),
+        ),
+      ),
+    );
+  }
   // t3team: commit renderer localStorage (composer drafts) to disk regularly and before quit.
   yield* registerDesktopStorageFlush();
   // t3team: the renderer's `<img>`s of the Atlassian media proxy need its bearer (no cookie there).

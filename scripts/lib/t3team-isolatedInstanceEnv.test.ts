@@ -45,12 +45,24 @@ describe("resolveAtlassianCallbackPorts", () => {
     assert.isUndefined(resolveAtlassianCallbackPorts({}));
   });
 
-  it("defaults to the registered 3773 for a pinned build", () => {
+  it("defaults to the port the build is actually pinned to, not a hardcoded 3773 or 3774", () => {
     assert.deepEqual(
       resolveAtlassianCallbackPorts({ T3CODE_DESKTOP_BACKEND_PORT: "3774" }),
-      [3773],
+      [3774],
+    );
+    assert.deepEqual(
+      resolveAtlassianCallbackPorts({ T3CODE_DESKTOP_BACKEND_PORT: "3783" }),
+      [3783],
     );
     assert.deepEqual(resolveAtlassianCallbackPorts({ VITE_DESKTOP_PIN_BACKEND_PORT: "1" }), [3773]);
+    // An explicit list always wins, including when it is only 3773.
+    assert.deepEqual(
+      resolveAtlassianCallbackPorts({
+        T3CODE_DESKTOP_BACKEND_PORT: "3783",
+        T3CODE_DESKTOP_ATLASSIAN_CALLBACK_PORTS: "3773,3783",
+      }),
+      [3773, 3783],
+    );
   });
 
   it("parses an explicit list and rejects a bad entry", () => {

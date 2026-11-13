@@ -324,6 +324,29 @@ describe("migrateNexiProfile", () => {
       cleanup();
     }
   });
+
+  it("records a successful Windows profile copy as copied, not windows-local-state", () => {
+    const { brandedDir, profileDir, isolatedProfile, cleanup } = makeTree();
+    try {
+      writeState(brandedDir, REAL_DB_BYTES);
+      writeProfile(profileDir);
+      const result = migrateNexiProfile({
+        sourceProfileDir: profileDir,
+        destinationProfileDir: isolatedProfile,
+        join: NodePath.join,
+        stamp: "testcase",
+        adjacentNexiHome: brandedDir,
+        platform: "win32",
+      });
+      assert.equal(result.status, "ok");
+      assert.equal(result.safeStorage, "copied");
+      const status = readMigrationStatus(isolatedProfile, NodePath.join);
+      assert.equal(status?.safeStorage, "copied");
+      assert.isUndefined(migrationWarningForUser(status));
+    } finally {
+      cleanup();
+    }
+  });
 });
 
 describe("existing Nexi user upgrade", () => {
