@@ -4,7 +4,7 @@ import * as Electron from "electron";
 
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopLocalEnvironmentAuth from "../backend/DesktopLocalEnvironmentAuth.ts";
-import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
+import { getDesktopUrl } from "../electron/t3team-desktopScheme.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
 
@@ -71,7 +71,9 @@ export const registerAtlassianAssetBearer = Effect.fn("desktop.t3team.atlassianA
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     const pool = yield* DesktopBackendPool.DesktopBackendPool;
     const localAuth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
-    const applicationUrl = getDesktopUrl(environment.isDevelopment, { isolatedInstance: environment.isolatedInstance });
+    const applicationUrl = getDesktopUrl(environment.isDevelopment, {
+      isolatedInstance: environment.isolatedInstance,
+    });
     const context = yield* Effect.context<never>();
     const bearerFor = Effect.fn("desktop.t3team.atlassianAssetBearer.bearerFor")(
       function* (requestUrl: string, pageUrl: string | undefined) {

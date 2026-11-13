@@ -6,7 +6,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 
-import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
+import { getDesktopUrl } from "../electron/t3team-desktopScheme.ts";
 import { readChromiumLocalStorage } from "./chromiumLocalStorage.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
@@ -78,7 +78,10 @@ const make = Effect.gen(function* () {
     yield* Ref.set(markerPath, Option.some(marker));
     const directory = yield* findV1LocalStorage;
     if (directory === null) return yield* writeMarker;
-    const origin = ElectronProtocol.getDesktopUrl(false, { isolatedInstance: environment.isolatedInstance }).replace(/\/$/, "");
+    const origin = getDesktopUrl(false, { isolatedInstance: environment.isolatedInstance }).replace(
+      /\/$/,
+      "",
+    );
     const read = yield* readChromiumLocalStorage(directory, origin).pipe(
       Effect.provideService(FileSystem.FileSystem, fs),
       Effect.provideService(Path.Path, path),

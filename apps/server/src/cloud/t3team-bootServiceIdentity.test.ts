@@ -7,7 +7,7 @@ import {
   UPSTREAM_BOOT_SERVICE_UNIT_FILE,
   bootServiceIdentityForAppId,
   resolveBootServiceIdentity,
-} from "./bootServiceIdentity.ts";
+} from "./t3team-bootServiceIdentity.ts";
 
 describe("bootServiceIdentityForAppId", () => {
   it("gives live Nexi Work unique launchd and systemd labels", () => {

@@ -15,6 +15,10 @@ import { satisfiesSemverRange } from "@t3tools/shared/semver";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopManagedPolicy from "../app/DesktopManagedPolicy.ts";
 import { parseWslDistroList, type WslDistro } from "./wslPathParsing.ts";
+import {
+  DEFAULT_WSL_RUNTIME_PARENT,
+  wslRuntimeParentExpression,
+} from "./t3team-wslRuntimeParent.ts";
 
 const PROCESS_TERMINATE_GRACE = Duration.seconds(1);
 const LIST_TIMEOUT = Duration.seconds(8);
@@ -256,21 +260,6 @@ const WSL_RUNTIME_SELECTION_GRACE_MINUTES = 5;
 
 const sanitizeWslRuntimeId = (value: string): string => value.replace(/[^A-Za-z0-9._-]/g, "_");
 
-/** WSL cache directory expression. An isolated instance uses a private path under `$HOME`. */
-export const DEFAULT_WSL_RUNTIME_PARENT = "$HOME/.t3/wsl-runtime";
-
-export function wslRuntimeParentExpression(
-  userDataDirName: string | undefined,
-  isolated: boolean,
-): string {
-  if (isolated && userDataDirName?.trim()) {
-    const slug = userDataDirName.trim().replace(/[^A-Za-z0-9._-]/g, "_");
-    return `$HOME/.${slug}/wsl-runtime`;
-  }
-  return DEFAULT_WSL_RUNTIME_PARENT;
-}
-
-
 export const buildWslRuntimeInstallScript = (
   linuxArchivePath: string,
   runtimeId: string,
@@ -424,10 +413,9 @@ export const buildWslRuntimeInvalidateScript = (
   runtimeParent: string = DEFAULT_WSL_RUNTIME_PARENT,
 ): string => {
   const safeRuntimeId = sanitizeWslRuntimeId(runtimeId);
-  return [
-    "set -eu",
-    `rm -f "${runtimeParent}/${safeRuntimeId}/${WSL_RUNTIME_READY_MARKER}"`,
-  ].join("\n");
+  return ["set -eu", `rm -f "${runtimeParent}/${safeRuntimeId}/${WSL_RUNTIME_READY_MARKER}"`].join(
+    "\n",
+  );
 };
 
 export const parseWslRuntimeRoot = (stdout: string): string | null => {
@@ -1230,7 +1218,9 @@ export const layer = Layer.effect(
       getUserHome,
       getDistroIp,
       prepareRuntime: Effect.fn("desktop.wsl.prepareRuntime")(function (distro, archive) {
-        return provideSpawner(prepareWslRuntimeImpl(distro, archive, windowsToWslPath, runtimeParent));
+        return provideSpawner(
+          prepareWslRuntimeImpl(distro, archive, windowsToWslPath, runtimeParent),
+        );
       }),
       pruneRuntimes: Effect.fn("desktop.wsl.pruneRuntimes")(function (distro, runtimeId) {
         return provideSpawner(pruneWslRuntimesImpl(distro, runtimeId, runtimeParent));

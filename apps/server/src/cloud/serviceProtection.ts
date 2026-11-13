@@ -7,7 +7,7 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as ProcessRunner from "../processRunner.ts";
-import { resolveBootServiceIdentity } from "./bootServiceIdentity.ts";
+import { resolveBootServiceIdentity } from "./t3team-bootServiceIdentity.ts";
 
 const PROTECT_DROP_IN = "90-t3code-protect.conf";
 const SYSTEM_UNIT_DIR = "/etc/systemd/system";

@@ -14,7 +14,7 @@ import * as Runtime from "effect/Runtime";
 import * as Schema from "effect/Schema";
 
 import { bootServiceBaseDirOf } from "./cloud/bootService.ts";
-import { resolveBootServiceIdentity } from "./cloud/bootServiceIdentity.ts";
+import { resolveBootServiceIdentity } from "./cloud/t3team-bootServiceIdentity.ts";
 import { ServiceLauncherHostProcess } from "./cloud/serviceLauncherClient.ts";
 import {
   SERVICE_LAUNCHER_CONTEXT_ENV,

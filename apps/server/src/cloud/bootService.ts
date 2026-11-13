@@ -36,7 +36,7 @@ import {
 import {
   type BootServiceIdentity,
   resolveBootServiceIdentity,
-} from "./bootServiceIdentity.ts";
+} from "./t3team-bootServiceIdentity.ts";
 
 const BOOT_SERVICE_UNIT_ENV = "T3_BOOT_SERVICE_UNIT";
 export const BOOT_SERVICE_LOG_FILE = "boot-service.log";
@@ -234,13 +234,7 @@ function systemdManager(input: {
   readonly identity: BootServiceIdentity;
 }): BootServiceManager {
   const unitFile = input.identity.unitFile;
-  const unitPath = input.path.join(
-    input.homeDir,
-    ".config",
-    "systemd",
-    "user",
-    unitFile,
-  );
+  const unitPath = input.path.join(input.homeDir, ".config", "systemd", "user", unitFile);
   const prepareActivation = [
     {
       step: "reloading systemd user units",
@@ -967,9 +961,7 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
             ),
             ([enabled, active]) => succeeded(active) || succeeded(enabled),
           )
-        : succeeded(
-            yield* probe("launchctl", ["print", `gui/${uid}/${identity.launchdLabel}`]),
-          );
+        : succeeded(yield* probe("launchctl", ["print", `gui/${uid}/${identity.launchdLabel}`]));
     return yield* Effect.acquireUseRelease(
       // Require every stop before repair when restoring, so the server releases the database.
       // Otherwise stops are best-effort; launchd rejects bootout of an unloaded job.

@@ -13,6 +13,7 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as DesktopCliShim from "./DesktopCliShim.ts";
+import { cliPathLinkName, cliShimMarker } from "./t3team-cliIdentity.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 export class DesktopCliCommandError extends Schema.TaggedError<DesktopCliCommandError>()(
@@ -69,8 +70,8 @@ export const make = Effect.gen(function* () {
   const path = environment.path;
   const windows = environment.platform === "win32";
   const launcher = DesktopCliShim.launcherPath(environment);
-  const commandName = DesktopCliShim.cliPathLinkName(environment.isolatedInstance);
-  const marker = DesktopCliShim.cliShimMarker(environment.isolatedInstance);
+  const commandName = cliPathLinkName(environment.isolatedInstance);
+  const marker = cliShimMarker(environment.isolatedInstance);
   const binDirectory = path.dirname(launcher);
   const ownedPathMarker = path.join(environment.stateDir, "cli-command-path-entry");
 

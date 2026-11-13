@@ -9,11 +9,14 @@ import {
   type LinuxPasswordStoreSwitch,
   type LinuxPasswordStorePreference,
 } from "../linuxSecretStorage.ts";
+import { resolveDesktopStateDir, type JoinPath } from "./DesktopStatePaths.ts";
 import {
-  resolveDesktopBaseDir,
-  resolveDesktopStateDir,
-  type JoinPath,
-} from "./DesktopStatePaths.ts";
+  type EarlyPackagedBranding,
+  resolveBrandedLinuxDesktopEntryName,
+  resolveEarlyDesktopBaseDir,
+} from "./t3team-earlyPackagedBranding.ts";
+
+export type { EarlyPackagedBranding } from "./t3team-earlyPackagedBranding.ts";
 
 interface EarlyDesktopSettingsInput {
   readonly env: NodeJS.ProcessEnv;
@@ -33,50 +36,8 @@ export interface EarlyLinuxElectronOptions {
   readonly isolatedInstance: boolean;
 }
 
-export const resolveLinuxDesktopEntryName = (
-  isDevelopment: boolean,
-  branding?: { readonly linuxDesktopEntryName?: string },
-): string =>
-  branding?.linuxDesktopEntryName?.trim() ||
-  (isDevelopment ? "com.t3tools.T3Code.Development.desktop" : "com.t3tools.T3Code.desktop");
-
-/** Packaged branding fields that early Linux startup needs before DesktopEnvironment exists. */
-export interface EarlyPackagedBranding {
-  readonly isolatedInstance?: boolean;
-  readonly userDataDirName?: string;
-  readonly linuxDesktopEntryName?: string;
-  readonly appId?: string;
-}
-
-function resolveLinuxAppDataDirectory(input: {
-  readonly env: NodeJS.ProcessEnv;
-  readonly homeDirectory: string;
-  readonly joinPath: JoinPath;
-}): string {
-  const xdg = input.env.XDG_CONFIG_HOME?.trim();
-  return xdg && xdg.length > 0 ? xdg : input.joinPath(input.homeDirectory, ".config");
-}
-
-export function readEarlyPackagedBranding(
-  resourcesPath: string | undefined,
-  readFileString: (path: string) => string,
-  exists: (path: string) => boolean,
-  joinPath: JoinPath,
-): EarlyPackagedBranding | undefined {
-  if (!resourcesPath) return undefined;
-  for (const candidate of [
-    joinPath(resourcesPath, "desktop-branding.json"),
-    joinPath(resourcesPath, "resources", "desktop-branding.json"),
-  ]) {
-    try {
-      if (!exists(candidate)) continue;
-      return JSON.parse(readFileString(candidate)) as EarlyPackagedBranding;
-    } catch {
-      continue;
-    }
-  }
-  return undefined;
-}
+export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
+  isDevelopment ? "com.t3tools.T3Code.Development.desktop" : "com.t3tools.T3Code.desktop";
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();
@@ -92,39 +53,6 @@ const decodeEarlyDesktopSettingsJson = Schema.decodeSync(EarlyDesktopSettingsJso
 
 const isDevelopmentEnvironment = (env: NodeJS.ProcessEnv): boolean =>
   trimNonEmpty(env.VITE_DEV_SERVER_URL) !== null;
-
-/**
- * The home early Linux startup reads and writes. An isolated instance uses its
- * branded app-data directory and ignores an inherited T3CODE_HOME.
- */
-export function resolveEarlyDesktopBaseDir(input: {
-  readonly env: NodeJS.ProcessEnv;
-  readonly homeDirectory: string;
-  readonly joinPath: JoinPath;
-  readonly packagedBranding?: EarlyPackagedBranding | undefined;
-  readonly appDataDirectory?: string;
-}): { readonly baseDir: string; readonly isolated: boolean } {
-  const name = input.packagedBranding?.userDataDirName?.trim();
-  if (input.packagedBranding?.isolatedInstance === true && name) {
-    const appData =
-      input.appDataDirectory ??
-      resolveLinuxAppDataDirectory({
-        env: input.env,
-        homeDirectory: input.homeDirectory,
-        joinPath: input.joinPath,
-      });
-    return { baseDir: input.joinPath(appData, name), isolated: true };
-  }
-  const t3Home = Option.fromUndefinedOr(input.env.T3CODE_HOME);
-  return {
-    baseDir: resolveDesktopBaseDir({
-      homeDirectory: input.homeDirectory,
-      joinPath: input.joinPath,
-      t3Home,
-    }),
-    isolated: false,
-  };
-}
 
 function resolveEarlyDesktopSettingsPath(input: {
   readonly env: NodeJS.ProcessEnv;
@@ -221,7 +149,11 @@ export function resolveEarlyLinuxElectronOptions(
   const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
     isDevelopment,
-    linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment, input.packagedBranding),
+    linuxDesktopEntryName: resolveBrandedLinuxDesktopEntryName(
+      isDevelopment,
+      input.packagedBranding,
+      resolveLinuxDesktopEntryName(isDevelopment),
+    ),
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,
       env: input.env,

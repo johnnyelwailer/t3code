@@ -6,14 +6,7 @@ import * as NodePath from "node:path";
 
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type CliShimTarget,
-  cliBinaryName,
-  cliPathLinkName,
-  cliShimMarker,
-  NEXI_MARKER,
-  renderCliShim,
-} from "./DesktopCliShim.ts";
+import { type CliShimTarget, renderCliShim } from "./DesktopCliShim.ts";
 
 const directories: Array<string> = [];
 afterEach(() => {
@@ -129,29 +122,5 @@ describe("renderCliShim", () => {
     );
     expect(bare).toEqual([]);
     expect(lines).toContain('set "T3CODE_CLI_PATH=C:\\Users\\José\\.t3\\bin\\t3.cmd"');
-  });
-});
-
-describe("isolated Nexi CLI names", () => {
-  it("uses nexi / nexi.cmd and a Nexi marker for an isolated instance", () => {
-    expect(cliBinaryName({ isolatedInstance: true, platform: "darwin" })).toBe("nexi");
-    expect(cliBinaryName({ isolatedInstance: true, platform: "linux" })).toBe("nexi");
-    expect(cliBinaryName({ isolatedInstance: true, platform: "win32" })).toBe("nexi.cmd");
-    expect(cliBinaryName({ isolatedInstance: false, platform: "linux" })).toBe("t3");
-    expect(cliBinaryName({ isolatedInstance: false, platform: "win32" })).toBe("t3.cmd");
-    expect(cliPathLinkName(true)).toBe("nexi");
-    expect(cliPathLinkName(false)).toBe("t3");
-    expect(cliShimMarker(true)).toBe(NEXI_MARKER);
-    const shim = renderCliShim({
-      target: { kind: "direct", executable: "/opt/Nexi/nexi", entry: "/opt/Nexi/entry.mjs" },
-      shimPath: "/home/n/.nexi/bin/nexi",
-      t3Home: "/home/n/.nexi",
-      isolatedInstance: true,
-      appId: "ch.nexplore.nexi.work",
-    });
-    expect(shim).toContain(NEXI_MARKER);
-    expect(shim).toContain("export T3CODE_DESKTOP_ISOLATED_INSTANCE=1");
-    expect(shim).toMatch(/export T3CODE_DESKTOP_APP_ID=.ch\.nexplore\.nexi\.work./);
-    expect(shim).not.toContain("T3_BOOT_SERVICE_UNIT=");
   });
 });

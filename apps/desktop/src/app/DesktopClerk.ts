@@ -18,6 +18,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
+import { getDesktopScheme } from "../electron/t3team-desktopScheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopUserData from "./DesktopUserData.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -100,7 +101,7 @@ function createDesktopClerkBridge(
     manageSingleInstanceLock: false,
     passkeys: true,
     renderer: {
-      scheme: ElectronProtocol.getDesktopScheme(isDevelopment, { isolatedInstance }),
+      scheme: getDesktopScheme(isDevelopment, { isolatedInstance }),
       host: ElectronProtocol.DESKTOP_HOST,
     },
   });
@@ -142,7 +143,12 @@ export const make = Effect.gen(function* () {
   yield* Effect.acquireRelease(
     Effect.try({
       try: () =>
-        createDesktopClerkBridge(environment.stateDir, environment.isDevelopment, userDataPath, environment.isolatedInstance),
+        createDesktopClerkBridge(
+          environment.stateDir,
+          environment.isDevelopment,
+          userDataPath,
+          environment.isolatedInstance,
+        ),
       catch: (cause) =>
         new DesktopClerkBridgeInitializationError({
           stateDir: environment.stateDir,
@@ -198,7 +204,7 @@ export const make = Effect.gen(function* () {
       };
       const resumeProviderAuth = (value: string | undefined) => {
         const destination = providerAuthReturnUrl(value);
-        const expectedOrigin = `${ElectronProtocol.getDesktopScheme(environment.isDevelopment, { isolatedInstance: environment.isolatedInstance })}://app`;
+        const expectedOrigin = `${getDesktopScheme(environment.isDevelopment, { isolatedInstance: environment.isolatedInstance })}://app`;
         if (!destination?.startsWith(`${expectedOrigin}/`)) return false;
         void runPromise(
           Effect.gen(function* () {

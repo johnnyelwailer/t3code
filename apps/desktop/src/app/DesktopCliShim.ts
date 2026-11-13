@@ -5,30 +5,15 @@ import * as Option from "effect/Option";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
+import {
+  cliBinaryName,
+  cliPathLinkName,
+  cliShimMarker,
+  isolatedShimEnvVars,
+} from "./t3team-cliIdentity.ts";
 
 // AppImage mounts change each run; the launcher must mount the image itself.
 const { logInfo, logWarning } = makeComponentLogger("desktop-cli-shim");
-
-const MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
-export const NEXI_MARKER = "Written by Nexi Work: runs the desktop app's bundled nexi CLI.";
-
-/** Launcher file name inside the app's `bin` directory. */
-export function cliBinaryName(input: {
-  readonly isolatedInstance: boolean;
-  readonly platform: NodeJS.Platform;
-}): string {
-  const base = input.isolatedInstance ? "nexi" : "t3";
-  return input.platform === "win32" ? `${base}.cmd` : base;
-}
-
-/** PATH entry name. An isolated Nexi install never uses or removes `t3`. */
-export function cliPathLinkName(isolatedInstance: boolean): string {
-  return isolatedInstance ? "nexi" : "t3";
-}
-
-export function cliShimMarker(isolatedInstance: boolean): string {
-  return isolatedInstance ? NEXI_MARKER : MARKER;
-}
 
 const SERVER_ENTRY = "apps/server/dist/bin.mjs";
 
@@ -49,13 +34,11 @@ function isolatedShimEnvLines(input: {
   readonly isolatedInstance?: boolean;
   readonly appId?: string | undefined;
 }): { readonly windows: ReadonlyArray<string>; readonly unix: ReadonlyArray<string> } {
-  if (input.isolatedInstance !== true) return { windows: [], unix: [] };
-  const appId = input.appId?.trim();
-  const windows = ['set "T3CODE_DESKTOP_ISOLATED_INSTANCE=1"'];
-  const unix = ["export T3CODE_DESKTOP_ISOLATED_INSTANCE=1"];
-  if (appId) {
-    windows.push(`set "T3CODE_DESKTOP_APP_ID=${cmdText(appId)}"`);
-    unix.push(`export T3CODE_DESKTOP_APP_ID=${shellWord(appId)}`);
+  const windows: string[] = [];
+  const unix: string[] = [];
+  for (const { name, value } of isolatedShimEnvVars(input)) {
+    windows.push(`set "${name}=${cmdText(value)}"`);
+    unix.push(`export ${name}=${shellWord(value)}`);
   }
   return { windows, unix };
 }

@@ -13,6 +13,8 @@ import * as DesktopEarlyElectronStartup from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopAppBranding } from "./DesktopEnvironment.ts";
 import { renderUrlHandlerDesktopEntry } from "./DesktopLinuxUrlHandler.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
+import { getDesktopScheme } from "../electron/t3team-desktopScheme.ts";
+import { readEarlyPackagedBranding } from "./t3team-earlyPackagedBranding.ts";
 
 export interface DesktopPreReadyCommandLineReader {
   readonly hasSwitch: (switchName: string) => boolean;
@@ -38,7 +40,7 @@ function packagedBrandingFromProcess():
     typeof process.resourcesPath === "string" && process.resourcesPath.length > 0
       ? process.resourcesPath
       : undefined;
-  return DesktopEarlyElectronStartup.readEarlyPackagedBranding(
+  return readEarlyPackagedBranding(
     resourcesPath,
     (path) => NodeFS.readFileSync(path, "utf8"),
     (path) => NodeFS.existsSync(path),
@@ -130,7 +132,9 @@ export const make = Effect.gen(function* () {
               process.env.T3CODE_DESKTOP_LAUNCHER_PATH?.trim() ||
               process.env.APPIMAGE?.trim() ||
               process.execPath,
-            scheme: ElectronProtocol.getDesktopScheme(linux.isDevelopment, { isolatedInstance: linux.isolatedInstance }),
+            scheme: getDesktopScheme(linux.isDevelopment, {
+              isolatedInstance: linux.isolatedInstance,
+            }),
             ...(iconPath === undefined ? {} : { iconPath }),
           }),
           "utf8",

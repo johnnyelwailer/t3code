@@ -854,7 +854,22 @@
     "apps/web/src/components/settings/LabsSettingsPanel.tsx",
     "apps/web/scripts/verify-built-boot.ts",
     "packages/contracts/src/providerPolicy.ts",
-    "packages/shared/src/projectSettings.test.ts"
+    "packages/shared/src/projectSettings.test.ts",
+    "apps/desktop/src/app/DesktopClerk.ts",
+    "apps/desktop/src/app/DesktopCliShim.ts",
+    "apps/desktop/src/app/DesktopEarlyElectronStartup.ts",
+    "apps/desktop/src/app/DesktopLegacyLocalStorage.ts",
+    "apps/desktop/src/app/DesktopLifecycle.ts",
+    "apps/desktop/src/app/DesktopLinuxUrlHandler.ts",
+    "apps/desktop/src/app/DesktopPreReadyPlatform.ts",
+    "apps/desktop/src/electron/ElectronProtocol.ts",
+    "apps/desktop/src/wsl/DesktopWslEnvironment.ts",
+    "apps/server/src/cli/update.ts",
+    "apps/server/src/cloud/bootService.ts",
+    "apps/server/src/cloud/serviceProtection.ts",
+    "apps/server/src/serverOwnership.ts",
+    "packages/project-context/src/t3teamProjectStateDir.ts",
+    "packages/project-context/src/t3teamProjectStateDir.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

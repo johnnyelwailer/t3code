@@ -20,7 +20,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } fr
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as BootService from "../cloud/bootService.ts";
-import { resolveBootServiceIdentity } from "../cloud/bootServiceIdentity.ts";
+import { resolveBootServiceIdentity } from "../cloud/t3team-bootServiceIdentity.ts";
 import {
   ensurePinnedRuntimeInstalled,
   launcherOwnsVersionsDir,
