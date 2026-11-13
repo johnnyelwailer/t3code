@@ -1,0 +1,33 @@
+# Compile the isolated Nexi NSIS include with warnings as errors, on every PR
+# and on main. Why this file exists: electron-builder runs makensis -WX, and
+# an unused un.StrStr (warning 6010) failed the rc.22 Windows installer after
+# the tag. Fork PR CI does not run the full desktop suite, so this gate is
+# plain Node plus apt nsis and finishes in seconds.
+name: T3Team NSIS compile
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: t3team-nsis-compile-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  nsis-compile:
+    name: NSIS compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install makensis
+        run: sudo apt-get update && sudo apt-get install -y nsis
+
+      - name: Compile t3team-installer.nsh with warnings as errors
+        env:
+          T3TEAM_NSIS_REQUIRE_MAKENSIS: "1"
+        run: node --test apps/desktop/scripts/t3team-compile-nsis.test.mjs

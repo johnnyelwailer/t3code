@@ -114,6 +114,19 @@ export function resolveWindowsPackagingIdentity(input: {
   };
 }
 
+/**
+ * The primary .exe electron-builder writes into the unpacked app directory.
+ * Isolated Nexi sets `win.executableName` to `nexi-work`, which is not the
+ * display product name ("Nexi Work"). The packaged-payload probe must use
+ * this name; `${productName}.exe` is a missing-file failure on stable builds.
+ */
+export function windowsPackagedExecutableFileName(
+  identity: WindowsPackagingIdentity,
+  productName: string,
+): string {
+  return `${identity.executableName ?? productName}.exe`;
+}
+
 /** NSIS options for `createBuildConfig`. Upstream is exactly the historical pair of keys. */
 export function windowsNsisOptions(identity: WindowsPackagingIdentity): Record<string, unknown> {
   const nsis: Record<string, unknown> = {

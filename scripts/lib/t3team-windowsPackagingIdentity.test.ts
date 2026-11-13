@@ -26,6 +26,7 @@ import {
   protocolSchemesOf,
   resolveWindowsPackagingIdentity,
   windowsNsisOptions,
+  windowsPackagedExecutableFileName,
 } from "./t3team-windowsPackagingIdentity.ts";
 
 const isolatedEnv = {
@@ -165,5 +166,32 @@ describe("the isolated NSIS include", () => {
     assert.include(body, "T3TEAM_STALE_NEXI_GUID");
     assert.include(body, "DeleteRegKey");
     assert.notInclude(body, "RMDir /r");
+  });
+});
+
+describe("windowsPackagedExecutableFileName", () => {
+  it("uses nexi-work.exe for an isolated Nexi build, not the 'Nexi Work' display name", () => {
+    const isolated = resolveWindowsPackagingIdentity({
+      env: isolatedEnv,
+      appId: LIVE_NEXI_APP_ID,
+      productName: "Nexi Work",
+    });
+    assert.equal(windowsPackagedExecutableFileName(isolated, "Nexi Work"), "nexi-work.exe");
+    assert.notEqual(windowsPackagedExecutableFileName(isolated, "Nexi Work"), "Nexi Work.exe");
+  });
+
+  it("falls back to the product name when the build is not isolated", () => {
+    const upstream = resolveWindowsPackagingIdentity({ env: {} });
+    assert.equal(windowsPackagedExecutableFileName(upstream, "T3 Code"), "T3 Code.exe");
+    const replace = resolveWindowsPackagingIdentity({
+      env: {
+        T3CODE_DESKTOP_PRODUCT_NAME: "Nexi Work",
+        T3CODE_DESKTOP_APP_ID: LIVE_NEXI_APP_ID,
+      },
+      appId: LIVE_NEXI_APP_ID,
+      productName: "Nexi Work",
+    });
+    assert.equal(replace.executableName, undefined);
+    assert.equal(windowsPackagedExecutableFileName(replace, "Nexi Work"), "Nexi Work.exe");
   });
 });
