@@ -583,6 +583,7 @@
     "packages/agent-runner/src/executor.ts",
     "packages/agent-runner/test/contract.test.ts",
     "packages/client-runtime/package.json",
+    "packages/client-runtime/src/t3ToolSummary.ts",
     "packages/client-runtime/src/connection/catalog.ts",
     "packages/client-runtime/src/connection/index.ts",
     "packages/client-runtime/src/connection/model.ts",
