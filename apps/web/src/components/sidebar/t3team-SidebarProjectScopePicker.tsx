@@ -47,6 +47,7 @@ type ProjectContextMenu = (
 export function T3TeamSidebarProjectScopePicker({
   shown,
   overflow,
+  hidden,
   addable,
   activeScopeKey,
   onSelectScope,
@@ -56,6 +57,7 @@ export function T3TeamSidebarProjectScopePicker({
 }: {
   shown: ReadonlyArray<SidebarProjectSnapshot>;
   overflow: ReadonlyArray<SidebarProjectSnapshot>;
+  hidden: ReadonlyArray<SidebarProjectSnapshot>;
   addable: ReadonlyArray<JiraCatalogProject>;
   activeScopeKey: string | null;
   onSelectScope: (scopeKey: string | null) => void;
@@ -70,8 +72,8 @@ export function T3TeamSidebarProjectScopePicker({
   });
   const filter = useComboboxFilter();
   const entries = useMemo(
-    () => buildScopePickerEntries(shown, overflow, addable),
-    [shown, overflow, addable],
+    () => buildScopePickerEntries(shown, overflow, addable, hidden),
+    [shown, overflow, addable, hidden],
   );
   const visible = useMemo(
     () => visibleScopePickerEntries(entries, menu.query),

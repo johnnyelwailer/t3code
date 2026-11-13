@@ -19,9 +19,11 @@ export interface EnvironmentFilterPill {
 }
 
 export interface EnvironmentFilter {
-  /** `null` hides the control: with fewer than two environments there is nothing to choose. */
+  /** `null` hides the control: with fewer than two visible environments and nothing hidden. */
   readonly pills: ReadonlyArray<EnvironmentFilterPill> | null;
-  /** The selection that holds: a selected environment that is gone reads as "All" (`null`). */
+  /** The environments the reader hid, so a control can offer them back; empty when none. */
+  readonly hiddenPills: ReadonlyArray<EnvironmentFilterPill>;
+  /** The selection that holds: a selected environment that is gone or hidden reads as "All". */
   readonly selectedId: string | null;
 }
 
@@ -54,23 +56,39 @@ function displayLabels(
 export function resolveEnvironmentFilter(input: {
   readonly environments: ReadonlyArray<EnvironmentFilterEnvironment>;
   readonly selectedId: string | null;
+  /** Ids the reader hid: their pills leave `pills` and join `hiddenPills`, where they can be brought back. */
+  readonly hiddenIds?: ReadonlySet<string> | readonly string[];
 }): EnvironmentFilter {
   const environments = orderEnvironments(input.environments);
+  const hidden = new Set<string>(input.hiddenIds ?? []);
+  const visible = environments.filter((env) => !hidden.has(env.id));
+  const hiddenEnvs = environments.filter((env) => hidden.has(env.id));
   const selectedId =
-    input.selectedId !== null && environments.some((env) => env.id === input.selectedId)
+    input.selectedId !== null &&
+    !hidden.has(input.selectedId) &&
+    environments.some((env) => env.id === input.selectedId)
       ? input.selectedId
       : null;
-  if (environments.length < 2) return { pills: null, selectedId };
   const labels = displayLabels(environments);
+  const labelById = new Map(environments.map((env, index) => [env.id, labels[index]!] as const));
+  const hiddenPills = hiddenEnvs.map((env) => ({
+    id: env.id,
+    label: labelById.get(env.id)!,
+    selected: false,
+  }));
+  if (visible.length < 2 && hiddenPills.length === 0) {
+    return { pills: null, hiddenPills, selectedId: null };
+  }
   return {
     pills: [
       { id: null, label: ENVIRONMENT_FILTER_ALL_LABEL, selected: selectedId === null },
-      ...environments.map((env, index) => ({
+      ...visible.map((env) => ({
         id: env.id,
-        label: labels[index]!,
+        label: labelById.get(env.id)!,
         selected: env.id === selectedId,
       })),
     ],
+    hiddenPills,
     selectedId,
   };
 }

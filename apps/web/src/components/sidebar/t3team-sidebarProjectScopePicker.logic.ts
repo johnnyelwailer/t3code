@@ -9,6 +9,8 @@ export type ScopePickerEntry =
       readonly value: string;
       readonly label: string;
       readonly group: SidebarProjectSnapshot;
+      /** The reader removed it from view; it lists only so it can be brought back. */
+      readonly hidden?: boolean;
     }
   | {
       readonly kind: "add";
@@ -24,24 +26,28 @@ function addEntryLabel(entry: JiraCatalogProject, multiSite: boolean): string {
 
 /**
  * Every scope the row knows, not just the ones behind +N: the overflow first (what the reader
- * cannot see), then the discs already shown, then the Jira projects the app does not have yet,
- * then "All projects". Search narrows this one list.
+ * cannot see), then the discs already shown, then the ones the reader removed from view (kept so
+ * they can be brought back), then the Jira projects the app does not have yet, then "All projects".
+ * Search narrows this one list.
  */
 export function buildScopePickerEntries(
   shown: ReadonlyArray<SidebarProjectSnapshot>,
   overflow: ReadonlyArray<SidebarProjectSnapshot>,
   addable: ReadonlyArray<JiraCatalogProject>,
+  hidden: ReadonlyArray<SidebarProjectSnapshot> = [],
 ): ReadonlyArray<ScopePickerEntry> {
-  const appEntry = (group: SidebarProjectSnapshot): ScopePickerEntry => ({
+  const appEntry = (group: SidebarProjectSnapshot, isHidden = false): ScopePickerEntry => ({
     kind: "app",
     value: group.projectKey,
     label: group.displayName,
     group,
+    ...(isHidden ? { hidden: true } : {}),
   });
   const multiSite = new Set(addable.map((entry) => entry.siteHost)).size > 1;
   return [
-    ...overflow.map(appEntry),
-    ...shown.map(appEntry),
+    ...overflow.map((group) => appEntry(group)),
+    ...shown.map((group) => appEntry(group)),
+    ...hidden.map((group) => appEntry(group, true)),
     ...addable.map((entry): ScopePickerEntry => ({
       kind: "add",
       value: `jira-add:${entry.entryKey}`,

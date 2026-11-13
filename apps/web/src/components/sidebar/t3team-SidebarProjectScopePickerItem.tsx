@@ -1,4 +1,4 @@
-import { FolderIcon, PlusIcon } from "lucide-react";
+import { EyeOffIcon, FolderIcon, PlusIcon } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 import { cn } from "~/lib/utils";
@@ -35,7 +35,14 @@ export function T3TeamSidebarProjectScopePickerItem({
         <EntryIcon entry={entry} />
       </span>
       <span className={cn("min-w-0 flex-1 truncate text-sm", add && "italic")}>{entry.label}</span>
-      {add ? <PlusIcon aria-hidden="true" className="size-3.5 text-muted-foreground" /> : null}
+      {add ? (
+        <PlusIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+      ) : entry.kind === "app" && entry.hidden ? (
+        <span className="shrink-0 text-muted-foreground">
+          <EyeOffIcon aria-hidden="true" className="size-3.5" />
+          <span className="sr-only">Hidden</span>
+        </span>
+      ) : null}
     </ComboboxItem>
   );
 }

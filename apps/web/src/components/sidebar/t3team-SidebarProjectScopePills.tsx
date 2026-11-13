@@ -28,6 +28,8 @@ type PillsProps = {
   groups: ReadonlyArray<SidebarProjectSnapshot>;
   activeScopeKey: string | null;
   onSelectScope: (scopeKey: string | null) => void;
+  /** Project keys the reader removed from view: no disc, kept only so they can be brought back. */
+  hiddenProjectKeys: ReadonlySet<string>;
   onProjectContextMenu?:
     | ((
         event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
@@ -71,6 +73,7 @@ export function T3TeamSidebarProjectScopePillsView({
   onRetrySite,
   activeScopeKey,
   onSelectScope,
+  hiddenProjectKeys,
   onProjectContextMenu,
 }: PillsProps & {
   addable: ReadonlyArray<JiraCatalogProject>;
@@ -80,10 +83,12 @@ export function T3TeamSidebarProjectScopePillsView({
   const [ref, width] = useSidebarPillRowWidth();
   const rowRef = useRef<HTMLDivElement | null>(null);
   const empty: ReadonlyArray<SidebarProjectSnapshot> = [];
+  const visibleGroups = groups.filter((group) => !hiddenProjectKeys.has(group.projectKey));
+  const hiddenGroups = groups.filter((group) => hiddenProjectKeys.has(group.projectKey));
   const { shown, overflow } =
     width === null
       ? { shown: empty, overflow: empty }
-      : splitProjectScopePills(groups, activeScopeKey, projectScopeDiscCapacity(width));
+      : splitProjectScopePills(visibleGroups, activeScopeKey, projectScopeDiscCapacity(width));
 
   return (
     <TooltipProvider delay={300} closeDelay={0}>
@@ -99,6 +104,7 @@ export function T3TeamSidebarProjectScopePillsView({
           <T3TeamSidebarProjectScopePillStack
             shown={shown}
             overflow={overflow}
+            hidden={hiddenGroups}
             addable={addable}
             activeScopeKey={activeScopeKey}
             onSelectScope={onSelectScope}

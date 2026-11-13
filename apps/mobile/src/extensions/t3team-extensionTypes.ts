@@ -72,6 +72,19 @@ export interface HomeFiltersProps {
   /** The selected environment's id, or null for all environments. */
   readonly selectedEnvironmentId: string | null;
   readonly onSelectEnvironment: (id: string | null) => void;
+  /** Project keys the reader removed from view; their pills stay, dimmed, and can be brought back. */
+  readonly hiddenProjectKeys: ReadonlySet<string>;
+  readonly onHideProject: (key: string) => void;
+  readonly onShowProject: (key: string) => void;
+  /** Environment ids the reader excluded; their pills stay, dimmed, and can be brought back. */
+  readonly hiddenEnvironmentIds: ReadonlySet<string>;
+  readonly onHideEnvironment: (id: string) => void;
+  readonly onShowEnvironment: (id: string) => void;
+  /**
+   * The local ("this computer") desktop environments. Their pill never offers exclude or stop,
+   * so the slot omits those actions for ids here.
+   */
+  readonly localEnvironmentIds: ReadonlySet<string>;
 }
 
 /**

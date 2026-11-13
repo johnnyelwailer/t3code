@@ -67,8 +67,23 @@ const ADDABLE: ReadonlyArray<JiraCatalogProject> = ["Apollo", "Borealis", "Casca
   }),
 );
 
-function HeaderRow({ width, initialScope }: { width: number; initialScope: string | null }) {
+function HeaderRow({
+  width,
+  initialScope,
+  initialHidden = new Set<string>(),
+}: {
+  width: number;
+  initialScope: string | null;
+  initialHidden?: ReadonlySet<string>;
+}) {
   const [scope, setScope] = useState<string | null>(initialScope);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(initialHidden);
+  const showProject = (key: string) =>
+    setHidden((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
   return (
     <div className="space-y-1" style={{ width }}>
       <div className="flex items-center gap-1 rounded-lg bg-sidebar p-1.5" style={INSET_VARS}>
@@ -76,11 +91,16 @@ function HeaderRow({ width, initialScope }: { width: number; initialScope: strin
           groups={GROUPS}
           addable={ADDABLE}
           activeScopeKey={scope}
-          onSelectScope={setScope}
+          hiddenProjectKeys={hidden}
+          onSelectScope={(scopeKey) => {
+            if (scopeKey !== null && hidden.has(scopeKey)) showProject(scopeKey);
+            setScope(scopeKey);
+          }}
         />
       </div>
       <div className="px-1 text-3xs text-muted-foreground">
         {width}px · {GROUPS.find((g) => g.projectKey === scope)?.displayName ?? "All projects"}
+        {hidden.size > 0 ? ` · hidden: ${[...hidden].join(", ")}` : ""}
       </div>
     </div>
   );

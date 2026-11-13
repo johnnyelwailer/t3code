@@ -67,3 +67,4 @@ apps/web/.storybook-local/
 
 # Bounded-execution e2e driver runtime state (journals, call logs, metrics).
 packages/t3team-sdk/e2e/.state/
+.pr-body-*.md

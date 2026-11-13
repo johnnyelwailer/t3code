@@ -97,6 +97,26 @@ describe("sidebarEnvironmentFilter hide rule", () => {
   it("reads a stored selection of a vanished environment as All", () => {
     expect(sidebarEnvironmentFilter([candidate("local", true)], "cloud").selectedId).toBeNull();
   });
+
+  it("moves a hidden environment out of the pills into hiddenPills", () => {
+    const filter = sidebarEnvironmentFilter(
+      [candidate("local", true), candidate("cloud"), candidate("idle")],
+      null,
+      new Set(["idle"]),
+    );
+    expect(filter.pills?.map((pill) => pill.id)).toEqual([null, "local", "cloud"]);
+    expect(filter.hiddenPills.map((pill) => pill.id)).toEqual(["idle"]);
+  });
+
+  it("keeps the control with just All when every environment is hidden", () => {
+    const filter = sidebarEnvironmentFilter(
+      [candidate("local", true), candidate("cloud")],
+      null,
+      new Set(["local", "cloud"]),
+    );
+    expect(filter.pills?.map((pill) => pill.id)).toEqual([null]);
+    expect(filter.hiddenPills.map((pill) => pill.id)).toEqual(["local", "cloud"]);
+  });
 });
 
 describe("environmentFilterPillCapacity", () => {

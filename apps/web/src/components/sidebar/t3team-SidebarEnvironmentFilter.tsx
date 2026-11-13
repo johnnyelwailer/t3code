@@ -1,4 +1,10 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+} from "react";
 
 import type { EnvironmentFilterPill } from "@t3tools/client-runtime/t3team-environmentFilter";
 
@@ -8,28 +14,34 @@ import {
   T3TeamSidebarEnvironmentFilterPill,
   T3TeamSidebarEnvironmentFilterOverflowMeasure,
 } from "./t3team-SidebarEnvironmentFilterPill";
-import { T3TeamSidebarEnvironmentFilterPicker } from "./t3team-SidebarEnvironmentFilterPicker";
+import { T3TeamSidebarEnvironmentOverflowMenu } from "./t3team-SidebarEnvironmentOverflowMenu";
 import { useSidebarPillRowWidth } from "./t3team-SidebarPillRowMeasure";
 import {
   ENVIRONMENT_FILTER_PILL_GAP,
   environmentFilterPillCapacity,
 } from "./t3team-sidebarEnvironmentFilter.logic";
 
+type EnvironmentPillProps = {
+  readonly pills: ReadonlyArray<EnvironmentFilterPill> | null;
+  readonly hiddenPills: ReadonlyArray<EnvironmentFilterPill>;
+  readonly onSelect: (environmentId: string | null) => void;
+  readonly onUnhide: (environmentId: string) => void;
+  readonly onEnvironmentContextMenu: (
+    event: ReactMouseEvent<HTMLElement>,
+    pill: EnvironmentFilterPill,
+  ) => void;
+  readonly isPrimaryEnvironment: (environmentId: string) => boolean;
+};
+
 /**
  * One-click environment filter under the project pills: "All" plus one pill per environment the
  * list shows something for. `pills` is null while there is nothing to choose, and nothing draws.
- * The row stays one line: whatever does not fit folds into a +N pill that opens the full list,
- * the way the project discs already do.
+ * The row stays one line: whatever does not fit, and whatever the reader hid, folds into a +N
+ * control that offers them back. Right-click a pill for its device menu.
  */
-export function T3TeamSidebarEnvironmentFilter({
-  pills,
-  onSelect,
-}: {
-  pills: ReadonlyArray<EnvironmentFilterPill> | null;
-  onSelect: (environmentId: string | null) => void;
-}) {
-  if (pills === null) return null;
-  return <T3TeamSidebarEnvironmentFilterRow pills={pills} onSelect={onSelect} />;
+export function T3TeamSidebarEnvironmentFilter(props: EnvironmentPillProps) {
+  if (props.pills === null) return null;
+  return <T3TeamSidebarEnvironmentFilterRow {...props} pills={props.pills} />;
 }
 
 type PillSizes = {
@@ -38,8 +50,8 @@ type PillSizes = {
 };
 
 /**
- * An invisible twin of the row measures every pill, plus the widest +N, so the split is a pure
- * sum of rendered widths instead of a guess.
+ * An invisible twin of the row measures every visible pill, plus the widest +N, so the split is a
+ * pure sum of rendered widths instead of a guess.
  */
 function useEnvironmentPillSizes(
   pills: ReadonlyArray<EnvironmentFilterPill>,
@@ -66,13 +78,24 @@ function useEnvironmentPillSizes(
   return [ref, sizes];
 }
 
+/** A pill only carries a device menu when it names an environment that is not "This computer". */
+function pillContextMenu(
+  event: ReactMouseEvent<HTMLElement>,
+  pill: EnvironmentFilterPill,
+  onEnvironmentContextMenu: EnvironmentPillProps["onEnvironmentContextMenu"],
+  isPrimaryEnvironment: EnvironmentPillProps["isPrimaryEnvironment"],
+): void {
+  if (pill.id !== null && !isPrimaryEnvironment(pill.id)) onEnvironmentContextMenu(event, pill);
+}
+
 function T3TeamSidebarEnvironmentFilterRow({
   pills,
+  hiddenPills,
   onSelect,
-}: {
-  pills: ReadonlyArray<EnvironmentFilterPill>;
-  onSelect: (environmentId: string | null) => void;
-}) {
+  onUnhide,
+  onEnvironmentContextMenu,
+  isPrimaryEnvironment,
+}: EnvironmentPillProps & { pills: ReadonlyArray<EnvironmentFilterPill> }) {
   const [rowRef, rowWidth] = useSidebarPillRowWidth();
   const [measureRef, sizes] = useEnvironmentPillSizes(pills);
   const shownCount =
@@ -85,7 +108,8 @@ function T3TeamSidebarEnvironmentFilterRow({
           sizes.overflowWidth,
         );
   const shown = pills.slice(0, shownCount);
-  const hiddenCount = pills.length - shown.length;
+  const overflow = pills.slice(shownCount);
+  const showOverflow = overflow.length > 0 || hiddenPills.length > 0;
   return (
     <div role="group" aria-label="Environment" className="relative min-w-0 py-0.5 pl-2">
       <div
@@ -108,13 +132,19 @@ function T3TeamSidebarEnvironmentFilterRow({
             key={pill.id ?? "all"}
             pill={pill}
             onSelect={onSelect}
+            onContextMenu={(event) =>
+              pillContextMenu(event, pill, onEnvironmentContextMenu, isPrimaryEnvironment)
+            }
           />
         ))}
-        {hiddenCount > 0 ? (
-          <T3TeamSidebarEnvironmentFilterPicker
-            pills={pills}
-            hiddenCount={hiddenCount}
+        {showOverflow ? (
+          <T3TeamSidebarEnvironmentOverflowMenu
+            overflow={overflow}
+            hiddenPills={hiddenPills}
             onSelect={onSelect}
+            onUnhide={onUnhide}
+            onEnvironmentContextMenu={onEnvironmentContextMenu}
+            isPrimaryEnvironment={isPrimaryEnvironment}
           />
         ) : null}
       </div>

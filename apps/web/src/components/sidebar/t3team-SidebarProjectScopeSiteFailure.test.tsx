@@ -48,6 +48,7 @@ describe("project scope failed site", () => {
           siteFailures={[failure]}
           onRetrySite={onRetrySite}
           activeScopeKey={null}
+          hiddenProjectKeys={new Set()}
           onSelectScope={() => {}}
         />,
       );

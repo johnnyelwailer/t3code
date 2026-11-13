@@ -11,6 +11,8 @@ import type { HomeProjectSortOrder } from "./homeThreadList";
 export interface HomeListOptions {
   readonly selectedEnvironmentId: EnvironmentId | null;
   readonly selectedProjectKey: string | null;
+  readonly hiddenProjectKeys: ReadonlySet<string>;
+  readonly hiddenEnvironmentIds: ReadonlySet<EnvironmentId>;
   readonly projectSortOrder: HomeProjectSortOrder;
 }
 
@@ -22,6 +24,8 @@ function defaultHomeListOptions(filters?: ThreadListFilters): HomeListOptions {
   return {
     selectedEnvironmentId: filters?.environmentId ?? null,
     selectedProjectKey: filters?.projectKey ?? null,
+    hiddenProjectKeys: new Set(filters?.hiddenProjectKeys ?? []),
+    hiddenEnvironmentIds: new Set(filters?.hiddenEnvironmentIds ?? []),
     projectSortOrder:
       DEFAULT_SIDEBAR_PROJECT_SORT_ORDER === "manual"
         ? "updated_at"
@@ -49,20 +53,25 @@ export function HomeListOptionsProvider({
   const [optionsAtom] = useState(() => Atom.make(defaultHomeListOptions(savedFilters)));
   const options = useAtomValue(optionsAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
-  // Only the scope persists; the sort order is per session. Updates read the
+  // Only the scope and the hidden sets persist; the sort order is per session. Updates read the
   // registry, so several in one event each build on the last and save it.
   const updateOptions = (patch: Partial<HomeListOptions>) => {
     const current = registry.get(optionsAtom);
     const next = { ...current, ...patch };
     registry.set(optionsAtom, next);
-    if (
+    const scopeChanged =
       next.selectedEnvironmentId !== current.selectedEnvironmentId ||
-      next.selectedProjectKey !== current.selectedProjectKey
-    ) {
+      next.selectedProjectKey !== current.selectedProjectKey;
+    const hiddenChanged =
+      next.hiddenProjectKeys !== current.hiddenProjectKeys ||
+      next.hiddenEnvironmentIds !== current.hiddenEnvironmentIds;
+    if (scopeChanged || hiddenChanged) {
       savePreferences({
         threadListFilters: {
           environmentId: next.selectedEnvironmentId,
           projectKey: next.selectedProjectKey,
+          hiddenProjectKeys: [...next.hiddenProjectKeys],
+          hiddenEnvironmentIds: [...next.hiddenEnvironmentIds],
         },
       });
     }
@@ -101,10 +110,36 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
   const setProjectSortOrder = (value: HomeProjectSortOrder) => {
     updateOptions({ projectSortOrder: value });
   };
+  const hideProject = (key: string) => {
+    if (options.hiddenProjectKeys.has(key)) return;
+    updateOptions({ hiddenProjectKeys: new Set([...options.hiddenProjectKeys, key]) });
+  };
+  const showProject = (key: string) => {
+    if (!options.hiddenProjectKeys.has(key)) return;
+    const next = new Set(options.hiddenProjectKeys);
+    next.delete(key);
+    updateOptions({ hiddenProjectKeys: next });
+  };
+  const hideEnvironment = (environmentId: EnvironmentId) => {
+    if (options.hiddenEnvironmentIds.has(environmentId)) return;
+    updateOptions({
+      hiddenEnvironmentIds: new Set([...options.hiddenEnvironmentIds, environmentId]),
+    });
+  };
+  const showEnvironment = (environmentId: EnvironmentId) => {
+    if (!options.hiddenEnvironmentIds.has(environmentId)) return;
+    const next = new Set(options.hiddenEnvironmentIds);
+    next.delete(environmentId);
+    updateOptions({ hiddenEnvironmentIds: next });
+  };
   return {
     options: resolvedOptions,
     setSelectedEnvironmentId,
     setSelectedProjectKey,
     setProjectSortOrder,
+    hideProject,
+    showProject,
+    hideEnvironment,
+    showEnvironment,
   } as const;
 }

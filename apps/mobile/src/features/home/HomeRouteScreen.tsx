@@ -127,7 +127,22 @@ export function HomeRouteScreen() {
     options: listOptions,
     setSelectedEnvironmentId,
     setSelectedProjectKey,
+    hideProject,
+    showProject,
+    hideEnvironment,
+    showEnvironment,
   } = useHomeListOptions(availableEnvironmentIds);
+  // "This computer": the saved connections that are not relay (cloud) managed; their pills never
+  // offer exclude or stop.
+  const localEnvironmentIds = useMemo(
+    () =>
+      new Set(
+        Object.values(savedConnectionsById)
+          .filter((connection) => connection.relayManaged !== true)
+          .map((connection) => connection.environmentId),
+      ),
+    [savedConnectionsById],
+  );
   const selectedEnvironmentId = listOptions.selectedEnvironmentId;
   // A legacy per-environment scratch key resolves here on every render; the stored
   // value is only rewritten when the user picks a filter.
@@ -252,6 +267,13 @@ export function HomeRouteScreen() {
           onRegenerateThreadTitle={regenerateThreadTitle}
           onEnvironmentChange={setSelectedEnvironmentId}
           onProjectChange={setSelectedProjectKey}
+          hiddenProjectKeys={listOptions.hiddenProjectKeys}
+          hiddenEnvironmentIds={listOptions.hiddenEnvironmentIds}
+          localEnvironmentIds={localEnvironmentIds}
+          onHideProject={hideProject}
+          onShowProject={showProject}
+          onHideEnvironment={hideEnvironment}
+          onShowEnvironment={showEnvironment}
           onOpenSettings={() => selectTab("settings")}
           onSearchQueryChange={setSearchQuery}
           onSelectThread={handleSelectThread}

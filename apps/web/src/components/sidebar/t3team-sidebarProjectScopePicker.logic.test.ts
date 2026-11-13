@@ -52,6 +52,32 @@ describe("buildScopePickerEntries", () => {
       null,
     ]);
   });
+
+  it("lists a removed project after the discs, marked hidden, so it can be brought back", () => {
+    const entries = buildScopePickerEntries(
+      [group("a")],
+      [group("b")],
+      [entry("x", "1", "s.net")],
+      [group("c")],
+    );
+    expect(entries.map((entry) => [entry.kind, entry.value])).toEqual([
+      ["app", "b"],
+      ["app", "a"],
+      ["app", "c"],
+      ["add", "jira-add:x::1"],
+      ["all", "all"],
+    ]);
+    expect(entries.find((entry) => entry.value === "c")).toMatchObject({
+      kind: "app",
+      hidden: true,
+    });
+    expect(entries.find((entry) => entry.value === "a")).toEqual({
+      kind: "app",
+      value: "a",
+      label: "a",
+      group: group("a"),
+    });
+  });
 });
 
 describe("visibleScopePickerEntries", () => {
