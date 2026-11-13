@@ -28,9 +28,7 @@ export function unusedUninstallStrFuncDeclarations(source) {
     return { declared: [], unused: [], used: [], missingBlock: true };
   }
   const block = blockMatch[1];
-  const declared = [...block.matchAll(/^\s*\$\{(Un[A-Za-z0-9]+)\}\s*$/gm)].map(
-    (m) => m[1],
-  );
+  const declared = [...block.matchAll(/^\s*\$\{(Un[A-Za-z0-9]+)\}\s*$/gm)].map((m) => m[1]);
   const aliases = new Map();
   for (const m of block.matchAll(/!define\s+(\S+)\s+'\$\{(Un[A-Za-z0-9]+)\}'/g)) {
     aliases.set(m[1], m[2]);
@@ -154,10 +152,7 @@ export function compileInstallerInclude(nshPath, uninstaller) {
   const dir = mkdtempSync(join(tmpdir(), "t3team-nsis-"));
   const outFile = join(dir, uninstaller ? "uninstaller-pass.exe" : "installer-pass.exe");
   const scriptPath = join(dir, uninstaller ? "uninstaller.nsi" : "installer.nsi");
-  writeFileSync(
-    scriptPath,
-    harnessSource({ uninstaller, outFile, nshDir: dirname(nshPath) }),
-  );
+  writeFileSync(scriptPath, harnessSource({ uninstaller, outFile, nshDir: dirname(nshPath) }));
   const args = ["-WX", "-V2", scriptPath];
   assert.equal(
     args.some((arg) => arg.toUpperCase().startsWith("/D")),
@@ -178,9 +173,7 @@ export function compileInstallerInclude(nshPath, uninstaller) {
 }
 
 function formatCompileOutput(result) {
-  return [result.stdout, result.stderr, result.error?.message]
-    .filter(Boolean)
-    .join("\n");
+  return [result.stdout, result.stderr, result.error?.message].filter(Boolean).join("\n");
 }
 
 test("the uninstaller does not declare an unused Un* StrFunc macro (rc.22 warning 6010)", () => {
@@ -234,16 +227,8 @@ test("makensis -WX compiles the installer and uninstaller passes", (t) => {
       const result = compileInstallerInclude(NSH_PATH, uninstaller);
       if (result.dir) dirs.push(result.dir);
       const output = formatCompileOutput(result);
-      assert.equal(
-        result.status,
-        0,
-        `${label} pass failed (exit ${result.status}):\n${output}`,
-      );
-      assert.doesNotMatch(
-        output,
-        /warning 6010/,
-        `${label} pass emitted warning 6010:\n${output}`,
-      );
+      assert.equal(result.status, 0, `${label} pass failed (exit ${result.status}):\n${output}`);
+      assert.doesNotMatch(output, /warning 6010/, `${label} pass emitted warning 6010:\n${output}`);
       assert.equal(existsSync(result.outFile), true, `${label} did not write ${result.outFile}`);
     }
   } finally {
