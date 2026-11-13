@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { JiraProjectPickerRow } from "~/t3team/components/t3team-JiraProjectPickerRow";
+import { JiraSiteChips } from "~/t3team/components/t3team-jiraSiteChips";
 import { PickerSearchInput } from "~/t3team/components/t3team-PickerSearchInput";
 import { PickerSection } from "~/t3team/components/t3team-PickerSection";
 import {
@@ -11,16 +12,25 @@ import {
   spansMultipleSites,
   type CatalogRow,
 } from "~/t3team/hooks/t3team-createProjectCatalogRows";
-import type { JiraCatalogProject } from "~/t3team/hooks/t3team-jiraProjectCatalog.logic";
+import type {
+  JiraCatalogProject,
+  JiraCatalogSiteFailure,
+} from "~/t3team/hooks/t3team-jiraProjectCatalog.logic";
+import {
+  catalogForJiraSite,
+  collectJiraSiteChips,
+  shouldShowJiraSiteChips,
+  toggleJiraSiteFilter,
+} from "~/t3team/hooks/t3team-jiraSiteFilter";
 import { CalmError } from "~/t3team/t3team-CalmError";
 
 /**
- * One search box over every project on every connected Jira site — there is no site step, the
- * site is a property of the row. Projects that can be added come first; the ones the app already
- * has sit under their own heading and open instead of re-adding.
+ * One search box over every project on every connected Jira site. When two or
+ * more sites are in play, chips under the search filter the list by source.
  */
 export function JiraProjectPicker({
   catalog,
+  siteFailures = [],
   boundProjectIds,
   loading,
   error,
@@ -30,6 +40,7 @@ export function JiraProjectPicker({
   roomy = false,
 }: {
   catalog: ReadonlyArray<JiraCatalogProject>;
+  siteFailures?: ReadonlyArray<JiraCatalogSiteFailure>;
   boundProjectIds: ReadonlyMap<string, string>;
   loading: boolean;
   error: unknown;
@@ -40,12 +51,18 @@ export function JiraProjectPicker({
   roomy?: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const rows = useMemo(
-    () => buildCatalogRows(catalog, boundProjectIds, query),
-    [boundProjectIds, catalog, query],
+  const [selectedSite, setSelectedSite] = useState<string | null>(null);
+  const chips = useMemo(() => collectJiraSiteChips(catalog, siteFailures), [catalog, siteFailures]);
+  const visibleCatalog = useMemo(
+    () => catalogForJiraSite(catalog, selectedSite),
+    [catalog, selectedSite],
   );
-  const showSite = spansMultipleSites(catalog);
-  const sites = [...new Set(catalog.map((entry) => entry.siteHost ?? "Jira"))];
+  const rows = useMemo(
+    () => buildCatalogRows(visibleCatalog, boundProjectIds, query),
+    [boundProjectIds, visibleCatalog, query],
+  );
+  const showSite = spansMultipleSites(catalog) && selectedSite === null;
+  const selectedChip = chips.find((chip) => chip.id === selectedSite) ?? null;
   const noResults = rows.available.length === 0 && rows.added.length === 0;
   const row = (entry: CatalogRow) => (
     <JiraProjectPickerRow
@@ -68,14 +85,12 @@ export function JiraProjectPicker({
           placeholder="Search projects"
         />
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {sites.map((site) => (
-              <span key={site} className="inline-flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-success" />
-                {site}
-              </span>
-            ))}
-          </div>
+          <JiraSiteChips
+            chips={shouldShowJiraSiteChips(chips) ? chips : []}
+            selectedId={selectedSite}
+            onToggle={(id) => setSelectedSite((current) => toggleJiraSiteFilter(current, id))}
+            onRetry={onRefresh}
+          />
           <Button
             variant="ghost"
             size="icon-xs"
@@ -118,12 +133,17 @@ export function JiraProjectPicker({
           </PickerSection>
         ) : null}
 
-        {noResults && catalog.length > 0 ? (
+        {noResults && (visibleCatalog.length > 0 || selectedChip) && query.trim() ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No project matches “{query.trim()}”.
+            No project matches “{query.trim()}”{selectedChip ? ` on ${selectedChip.label}` : ""}.
           </p>
         ) : null}
-        {!loading && !error && catalog.length === 0 ? (
+        {noResults && !query.trim() && selectedChip ? (
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            No projects on {selectedChip.label}.
+          </p>
+        ) : null}
+        {!loading && !error && catalog.length === 0 && !selectedChip ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             No projects found on your connected Jira sites.
           </p>

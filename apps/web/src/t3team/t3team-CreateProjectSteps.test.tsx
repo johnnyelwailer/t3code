@@ -205,7 +205,11 @@ describe("add-project page, choose screen", () => {
         }),
       ),
     );
-    expect(page().textContent).toContain("Couldn't load acme.atlassian.net");
+    // Two sources (the loaded site plus the failed one) → chips, not a second notice.
+    expect(page().textContent).toContain("acme.atlassian.net");
+    expect(page().textContent).toContain("Offline");
     expect(page().textContent).toContain("IES NG");
+    expect(page().textContent).toContain("Retry");
+    expect(page().textContent).not.toContain("Couldn't load");
   });
 });

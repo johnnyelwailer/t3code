@@ -3,6 +3,10 @@ import type { ReactNode } from "react";
 import { JiraProjectPicker } from "~/t3team/components/t3team-JiraProjectPicker";
 import type { CatalogRow } from "~/t3team/hooks/t3team-createProjectCatalogRows";
 import type { JiraCatalogState } from "~/t3team/hooks/t3team-useJiraProjectCatalogState";
+import {
+  collectJiraSiteChips,
+  shouldShowJiraSiteChips,
+} from "~/t3team/hooks/t3team-jiraSiteFilter";
 import { CalmNotice } from "~/t3team/t3team-CalmNotice";
 
 export type CreateProjectChooseStepProps = {
@@ -25,7 +29,12 @@ export function CreateProjectChooseStep(props: CreateProjectChooseStepProps) {
   // The full-catalog CalmError (every site failed) already covers the error case below; this is
   // the quieter "some sites loaded, one didn't" case, which would otherwise just drop that site's
   // projects from the list with no sign anything was missed.
-  const partialFailure = !catalogState.error && catalogState.siteFailures.length > 0;
+  const showSiteChips = shouldShowJiraSiteChips(
+    collectJiraSiteChips(catalogState.catalog, catalogState.siteFailures),
+  );
+  // Chips already report a failed site when two or more sources are in play.
+  const partialFailure =
+    !catalogState.error && catalogState.siteFailures.length > 0 && !showSiteChips;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 pt-4">
@@ -48,6 +57,7 @@ export function CreateProjectChooseStep(props: CreateProjectChooseStepProps) {
         <JiraProjectPicker
           roomy
           catalog={catalogState.catalog}
+          siteFailures={catalogState.siteFailures}
           boundProjectIds={props.boundProjectIds}
           loading={catalogState.loading}
           error={catalogState.error}
