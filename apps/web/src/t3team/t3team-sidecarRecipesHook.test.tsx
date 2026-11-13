@@ -9,6 +9,9 @@ import { createMockBackend } from "~/t3team/backend/t3team-mockBackend";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
 
+// Exercises the starters themselves; CONTEXT_STARTERS hides them by default.
+vi.mock("~/t3team/t3team-contextStartersFlag", () => ({ useContextStartersEnabled: () => true }));
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((promiseResolve) => {
