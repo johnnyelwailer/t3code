@@ -1,6 +1,7 @@
 import { ProjectId, type CloudSession } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import { CLOUD_SESSION_CREATE_FAILED_TITLE } from "./t3team-cloudSessionFailure";
 import {
   CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE,
   decideCloudQueuedSendFlush,
@@ -154,6 +155,54 @@ describe("decideCloudQueuedSendFlush", () => {
       kind: "fail",
       message: CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE,
       retryable: true,
+    });
+    // Still creating, not failed: keep waiting for the RPC.
+    expect(
+      decideCloudQueuedSendFlush({
+        ...base,
+        queued: creating,
+        target: { sessionId: CLOUD_SESSION_CREATING_ID, label: "New cloud session" },
+      }).kind,
+    ).toBe("wait");
+  });
+
+  it("fails a queued send when the create itself failed, with the reason and Retry", () => {
+    const creating = { ...queued, sessionId: CLOUD_SESSION_CREATING_ID };
+    const message = "Sign in first: the account entry at the bottom of Settings.";
+    expect(
+      decideCloudQueuedSendFlush({
+        ...base,
+        queued: creating,
+        target: {
+          sessionId: CLOUD_SESSION_CREATING_ID,
+          label: "New cloud session",
+          createFailed: true,
+          createFailureMessage: message,
+          createFailureReason: "broker_sign_in_required",
+        },
+      }),
+    ).toEqual({
+      kind: "fail",
+      message,
+      retryable: true,
+      failure: { kind: "create_failed", reason: "broker_sign_in_required", environmentId: null },
+    });
+    // No copy on the target: still fail, with the generic title, so the card leaves "Queued".
+    expect(
+      decideCloudQueuedSendFlush({
+        ...base,
+        queued: creating,
+        target: {
+          sessionId: CLOUD_SESSION_CREATING_ID,
+          label: "New cloud session",
+          createFailed: true,
+        },
+      }),
+    ).toMatchObject({
+      kind: "fail",
+      message: CLOUD_SESSION_CREATE_FAILED_TITLE,
+      retryable: true,
+      failure: { kind: "create_failed", reason: null },
     });
   });
 

@@ -8,6 +8,7 @@ import { isTerminalCloudSessionPhase } from "~/components/cloud/t3team-cloudSess
 import type { CloudProjectWait } from "./t3team-cloudProjectWait";
 import { cloudProjectWaitParkedMessage } from "./t3team-cloudProjectWaitPresentation";
 import { isCloudQueuedSendFailed, type CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { CLOUD_SESSION_CREATE_FAILED_TITLE } from "./t3team-cloudSessionFailure";
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
 export const CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE =
@@ -38,7 +39,7 @@ export type CloudQueuedSendFlushAction =
     };
 
 export interface CloudQueuedSendFailure {
-  readonly kind: "project_not_resolved" | "session_ended";
+  readonly kind: "project_not_resolved" | "session_ended" | "create_failed";
   /** The classifier's reason (`CloudProjectWaitReason`) for `project_not_resolved`. */
   readonly reason: string | null;
   readonly environmentId: string | null;
@@ -47,7 +48,13 @@ export interface CloudQueuedSendFailure {
 export function decideCloudQueuedSendFlush(input: {
   readonly queued: CloudQueuedSend;
   /** The in-memory Run-on target of this draft, when this window still has it. */
-  readonly target: { readonly sessionId: string; readonly label: string } | null;
+  readonly target: {
+    readonly sessionId: string;
+    readonly label: string;
+    readonly createFailed?: boolean;
+    readonly createFailureMessage?: string;
+    readonly createFailureReason?: string;
+  } | null;
   readonly session: CloudSession | null;
   readonly connectFailure: { readonly sessionId: string; readonly message: string } | null;
   /** The session's machine is a connected environment on this client. */
@@ -78,9 +85,28 @@ export function decideCloudQueuedSendFlush(input: {
     if (input.target === null) {
       return { kind: "fail", message: CLOUD_QUEUED_SEND_NOT_CREATED_MESSAGE, retryable: true };
     }
-    return input.target.sessionId === CLOUD_SESSION_CREATING_ID
-      ? { kind: "wait" }
-      : { kind: "resolve-session", sessionId: input.target.sessionId, label: input.target.label };
+    if (input.target.sessionId === CLOUD_SESSION_CREATING_ID) {
+      // A failed create used to wait forever here: the sentinel was still present, and the
+      // flusher never saw `createFailed`, so the setup card stayed on "Queued".
+      if (input.target.createFailed === true) {
+        return {
+          kind: "fail",
+          message: input.target.createFailureMessage ?? CLOUD_SESSION_CREATE_FAILED_TITLE,
+          retryable: true,
+          failure: {
+            kind: "create_failed",
+            reason: input.target.createFailureReason ?? null,
+            environmentId: null,
+          },
+        };
+      }
+      return { kind: "wait" };
+    }
+    return {
+      kind: "resolve-session",
+      sessionId: input.target.sessionId,
+      label: input.target.label,
+    };
   }
   // The list can lag a fresh create; the next poll brings it.
   if (session === null) return { kind: "wait" };

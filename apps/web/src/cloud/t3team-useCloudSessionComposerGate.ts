@@ -5,6 +5,7 @@
  * nothing here has to stay mounted for the message to go out.
  */
 import type { ScopedProjectRef } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import { CloudIcon } from "lucide-react";
 import { createElement, useCallback, useMemo } from "react";
 
@@ -12,15 +13,21 @@ import type { ComposerBannerStackItem } from "~/components/chat/ComposerBannerSt
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { CloudQueuedSendBannerActions } from "./t3team-CloudQueuedSendBannerActions";
 import type { CloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { applyCloudSessionCreateFailure } from "./t3team-applyCloudSessionCreateFailure";
 import {
   cancelDraftCloudQueuedSend,
+  getDraftCloudQueuedSend,
   retryDraftCloudQueuedSend,
   useDraftCloudQueuedSend,
 } from "./t3team-cloudQueuedSendStore";
+import { getCloudSessionLocal } from "./t3team-cloudSessionLocalStore";
+import { beginCloudSessionCreate, useCloudSessionTarget } from "./t3team-cloudSessionTargetStore";
 import { restartDraftCloudQueuedSendWait } from "./t3team-cloudQueuedSendWaitRestart";
 import { useCloudQueuedSendDispatching } from "./t3team-cloudQueuedSendDispatching";
 import { logCloudProjectWaitCancelled } from "./t3team-cloudProjectWaitLog";
 import { cloudProjectNotResolvedActions } from "./t3team-cloudProjectNotResolvedActions";
+import { cloudSessionCreateSignInAction } from "./t3team-cloudSessionCreateSignInAction";
+import { requestCloudSessionSignIn } from "./t3team-cloudSessionSignIn";
 import {
   queuedSendEnvironmentIds,
   useCloudQueuedSendEnvironmentFacts,
@@ -63,6 +70,8 @@ export function useCloudSessionComposerGate(input: {
 } {
   const cloud = useCloudSessionController({ scopeKey: input.scopeKey });
   const { draftId } = input;
+  const target = useCloudSessionTarget(input.scopeKey);
+  const navigate = useNavigate();
   const projectKey = useCloudSessionProjectKey(input.projectRef);
   useCloudSessionProjectFollow({
     scopeKey: input.scopeKey,
@@ -81,8 +90,38 @@ export function useCloudSessionComposerGate(input: {
     [cloud.sessions, draftId, projectKey],
   );
   const retryQueuedSend = useCallback(() => {
-    if (draftId !== null) retryDraftCloudQueuedSend(draftId);
-  }, [draftId]);
+    if (draftId === null) return;
+    const parked = getDraftCloudQueuedSend(draftId);
+    // A create failure has to start a new create: clearing the send's failure alone would
+    // immediately fail again, because the Run-on target is still marked createFailed.
+    if (parked?.failureKind === "create_failed" && input.scopeKey !== null) {
+      const projectId =
+        input.projectRef !== null && input.projectRef.environmentId === cloud.primaryEnvironmentId
+          ? input.projectRef.projectId
+          : undefined;
+      const scopeKey = input.scopeKey;
+      beginCloudSessionCreate(
+        {
+          scopeKey,
+          projectKey,
+          staleLocalSessionId: getCloudSessionLocal()?.session.sessionId ?? null,
+        },
+        undefined,
+        () =>
+          cloud.onCreate(projectId, {
+            onFailed: (result) => applyCloudSessionCreateFailure(scopeKey, result, draftId),
+          }),
+      );
+    }
+    retryDraftCloudQueuedSend(draftId);
+  }, [
+    cloud.onCreate,
+    cloud.primaryEnvironmentId,
+    draftId,
+    input.projectRef,
+    input.scopeKey,
+    projectKey,
+  ]);
   const restartQueuedWait = useCallback(() => {
     if (draftId !== null) restartDraftCloudQueuedSendWait(draftId);
   }, [draftId]);
@@ -111,18 +150,38 @@ export function useCloudSessionComposerGate(input: {
       nowMs: Date.now(),
     });
   }, [draftId, stepFacts]);
-  const recoveryActions = cloudProjectNotResolvedActions({
-    draftId,
-    queued,
-    scopeKey: input.scopeKey,
-    projectKey,
-    projectId:
-      input.projectRef !== null && input.projectRef.environmentId === cloud.primaryEnvironmentId
-        ? input.projectRef.projectId
-        : undefined,
-    createPending: cloud.createPending,
-    onCreate: cloud.onCreate,
+  const signInAction = cloudSessionCreateSignInAction({
+    createFailed: target?.createFailed === true,
+    ...(queued?.failureKind !== undefined ? { failureKind: queued.failureKind } : {}),
+    failureReason: target?.createFailureReason ?? queued?.failureReason ?? null,
+    onSignIn: () => {
+      const reason = target?.createFailureReason ?? queued?.failureReason;
+      if (reason === "unauthorized" || reason === "repository_sign_in_required") {
+        requestCloudSessionSignIn(retryQueuedSend, target?.createFailureHost);
+        return;
+      }
+      if (reason === "connect_sign_in_required") {
+        void navigate({ to: "/settings/connections" });
+        return;
+      }
+      void navigate({ to: "/settings" });
+    },
   });
+  const recoveryActions = [
+    ...cloudProjectNotResolvedActions({
+      draftId,
+      queued,
+      scopeKey: input.scopeKey,
+      projectKey,
+      projectId:
+        input.projectRef !== null && input.projectRef.environmentId === cloud.primaryEnvironmentId
+          ? input.projectRef.projectId
+          : undefined,
+      createPending: cloud.createPending,
+      onCreate: cloud.onCreate,
+    }),
+    ...(signInAction !== null ? [signInAction] : []),
+  ];
   const projectWaitNow = useCloudQueuedSendProjectWaitNow(stepFacts);
   const canRetry = queued?.failureMessage !== undefined && queued.retryable !== false;
 

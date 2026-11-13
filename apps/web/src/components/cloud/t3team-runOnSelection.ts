@@ -22,6 +22,12 @@ export interface RunOnSelectionTarget {
   readonly projectKey: string | null;
   /** The create never reached a session id; the entry stays selected and offers Retry. */
   readonly createFailed: boolean;
+  /** Plain-words reason for a failed create, shown on the setup card (not in the picker). */
+  readonly createFailureMessage?: string;
+  /** The server's `CloudSessionFailureReason`, for a Sign-in recovery action. */
+  readonly createFailureReason?: string;
+  /** The GitHub host a sign-in failure named, when the reason is a gh sign-in. */
+  readonly createFailureHost?: string;
   /**
    * The just-created session this window already held when the create began: an earlier create's,
    * so it is never the answer to this one.
@@ -37,7 +43,12 @@ export type RunOnSelectionEvent =
       readonly staleLocalSessionId?: string | null;
     }
   | { readonly kind: "created"; readonly sessionId: string; readonly label: string }
-  | { readonly kind: "createFailed" }
+  | {
+      readonly kind: "createFailed";
+      readonly message?: string;
+      readonly reason?: string;
+      readonly host?: string;
+    }
   | {
       readonly kind: "pick";
       readonly sessionId: string;
@@ -75,7 +86,13 @@ export function reduceRunOnSelection(
     case "createFailed":
       return state === null || state.sessionId !== CLOUD_SESSION_CREATING_ID
         ? state
-        : { ...state, createFailed: true };
+        : {
+            ...state,
+            createFailed: true,
+            ...(event.message === undefined ? {} : { createFailureMessage: event.message }),
+            ...(event.reason === undefined ? {} : { createFailureReason: event.reason }),
+            ...(event.host === undefined ? {} : { createFailureHost: event.host }),
+          };
     case "pick":
       return {
         sessionId: event.sessionId,
