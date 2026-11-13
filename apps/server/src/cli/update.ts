@@ -20,6 +20,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } fr
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as BootService from "../cloud/bootService.ts";
+import { resolveBootServiceIdentity } from "../cloud/t3team-bootServiceIdentity.ts";
 import {
   ensurePinnedRuntimeInstalled,
   launcherOwnsVersionsDir,
@@ -279,7 +280,8 @@ const belongsToBootService = Effect.fn("cli.update.belongs_to_boot_service")(fun
   const runner = yield* ProcessRunner.ProcessRunner;
   if (platform === "linux") {
     const cgroup = yield* fs.readFileString(`/proc/${pid}/cgroup`).pipe(Effect.option);
-    return Option.isSome(cgroup) && cgroup.value.includes("/t3code.service");
+    const unitFile = resolveBootServiceIdentity().unitFile;
+    return Option.isSome(cgroup) && cgroup.value.includes(`/${unitFile}`);
   }
   if (platform === "darwin") {
     const parent = yield* runner

@@ -34,6 +34,26 @@ describe("physical context JSON paths", () => {
     });
     expect(normalizeProjectContextStateFile(file, ".nexi")).toEqual(file);
   });
+  it("maps legacy .t3team and .nexi paths onto .agents/nexi", () => {
+    const fromT3 = normalizeProjectContextStateFile(
+      {
+        relativePath: ".t3team/context/entrypoint.json",
+        contents: JSON.stringify({
+          paths: { manifest: ".t3team/context/manifest.json" },
+          fromNexi: ".nexi/context/a.json",
+        }),
+      },
+      ".agents/nexi",
+    );
+    expect(fromT3.relativePath).toBe(".agents/nexi/context/entrypoint.json");
+    expect(JSON.parse(fromT3.contents)).toEqual({
+      paths: { manifest: ".agents/nexi/context/manifest.json" },
+      fromNexi: ".agents/nexi/context/a.json",
+    });
+    expect(normalizeProjectContextStateFile(fromT3, ".agents/nexi").relativePath).toBe(
+      ".agents/nexi/context/entrypoint.json",
+    );
+  });
   it("preserves flag-off JSON bytes exactly", () => {
     const file = {
       relativePath: ".t3team/context/entrypoint.json",
@@ -86,14 +106,14 @@ it.effect("persists the browser mirror with physical paths before CAS hashing", 
           ),
         );
       expect(result.writtenFiles).toEqual([
-        ".nexi/context/entrypoint.json",
-        ".nexi/context/manifest.json",
+        ".agents/nexi/context/entrypoint.json",
+        ".agents/nexi/context/manifest.json",
       ]);
       const contents = NodeFS.readFileSync(
-        NodePath.join(root, ".nexi/context/entrypoint.json"),
+        NodePath.join(root, ".agents/nexi/context/entrypoint.json"),
         "utf8",
       );
-      expect(JSON.parse(contents).paths.manifest).toBe(".nexi/context/manifest.json");
+      expect(JSON.parse(contents).paths.manifest).toBe(".agents/nexi/context/manifest.json");
       expect(NodeFS.existsSync(NodePath.join(root, JSON.parse(contents).paths.manifest))).toBe(
         true,
       );

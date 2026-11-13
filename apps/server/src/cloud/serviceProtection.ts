@@ -7,7 +7,7 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as ProcessRunner from "../processRunner.ts";
-import { BOOT_SERVICE_UNIT_FILE } from "./bootService.ts";
+import { resolveBootServiceIdentity } from "./t3team-bootServiceIdentity.ts";
 
 const PROTECT_DROP_IN = "90-t3code-protect.conf";
 const SYSTEM_UNIT_DIR = "/etc/systemd/system";
@@ -72,6 +72,7 @@ export function protectionPlan(input: {
     dropIn(systemUnitDir, unit, section, properties, true);
   const user = (unit: string, section: string, properties: ReadonlyArray<string>) =>
     dropIn(input.userUnitDir, unit, section, properties);
+  const unitFile = resolveBootServiceIdentity().unitFile;
   return {
     systemUnitDir,
     system: [
@@ -89,7 +90,7 @@ export function protectionPlan(input: {
     user: [
       user("app.slice", "Slice", ["MemoryLow=1536M"]),
       user("init.scope", "Scope", ["MemoryLow=256M"]),
-      user(BOOT_SERVICE_UNIT_FILE, "Service", [PROTECTED_OOM_SCORE]),
+      user(unitFile, "Service", [PROTECTED_OOM_SCORE]),
     ],
     oomUnits: [manager, ...remote],
   };
@@ -310,10 +311,11 @@ export interface ServiceProtectionState {
 export const readProtection = Effect.fn("ServiceProtection.read")(function* (userUnitDir: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const unitFile = resolveBootServiceIdentity().unitFile;
   const shown = yield* run("read the service's cgroup", "systemctl", [
     "--user",
     "show",
-    BOOT_SERVICE_UNIT_FILE,
+    unitFile,
     "--property=ControlGroup,MainPID",
   ]).pipe(Effect.option);
   if (Option.isNone(shown)) return undefined;
@@ -339,7 +341,7 @@ export const readProtection = Effect.fn("ServiceProtection.read")(function* (use
     unprotected,
     oomScoreAdj: score === "" ? undefined : Number(score),
     setByProtect: yield* fs
-      .exists(path.join(userUnitDir, `${BOOT_SERVICE_UNIT_FILE}.d`, PROTECT_DROP_IN))
+      .exists(path.join(userUnitDir, `${unitFile}.d`, PROTECT_DROP_IN))
       .pipe(Effect.orElseSucceed(() => false)),
   } satisfies ServiceProtectionState;
 });

@@ -10,23 +10,23 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     vi.resetModules();
   });
 
-  it("moves every server-owned state path into .nexi when on", async () => {
+  it("moves every server-owned state path into .agents/nexi when on", async () => {
     vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, "1");
     vi.resetModules();
     const utils = await import("./t3team-project-repository-utils.ts");
     const setup = await import("./t3team-projectSetupShared.ts");
     const blobs = await import("./t3team-context-blob-store-utils.ts");
-    expect(utils.HIDDEN_T3TEAM_DIR).toBe(".nexi");
-    expect(utils.GITIGNORE_ENTRY).toBe(".nexi/");
+    expect(utils.HIDDEN_T3TEAM_DIR).toBe(".agents/nexi");
+    expect(utils.GITIGNORE_ENTRY).toBe(".agents/nexi/");
     expect(utils.MAIN_REPOSITORY_GITIGNORE_ENTRIES).toEqual([
-      ".nexi/references/",
-      ".nexi/child-session-worktrees/",
-      ".nexi/context/_blobs/",
+      ".agents/nexi/references/",
+      ".agents/nexi/child-session-worktrees/",
+      ".agents/nexi/context/_blobs/",
     ]);
-    expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".nexi/recipes");
-    expect(setup.T3TEAM_PROJECT_CONTEXT_ROOT).toBe(".nexi/context");
-    expect(setup.T3TEAM_PROJECT_PROFILE_MANIFEST_PATH).toBe(".nexi/setup/profile.json");
-    expect(blobs.T3TEAM_CONTEXT_BLOB_ROOT).toBe(".nexi/context/_blobs");
+    expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".agents/nexi/recipes");
+    expect(setup.T3TEAM_PROJECT_CONTEXT_ROOT).toBe(".agents/nexi/context");
+    expect(setup.T3TEAM_PROJECT_PROFILE_MANIFEST_PATH).toBe(".agents/nexi/setup/profile.json");
+    expect(blobs.T3TEAM_CONTEXT_BLOB_ROOT).toBe(".agents/nexi/context/_blobs");
   });
 
   it("advertises the startup selection after the environment changes", async () => {
@@ -35,7 +35,7 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     const state = await import("@t3tools/project-context/t3teamProjectStateDir");
     vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, "0");
     expect(state.isNexiStateDirEnabled()).toBe(false);
-    expect(state.PROJECT_STATE_DIR).toBe(".nexi");
+    expect(state.PROJECT_STATE_DIR).toBe(".agents/nexi");
     expect(state.isNexiStateDirSelectedAtStartup()).toBe(true);
   });
 
@@ -52,30 +52,30 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     if (profile === undefined) throw new Error("expected a bundled profile");
 
     const status = skill.renderStatusAndContextSkill();
-    expect(status).toContain(".nexi/context/");
+    expect(status).toContain(".agents/nexi/context/");
     expect(status).not.toContain(".t3team/");
 
     const agents = content.renderAgentsMd(profile);
-    expect(agents).toContain(".nexi/references/reference-repositories.json");
+    expect(agents).toContain(".agents/nexi/references/reference-repositories.json");
     expect(agents).not.toContain(".t3team/");
 
     const manage = packs
       .listBundledT3TeamRecipes()
       .find((recipe) => recipe.id === "manage-project-recipes");
-    expect(manage?.promptTemplate).toContain(".nexi/recipes/<recipe-id>/");
+    expect(manage?.promptTemplate).toContain(".agents/nexi/recipes/<recipe-id>/");
     expect(manage?.promptTemplate).not.toContain(".t3team/");
 
     const tools = catalog.listImplementedT3TeamToolCatalogEntries();
     const list = tools.find((tool) => tool.id === "t3team.recipe.list");
     const run = tools.find((tool) => tool.id === "t3team.orchestration.run");
-    expect(list?.description).toContain(".nexi/recipes/");
+    expect(list?.description).toContain(".agents/nexi/recipes/");
     expect(list?.description).not.toContain(".t3team/");
-    expect(run?.description).toContain(".nexi/recipes/AUTHORING.md");
+    expect(run?.description).toContain(".agents/nexi/recipes/AUTHORING.md");
     expect(run?.description).toContain(".t3team-runs/");
     expect(run?.description).not.toContain(".t3team/recipes");
 
     const workflow = rewrite.renderDescriptionRewriteWorkflow();
-    expect(workflow).toContain(".nexi/context/work-items/");
+    expect(workflow).toContain(".agents/nexi/context/work-items/");
     expect(workflow).not.toContain(".t3team/context/");
 
     expect(legacy.renderLegacyAgentsMd(profile)).toContain(
@@ -84,14 +84,14 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     expect(legacy.renderPreviousAgentsMd(profile)).toContain(".t3team/recipes/");
   });
 
-  it("names the physical dir .nexi when the flag is unset or blank", async () => {
+  it("names the physical dir .agents/nexi when the flag is unset or blank", async () => {
     for (const value of [undefined, "", "   "] as const) {
       vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, value);
       vi.resetModules();
       const utils = await import("./t3team-project-repository-utils.ts");
       const setup = await import("./t3team-projectSetupShared.ts");
-      expect(utils.HIDDEN_T3TEAM_DIR).toBe(".nexi");
-      expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".nexi/recipes");
+      expect(utils.HIDDEN_T3TEAM_DIR).toBe(".agents/nexi");
+      expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".agents/nexi/recipes");
     }
   });
 

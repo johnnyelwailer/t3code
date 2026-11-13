@@ -10,6 +10,8 @@ import type { CreateProjectKickoffThread } from "~/t3team/t3team-kickoffTypes";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import { T3TeamSetupWelcomeSurface } from "~/t3team/t3team-SetupWelcomeSurface";
+import { NoProjectsHeroBody } from "~/components/NoProjectsHero";
+import { useNexiWelcomeEnabled } from "~/t3team/welcome/t3team-useNexiWelcomeEnabled";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
 import {
   T3TEAM_FIRST_PROJECT_SETUP_REASON,
@@ -68,8 +70,12 @@ function ProjectBrowserEmpty({
   const productName = appearance?.labels?.appName ?? "t3team";
   // Projects already exist but none is bound to a work source: this is not a
   // first-run setup, so the header must not claim it is one.
-  const headerLabel =
-    setupSurfaceReason.kind === "no-work-project"
+  // The welcome page is the first-run setup: with it on, a home without projects is the plain
+  // empty home, never the first-project setup surface.
+  const welcomeIsSetup = useNexiWelcomeEnabled() && setupSurfaceReason.kind === "first-project";
+  const headerLabel = welcomeIsSetup
+    ? null
+    : setupSurfaceReason.kind === "no-work-project"
       ? "Connect a work source"
       : `Set up ${productName}`;
 
@@ -81,11 +87,17 @@ function ProjectBrowserEmpty({
         })}
       >
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-        <span className="text-sm font-medium text-muted-foreground/70">{headerLabel}</span>
+        {headerLabel === null ? null : (
+          <span className="text-sm font-medium text-muted-foreground/70">{headerLabel}</span>
+        )}
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full min-h-0">
-          <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />
+          {welcomeIsSetup ? (
+            <NoProjectsHeroBody />
+          ) : (
+            <T3TeamSetupWelcomeSurface onCreate={onCreate} reason={setupSurfaceReason} />
+          )}
         </div>
       </div>
     </div>

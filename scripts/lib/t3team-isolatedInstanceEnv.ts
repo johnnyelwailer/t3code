@@ -47,21 +47,38 @@ export function resolveAtlassianCallbackPorts(env: Env): readonly number[] | und
       .split(",")
       .map((part) => parsePort("T3CODE_DESKTOP_ATLASSIAN_CALLBACK_PORTS", part.trim()));
   }
-  return resolvePinnedBackendPort(env) === undefined ? undefined : [DEFAULT_PINNED_BACKEND_PORT];
+  // When the explicit list is unset, a pinned build's return address is the
+  // port it actually listens on (live 3783, a nightly 3774, unflavored 3773).
+  // Never fall back to a hardcoded 3773/3774 while the backend is on another port.
+  const pinned = resolvePinnedBackendPort(env);
+  return pinned === undefined ? undefined : [pinned];
 }
 
 export function isIsolatedInstanceBuild(env: Env): boolean {
   return env.T3CODE_DESKTOP_ISOLATED_INSTANCE?.trim() === "1";
 }
 
-/** The `t3code://` URL scheme claim of a build. An isolated instance leaves it to the installed app. */
+export const NEXI_WORK_PROTOCOL_SCHEME = "nexi-work";
+export const LIVE_NEXI_APP_ID = "ch.nexplore.nexi.work";
+
+/**
+ * The OS URL-scheme claim of a build. An isolated live Nexi build claims
+ * `nexi-work://` and never `t3code://`. Other isolated flavors leave the
+ * scheme to live. A non-isolated build still claims the upstream schemes.
+ */
 export function t3codeProtocolClaims(env: Env): ReadonlyArray<{
   readonly name: string;
   readonly schemes: readonly string[];
 }> {
-  return isIsolatedInstanceBuild(env)
-    ? []
-    : [{ name: "T3 Code", schemes: ["t3code", "t3code-dev"] }];
+  if (!isIsolatedInstanceBuild(env)) {
+    return [{ name: "T3 Code", schemes: ["t3code", "t3code-dev"] }];
+  }
+  const scheme = env.T3CODE_DESKTOP_PROTOCOL_SCHEME?.trim();
+  const appId = env.T3CODE_DESKTOP_APP_ID?.trim();
+  if (scheme === NEXI_WORK_PROTOCOL_SCHEME || appId === LIVE_NEXI_APP_ID) {
+    return [{ name: "Nexi Work", schemes: [NEXI_WORK_PROTOCOL_SCHEME] }];
+  }
+  return [];
 }
 
 /** Extra `desktop-branding.json` fields for an isolated instance (none for a normal build). */
@@ -70,24 +87,16 @@ export function isolatedBrandingFields(env: Env): { readonly isolatedInstance?: 
 }
 
 /**
- * Only macOS isolates every path an installed app shares with another install. Windows would start
- * its WSL backend on the distro's shared `~/.t3`, and Linux reads and writes shared state before
- * the isolated home exists (early settings, the device-scale-factor file, the portal desktop
- * entry, the URL-handler registration), so an isolated build for them would look isolated and not
- * be. Refuse to build one instead.
+ * An isolated instance needs a product name: that name is the directory it owns under app data.
+ * Windows and Linux builds are isolated the same way as macOS (a private home, Electron profile,
+ * and early-startup paths).
  */
 export function assertIsolatedBuildSupported(
   env: Env,
-  platform: "mac" | "win" | "linux",
+  _platform: "mac" | "win" | "linux",
   productName: string | undefined,
 ): void {
   if (!isIsolatedInstanceBuild(env)) return;
-  if (platform !== "mac") {
-    throw new Error(
-      `T3CODE_DESKTOP_ISOLATED_INSTANCE=1: isolated instances are macOS-only, not ${platform}. ` +
-        `Build this flavor for mac, or drop the isolation switch for a build that replaces the installed app.`,
-    );
-  }
   if (productName === undefined || productName.trim() === "") {
     throw new Error(
       "T3CODE_DESKTOP_ISOLATED_INSTANCE=1 needs a product name (T3CODE_DESKTOP_PRODUCT_NAME): the product name is the isolated home's directory.",

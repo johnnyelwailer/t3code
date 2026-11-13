@@ -25,7 +25,12 @@ const Candidate = Schema.Struct({
     description: "default branch | other branch | open PR #n | recently closed PR #n",
   }),
   path: Schema.String,
-  kind: Schema.Literals([".nexi/machine.json", "devcontainer"]),
+  kind: Schema.Literals([
+    ".agents/nexi/machine.json",
+    ".nexi/machine.json",
+    ".t3team/machine.json",
+    "devcontainer",
+  ]),
   author: Schema.NullOr(Schema.String),
   summary: Schema.String,
   commit: Schema.String,

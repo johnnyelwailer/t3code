@@ -65,11 +65,27 @@ describe("withUpdateIssue", () => {
 });
 
 describe("isLiveFlavorPreset", () => {
-  it("is true only for the live flavor's preset: nightlies and upstream builds never use the feed", () => {
+  it("is true for the in-place flavors (live and stable); nightlies and junk never use the feed", () => {
     expect(isLiveFlavorPreset('{"flavor":"live","flags":{}}')).toBe(true);
+    expect(isLiveFlavorPreset('{"flavor":"stable","flags":{}}')).toBe(true);
     expect(isLiveFlavorPreset('{"flavor":"nightly","flags":{}}')).toBe(false);
+    expect(isLiveFlavorPreset('{"flavor":"nightly-experimental","flags":{}}')).toBe(false);
     expect(isLiveFlavorPreset("nonsense")).toBe(false);
     expect(isLiveFlavorPreset(undefined)).toBe(false);
+  });
+
+  it("a packaged stable install uses the GHE feed, so it can update to a newer desktop-v* stable", () => {
+    // The desktop enables the interim GHE feed only when isLiveFlavorPreset is true
+    // (t3team-nexiUpdateFeed.ts reads packaged flag-preset.json; t3team-nexiElectronUpdater.ts
+    // picks NexiMacUpdater the same way). A stable preset must therefore match live.
+    const stablePreset = JSON.stringify({
+      flavor: "stable",
+      productName: "Nexi Work",
+      appId: "ch.nexplore.nexi.work",
+      flags: {},
+    });
+    expect(isLiveFlavorPreset(stablePreset)).toBe(true);
+    expect(isLiveFlavorPreset(JSON.stringify({ flavor: "nightly" }))).toBe(false);
   });
 });
 

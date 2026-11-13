@@ -14,7 +14,7 @@ export function T3TeamProjectLinkedRepositoriesSetting({ projectId }: { projectI
     <SettingsSection title="Linked repositories">
       <SettingsRow
         title="Repositories"
-        description="The code, pull requests and branches this project reads from: choose them, pick the main repository, and watch their sync."
+        description="The code, pull requests and branches this project reads from: choose them, make one the main workspace with one click, and watch their sync."
         control={
           <Button
             size="sm"
