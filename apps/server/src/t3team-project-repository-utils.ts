@@ -67,6 +67,10 @@ export type MainRepositoryBootstrapResult = {
   readonly url?: string;
   readonly localPath: string;
   readonly status: ProjectMainRepositorySelection;
+  /** The branch the project chose for the workspace checkout; absent leaves it as it is. */
+  readonly branch?: string;
+  /** Why the last attempt to put the checkout on `branch` failed; the checkout is still usable. */
+  readonly error?: string;
 };
 
 export type BootstrapWorkspaceResponse = {

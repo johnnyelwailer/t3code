@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isSameRepository } from "@t3tools/project-context/t3teamRepositoryIdentity";
 
 import { useBackend } from "~/t3team/backend/t3team-index";
 import type { LinkedRepositorySyncResult } from "~/t3team/backend/t3team-types";
@@ -53,6 +54,17 @@ export function useLinkedRepositorySyncStatus(input: {
   }, [backend, enabled, workspaceRoot]);
 
   const byUrl = useMemo(() => new Map(entries.map((entry) => [entry.url, entry])), [entries]);
+  const entryFor = useCallback(
+    (url: string) => {
+      const exact = byUrl.get(url);
+      if (exact) return exact;
+      for (const [key, value] of byUrl) {
+        if (isSameRepository(key, url)) return value;
+      }
+      return undefined;
+    },
+    [byUrl],
+  );
   const refresh = useCallback(() => restartRef.current(), []);
   const syncNow = useCallback(
     async (url: string) => {
@@ -62,5 +74,5 @@ export function useLinkedRepositorySyncStatus(input: {
     },
     [backend, workspaceRoot],
   );
-  return { byUrl, refresh, syncNow };
+  return { byUrl, entryFor, refresh, syncNow };
 }

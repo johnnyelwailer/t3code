@@ -23,6 +23,7 @@ import * as Semaphore from "effect/Semaphore";
 
 import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
 import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { updateMainRepositoryCheckout } from "./t3team-mainRepositoryBranch.ts";
 import { syncLinkedCheckout } from "./t3team-linkedRepositorySyncJob.ts";
 import { recordLinkedRepositoryOutcome } from "./t3team-linkedRepositoryManifestEntry.ts";
 import type {
@@ -69,6 +70,11 @@ export class T3TeamLinkedRepositorySync extends Context.Service<
     readonly awaitSettled: (localPath: string) => Effect.Effect<void>;
     /** Serializes reference-manifest read-modify-write cycles with job outcomes. */
     readonly withManifestLock: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
+    /** Fetch + align the workspace checkout (the main repository). Never clones or repairs it. */
+    readonly alignMainCheckout: (input: {
+      readonly localPath: string;
+      readonly branch?: string;
+    }) => Effect.Effect<string | undefined>;
     /** A main-repository switch's state: links it into `toRoot` now (no copying) and queues the
      * durable background copy. Takes its own lock, never the manifest lock, so linked-repository
      * requests are not held up. */
@@ -246,6 +252,9 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const alignMainCheckout = (input: { readonly localPath: string; readonly branch?: string }) =>
+    updateMainRepositoryCheckout(input.localPath, input.branch).pipe(Effect.provide(context));
+
   return T3TeamLinkedRepositorySync.of({
     request,
     phase: (localPath) => jobs.get(localPath)?.phase,
@@ -255,6 +264,7 @@ const make = Effect.gen(function* () {
         return job ? Deferred.await(job.settled) : Effect.void;
       }),
     withManifestLock,
+    alignMainCheckout,
     startStateMigration,
     resumeStateMigration,
     stateMigrationStatus,

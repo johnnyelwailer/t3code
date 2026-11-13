@@ -16,6 +16,7 @@ import {
   formatReferenceManifestJson,
   MANIFEST_FILE_NAME,
   type LinkedRepositoryBootstrapResult,
+  type MainRepositoryBootstrapResult,
   type ReferenceManifestFile,
 } from "./t3team-project-repository-utils.ts";
 
@@ -50,6 +51,28 @@ export const recordLinkedRepositoryOutcome = Effect.fn("recordLinkedRepositoryOu
     contents: formatReferenceManifestJson({
       ...manifest,
       linkedRepositories,
+    } as unknown as ReferenceManifestFile),
+  });
+});
+
+/** Records the main repository's chosen branch and any checkout error, keeping the rest of the file. */
+export const recordMainRepository = Effect.fn("recordMainRepository")(function* (
+  referencesRoot: string,
+  mainRepository: MainRepositoryBootstrapResult,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const manifestPath = path.join(referencesRoot, MANIFEST_FILE_NAME);
+  const raw = yield* fileSystem.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""));
+  const decoded = decodeManifestObject(raw);
+  if (Option.isNone(decoded)) return;
+  const manifest = decoded.value;
+  if (typeof manifest.mainRepository !== "object" || manifest.mainRepository === null) return;
+  yield* writeFileStringAtomically({
+    filePath: manifestPath,
+    contents: formatReferenceManifestJson({
+      ...manifest,
+      mainRepository,
     } as unknown as ReferenceManifestFile),
   });
 });

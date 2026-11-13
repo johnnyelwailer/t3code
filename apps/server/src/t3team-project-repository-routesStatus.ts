@@ -25,7 +25,9 @@ import {
   REFERENCES_DIR_NAME,
   toT3TeamError,
   withSyncState,
+  type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
+import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 export const readLinkedRepositoryStatus = Effect.fn("readLinkedRepositoryStatus")(function* (
   workspaceRoot: string,
@@ -40,10 +42,25 @@ export const readLinkedRepositoryStatus = Effect.fn("readLinkedRepositoryStatus"
   // status read; the read itself stays file-only and returns at once.
   yield* sync.resumeStateMigration(workspaceRoot);
   const stateMigration = yield* sync.stateMigrationStatus(workspaceRoot);
+  const linkedRepositories = manifest.linkedRepositories.map((entry) =>
+    withSyncState(entry, sync.phase(entry.localPath)),
+  );
+  // The main repository is the workspace itself, not a reference clone, so it is left out of
+  // the manifest list. Include it here so the Linked repositories dialog can offer a branch
+  // picker for it the same way it does for secondary checkouts.
+  const main = manifest.mainRepository;
+  if (main?.url && !linkedRepositories.some((entry) => isSameRepository(entry.url, main.url!))) {
+    const mainEntry: LinkedRepositoryBootstrapResult = {
+      url: main.url,
+      localPath: main.localPath,
+      status: "cloned",
+      ...(main.branch ? { branch: main.branch } : {}),
+      ...(main.error ? { error: main.error } : {}),
+    };
+    linkedRepositories.push(withSyncState(mainEntry, sync.phase(main.localPath)));
+  }
   return {
-    linkedRepositories: manifest.linkedRepositories.map((entry) =>
-      withSyncState(entry, sync.phase(entry.localPath)),
-    ),
+    linkedRepositories,
     ...(stateMigration ? { stateMigration } : {}),
   };
 });

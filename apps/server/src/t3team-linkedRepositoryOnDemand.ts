@@ -16,6 +16,7 @@ import {
   type LinkedRepositoryAgentView,
 } from "./t3team-linkedRepositoryAgentView.ts";
 import { LINKED_REPOSITORY_CLONE_TIMEOUT_MS } from "./t3team-linkedCheckoutGit.ts";
+import { recordMainRepository } from "./t3team-linkedRepositoryManifestEntry.ts";
 import { T3TeamLinkedRepositorySync } from "./t3team-linkedRepositorySync.ts";
 import { readPreservedReferenceManifest } from "./t3team-project-repository-routesBootstrap.ts";
 import {
@@ -24,7 +25,10 @@ import {
   REFERENCES_DIR_NAME,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
-import { findLinkedRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import {
+  findLinkedRepository,
+  isMainRepositoryUrl,
+} from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 /** The repository is not among the project's recorded linked repositories. */
 export class LinkedRepositoryNotLinkedError extends Schema.TaggedError<LinkedRepositoryNotLinkedError>()(
@@ -79,6 +83,33 @@ export const syncLinkedRepositoryOnDemand = Effect.fn("syncLinkedRepositoryOnDem
       })),
     );
     const { manifest, entry } = yield* readEntry;
+    const main = manifest.mainRepository;
+    if (
+      (!entry || entry.localPath.trim() === "") &&
+      main &&
+      isMainRepositoryUrl(main, input.repository)
+    ) {
+      const error = yield* sync.alignMainCheckout({
+        localPath: main.localPath,
+        ...(main.branch ? { branch: main.branch } : {}),
+      });
+      const { error: _previous, ...rest } = main;
+      const recorded = { ...rest, ...(error ? { error } : {}) };
+      if (error !== main.error) {
+        yield* sync.withManifestLock(recordMainRepository(referencesRoot, recorded));
+      }
+      const mainEntry: LinkedRepositoryBootstrapResult = {
+        url: main.url ?? input.repository,
+        localPath: main.localPath,
+        status: error ? "cloned" : "updated",
+        ...(main.branch ? { branch: main.branch } : {}),
+        ...(error ? { error } : {}),
+      };
+      return {
+        entry: mainEntry,
+        view: describeLinkedRepositoryForAgent(mainEntry, undefined),
+      } satisfies LinkedRepositoryOnDemandResult;
+    }
     if (!entry || entry.localPath.trim() === "") {
       return yield* new LinkedRepositoryNotLinkedError({
         repository: input.repository,

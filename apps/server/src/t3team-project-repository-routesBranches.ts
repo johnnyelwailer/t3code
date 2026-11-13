@@ -25,7 +25,10 @@ import {
   REFERENCES_DIR_NAME,
   toT3TeamError,
 } from "./t3team-project-repository-utils.ts";
-import { findLinkedRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import {
+  findLinkedRepository,
+  isMainRepositoryUrl,
+} from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 export type LinkedRepositoryBranches = {
   readonly branches: ReadonlyArray<string>;
@@ -49,8 +52,14 @@ export const listLinkedRepositoryBranches = Effect.fn("listLinkedRepositoryBranc
     path.join(referencesRoot, MANIFEST_FILE_NAME),
   );
   const entry = findLinkedRepository(manifest.linkedRepositories, url);
-  if (!entry) return EMPTY;
-  const cwd = entry.localPath;
+  // The main repository is the workspace checkout, not a reference clone, so it is absent from
+  // the linked-repository manifest. List its branches from the workspace itself.
+  const cwd =
+    entry?.localPath ??
+    (isMainRepositoryUrl(manifest.mainRepository, url)
+      ? (manifest.mainRepository?.localPath ?? workspaceRoot)
+      : undefined);
+  if (!cwd) return EMPTY;
   const refs = yield* git(
     "branches",
     cwd,

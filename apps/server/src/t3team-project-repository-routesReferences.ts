@@ -15,6 +15,7 @@ import * as Path from "effect/Path";
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { writeReferenceManifest } from "./t3team-project-repository-services.ts";
+import { recordMainRepository } from "./t3team-linkedRepositoryManifestEntry.ts";
 import {
   planLinkedRepositoriesForBootstrap,
   readPreservedReferenceManifest,
@@ -37,7 +38,11 @@ import {
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 import { detectMainRepositoryCandidates } from "./t3team-projectMainRepositoryState.ts";
-import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import {
+  chosenBranchForRepository,
+  isSameRepository,
+  repositoryLookupCandidates,
+} from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferences")(
   function* (input: {
@@ -72,10 +77,43 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
           path.join(referencesRoot, MANIFEST_FILE_NAME),
         );
         // A switch records how this checkout became the main repository; keep that selection.
-        const mainRepository: MainRepositoryBootstrapResult | undefined =
-          detectedMainRepository && preserved.mainRepository?.localPath === workspaceRoot
-            ? { ...detectedMainRepository, status: preserved.mainRepository.status }
+        const preservedMain = preserved.mainRepository;
+        const baseMain: MainRepositoryBootstrapResult | undefined =
+          detectedMainRepository && preservedMain?.localPath === workspaceRoot
+            ? {
+                ...detectedMainRepository,
+                status: preservedMain.status,
+                ...(preservedMain.branch ? { branch: preservedMain.branch } : {}),
+                ...(preservedMain.error ? { error: preservedMain.error } : {}),
+              }
             : detectedMainRepository;
+        // Only treat the branches map as a choice for the main repo when its URL is in
+        // the saved linked list (the dialog shows it then). A map of only secondaries
+        // must not clear a recorded main branch.
+        const mainUrl = baseMain?.url;
+        const mainUrlListed = Boolean(
+          mainUrl && input.linkedRepositoryUrls?.some((url) => isSameRepository(url, mainUrl)),
+        );
+        const applyMainBranchChoice =
+          Boolean(mainUrl) && mainUrlListed && input.linkedRepositoryBranches !== undefined;
+        const requestedMainBranch =
+          mainUrl && applyMainBranchChoice
+            ? chosenBranchForRepository(input.linkedRepositoryBranches, mainUrl)
+            : undefined;
+        const mainRepository: MainRepositoryBootstrapResult | undefined =
+          applyMainBranchChoice && baseMain
+            ? (() => {
+                const { branch: _branch, error: _error, ...rest } = baseMain;
+                return {
+                  ...rest,
+                  ...(requestedMainBranch ? { branch: requestedMainBranch } : {}),
+                };
+              })()
+            : baseMain;
+        const mainBranchToApply =
+          requestedMainBranch && requestedMainBranch !== preservedMain?.branch
+            ? requestedMainBranch
+            : undefined;
 
         // A linked URL matching the main repository's own remote is the main repository itself,
         // not a reference clone — skip wrapping it (GHE #42 item 2).
@@ -155,6 +193,8 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
           shouldInspect,
           localCandidates,
           recordedCandidates,
+          mainBranchToApply,
+          mainCheckoutPath: mainRepository?.localPath ?? workspaceRoot,
         };
       }),
     );
@@ -179,8 +219,21 @@ export const bootstrapWorkspaceReferences = Effect.fn("bootstrapWorkspaceReferen
       locked.localCandidates,
       Option.isSome(inspection) ? inspection.value.candidates : locked.recordedCandidates,
     );
+    let mainRepository = locked.response.mainRepository;
+    if (locked.mainBranchToApply && mainRepository) {
+      const error = yield* sync.alignMainCheckout({
+        localPath: locked.mainCheckoutPath,
+        branch: locked.mainBranchToApply,
+      });
+      if (error !== mainRepository.error) {
+        const { error: _previous, ...rest } = mainRepository;
+        mainRepository = { ...rest, ...(error ? { error } : {}) };
+        yield* sync.withManifestLock(recordMainRepository(referencesRoot, mainRepository));
+      }
+    }
     return {
       ...locked.response,
+      ...(mainRepository ? { mainRepository } : {}),
       ...(mainRepositoryCandidates.length > 0 ? { mainRepositoryCandidates } : {}),
     } satisfies BootstrapWorkspaceResponse;
   },
