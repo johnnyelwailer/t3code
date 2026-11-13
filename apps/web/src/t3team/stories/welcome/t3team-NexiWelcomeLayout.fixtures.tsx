@@ -11,6 +11,5 @@ export {
   WelcomeItem,
   WelcomePageShell,
   WelcomeSection,
-  WelcomeSectionsGrid,
   type WelcomeStatus,
 } from "~/t3team/welcome/t3team-welcomeLayout";

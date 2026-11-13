@@ -102,7 +102,7 @@ export function T3TeamImageLightbox({
 
           <DialogPrimitive.Close
             aria-label="Close image viewer"
-            className="absolute top-3 end-3 z-10 wco:top-[max(0.75rem,env(titlebar-area-y,0px))] wco:end-[var(--workspace-native-controls-inset)]"
+            className="absolute top-3 end-3 z-10"
             render={<Button variant="glass" size="icon" />}
           >
             <XIcon />

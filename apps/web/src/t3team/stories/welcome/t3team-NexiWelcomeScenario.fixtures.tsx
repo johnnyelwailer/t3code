@@ -1,11 +1,6 @@
 import type { ReactNode } from "react";
 
-import {
-  StartFooter,
-  WelcomePageShell,
-  WelcomeSection,
-  WelcomeSectionsGrid,
-} from "./t3team-NexiWelcomeLayout.fixtures";
+import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-NexiWelcomeLayout.fixtures";
 import {
   AccountBlock,
   AgentsBlock,
@@ -115,12 +110,8 @@ export function NexiWelcomePageMockup({ scenario }: { readonly scenario: Welcome
   const entraSignedIn = scenario.account === "signedIn";
   const agentReady = scenario.agents === "ready";
   return (
-    <WelcomePageShell
-      narrow={scenario.narrow}
-      title="Set up Nexi Work"
-      footer={<StartFooter agentReady={agentReady} onStart={noop} onStartWithoutAgent={noop} />}
-    >
-      <WelcomeSectionsGrid>
+    <WelcomePageShell narrow={scenario.narrow}>
+      <div className="border-t border-border/50">
         <WelcomeSection title="Agents">
           <AgentsBlock state={scenario.agents} />
         </WelcomeSection>
@@ -139,7 +130,8 @@ export function NexiWelcomePageMockup({ scenario }: { readonly scenario: Welcome
           <AccountBlock state={scenario.account} />
           <CloudPhoneBlock state={scenario.cloudPhone} entraSignedIn={entraSignedIn} />
         </WelcomeSection>
-      </WelcomeSectionsGrid>
+      </div>
+      <StartFooter agentReady={agentReady} onStart={noop} onStartWithoutAgent={noop} />
     </WelcomePageShell>
   );
 }

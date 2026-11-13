@@ -106,14 +106,6 @@ export function WelcomeSection({
 
 export { WelcomePageShell } from "./t3team-NexiWelcomeShell";
 
-/** One column on a narrow setup window, two on a wide one — container-queried to the page, not the viewport. */
-export const WELCOME_SECTIONS_GRID_CLASS =
-  "grid grid-cols-1 items-start gap-x-8 @3xl/welcome-page:grid-cols-2";
-
-export function WelcomeSectionsGrid({ children }: { readonly children: ReactNode }) {
-  return <div className={WELCOME_SECTIONS_GRID_CLASS}>{children}</div>;
-}
-
 export function StartFooter({
   agentReady,
   onStart,
@@ -124,7 +116,7 @@ export function StartFooter({
   readonly onStartWithoutAgent?: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-5">
       {agentReady ? (
         <span />
       ) : (
