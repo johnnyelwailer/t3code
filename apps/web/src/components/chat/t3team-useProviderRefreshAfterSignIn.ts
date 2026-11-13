@@ -2,21 +2,26 @@ import type { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { useEffect, useEffectEvent, useState } from "react";
 
-import {
-  deriveProviderInstanceEntries,
-  isProviderInstancePickerReady,
-} from "../../providerInstances";
+import { deriveProviderInstanceEntries } from "../../providerInstances";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { classifyProviderRefreshResult } from "./t3team-reconcileToolAuthWithProvider";
 
 /**
  * - `idle`: not signed in (or nothing to refresh yet).
  * - `refreshing`: signed in; the machine is re-checking the provider.
  * - `notReady`: the re-check finished and the instance still is not ready. A re-check that already
  *   reports it ready stays `refreshing`: the live list is about to swap the panel for the models.
+ * - `unauthenticated`: the re-check found the account is not signed in (the same probe Settings
+ *   uses). A definite result: the notice offers Sign in, not another Check again loop.
  * - `failed`: the re-check itself could not run.
  */
-export type ProviderRefreshAfterSignInStatus = "idle" | "refreshing" | "notReady" | "failed";
+export type ProviderRefreshAfterSignInStatus =
+  | "idle"
+  | "refreshing"
+  | "notReady"
+  | "unauthenticated"
+  | "failed";
 
 export interface ProviderRefreshAfterSignIn {
   readonly status: ProviderRefreshAfterSignInStatus;
@@ -26,6 +31,7 @@ export interface ProviderRefreshAfterSignIn {
 
 type Outcome =
   | { readonly key: string; readonly status: "notReady" }
+  | { readonly key: string; readonly status: "unauthenticated" }
   | { readonly key: string; readonly status: "failed"; readonly error: string };
 
 /**
@@ -62,9 +68,8 @@ export function useProviderRefreshAfterSignIn(input: {
       const refreshed = deriveProviderInstanceEntries(result.value.providers).find(
         (candidate) => candidate.instanceId === instanceId,
       );
-      return refreshed && isProviderInstancePickerReady(refreshed)
-        ? null
-        : ({ key: requestKey, status: "notReady" } as const);
+      const classified = classifyProviderRefreshResult(refreshed);
+      return classified === "ready" ? null : ({ key: requestKey, status: classified } as const);
     }
     return {
       key: requestKey,

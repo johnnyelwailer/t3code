@@ -8,7 +8,7 @@ import { createJiraProject, type CreateJiraProjectInput } from "./t3team-createJ
 
 export type CreateProjectSubmitState =
   | { readonly kind: "idle" }
-  | { readonly kind: "creating" }
+  | { readonly kind: "creating"; readonly project?: ProjectShellProject }
   | { readonly kind: "error"; readonly error: unknown };
 
 const IDLE: CreateProjectSubmitState = { kind: "idle" };
@@ -38,7 +38,14 @@ export function useCreateProjectSubmit(scopeKey: string | undefined) {
       setRaw({ state: { kind: "creating" }, scopeKey });
       try {
         if (!backend) throw new Error("Backend not available");
-        return await createJiraProject({ ...input, backend });
+        return await createJiraProject({
+          ...input,
+          backend,
+          onRecordCreated: (project) => {
+            setRaw({ state: { kind: "creating", project }, scopeKey });
+            input.onRecordCreated?.(project);
+          },
+        });
       } catch (error) {
         setRaw({ state: { kind: "error", error }, scopeKey });
         inFlightRef.current = false;

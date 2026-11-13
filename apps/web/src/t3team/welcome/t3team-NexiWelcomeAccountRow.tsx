@@ -1,6 +1,7 @@
 import type { AccountStatus } from "@t3tools/contracts";
 
 import { MicrosoftEntraMark } from "~/t3team/welcome/t3team-MicrosoftEntraMark";
+import type { WelcomeCheck } from "~/t3team/welcome/t3team-welcomeCheck.logic";
 import {
   PrimaryAction,
   SecondaryAction,
@@ -11,7 +12,7 @@ import {
 
 export type NexiWelcomeAccountRowProps = {
   readonly account: AccountStatus | null;
-  readonly loaded: boolean;
+  readonly check: WelcomeCheck;
   readonly pending: boolean;
   readonly error: string | null;
   readonly skipped: boolean;
@@ -23,7 +24,7 @@ export type NexiWelcomeAccountRowProps = {
 
 export function NexiWelcomeAccountRow({
   account,
-  loaded,
+  check,
   pending,
   error,
   skipped,
@@ -48,12 +49,12 @@ export function NexiWelcomeAccountRow({
     );
   }
 
-  if (!loaded && error) {
+  if (account === null && check === "failed") {
     return (
       <WelcomeItem
         mark={mark}
         title="Nexplore"
-        description={error}
+        description="Can't reach Nexplore right now."
         action={<SecondaryAction onClick={onRetry}>Retry</SecondaryAction>}
       />
     );
@@ -102,7 +103,7 @@ export function NexiWelcomeAccountRow({
       action={
         <div className="flex items-center gap-2">
           <SecondaryAction onClick={onSkip}>Skip</SecondaryAction>
-          <PrimaryAction onClick={onSignIn} disabled={pending || !loaded}>
+          <PrimaryAction onClick={onSignIn} disabled={pending || check === "checking"}>
             {pending ? "Starting…" : "Sign in"}
           </PrimaryAction>
         </div>

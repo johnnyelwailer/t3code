@@ -107,6 +107,13 @@ const buildInputAsar = async (dest: string): Promise<void> => {
       stat: { size: Buffer.byteLength(UNPACKED_BODY), mode: 0o644 },
       streamGenerator: readableFrom(UNPACKED_BODY),
     },
+    {
+      path: "big/helper",
+      type: "file",
+      unpacked: true,
+      stat: { size: Buffer.byteLength(EXEC_BODY), mode: 0o755 },
+      streamGenerator: readableFrom(EXEC_BODY),
+    },
   ]);
 };
 
@@ -204,6 +211,11 @@ it.layer(NodeServices.layer)("desktop-asar-dts-afterpack", (it) => {
         assert.equal(
           NodeFS.readFileSync(path.join(extractDir, "big", "unpacked.bin"), "utf8"),
           UNPACKED_BODY,
+        );
+        // The asar header records no executable flag for unpacked entries.
+        assert.equal(
+          NodeFS.statSync(path.join(`${outputAsar}.unpacked`, "big", "helper")).mode & 0o777,
+          0o755,
         );
 
         // The regression: read the symlink THROUGH the real filesystem link. A

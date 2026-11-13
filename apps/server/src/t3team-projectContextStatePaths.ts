@@ -9,7 +9,9 @@ import type { T3TeamContextFileWrite } from "./t3team-project-workspace-context-
 function normalizePaths(value: unknown, stateDirName?: string): unknown {
   if (typeof value === "string") {
     // Only whole path values, never a mention embedded in customer text or a URL.
-    return /^(?:\.\/)?\.t3team(?:[\\/]|$)|^(?:\/|[A-Za-z]:[\\/])/.test(value)
+    return /^(?:\.\/)?(?:\.t3team|\.nexi|\.agents[\\/]nexi)(?:[\\/]|$)|^(?:\/|[A-Za-z]:[\\/])/.test(
+      value,
+    )
       ? toPhysicalProjectStatePath(value, stateDirName)
       : value;
   }

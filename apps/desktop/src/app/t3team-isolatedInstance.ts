@@ -62,8 +62,15 @@ export function explicitBackendHome(input: {
 export function isolatedBackendChildEnv(input: {
   readonly isolatedInstance: boolean;
   readonly home: string;
+  readonly appId?: string | undefined;
 }): Readonly<Record<string, string>> {
-  return input.isolatedInstance ? { T3CODE_HOME: input.home } : {};
+  if (!input.isolatedInstance) return {};
+  const appId = input.appId?.trim();
+  return {
+    T3CODE_HOME: input.home,
+    T3CODE_DESKTOP_ISOLATED_INSTANCE: "1",
+    ...(appId ? { T3CODE_DESKTOP_APP_ID: appId } : {}),
+  };
 }
 
 /**
@@ -76,9 +83,6 @@ export function isolatedInstanceStartupProblem(input: {
   readonly platform: NodeJS.Platform;
 }): string | undefined {
   if (!input.isolatedBranding) return undefined;
-  if (input.platform !== "darwin") {
-    return `This build is an isolated instance, and isolated instances are macOS-only (running on ${input.platform}). It would share state with an installed app. Install the replace-mode build instead.`;
-  }
   if (!input.userDataDirName) {
     return "This build is an isolated instance, but its branding has no userDataDirName, so it has no home of its own. Rebuild it with a product name.";
   }

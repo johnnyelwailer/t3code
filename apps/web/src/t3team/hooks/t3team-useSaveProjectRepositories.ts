@@ -7,8 +7,8 @@ import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectReposi
 import { useLinkedRepositorySyncView } from "~/t3team/hooks/t3team-useLinkedRepositorySyncView";
 
 /**
- * The linked-repositories dialog's save: its progress view, whether it is running, its error, and
- * what was last saved. Saving returns before a clone finishes; the dialog stays open to show it.
+ * The linked-repositories dialog's save for the linked list (and branches). The main
+ * repository is persisted on its own by Make main, not through this save.
  */
 export function useSaveProjectRepositories(input: {
   readonly project: ProjectShellProject;
@@ -16,9 +16,6 @@ export function useSaveProjectRepositories(input: {
   readonly linkedRepositoryBranches: Parameters<
     typeof saveProjectRepositories
   >[0]["linkedRepositoryBranches"];
-  readonly mainRepositoryUrl: string | null;
-  /** The main repository this save switches to; `undefined` when unchanged. */
-  readonly mainChange: string | null | undefined;
   readonly syncStatus: {
     readonly byUrl: ReadonlyMap<string, LinkedRepositorySyncResult>;
     readonly refresh: () => void;
@@ -30,16 +27,15 @@ export function useSaveProjectRepositories(input: {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{
     urls: ReadonlyArray<string>;
-    main: string | null;
   } | null>(null);
-  const { linkedRepositoryUrls, mainChange, syncStatus } = input;
+  const { linkedRepositoryUrls, syncStatus } = input;
   const syncView = useLinkedRepositorySyncView({
     urls: linkedRepositoryUrls,
     byUrl: syncStatus.byUrl,
-    mainRepositoryUrl: mainChange,
+    mainRepositoryUrl: undefined,
   });
 
-  const save = async () => {
+  const save = async (): Promise<ProjectShellProject | null> => {
     setSaveError(null);
     setSaving(true);
     syncView.begin();
@@ -51,23 +47,22 @@ export function useSaveProjectRepositories(input: {
         ...(input.linkedRepositoryBranches
           ? { linkedRepositoryBranches: input.linkedRepositoryBranches }
           : {}),
-        // Show clone progress while the save waits on the chosen main repository's clone.
         onSaved: () => syncStatus.refresh(),
         onPhase: syncView.setPhase,
-        ...(mainChange !== undefined ? { mainRepositoryUrl: mainChange } : {}),
       });
       input.onProjectUpdated(nextProject);
-      setSaved({ urls: linkedRepositoryUrls, main: input.mainRepositoryUrl });
+      setSaved({ urls: linkedRepositoryUrls });
       syncStatus.refresh();
+      return nextProject;
     } catch (error) {
       setSaveError(error);
       syncView.hide();
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
-  const unchangedSinceSave =
-    saved !== null && saved.urls === linkedRepositoryUrls && saved.main === input.mainRepositoryUrl;
+  const unchangedSinceSave = saved !== null && saved.urls === linkedRepositoryUrls;
   return { save, saving, saved, saveError, syncView, unchangedSinceSave };
 }

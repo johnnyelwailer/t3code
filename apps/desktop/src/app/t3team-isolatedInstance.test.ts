@@ -83,7 +83,20 @@ describe("isolatedBackendChildEnv", () => {
   it("names the isolated home for an isolated instance and nothing otherwise", () => {
     assert.deepEqual(isolatedBackendChildEnv({ isolatedInstance: true, home: "/iso" }), {
       T3CODE_HOME: "/iso",
+      T3CODE_DESKTOP_ISOLATED_INSTANCE: "1",
     });
+    assert.deepEqual(
+      isolatedBackendChildEnv({
+        isolatedInstance: true,
+        home: "/iso",
+        appId: "ch.nexplore.nexi.work",
+      }),
+      {
+        T3CODE_HOME: "/iso",
+        T3CODE_DESKTOP_ISOLATED_INSTANCE: "1",
+        T3CODE_DESKTOP_APP_ID: "ch.nexplore.nexi.work",
+      },
+    );
     assert.deepEqual(isolatedBackendChildEnv({ isolatedInstance: false, home: "/iso" }), {});
   });
 });
