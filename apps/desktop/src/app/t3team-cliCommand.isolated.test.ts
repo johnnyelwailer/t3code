@@ -77,7 +77,7 @@ it.layer(NodeServices.layer)("isolated Nexi CLI command", (it) => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("on macOS, puts nexi on PATH via ~/.local/bin and a removable zprofile snippet, never touching t3", () =>
+  it.effect("on macOS, links nexi in ~/.local/bin without editing any shell profile, and uninstall strips an old snippet", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -102,20 +102,24 @@ it.layer(NodeServices.layer)("isolated Nexi CLI command", (it) => {
         expect(yield* fs.readLink(link)).toBe(path.join(baseDir, "bin", "nexi"));
         expect(yield* fs.readFileString(upstream)).toBe("#!/bin/sh\n# upstream t3\n");
         expect(yield* fs.exists(path.join(localBin, "t3"))).toBe(true);
-        const zprofile = yield* fs.readFileString(path.join(home, ".zprofile"));
-        expect(zprofile).toContain("nexi-work-cli-path:begin");
-        expect(zprofile).toContain(localBin);
-        expect(zprofile).not.toContain("t3code");
-        // Idempotent.
+        for (const profile of [".zprofile", ".bash_profile", ".profile"]) {
+          expect(yield* fs.exists(path.join(home, profile))).toBe(false);
+        }
+        // Idempotent, and still no profile edits.
         const again = yield* command.install;
         expect(again.installedPath).toBe(link);
-        expect(yield* fs.readFileString(path.join(home, ".zprofile"))).toBe(zprofile);
+        expect(yield* fs.exists(path.join(home, ".zprofile"))).toBe(false);
+        // An earlier test build may have left a marked snippet: uninstall removes only that.
+        yield* fs.writeFileString(
+          path.join(home, ".zprofile"),
+          "export FOO=1\n\n# nexi-work-cli-path:begin\nexport PATH=x\n# nexi-work-cli-path:end\n",
+        );
         expect((yield* command.uninstall).installedPath).toBeNull();
         expect(yield* fs.exists(link)).toBe(false);
         expect(yield* fs.exists(upstream)).toBe(true);
-        expect(yield* fs.readFileString(path.join(home, ".zprofile"))).not.toContain(
-          "nexi-work-cli-path:begin",
-        );
+        const after = yield* fs.readFileString(path.join(home, ".zprofile"));
+        expect(after).not.toContain("nexi-work-cli-path:begin");
+        expect(after).toContain("export FOO=1");
       } finally {
         process.env.PATH = previousPath;
       }

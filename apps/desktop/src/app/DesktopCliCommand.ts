@@ -14,12 +14,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as DesktopCliShim from "./DesktopCliShim.ts";
 import { cliPathLinkName, cliShimMarker } from "./t3team-cliIdentity.ts";
-import {
-  ensureUnixPathSnippet,
-  removeUnixPathSnippet,
-  unixDirOnPath,
-  userShellProfilePaths,
-} from "./t3team-cliUserPath.ts";
+import { removeUnixPathSnippet, userShellProfilePaths } from "./t3team-cliUserPath.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 
 export class DesktopCliCommandError extends Schema.TaggedError<DesktopCliCommandError>()(
@@ -222,18 +217,6 @@ export const make = Effect.gen(function* () {
     ),
   );
 
-
-  const ensureDirOnUserPath = Effect.fn("DesktopCliCommand.ensureDirOnUserPath")(
-    function* (directory: string) {
-      if (unixDirOnPath(directory, process.env.PATH)) return;
-      for (const profile of userShellProfilePaths(environment.homeDirectory)) {
-        const existing = yield* fs.readFileString(profile).pipe(Effect.orElseSucceed(() => ""));
-        const next = ensureUnixPathSnippet(existing, directory);
-        if (next.changed) yield* fs.writeFileString(profile, next.text).pipe(Effect.ignore);
-      }
-    },
-  );
-
   const removeDirFromUserPath = Effect.gen(function* () {
     for (const profile of userShellProfilePaths(environment.homeDirectory)) {
       const existing = yield* fs.readFileString(profile).pipe(Effect.orElseSucceed(() => ""));
@@ -264,10 +247,7 @@ export const make = Effect.gen(function* () {
     const existing = yield* installedAt;
     if (Option.isSome(existing)) {
       const target = yield* fs.readLink(existing.value).pipe(Effect.option);
-      if (Option.getOrUndefined(target) === launcher) {
-        yield* ensureDirOnUserPath(path.dirname(existing.value));
-        return yield* state;
-      }
+      if (Option.getOrUndefined(target) === launcher) return yield* state;
       yield* fs
         .remove(existing.value)
         .pipe(Effect.mapError(() => fail(`Could not replace ${existing.value}.`)));
@@ -296,10 +276,8 @@ export const make = Effect.gen(function* () {
         Effect.as(true),
         Effect.orElseSucceed(() => false),
       );
-      if (linked) {
-        yield* ensureDirOnUserPath(directory);
-        return yield* state;
-      }
+      // t3team: never edit shell profiles on our own (Phil 2026-11-13); uninstall still strips an old snippet.
+      if (linked) return yield* state;
     }
     return yield* fail(
       `Another ${commandName} command is already installed, or no folder on your PATH is writable. Run the launcher directly at ${launcher}.`,
