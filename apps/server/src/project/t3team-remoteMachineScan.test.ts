@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
+import { projectMachineFilePathLookupOrder } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 
 import { scanCheckout } from "./t3team-projectMachineScan.ts";
@@ -78,7 +79,7 @@ it.layer(NodeServices.layer)("remote machine scan", (it) => {
         expect(result?.candidates).toEqual([]);
         expect(result?.rejected).toEqual([]);
         expect(fixture.reads.map((read) => read.path)).toEqual([
-          ".nexi/machine.json",
+          ...projectMachineFilePathLookupOrder(),
           ".devcontainer/devcontainer.json",
           ".devcontainer.json",
         ]);
