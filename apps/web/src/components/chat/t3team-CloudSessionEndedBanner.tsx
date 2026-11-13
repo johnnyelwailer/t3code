@@ -3,7 +3,9 @@ import { CloudOffIcon, ClockIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { ENDED_SESSION_BANNER_COPY } from "~/cloud/t3team-endedSessionAction";
+import { isThreadCloudSessionEnded } from "~/cloud/t3team-endedCloudSessionEnvironments";
 import { liveCloudSessionForEnvironment } from "~/cloud/t3team-cloudSessionEnvironmentMatch";
+import { useEnvironmentPresentation } from "~/state/presentation";
 import {
   resolveSessionEndingNotice,
   SESSION_ENDING_WARNING_SECONDS,
@@ -46,8 +48,10 @@ export function endedSessionBannerItem(
  * warning window opens; only inside it does the count tick, so a session with hours left does not
  * re-render its thread every few seconds.
  */
-function useSessionEnding(environmentId: EnvironmentId | null) {
-  const { sessions } = useCloudSessionsOfMachine(environmentId);
+function useSessionEnding(
+  environmentId: EnvironmentId | null,
+  sessions: ReturnType<typeof useCloudSessionsOfMachine>["sessions"],
+) {
   const live =
     environmentId === null ? null : liveCloudSessionForEnvironment(sessions, environmentId);
   const endsAtMs = live?.phase === "ready" ? sessionEndsAtMs(live) : null;
@@ -75,15 +79,26 @@ function useSessionEnding(environmentId: EnvironmentId | null) {
 
 /**
  * The composer banner for a thread whose cloud session has ended: the connection was parked on
- * `session_ended`, so "reconnecting" would be a lie and retrying is pointless. Before that, the
- * warning that it is about to. Null otherwise.
+ * `session_ended`, or the session list shows it has stopped and nothing live serves it (old
+ * threads can still look like a refused sign-in). Reconnecting would be a lie; the ended actions
+ * offer Start or Connect instead. Before that, the warning that it is about to. Null otherwise.
  */
 export function useCloudSessionEndedBannerItem(
   environmentId: EnvironmentId | null,
   restartProjectId: ProjectId | null = null,
 ): ComposerBannerStackItem | null {
-  const ended = useEnvironmentSessionEnded(environmentId);
-  const { sessionId, secondsLeft } = useSessionEnding(environmentId);
+  const parkedOnSessionEnded = useEnvironmentSessionEnded(environmentId);
+  const { sessions } = useCloudSessionsOfMachine(environmentId);
+  const { presentation } = useEnvironmentPresentation(environmentId);
+  const ended =
+    environmentId !== null &&
+    isThreadCloudSessionEnded({
+      parkedOnSessionEnded,
+      environmentId,
+      entry: presentation?.entry ?? null,
+      sessions,
+    });
+  const { sessionId, secondsLeft } = useSessionEnding(environmentId, sessions);
   const notice = resolveSessionEndingNotice(secondsLeft);
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
   if (environmentId === null) return null;

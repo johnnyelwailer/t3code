@@ -43,3 +43,22 @@ export function endedCloudSessionEnvironmentIds(
   }
   return result;
 }
+
+/**
+ * Parked on `session_ended`, or the session list shows this environment's session stopped and
+ * no live one serves it. The list path covers old threads whose last failure still reads as a
+ * refused sign-in; the generic Reconnect banner must not stay.
+ */
+export function isThreadCloudSessionEnded(input: {
+  readonly parkedOnSessionEnded: boolean;
+  readonly environmentId: EnvironmentId;
+  readonly entry: Pick<ConnectionCatalogEntry, "target"> | null;
+  readonly sessions: ReadonlyArray<CloudSession>;
+}): boolean {
+  if (input.parkedOnSessionEnded) return true;
+  if (input.entry === null) return false;
+  return endedCloudSessionEnvironmentIds(
+    [{ environmentId: input.environmentId, entry: input.entry }],
+    input.sessions,
+  ).has(input.environmentId);
+}
