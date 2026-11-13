@@ -5,15 +5,21 @@
 !include "WinMessages.nsh"
 !ifdef BUILD_UNINSTALLER
   ${UnStrRep}
+  ${UnStrStr}
   !define T3StrRep '${UnStrRep}'
-  ${UnStrContains}
-  !define T3StrContains '${UnStrContains}'
+  !define T3StrStr '${UnStrStr}'
 !else
   ${StrRep}
+  ${StrStr}
   !define T3StrRep '${StrRep}'
-  ${StrContains}
-  !define T3StrContains '${StrContains}'
+  !define T3StrStr '${StrStr}'
 !endif
+; StrFunc provides StrRep/StrStr (and Un* for the uninstaller), not StrContains.
+; Keep ${T3StrContains} result needle haystack call sites; StrStr is haystack, needle.
+!macro T3TeamStrContains result needle haystack
+  ${T3StrStr} ${result} `${haystack}` `${needle}`
+!macroend
+!define T3StrContains "!insertmacro T3TeamStrContains"
 
 ; The rc.16-era Nexi installer used upstream's appId, so its uninstall GUID is
 ; the same as T3 Code's. We may delete that *registry key* only when DisplayName
