@@ -64,7 +64,9 @@ import {
 } from "./lib/t3team-windowsPayloadBudget.ts";
 import {
   assertIsolatedBuildSupported,
+  distributionProtocolClaims,
   isolatedBrandingFields,
+  parseDistributionUrlSchemes,
   T3TeamIsolatedBuildError,
   t3codeProtocolClaims,
 } from "./lib/t3team-isolatedInstanceEnv.ts";
@@ -3218,6 +3220,8 @@ interface PackagedDesktopBrandingResource {
   readonly legacyUserDataDirName: string;
   readonly linuxDesktopEntryName: string;
   readonly linuxWmClass: string;
+  /** t3team: a distribution's custom URL scheme(s) that open the app (e.g. nexi). */
+  readonly urlSchemes?: readonly string[];
   readonly isolatedInstance?: true;
 }
 
@@ -3423,6 +3427,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       },
       protocols: [
         ...t3codeProtocolClaims(process.env),
+        ...distributionProtocolClaims(process.env),
         {
           name: "Web site URL",
           schemes: ["http", "https"],
@@ -3473,7 +3478,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
       maintainer: "T3 Tools <hello@t3.codes>",
-      protocols: [...t3codeProtocolClaims(process.env)],
+      protocols: [...t3codeProtocolClaims(process.env), ...distributionProtocolClaims(process.env)],
       desktop: {
         entry: {
           StartupWMClass: "t3code",
@@ -3512,6 +3517,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",
+      // URL schemes registered for the installed app (t3code plus a distribution's custom scheme).
+      protocols: [...t3codeProtocolClaims(process.env), ...distributionProtocolClaims(process.env)],
       // Smart App Control validates unpacked native libraries independently; sign them too.
       signExts: [".node", ".dll"],
       // Resource editing sets product icons even when code signing is disabled.
@@ -4559,6 +4566,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
       legacyUserDataDirName: options.productName,
       linuxDesktopEntryName: `${slug}.desktop`,
       linuxWmClass: slug,
+      urlSchemes: parseDistributionUrlSchemes(process.env),
       ...isolatedBrandingFields(process.env),
     };
     yield* fs.writeFileString(
