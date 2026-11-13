@@ -50,7 +50,10 @@ describe("useLatest", () => {
 
 describe("useLatestCallback", () => {
   it("keeps a stable identity and calls the latest closure", () => {
-    const seen: { fn: ((n: number) => number) | null; results: number[] } = { fn: null, results: [] };
+    const seen: { fn: ((n: number) => number) | null; results: number[] } = {
+      fn: null,
+      results: [],
+    };
     function Host({ factor }: { factor: number }) {
       const [n, setN] = useState(0);
       const cb = useLatestCallback((value: number) => value * factor);

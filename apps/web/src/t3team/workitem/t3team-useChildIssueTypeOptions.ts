@@ -29,7 +29,8 @@ export function useChildIssueTypeOptions(input: {
     setLoading(true);
     setError(null);
 
-    fetchRef.current()
+    fetchRef
+      .current()
       .then((types) => {
         if (!cancelled) setOptions(types);
       })

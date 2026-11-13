@@ -117,7 +117,6 @@ export function Panel({ onClose, open }: { onClose: () => void; open: boolean })
 `,
   );
 
-
   hook.valid(
     "allows an effect that depends on a useCallback result (stable when its own deps are)",
     `import { useCallback, useEffect, useState } from "react";

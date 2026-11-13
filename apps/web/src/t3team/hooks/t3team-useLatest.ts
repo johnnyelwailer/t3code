@@ -19,8 +19,6 @@ export function useLatest<T>(value: T): { readonly current: T } {
  */
 export function useLatestCallback<T extends (...args: never[]) => unknown>(fn: T): T {
   const latest = useLatest(fn);
-  const [stable] = useState(
-    () => ((...args: never[]) => latest.current(...args)) as T,
-  );
+  const [stable] = useState(() => ((...args: never[]) => latest.current(...args)) as T);
   return stable;
 }

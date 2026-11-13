@@ -106,8 +106,6 @@ afterEach(() => {
   host = null;
 });
 
-
-
 /** The pre-#923 hook: `discoverSourceControl` is in the effect deps. Kept only so a
  * test can prove the loop cap still fires on that pattern. */
 function useGitHubAuthProbeBefore923(params: {
@@ -123,10 +121,9 @@ function useGitHubAuthProbeBefore923(params: {
   const { enabled, onAuthenticated, setLoadingAuth, setAuthStatus, setAuthDetail } = params;
   const onAuthenticatedRef = { current: onAuthenticated };
   onAuthenticatedRef.current = onAuthenticated;
-  const discoverSourceControl = useAtomQueryRunner(
-    {} as never,
-    {} as never,
-  ) as (input: unknown) => Promise<unknown>;
+  const discoverSourceControl = useAtomQueryRunner({} as never, {} as never) as (
+    input: unknown,
+  ) => Promise<unknown>;
   // The buggy pattern: unstable hook-returned function in the dependency list,
   // plus setState in the effect — this is what froze Add on "Adding…".
   useEffect(() => {

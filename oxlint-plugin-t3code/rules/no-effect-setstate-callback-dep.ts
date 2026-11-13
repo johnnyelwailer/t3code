@@ -25,9 +25,7 @@ const STABLE_HOOKS = new Set([
 // Hooks whose return is a new function identity on most renders. useCallback
 // and useMemo are intentionally stable when their own deps are, so they are
 // not in this set — exhaustive-deps on the useCallback is the right guard there.
-const FUNCTION_HOOKS = new Set([
-  "useAtomQueryRunner",
-]);
+const FUNCTION_HOOKS = new Set(["useAtomQueryRunner"]);
 const BUILTIN_SETTER_LOOKALIKES = new Set([
   "setTimeout",
   "setInterval",
@@ -64,7 +62,14 @@ const MESSAGE =
   "If this effect is correct, name why on the line above: " +
   "`// oxlint-disable-next-line t3code/no-effect-setstate-callback-dep -- <why>`.";
 
-type BindingKind = "setter" | "callback-param" | "param" | "hook-fn" | "hook-value" | "latest" | "other";
+type BindingKind =
+  | "setter"
+  | "callback-param"
+  | "param"
+  | "hook-fn"
+  | "hook-value"
+  | "latest"
+  | "other";
 
 type Scope = {
   readonly params: Map<string, BindingKind>;
@@ -74,12 +79,25 @@ type Scope = {
 type VisitNode = ESTree.Node & { [key: string]: unknown };
 
 const isNode = (value: unknown): value is VisitNode =>
-  typeof value === "object" && value !== null && "type" in value && typeof (value as { type: unknown }).type === "string";
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  typeof (value as { type: unknown }).type === "string";
 
-function walk(node: VisitNode, visit: (node: VisitNode, parent: VisitNode | null) => void, parent: VisitNode | null = null) {
+function walk(
+  node: VisitNode,
+  visit: (node: VisitNode, parent: VisitNode | null) => void,
+  parent: VisitNode | null = null,
+) {
   visit(node, parent);
   for (const key of Object.keys(node)) {
-    if (key === "parent" || key === "leadingComments" || key === "trailingComments" || key === "range" || key === "loc") {
+    if (
+      key === "parent" ||
+      key === "leadingComments" ||
+      key === "trailingComments" ||
+      key === "range" ||
+      key === "loc"
+    ) {
       continue;
     }
     const child = node[key];
@@ -104,7 +122,11 @@ const calleeName = (node: ESTree.CallExpression): string | null => {
   if (Option.isNone(callee)) return null;
   const expression = callee.value;
   if (expression.type === "Identifier") return expression.name;
-  if (expression.type === "MemberExpression" && !expression.computed && expression.property.type === "Identifier") {
+  if (
+    expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.property.type === "Identifier"
+  ) {
     return expression.property.name;
   }
   return null;
@@ -196,7 +218,10 @@ function collectScopes(program: VisitNode): Map<VisitNode, Scope> {
       const declarator = node as unknown as ESTree.VariableDeclarator;
       const initNode = declarator.init ? unwrapExpression(declarator.init) : Option.none();
       const init = Option.isSome(initNode) ? initNode.value : null;
-      const isHook = init !== null && init.type === "CallExpression" && isHookCall(init as ESTree.CallExpression);
+      const isHook =
+        init !== null &&
+        init.type === "CallExpression" &&
+        isHookCall(init as ESTree.CallExpression);
       const hookName = isHook ? hookCalleeName(init as ESTree.CallExpression) : null;
       const id = declarator.id;
       if (id.type === "ArrayPattern" && hookName === "useState") {
@@ -237,7 +262,14 @@ function collectScopes(program: VisitNode): Map<VisitNode, Scope> {
     if (isFn) visitCollect(node);
     else visitCollect(node);
     for (const key of Object.keys(node)) {
-      if (key === "parent" || key === "leadingComments" || key === "trailingComments" || key === "range" || key === "loc") continue;
+      if (
+        key === "parent" ||
+        key === "leadingComments" ||
+        key === "trailingComments" ||
+        key === "range" ||
+        key === "loc"
+      )
+        continue;
       const child = node[key];
       if (Array.isArray(child)) {
         for (const entry of child) {
@@ -253,7 +285,12 @@ function collectScopes(program: VisitNode): Map<VisitNode, Scope> {
   return scopes;
 }
 
-function resolveBinding(name: string, functionNode: VisitNode, scopes: Map<VisitNode, Scope>, functionStack: VisitNode[]): BindingKind | null {
+function resolveBinding(
+  name: string,
+  functionNode: VisitNode,
+  scopes: Map<VisitNode, Scope>,
+  functionStack: VisitNode[],
+): BindingKind | null {
   // Search from innermost function outward
   for (let i = functionStack.length - 1; i >= 0; i -= 1) {
     const scope = scopes.get(functionStack[i]!);
@@ -266,7 +303,8 @@ function resolveBinding(name: string, functionNode: VisitNode, scopes: Map<Visit
 
 function isSetStateCall(name: string, kind: BindingKind | null): boolean {
   if (kind === "setter") return true;
-  if (kind === "callback-param" && SETTER_NAME.test(name) && !BUILTIN_SETTER_LOOKALIKES.has(name)) return true;
+  if (kind === "callback-param" && SETTER_NAME.test(name) && !BUILTIN_SETTER_LOOKALIKES.has(name))
+    return true;
   return false;
 }
 
@@ -324,7 +362,14 @@ function findViolations(program: VisitNode): Report[] {
       }
     }
     for (const key of Object.keys(node)) {
-      if (key === "parent" || key === "leadingComments" || key === "trailingComments" || key === "range" || key === "loc") continue;
+      if (
+        key === "parent" ||
+        key === "leadingComments" ||
+        key === "trailingComments" ||
+        key === "range" ||
+        key === "loc"
+      )
+        continue;
       const child = node[key];
       if (Array.isArray(child)) {
         for (const entry of child) {

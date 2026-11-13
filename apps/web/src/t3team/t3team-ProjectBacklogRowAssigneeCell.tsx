@@ -42,7 +42,8 @@ export function ProjectBacklogRowAssigneeCell({
     setAssigneeLoading(true);
     setAssigneeError(null);
 
-    void onSearchAssignableUsersRef.current(ticket, deferredAssigneeQuery)
+    void onSearchAssignableUsersRef
+      .current(ticket, deferredAssigneeQuery)
       .then((users) => {
         if (cancelled) return;
         setAssignableUsers(users);

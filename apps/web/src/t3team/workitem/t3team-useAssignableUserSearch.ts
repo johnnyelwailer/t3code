@@ -34,7 +34,8 @@ export function useAssignableUserSearch(input: {
     setSearchLoading(true);
     setSearchError(null);
 
-    searchRef.current(debouncedQuery.trim() || undefined)
+    searchRef
+      .current(debouncedQuery.trim() || undefined)
       .then((users) => {
         if (cancelled) return;
         setResults(users);
