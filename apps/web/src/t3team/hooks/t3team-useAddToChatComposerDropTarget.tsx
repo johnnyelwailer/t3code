@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import type { AddToChatTarget } from "~/t3team/hooks/t3team-useAddToChat";
 import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
+import { useContextStartersEnabled } from "~/t3team/t3team-contextStartersFlag";
 import {
   T3TeamAgentContextDropOverlay,
   useT3TeamAgentContextDropTarget,
@@ -9,8 +10,10 @@ import {
 
 export function useAddToChatComposerDropTarget(target?: AddToChatTarget) {
   const { addToChatFromRequest } = useAddToChat();
+  const contextStartersEnabled = useContextStartersEnabled();
   const { isActive, dropProps } = useT3TeamAgentContextDropTarget({
     canDrop: (record) =>
+      contextStartersEnabled &&
       record.capabilities.actions.some((action) => action.kind === "add-to-chat"),
     onDropRecord: async (record) => {
       const action = record.capabilities.actions.find(

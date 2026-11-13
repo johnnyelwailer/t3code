@@ -108,12 +108,8 @@ describe("InboxWorkItemRow", () => {
     });
 
     expect(contextMenuShow).toHaveBeenCalledTimes(1);
-    expect(contextMenuShow.mock.calls[0]?.[0]).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "add-to-chat", label: "Add to chat" }),
-        expect.objectContaining({ id: "unpin", label: "Unpin" }),
-      ]),
-    );
+    // "Add to chat" follows CONTEXT_STARTERS, off by default.
+    expect(contextMenuShow.mock.calls[0]?.[0]).toEqual([{ id: "unpin", label: "Unpin" }]);
     await act(async () => root.unmount());
   });
 

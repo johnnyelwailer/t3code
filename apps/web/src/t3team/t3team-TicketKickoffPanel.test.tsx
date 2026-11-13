@@ -6,8 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createLucideReactMock } from "./t3team-createLucideReactMock";
 import { TicketKickoffPanel } from "./t3team-TicketKickoffPanel";
 
-const { mockUseSidecarComposition } = vi.hoisted(() => ({
+const { mockUseSidecarComposition, flags } = vi.hoisted(() => ({
   mockUseSidecarComposition: vi.fn(),
+  flags: { contextStarters: false },
+}));
+
+vi.mock("~/t3team/t3team-contextStartersFlag", () => ({
+  useContextStartersEnabled: () => flags.contextStarters,
 }));
 
 vi.mock("lucide-react", (importOriginal) => createLucideReactMock(importOriginal));
@@ -94,8 +99,8 @@ describe("TicketKickoffPanel", () => {
     });
   });
 
-  it("renders quick starts without a recent conversations section", () => {
-    const markup = renderToStaticMarkup(
+  function renderPanel() {
+    return renderToStaticMarkup(
       <TicketKickoffPanel
         profileId="engineering-copilot"
         projectId="project-1"
@@ -110,6 +115,20 @@ describe("TicketKickoffPanel", () => {
         renderComposer={({ composerRef }) => <div>composer:{String(Boolean(composerRef))}</div>}
       />,
     );
+  }
+
+  it("renders no quick-starts section, only the composer, while CONTEXT_STARTERS is off", () => {
+    flags.contextStarters = false;
+    const markup = renderPanel();
+
+    expect(markup).not.toContain("Quick starts");
+    expect(markup).not.toContain("No sidecar sections");
+    expect(markup).toContain("composer:true");
+  });
+
+  it("renders quick starts without a recent conversations section", () => {
+    flags.contextStarters = true;
+    const markup = renderPanel();
 
     expect(markup).toContain("Quick starts");
     expect(markup).not.toContain("Recent conversations");
