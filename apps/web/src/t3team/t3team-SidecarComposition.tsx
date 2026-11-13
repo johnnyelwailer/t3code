@@ -7,7 +7,10 @@ import {
 import { DEFAULT_SIDECAR_COMPOSITION, getT3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import { useT3TeamSidecarComposition } from "~/t3team/hooks/t3team-useSidecarComposition";
-import { CONTEXT_STARTER_SECTION_ID, hidesContextStarters } from "~/t3team/t3team-contextStarters";
+import {
+  CONTEXT_STARTER_SECTION_ID,
+  hidesContextStarterSection,
+} from "~/t3team/t3team-contextStarters";
 import { useContextStartersEnabled } from "~/t3team/t3team-contextStartersFlag";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 import { useRunT3TeamDeterministicWorkflowLaunch } from "~/t3team/t3team-inlineRecipeLaunch";
@@ -61,7 +64,7 @@ export function T3TeamSidecarComposition({
     projectDefault,
   });
 
-  const startersHidden = hidesContextStarters(surface, useContextStartersEnabled());
+  const startersHidden = hidesContextStarterSection(surface, useContextStartersEnabled());
   const visibleSections = composition.sections.flatMap((sectionState) => {
     const definition = sectionsById.get(sectionState.sectionId);
     if (!definition || !definition.surfaces.includes(surface)) {

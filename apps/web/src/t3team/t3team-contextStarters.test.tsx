@@ -26,6 +26,7 @@ import {
   useDigestTicketChatActions,
   type DigestTicketChatActions,
 } from "~/t3team/t3team-digestTicketChatContext";
+import { hidesContextStarterSection } from "~/t3team/t3team-contextStarters";
 import { useT3TeamSidecarRecipeQuickStarts } from "~/t3team/t3team-sidecarRecipes";
 
 const project: ProjectShellProject = {
@@ -43,6 +44,19 @@ const chatActions: DigestTicketChatActions = {
   onOpenFullThread: vi.fn(),
   onThreadKickoffConsumed: vi.fn(),
 };
+
+function BacklogStarters() {
+  const quickStarts = useT3TeamSidecarRecipeQuickStarts({
+    backend: null,
+    surface: "project.dashboard",
+    project,
+    profileId: undefined,
+    selectedWorkLabel: project.title,
+    dashboardMode: "backlog",
+    availableContextKeys: ["project.summary", "dashboard.backlog.summary"],
+  });
+  return <span>{quickStarts.map((recipe) => recipe.id).join(",")}</span>;
+}
 
 function WorkItemStarters() {
   const quickStarts = useT3TeamSidecarRecipeQuickStarts({
@@ -86,5 +100,16 @@ describe("contextual starters behind CONTEXT_STARTERS", () => {
 
     expect(markup).toContain("explain-selected-work");
     expect(markup).toContain(">chat-tab<");
+  });
+
+  it("keeps the backlog's one-click assignee filter, which runs no agent, with the default flags", () => {
+    harness.flags = {};
+    const markup = renderToStaticMarkup(<BacklogStarters />);
+
+    expect(markup).toContain("show-only-assigned-to-me");
+    expect(markup).not.toContain("summarize-project-risk");
+    expect(hidesContextStarterSection("project.dashboard.backlog", false)).toBe(false);
+    expect(hidesContextStarterSection("workitem.detail.sidepanel", false)).toBe(true);
+    expect(hidesContextStarterSection("project.dashboard.myWork", false)).toBe(true);
   });
 });
