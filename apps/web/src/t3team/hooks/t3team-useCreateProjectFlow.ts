@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-manual-memo -- this file compiles; existing useMemo stays to avoid a behavior sweep */
 import { useMemo, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 

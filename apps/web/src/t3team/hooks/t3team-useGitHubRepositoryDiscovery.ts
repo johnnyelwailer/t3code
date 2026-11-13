@@ -1,3 +1,5 @@
+/* oxlint-disable t3code/no-manual-memo -- this file compiles; existing useCallback/useMemo stay to avoid a behavior sweep */
+/* oxlint-disable react/set-state-in-effect -- cache restore writes several fields from the integration cache when the project key changes */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLiveRefresh } from "~/hooks/useLiveRefresh";
 import { useBackend } from "~/t3team/backend/t3team-index";
@@ -56,6 +58,7 @@ export function useGitHubRepositoryDiscovery({
     authCache?.accounts ?? [],
   );
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- restores GitHub auth and discovery from the integration cache when the project key changes
   useEffect(() => {
     const cachedAuth = readIntegrationCache<GitHubAuthCache>("github:auth")?.value;
     const cachedDiscovery = readIntegrationCache<GitHubDiscoveryCache>(discoveryCacheKey)?.value;

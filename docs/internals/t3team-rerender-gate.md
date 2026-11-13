@@ -81,3 +81,7 @@ counter.expectRerendered({ "row-0": 1, "row-1": 1 });
 git diff --name-only --diff-filter=ACMR <base> HEAD > changed.txt
 node t3team-rerender-gate.mjs --files changed.txt --body pr-body.txt
 ```
+
+## Setup-surface render-loop tests
+
+See `docs/internals/t3team-surface-loop-gate.md`.

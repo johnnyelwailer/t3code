@@ -136,12 +136,8 @@ apps/web/src/t3team/hooks/t3team-useAtlassianOAuth.test.tsx
 apps/web/src/t3team/hooks/t3team-useAtlassianOAuth.ts
 apps/web/src/t3team/hooks/t3team-useChildThreadRelations.ts
 apps/web/src/t3team/hooks/t3team-useCreateProjectConnect.ts
-apps/web/src/t3team/hooks/t3team-useCreateProjectFlow.ts
 apps/web/src/t3team/hooks/t3team-useCreateProjectSubmit.test.tsx
 apps/web/src/t3team/hooks/t3team-useCreateProjectSubmit.ts
-apps/web/src/t3team/hooks/t3team-useGitHubAuthProbe.ts
-apps/web/src/t3team/hooks/t3team-useGitHubRepositoryDiscovery.ts
-apps/web/src/t3team/hooks/t3team-useGitHubRepositoryDiscoveryFetchers.ts
 apps/web/src/t3team/hooks/t3team-useHydratePinnedSidebarItems.ts
 apps/web/src/t3team/hooks/t3team-useHydrateThreadPlacements.ts
 apps/web/src/t3team/hooks/t3team-useHydrateThreadPlacementsEffect.test.tsx

@@ -37,3 +37,6 @@ jobs:
           git diff --name-only --diff-filter=ACMR "$BASE" HEAD > t3team-rerender-changed.txt
           printf '%s' "$PR_BODY" > t3team-rerender-pr-body.txt
           node t3team-rerender-gate.mjs --files t3team-rerender-changed.txt --body t3team-rerender-pr-body.txt
+
+      - name: Surface loop-test gate
+        run: node t3team-surface-loop-gate.mjs
