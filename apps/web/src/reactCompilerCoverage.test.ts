@@ -47,3 +47,36 @@ describe("React Compiler coverage", () => {
   // oxlint-disable-next-line t3code/no-test-timeout-or-unreasoned-skip -- CPU-bound compile of a huge file, not a hidden wait.
   it.each([...slowFiles])("compiles %s", compile, 60_000);
 });
+
+const MUST_COMPILE = [
+  "apps/web/src/t3team/hooks/t3team-useGitHubAuthProbe.ts",
+  "apps/web/src/t3team/hooks/t3team-useGitHubRepositoryDiscovery.ts",
+  "apps/web/src/t3team/hooks/t3team-useGitHubRepositoryDiscoveryFetchers.ts",
+  "apps/web/src/t3team/hooks/t3team-useCreateProjectFlow.ts",
+] as const;
+
+// Frozen ceiling: this number only goes down. When a file is cleaned, remove it
+// from the list and lower this constant. useLatest stays listed: the compiler
+// rejects the documented latest-ref assignment during render.
+const MAX_T3TEAM_COMPILER_PENDING = 335;
+
+describe("t3team React Compiler pending list", () => {
+  it("cannot grow past the frozen ceiling", () => {
+    expect(t3teamCompilerPendingFiles.length).toBeLessThanOrEqual(MAX_T3TEAM_COMPILER_PENDING);
+  });
+
+  it("every listed file still exists (drop stale entries)", () => {
+    const missing = t3teamCompilerPendingFiles.filter(
+      (file) => !NodeFS.existsSync(NodePath.join(repoRoot, file)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("has no duplicate paths", () => {
+    expect(new Set(t3teamCompilerPendingFiles).size).toBe(t3teamCompilerPendingFiles.length);
+  });
+
+  it("keeps the auth probe, discovery, fetchers and create-project flow compiling", () => {
+    expect(MUST_COMPILE.filter((file) => t3teamCompilerPendingFiles.includes(file))).toEqual([]);
+  });
+});

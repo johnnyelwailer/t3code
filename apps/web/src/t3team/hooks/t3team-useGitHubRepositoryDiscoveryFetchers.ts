@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-manual-memo -- compiles; keep useCallback to avoid a behavior sweep */
 import { useCallback } from "react";
 import type { useBackend } from "~/t3team/backend/t3team-index";
 import { writeIntegrationCache } from "./t3team-integrationCache";
@@ -77,9 +78,8 @@ export function useGitHubRepositoryDiscoveryFetchers({
         setDiscoveryWarning(
           error instanceof Error ? error.message : "Failed to discover repository suggestions.",
         );
-      } finally {
-        setLoadingDiscovery(false);
       }
+      setLoadingDiscovery(false);
     },
     [
       backend,
@@ -115,6 +115,7 @@ export function useGitHubRepositoryDiscoveryFetchers({
 
       setLoadingDiscovery(true);
       setDiscoveryWarning(undefined);
+      let thrown: unknown;
       try {
         const outcomes = await Promise.all(
           hosts.map(async (entry) => {
@@ -152,35 +153,36 @@ export function useGitHubRepositoryDiscoveryFetchers({
               ? `Could not search ${failures[0]?.error?.host ?? "GitHub"}.`
               : "Could not search the connected GitHub accounts.",
           );
-          return;
+        } else {
+          setRepositoriesMeta(mergeRepositoriesMeta(responses));
+          const merged = mergeGitHubDiscoveryResults(responses, host);
+          const failureWarning =
+            failures.length > 0
+              ? `Could not search ${failures.map((failure) => failure.error?.host).join(", ")}.`
+              : undefined;
+          const nextWarning = [merged.discoveryWarning, failureWarning]
+            .filter((warning): warning is string => Boolean(warning))
+            .join(" ");
+          const nextAccount = merged.githubAccount ?? account;
+          const nextCache: GitHubDiscoveryCache = {
+            githubHost: merged.githubHost,
+            ...(nextAccount ? { githubAccount: nextAccount } : {}),
+            suggestedUrls: merged.suggestedUrls,
+            ...(nextWarning ? { discoveryWarning: nextWarning } : {}),
+          };
+
+          writeIntegrationCache(discoveryCacheKey, nextCache);
+          setGithubHost(merged.githubHost);
+          setGithubAccount(nextAccount);
+          setSuggestedUrls(merged.suggestedUrls);
+          setCatalog(responses.flatMap((response) => response.repositories ?? []));
+          setDiscoveryWarning(nextWarning || undefined);
         }
-
-        setRepositoriesMeta(mergeRepositoriesMeta(responses));
-        const merged = mergeGitHubDiscoveryResults(responses, host);
-        const failureWarning =
-          failures.length > 0
-            ? `Could not search ${failures.map((failure) => failure.error?.host).join(", ")}.`
-            : undefined;
-        const nextWarning = [merged.discoveryWarning, failureWarning]
-          .filter((warning): warning is string => Boolean(warning))
-          .join(" ");
-        const nextAccount = merged.githubAccount ?? account;
-        const nextCache: GitHubDiscoveryCache = {
-          githubHost: merged.githubHost,
-          ...(nextAccount ? { githubAccount: nextAccount } : {}),
-          suggestedUrls: merged.suggestedUrls,
-          ...(nextWarning ? { discoveryWarning: nextWarning } : {}),
-        };
-
-        writeIntegrationCache(discoveryCacheKey, nextCache);
-        setGithubHost(merged.githubHost);
-        setGithubAccount(nextAccount);
-        setSuggestedUrls(merged.suggestedUrls);
-        setCatalog(responses.flatMap((response) => response.repositories ?? []));
-        setDiscoveryWarning(nextWarning || undefined);
-      } finally {
-        setLoadingDiscovery(false);
+      } catch (error) {
+        thrown = error;
       }
+      setLoadingDiscovery(false);
+      if (thrown !== undefined) throw thrown;
     },
     [
       backend,

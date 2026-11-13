@@ -90,6 +90,7 @@
     "t3team-additive-guard.test.mjs",
     "t3team-exhaustive-deps-ratchet.test.mjs",
     "t3team-rerender-gate.test.mjs",
+    "t3team-surface-loop-gate.test.mjs",
   ],
   // Fork debt baseline (2026-09-09): dependencies declared for fork tooling that knip
   // cannot trace (string-based resolution, external runners, or not yet wired in).
