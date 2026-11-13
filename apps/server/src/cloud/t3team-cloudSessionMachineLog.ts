@@ -10,7 +10,7 @@ import * as Effect from "effect/Effect";
  *   are linked repositories that define one, deliberately not used.
  * - `rejected`: the project's own definition is broken (`rejected` is its path).
  * - `unusable`: a definition exists but cannot be fetched or cloned (`reason` is the failure).
- * - `plain_offered`: the create failed on the machine and a plain session was offered instead.
+ * - `plain_fallback`: the machine could not be used, so the create went on as a plain session.
  * - `plain_unavailable`: the create failed on the machine and no plain session is possible either.
  */
 export interface MachineOutcome {
@@ -19,7 +19,7 @@ export interface MachineOutcome {
     | "plain"
     | "rejected"
     | "unusable"
-    | "plain_offered"
+    | "plain_fallback"
     | "plain_unavailable";
   readonly repository?: string;
   readonly reason?: string;

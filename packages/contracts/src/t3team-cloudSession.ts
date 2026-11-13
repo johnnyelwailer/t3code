@@ -121,6 +121,8 @@ export const CloudSessionSchema = Schema.Struct({
   machineSetup: Schema.optional(Schema.Boolean),
   /** A project-machine session's milestone, present only while `phase` is `preparing`. */
   machineStage: Schema.optional(CloudSessionMachineStageSchema),
+  /** Why the project's machine was not used: the session started plain instead. */
+  machineFallback: Schema.optional(Schema.String),
 });
 export type CloudSession = typeof CloudSessionSchema.Type;
 

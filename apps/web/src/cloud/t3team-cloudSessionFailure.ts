@@ -1,4 +1,8 @@
-import type { CloudSessionFailedError, CloudSessionFailureReason } from "@t3tools/contracts";
+import type {
+  CloudSession,
+  CloudSessionFailedError,
+  CloudSessionFailureReason,
+} from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type * as Cause from "effect/Cause";
 
@@ -127,4 +131,14 @@ export function reportCloudSessionCreateFailure(
     if (offerCloudSessionSignIn(retry, failure.host)) return;
   }
   toastManager.add({ type: "error", ...cloudSessionCreateFailureToast(result) });
+}
+
+/** One line when a create went on as a plain session because the project's machine could not be used. */
+export function reportCloudSessionMachineFallback(session: Pick<CloudSession, "machineFallback">) {
+  if (session.machineFallback === undefined) return;
+  toastManager.add({
+    type: "info",
+    title: "Started without the project's machine",
+    description: session.machineFallback,
+  });
 }

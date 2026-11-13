@@ -8,7 +8,10 @@ import { cloudSessionEnvironment } from "~/state/t3team-cloudSessions";
 import { useAtomCommand } from "~/state/use-atom-command";
 
 import { CLOUD_SESSION_LIFETIME_SECONDS } from "./t3team-cloudSessionLifetime";
-import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
+import {
+  reportCloudSessionCreateFailure,
+  reportCloudSessionMachineFallback,
+} from "./t3team-cloudSessionFailure";
 
 export interface CloudSessionCreateOptions {
   readonly machineSetup?: boolean;
@@ -74,6 +77,7 @@ export function useCloudSessionCreate(input: {
               knownServerSessionIds: new Set(serverSessions.map((session) => session.sessionId)),
             });
             refreshCloudSessionList();
+            reportCloudSessionMachineFallback(result.value);
             options?.onCreated?.(result.value);
           } else {
             const skipToast = options?.onFailed?.(result) === true;

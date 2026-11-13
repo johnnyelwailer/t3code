@@ -20,5 +20,9 @@ export function placementNote(
     : placement.ready
       ? `is ready${session.endsAt === undefined ? "" : ` until ${session.endsAt}`}`
       : `is still starting; ${waits}`;
-  return `The child runs on ${where}, which ${state}. Its turns execute there with ${modelSelection.model} (${modelSelection.instanceId}); its messages and completion come back to this thread. Ending the child here interrupts it there.`;
+  const plain =
+    session.machineFallback === undefined
+      ? ""
+      : ` Plain session: the project's machine was not used (${session.machineFallback}).`;
+  return `The child runs on ${where}, which ${state}.${plain} Its turns execute there with ${modelSelection.model} (${modelSelection.instanceId}); its messages and completion come back to this thread. Ending the child here interrupts it there.`;
 }
