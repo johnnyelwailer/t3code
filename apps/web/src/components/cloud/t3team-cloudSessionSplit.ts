@@ -67,19 +67,15 @@ export function splitCloudSessions(
  * (it stays a "Ready · Connect" row instead of vanishing the moment it comes up).
  *
  * Of the sessions that ended, only a failure is surfaced, because it is the one ending the user did
- * not cause and may not have seen: the newest session, if it failed and was not dismissed. A cancel
- * or a normal stop is the user's own doing and stays in the Settings history. A failure stops
- * showing once dismissed or once a newer session exists.
+ * not cause and may not have seen: the newest session, if it failed. It reads as a shut-down
+ * machine with Retry beside it, and stops showing once a newer session exists. A cancel or a normal
+ * stop is the user's own doing and stays in the Settings history.
  *
  * List order (newest first, from the server) is preserved.
  */
-export function runOnCloudSessions(
-  sessions: readonly CloudSession[],
-  dismissedSessionIds: ReadonlySet<string> = new Set(),
-): readonly CloudSession[] {
+export function runOnCloudSessions(sessions: readonly CloudSession[]): readonly CloudSession[] {
   const newest = sessions[0];
-  const surfacedFailure =
-    newest?.phase === "failed" && !dismissedSessionIds.has(newest.sessionId) ? newest : null;
+  const surfacedFailure = newest?.phase === "failed" ? newest : null;
   return sessions.filter(
     (session) => !isTerminalCloudSessionPhase(session.phase) || session === surfacedFailure,
   );

@@ -6,6 +6,7 @@ import * as Option from "effect/Option";
 
 import { NoProjectsHero } from "../components/NoProjectsHero";
 import { WelcomeWizard } from "../components/onboarding/WelcomeWizard";
+import { useNexiWelcomeEnabled } from "../t3team/welcome/t3team-useNexiWelcomeEnabled";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 
 const decodeEnvironmentId = Schema.decodeOption(EnvironmentId);
@@ -32,9 +33,10 @@ function WelcomeRouteView() {
   const [dismissed, setDismissed] = useState(false);
   const openNewThread = useNewThreadHandler();
   const localAvailable = authGateState.status === "authenticated";
+  const nexiWelcome = useNexiWelcomeEnabled();
   return (
     <>
-      <NoProjectsHero />
+      {nexiWelcome ? null : <NoProjectsHero />}
       {isWelcomeRoute && !dismissed ? (
         <WelcomeWizard
           localAvailable={localAvailable}

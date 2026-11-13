@@ -1,12 +1,12 @@
 /**
- * The words for what the "Project ready" step waits on (`CloudProjectWait`) and how they escalate
- * with the time spent on the step: quiet at first, then what is expected, then that it is taking
- * longer than usual with the unmet condition and a copyable diagnostic. Pure; read by the steps
- * module (banner title, step detail) and the setup card.
+ * The words for what the "Project ready" step waits on (`CloudProjectWait`), escalating with the
+ * time on the step: quiet, then a plain status sentence, then the same sentence with "taking
+ * longer than usual". Visible copy carries no ids, folders or counts; those belong to the
+ * diagnostic, which the card keeps behind a closed disclosure. Pure.
  */
 import type { CloudProjectWait, CloudProjectWaitReason } from "./t3team-cloudProjectWait";
 
-/** Seconds on the step before the card says what is expected. */
+/** Seconds on the step before the card says what is going on. */
 export const CLOUD_PROJECT_WAIT_EXPECTED_SECONDS = 15;
 /** Seconds on the step before the card says it is taking longer than usual. */
 export const CLOUD_PROJECT_WAIT_SLOW_SECONDS = 90;
@@ -20,9 +20,9 @@ export interface CloudProjectWaitNotice {
   readonly detail: string;
   /** True when waiting alone cannot end it: the machine's project is not this project. */
   readonly blocking: boolean;
-  /** What is expected, or after the long wait what is still missing; null at first. */
+  /** The plain status sentence; null at first. */
   readonly text: string | null;
-  /** One copyable line for a bug report; only once the wait is long. */
+  /** One copyable line for a bug report; only once the wait is long, and never in visible copy. */
   readonly diagnostic: string | null;
 }
 
@@ -30,70 +30,65 @@ const quoted = (name: string) => `“${name}”`;
 const nameOf = (wait: CloudProjectWait) =>
   wait.projectTitle === null ? "this project" : quoted(wait.projectTitle);
 const machineNameOf = (wait: CloudProjectWait) =>
-  wait.machineProjectTitle === null ? "project" : quoted(wait.machineProjectTitle);
+  wait.machineProjectTitle === null
+    ? "its own project"
+    : `its project ${quoted(wait.machineProjectTitle)}`;
 
 /** The step's one-line detail for a reason. */
 export function cloudProjectWaitDetail(wait: CloudProjectWait): string {
   switch (wait.reason) {
     case "machine-settings-pending":
-      return "Waiting for the cloud machine to report its settings";
-    case "scratch-folder-unknown":
-      return "The cloud machine reported no scratch folder";
-    case "scratch-opening":
-      return "Opening the cloud machine's scratch folder";
     case "project-list-pending":
-      return "Waiting for the cloud machine to send its project list";
+      return "Connecting to the cloud machine";
+    case "scratch-folder-unknown":
+      return "The cloud machine has no folder to work in";
+    case "scratch-opening":
+      return "Opening a folder on the cloud machine";
     case "project-not-listed":
-      return `Waiting for the cloud machine to list ${nameOf(wait)}`;
-    case "different-repository":
-      return `The machine's project ${machineNameOf(wait)} is a different repository than ${nameOf(wait)}`;
-    case "different-folder":
-      return `The machine's project ${machineNameOf(wait)} is not the folder of ${nameOf(wait)}`;
     case "no-matching-project":
-      return wait.projectsSeen === 1
-        ? `The machine's only project is not ${nameOf(wait)}`
-        : `None of the machine's ${wait.projectsSeen} projects is ${nameOf(wait)}`;
+      return `Waiting for ${nameOf(wait)} on the cloud machine`;
+    case "different-repository":
+      return "The cloud machine is working in a different repository";
+    case "different-folder":
+      return "The cloud machine is working in a different folder";
   }
 }
 
-function expectedText(wait: CloudProjectWait): string {
+/** One plain sentence: what is going on, and what happens to the message next. */
+function statusText(wait: CloudProjectWait): string {
   switch (wait.reason) {
     case "machine-settings-pending":
-      return "Your message is sent once the machine answers this app's first request.";
-    case "scratch-folder-unknown":
-      return "Your message is held: this app finds a machine's scratch folder through its settings, and they name none.";
-    case "scratch-opening":
-      return "This app opens the folder on the machine, then sends your message.";
     case "project-list-pending":
-      return "A machine tells this app about its project as soon as it is connected, then your message is sent.";
+      return "Still connecting to the cloud machine. Your message sends when it's ready.";
+    case "scratch-opening":
+      return "Opening a folder on the cloud machine. Your message sends when it's ready.";
     case "project-not-listed":
-      return "The machine's server registers its working folder as its project when it starts; your message is sent as soon as it appears.";
-    case "different-repository":
-    case "different-folder":
-      return "Your message is held until the machine has the project this draft belongs to.";
     case "no-matching-project":
-      return "Your message is sent as soon as the machine lists this project.";
+      return `Waiting for ${nameOf(wait)} on the cloud machine. Your message sends as soon as it is there.`;
+    case "scratch-folder-unknown":
+      return "The cloud machine has no folder to work in. Send your message in its own project, or cancel to choose another machine.";
+    case "different-repository":
+      return `The cloud machine is working in a different repository. Send your message in ${machineNameOf(wait)}, or cancel to choose another machine.`;
+    case "different-folder":
+      return `The cloud machine is working in a different folder. Send your message in ${machineNameOf(wait)}, or cancel to choose another machine.`;
   }
 }
 
-function unmetText(wait: CloudProjectWait): string {
+/** The body of the card for a send that stopped waiting: plain, and never a dead end. */
+export function cloudProjectWaitParkedMessage(wait: CloudProjectWait): string {
   switch (wait.reason) {
-    case "machine-settings-pending":
-      return "the machine has not reported its settings to this app";
     case "scratch-folder-unknown":
-      return "the machine's settings name no scratch folder";
-    case "scratch-opening":
-      return "the machine's scratch folder is not open";
-    case "project-list-pending":
-      return "this app lists no projects on the machine";
-    case "project-not-listed":
-      return `no project at ${wait.expectedCwd ?? "the machine's working folder"} is listed`;
+      return "The cloud machine has no folder to work in. Your message is saved.";
     case "different-repository":
-      return "the machine's project is not this repository";
+      return "The cloud machine is working in a different repository. Your message is saved.";
     case "different-folder":
-      return "the machine's project is not this project's folder";
+      return "The cloud machine is working in a different folder. Your message is saved.";
+    case "machine-settings-pending":
+    case "project-list-pending":
+    case "scratch-opening":
+    case "project-not-listed":
     case "no-matching-project":
-      return `no project on the machine is ${nameOf(wait)}`;
+      return `The cloud machine hasn't opened ${nameOf(wait)} yet. Your message is saved.`;
   }
 }
 
@@ -108,7 +103,7 @@ const BLOCKING: ReadonlySet<CloudProjectWaitReason> = new Set([
   "different-folder",
 ]);
 
-/** The wording for a wait that has lasted `waitingSeconds`: quiet first, then what is expected, then what is missing. */
+/** The wording for a wait that has lasted `waitingSeconds`: quiet first, then the status sentence. */
 export function presentCloudProjectWait(
   wait: CloudProjectWait,
   waitingSeconds: number,
@@ -119,18 +114,20 @@ export function presentCloudProjectWait(
       : waitingSeconds >= CLOUD_PROJECT_WAIT_EXPECTED_SECONDS
         ? "expected"
         : "waiting";
-  const unmet = unmetText(wait);
+  const blocking = BLOCKING.has(wait.reason);
+  const status = statusText(wait);
   return {
     level,
     reason: wait.reason,
     detail: cloudProjectWaitDetail(wait),
-    blocking: BLOCKING.has(wait.reason),
+    blocking,
     text:
       level === "waiting"
         ? null
-        : level === "expected"
-          ? expectedText(wait)
-          : `Taking longer than usual. Not yet true: ${unmet}. ${expectedText(wait)} You can cancel while you wait.`,
+        : // A blocked wait is not slow, it is stuck: the status sentence already says so.
+          level === "slow" && !blocking
+          ? `This is taking longer than usual. ${status}`
+          : status,
     diagnostic: level === "slow" ? cloudProjectWaitDiagnostic(wait) : null,
   };
 }

@@ -6,23 +6,22 @@
  */
 import { useSyncExternalStore } from "react";
 
+import {
+  NEW_CLOUD_SESSION_LABEL,
+  reduceRunOnSelection,
+  type RunOnSelectionEvent,
+  type RunOnSelectionTarget,
+} from "~/components/cloud/t3team-runOnSelection";
 import { CLOUD_SESSION_CREATING_ID } from "./t3team-cloudSessionTargetLogic";
 
-export interface CloudSessionTarget {
+/**
+ * One scope's selection. The fields and every transition belong to `t3team-runOnSelection`; this
+ * store only commits them and tells React.
+ */
+export type CloudSessionTarget = RunOnSelectionTarget & {
   /** Composer/draft/thread key this preference belongs to. */
   readonly scopeKey: string;
-  /**
-   * Session id once create returned; `CLOUD_SESSION_CREATING_ID` while the
-   * create RPC is still in flight so the trigger can flip off "This computer".
-   */
-  readonly sessionId: string;
-  readonly label: string;
-  /**
-   * The composer's logical project when the session was picked or created (it is provisioned
-   * for that project). Null when the composer had none; then the target follows no project.
-   */
-  readonly projectKey: string | null;
-}
+};
 
 const listeners = new Set<() => void>();
 /** scopeKey -> target */
@@ -37,6 +36,16 @@ function emit(): void {
 function commit(next: Map<string, CloudSessionTarget>): void {
   byScope = next;
   emit();
+}
+
+function apply(scopeKey: string, event: RunOnSelectionEvent): void {
+  const current = byScope.get(scopeKey) ?? null;
+  const next = reduceRunOnSelection(current, event);
+  if (next === current) return;
+  const map = new Map(byScope);
+  if (next === null) map.delete(scopeKey);
+  else map.set(scopeKey, { scopeKey, ...next });
+  commit(map);
 }
 
 export function subscribeCloudSessionTargets(listener: () => void): () => void {
@@ -58,28 +67,22 @@ export function selectCloudSessionTarget(input: {
   readonly label: string;
   readonly projectKey?: string | null;
 }): void {
-  const next = new Map(byScope);
-  next.set(input.scopeKey, {
-    scopeKey: input.scopeKey,
+  apply(input.scopeKey, {
+    kind: "pick",
     sessionId: input.sessionId,
     label: input.label,
     projectKey: input.projectKey ?? null,
   });
-  commit(next);
 }
 
 /** Immediate preference while create is in flight (no session id yet). */
 export function selectCloudSessionCreating(
   scopeKey: string,
-  label = "New cloud session",
+  label = NEW_CLOUD_SESSION_LABEL,
   projectKey: string | null = null,
+  staleLocalSessionId: string | null = null,
 ): void {
-  selectCloudSessionTarget({
-    scopeKey,
-    sessionId: CLOUD_SESSION_CREATING_ID,
-    label,
-    projectKey,
-  });
+  apply(scopeKey, { kind: "create", label, projectKey, staleLocalSessionId });
 }
 
 /** What a "New cloud session" click asks for; a "Move to" create must not touch the target. */
@@ -93,32 +96,42 @@ export interface CloudSessionCreateOptions {
  * tagged with the composer's `projectKey` so the target follows the composer's project.
  */
 export function beginCloudSessionCreate(
-  scope: { readonly scopeKey: string | null; readonly projectKey: string | null },
+  scope: {
+    readonly scopeKey: string | null;
+    readonly projectKey: string | null;
+    /** `getCloudSessionLocal()`'s session id now: an earlier create's, never this one's answer. */
+    readonly staleLocalSessionId?: string | null;
+  },
   options: CloudSessionCreateOptions | undefined,
   create: () => void,
 ): void {
   if (scope.scopeKey !== null && options?.selectAsTarget !== false) {
-    selectCloudSessionCreating(scope.scopeKey, undefined, scope.projectKey);
+    selectCloudSessionCreating(
+      scope.scopeKey,
+      undefined,
+      scope.projectKey,
+      scope.staleLocalSessionId ?? null,
+    );
   }
   create();
 }
 
-/** Create RPC answered: replace the creating sentinel with the real session. */
+/** Create RPC answered: replace the creating sentinel with the real session, in place. */
 export function resolveCloudSessionCreating(
   scopeKey: string,
   sessionId: string,
   label: string,
 ): void {
-  const current = byScope.get(scopeKey);
-  if (current === undefined || current.sessionId !== CLOUD_SESSION_CREATING_ID) return;
-  selectCloudSessionTarget({ scopeKey, sessionId, label, projectKey: current.projectKey });
+  apply(scopeKey, { kind: "created", sessionId, label });
+}
+
+/** The create never reached a session: the entry stays selected and offers Retry. */
+export function failCloudSessionCreate(scopeKey: string): void {
+  apply(scopeKey, { kind: "createFailed" });
 }
 
 export function clearCloudSessionTarget(scopeKey: string): void {
-  if (!byScope.has(scopeKey)) return;
-  const next = new Map(byScope);
-  next.delete(scopeKey);
-  commit(next);
+  apply(scopeKey, { kind: "clear" });
 }
 
 export function useCloudSessionTarget(scopeKey: string | null): CloudSessionTarget | null {
@@ -136,7 +149,7 @@ export function cloudSessionTargetsNeedListRefresh(
   targets: ReadonlyMap<string, CloudSessionTarget> = getCloudSessionTargets(),
 ): boolean {
   for (const target of targets.values()) {
-    if (target.sessionId === CLOUD_SESSION_CREATING_ID) return true;
+    if (target.sessionId === CLOUD_SESSION_CREATING_ID && !target.createFailed) return true;
   }
   return false;
 }

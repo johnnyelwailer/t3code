@@ -26,7 +26,9 @@ import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { RunOnCloudRow } from "./cloud/t3team-RunOnCloudRow";
 import { runOnRows } from "./cloud/t3team-runOnCloudRows";
-import { NewCloudSessionItem } from "./cloud/t3team-NewCloudSessionItem";
+import { type CloudProjectNotHere, NewCloudSessionItem } from "./cloud/t3team-NewCloudSessionItem";
+import { RunOnSelectedSessionItem } from "./cloud/t3team-RunOnSelectedSessionItem";
+import type { RunOnSelectionStatus } from "./cloud/t3team-runOnSelection";
 import {
   cloudSessionSelectValue,
   parseCloudSessionSelectValue,
@@ -111,10 +113,18 @@ export interface BranchToolbarEnvironmentSelectorBaseProps {
    * in the trigger immediately, before the VM is Ready/connected.
    */
   selectedCloudSession?: { readonly sessionId: string; readonly label: string } | null;
+  /**
+   * t3team: how the selected entry reads while it has no session row of its own — right after the
+   * pick, and when the create failed before a machine existed.
+   */
+  cloudSessionSelectionStatus?: RunOnSelectionStatus;
   /** t3team: one-click select of a ready/provisioning session (connect waits for send). */
   onSelectCloudSession?: (session: CloudSession) => void;
-  /** t3team: hides a surfaced failure from the menu once the user has seen it. */
-  onDismissCloudSession?: (cloudSession: CloudSession) => void;
+  /**
+   * t3team: the composer's project exists only on other machines, so a session started here would
+   * have none. The create entry says so and offers the clone rather than starting a bare session.
+   */
+  cloudProjectNotHere?: CloudProjectNotHere | null;
   /**
    * t3team: stop a cloud machine from its row (reversible: the workspace is kept). Absent
    * (stop/delete off, or "Move to" mode) hides the action.
@@ -178,8 +188,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   cloudSessionProject,
   onSetupCloudSessions,
   selectedCloudSession = null,
+  cloudSessionSelectionStatus = "provisioning",
   onSelectCloudSession,
-  onDismissCloudSession,
+  cloudProjectNotHere = null,
   onCloudMenuOpenChange,
   onCloudMenuHint,
   onHandoffToEnvironment,
@@ -234,6 +245,12 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       ) ?? null
     );
   }, [connectedCloudEnvironments, environmentId, runOnEnvironments, optimisticCloudSession]);
+
+  // Until the create answers there is no session to list, and once it has answered the session's
+  // own row carries the selection: either way exactly one entry is the selected one.
+  const showSelectionEntry =
+    optimisticCloudSession !== null &&
+    !cloudRows.some((row) => row.session.sessionId === optimisticCloudSession.sessionId);
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -468,6 +485,15 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               ))}
           {onCreateCloudSession && (
             <>
+              {/* The pick itself is the selected entry until the run has a row of its own, so the
+                  request, its progress and any failure read there and never as a second row. */}
+              {showSelectionEntry && optimisticCloudSession !== null && (
+                <RunOnSelectedSessionItem
+                  label={optimisticCloudSession.label}
+                  status={cloudSessionSelectionStatus}
+                  onRetry={createCloudSession}
+                />
+              )}
               {cloudRows.map((row) => (
                 <RunOnCloudRow
                   key={row.session.sessionId}
@@ -476,9 +502,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   selected={optimisticCloudSession?.sessionId === row.session.sessionId}
                   blockedReason={cloudMoveBlockedReason}
                   onSelect={selectCloudSession}
-                  onDismiss={onDismissCloudSession}
                   onStop={moveMode ? undefined : onStopCloudSession}
                   onDelete={moveMode ? undefined : onDeleteCloudSession}
+                  onRetry={createCloudSession}
                   stopPending={
                     cloudSessionActionPending?.sessionId === row.session.sessionId &&
                     cloudSessionActionPending.kind === "stop"
@@ -490,11 +516,12 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 />
               ))}
               {/* A paid machine this thread could not move to anyway: not offered. */}
-              {cloudMoveBlockedReason === null && (
+              {cloudMoveBlockedReason === null && !showSelectionEntry && (
                 <NewCloudSessionItem
                   project={cloudSessionProject}
                   pending={cloudSessionCreatePending}
                   setupPending={cloudSessionSetupPending}
+                  notHere={cloudProjectNotHere}
                   onCreate={createCloudSession}
                   onSetup={
                     onSetupProjectMachine
