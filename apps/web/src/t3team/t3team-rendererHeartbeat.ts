@@ -47,8 +47,7 @@ export function startRendererHeartbeat(input?: {
     });
   const now = input?.now ?? (() => Date.now());
   const intervalMs = input?.intervalMs ?? HEARTBEAT_INTERVAL_MS;
-  const send = () =>
-    report({ at: now(), lastComponentRenderCounts: snapshotRenderCounts() });
+  const send = () => report({ at: now(), lastComponentRenderCounts: snapshotRenderCounts() });
   send();
   const id = setInterval(send, intervalMs);
   return () => clearInterval(id);

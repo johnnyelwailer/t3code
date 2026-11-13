@@ -1,4 +1,6 @@
-// @effect-diagnostics globalDate:off, globalTimers:off, globalConsole:off - Electron main watchdog; now, timers and log are injectable, with Date/setTimeout/console as process-level defaults.
+// @effect-diagnostics globalTimers:off -- Electron main watchdog; the timer is injectable, with setTimeout as the process-level default.
+// @effect-diagnostics globalConsole:off -- The diagnostic log is injectable, with console.warn as the process-level default.
+// @effect-diagnostics globalDate:off -- Timestamps are injectable, with Date.now as the process-level default.
 import * as Electron from "electron";
 
 /** IPC channel for renderer liveness, with optional render counts. */

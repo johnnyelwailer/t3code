@@ -525,6 +525,5 @@ contextBridge.exposeInMainWorld("desktopBridge", {
 } satisfies DesktopBridge);
 
 contextBridge.exposeInMainWorld("t3teamWatchdog", {
-  reportHeartbeat: (payload: unknown) =>
-    ipcRenderer.send("t3team:renderer-heartbeat", payload),
+  reportHeartbeat: (payload: unknown) => ipcRenderer.send("t3team:renderer-heartbeat", payload),
 });

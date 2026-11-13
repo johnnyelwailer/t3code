@@ -97,7 +97,7 @@ describe("reload prompt", () => {
   it("Escape and the Reload button both request a reload", () => {
     expect(RELOAD_PROMPT_HTML).toContain('event.key==="Escape"');
     expect(RELOAD_PROMPT_HTML).toContain(RELOAD_PROMPT_TITLE);
-    expect(RELOAD_PROMPT_HTML).toContain("getElementById(\"reload\")");
+    expect(RELOAD_PROMPT_HTML).toContain('getElementById("reload")');
   });
 });
 
@@ -203,12 +203,14 @@ describe("installRendererWatchdog", () => {
     handle.dispose();
     // A heartbeat was recorded; a fresh install is not needed to prove the channel name.
     expect(RENDERER_HEARTBEAT_CHANNEL).toBe("t3team:renderer-heartbeat");
-    expect(formatWatchdogDiagnostics({
-      reason: "unresponsive",
-      unresponsiveAt: 50,
-      lastHeartbeatAt: 20,
-      lastComponentRenderCounts: { Chips: 2 },
-    })).toContain("Chips");
+    expect(
+      formatWatchdogDiagnostics({
+        reason: "unresponsive",
+        unresponsiveAt: 50,
+        lastHeartbeatAt: 20,
+        lastComponentRenderCounts: { Chips: 2 },
+      }),
+    ).toContain("Chips");
     void log;
   });
 });

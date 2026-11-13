@@ -13,6 +13,7 @@ import { useT3TeamPackAppearance } from "./t3team-packAppearance";
 import { T3TeamPackAppearanceDefaultsSync } from "./t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "./t3team-PackAppearanceSync";
 import { isT3TeamShellPath } from "./t3team-upstreamRouteBridge";
+import { useRendererHeartbeat } from "./t3team-useRendererHeartbeat";
 import { useUpstreamRouteBridge } from "./t3team-useUpstreamRouteBridge";
 
 /**
@@ -52,6 +53,7 @@ function T3TeamPackDocumentTitle() {
  */
 export function T3TeamRootCoordinators() {
   const pathname = useLocation({ select: (location) => location.pathname });
+  useRendererHeartbeat();
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Ctrl/Cmd+scroll hover-zoom for marked regions; document-level, app-wide, released on unmount
   useEffect(() => startRegionZoom(), []);
   // Upstream's sidebar navigates to upstream route shapes. The bridge maps those onto the
