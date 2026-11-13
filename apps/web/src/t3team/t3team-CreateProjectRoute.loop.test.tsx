@@ -127,9 +127,7 @@ vi.mock("~/state/use-atom-query-runner", async () => {
               status: "authenticated" as const,
               host: "github.com",
               account: "yg",
-              accounts: [
-                { host: "github.com", account: "yg", active: true, authenticated: true },
-              ],
+              accounts: [{ host: "github.com", account: "yg", active: true, authenticated: true }],
             },
           },
         ],

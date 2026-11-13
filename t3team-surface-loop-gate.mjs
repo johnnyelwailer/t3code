@@ -1,12 +1,5 @@
 #!/usr/bin/env node
-/**
- * Inventory gate: every create / open / setup surface must have a RENDER_CAP loop
- * test that uses live-shaped discovery or auth fakes (the LIVE_SHAPED_DISCOVERY
- * token) and does not fully mock the surface's discovery, auth, or sync hook.
- *
- * Plain Node, no workspace install: runs as a second step on the existing
- * rerender-gate job so the fork's CI quota does not grow by a new job.
- */
+/** Every create/open/setup surface needs a RENDER_CAP loop test with the LIVE_SHAPED_DISCOVERY token (real discovery, auth and sync hooks). */
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
@@ -73,10 +66,7 @@ function walk(dir, acc = []) {
 
 function mocksForbiddenHook(source, hook) {
   // vi.mock("~/t3team/hooks/t3team-useGitHubRepositoryDiscovery", ...)
-  const pattern = new RegExp(
-    String.raw`vi\.mock\(\s*["'][^"']*${hook}["']`,
-    "m",
-  );
+  const pattern = new RegExp(String.raw`vi\.mock\(\s*["'][^"']*${hook}["']`, "m");
   return pattern.test(source);
 }
 
