@@ -1,10 +1,6 @@
 #!/usr/bin/env node
-// t3team hot-file warning: flags a branch that adds lines to hot files the upstream
-// redesign stack (#28839..#28845) rewrites. WARNING ONLY — always exits 0.
-// Usage: node scripts/t3team-hot-file-check.mjs [baseRef] [headRef]
-//   baseRef defaults to origin/main (then main), headRef to HEAD.
-// See docs/UPSTREAM-ALIGNMENT.md for the rules; the file list lives in
-// scripts/t3team-hot-files.json.
+// Warning only, always exits 0. Usage: [baseRef=origin/main] [headRef=HEAD].
+// Rules: docs/UPSTREAM-ALIGNMENT.md; file list: scripts/t3team-hot-files.json.
 
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
