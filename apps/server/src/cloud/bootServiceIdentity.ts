@@ -1,9 +1,11 @@
 /** Upstream labels stay the default so an unbranded t3code build is unchanged. */
-export const UPSTREAM_BOOT_SERVICE_NAME = "t3code";
+const UPSTREAM_BOOT_SERVICE_NAME = "t3code";
 export const UPSTREAM_BOOT_SERVICE_UNIT_FILE = `${UPSTREAM_BOOT_SERVICE_NAME}.service`;
+// `.service` suffix keeps the label distinct from the desktop app's bundle id
+// (com.t3tools.t3code), so launchd and TCC records never collide.
 export const UPSTREAM_BOOT_SERVICE_LAUNCHD_LABEL = "com.t3tools.t3code.service";
-export const UPSTREAM_BOOT_SERVICE_PLIST_FILE = `${UPSTREAM_BOOT_SERVICE_LAUNCHD_LABEL}.plist`;
-export const UPSTREAM_BOOT_SERVICE_DESCRIPTION = "T3 Code server";
+const UPSTREAM_BOOT_SERVICE_PLIST_FILE = `${UPSTREAM_BOOT_SERVICE_LAUNCHD_LABEL}.plist`;
+const UPSTREAM_BOOT_SERVICE_DESCRIPTION = "T3 Code server";
 
 export const NEXI_LIVE_APP_ID = "ch.nexplore.nexi.work";
 /** Dedicated identity env. Distinct from `T3_BOOT_SERVICE_UNIT`, which means "running inside the service". */
@@ -18,7 +20,7 @@ export interface BootServiceIdentity {
   readonly appId?: string;
 }
 
-export function upstreamBootServiceIdentity(): BootServiceIdentity {
+function upstreamBootServiceIdentity(): BootServiceIdentity {
   return {
     name: UPSTREAM_BOOT_SERVICE_NAME,
     unitFile: UPSTREAM_BOOT_SERVICE_UNIT_FILE,

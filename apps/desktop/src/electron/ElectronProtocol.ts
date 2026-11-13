@@ -15,7 +15,7 @@ import * as Electron from "electron";
 export const DESKTOP_HOST = "app";
 const DESKTOP_PRODUCTION_SCHEME = "t3code";
 const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
-export const NEXI_WORK_SCHEME = "nexi-work";
+const NEXI_WORK_SCHEME = "nexi-work";
 
 export type DesktopSchemeOptions = {
   readonly isolatedInstance?: boolean;

@@ -9,7 +9,7 @@ import { makeComponentLogger } from "./DesktopObservability.ts";
 // AppImage mounts change each run; the launcher must mount the image itself.
 const { logInfo, logWarning } = makeComponentLogger("desktop-cli-shim");
 
-export const MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
+const MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
 export const NEXI_MARKER = "Written by Nexi Work: runs the desktop app's bundled nexi CLI.";
 
 /** Launcher file name inside the app's `bin` directory. */

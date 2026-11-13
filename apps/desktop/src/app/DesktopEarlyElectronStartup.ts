@@ -48,7 +48,7 @@ export interface EarlyPackagedBranding {
   readonly appId?: string;
 }
 
-export function resolveLinuxAppDataDirectory(input: {
+function resolveLinuxAppDataDirectory(input: {
   readonly env: NodeJS.ProcessEnv;
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
