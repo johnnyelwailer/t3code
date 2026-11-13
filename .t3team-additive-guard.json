@@ -855,7 +855,9 @@
     "apps/web/src/components/settings/LabsSettingsPanel.tsx",
     "apps/web/scripts/verify-built-boot.ts",
     "packages/contracts/src/providerPolicy.ts",
-    "packages/shared/src/projectSettings.test.ts"
+    "packages/shared/src/projectSettings.test.ts",
+    "packages/source-control-github/src/server/driver.ts",
+    "packages/source-control-github/src/shared/gitHubMedia.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

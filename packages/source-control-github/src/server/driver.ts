@@ -11,7 +11,8 @@ import { definition } from "../shared/definition.ts";
 
 import * as GitHubAppAccess from "./GitHubAppAccess.ts";
 import * as GitHubAppSignIn from "./GitHubAppSignIn.ts";
-import * as GitHubMediaFetch from "./gitHubMediaFetch.ts";
+// t3team: wraps upstream's `gitHubMediaFetch.ts` with GitHub Enterprise media.
+import * as GitHubMediaFetch from "./t3team-gitHubEnterpriseMediaFetch.ts";
 import * as GitHubPullRequestApi from "./GitHubPullRequestApi.ts";
 import * as GitHubPullRequestProvider from "./GitHubPullRequestProvider.ts";
 import * as GitHubRest from "./GitHubRest.ts";
