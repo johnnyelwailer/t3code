@@ -51,6 +51,7 @@ export { ListRow } from "../components/ui/ListRow";
 export { LongPressListRow } from "../components/ui/t3team-LongPressListRow";
 export { HomeProjectIcon } from "./t3team-HomeProjectIcon";
 export { environmentCatalog } from "../connection/catalog";
+export { projectEnvironment } from "../state/projects";
 export { appAtomRegistry } from "../state/atom-registry";
 export { useProjects, useServerConfigs } from "../state/entities";
 export { cloudSessionCommands } from "../state/t3team-cloudSessionCommands";
