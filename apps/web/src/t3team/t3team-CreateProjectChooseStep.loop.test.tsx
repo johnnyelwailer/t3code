@@ -62,7 +62,7 @@ function Surface() {
         loading: false,
         connected: true,
         error: null,
-        siteFailures: [{ label: "Other Site", accountId: "site-b" }],
+        siteFailures: [{ label: "Other Site", accountId: "site-b", provider: "atlassian", siteHost: "other.atlassian.net", error: "unavailable" }],
         refresh,
       },
       boundProjectIds: new Map(),

@@ -1,7 +1,7 @@
 /* oxlint-disable t3code/no-dom-test-environment -- Render-loop budget needs a DOM; this stays a unit file so CI runs it without Playwright. */
 /* oxlint-disable t3code/require-disposable-render -- Custom root so a render-loop cap can fail the test. */
 // @vitest-environment jsdom
-import { act, createElement } from "react";
+import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -111,7 +111,7 @@ vi.mock("~/t3team/components/t3team-RepositoryPicker", async () => {
   return {
     RepositoryPicker: (props: {
       linkedUrls: ReadonlyArray<string>;
-      renderLinkedStatus?: (url: string) => unknown;
+      renderLinkedStatus?: (url: string) => ReactNode;
     }) =>
       createElement(
         "div",
