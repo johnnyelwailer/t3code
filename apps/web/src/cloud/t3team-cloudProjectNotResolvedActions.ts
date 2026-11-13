@@ -7,7 +7,7 @@ import {
 } from "./t3team-cloudQueuedSendRecovery";
 
 export interface CloudQueuedSendRecoveryAction {
-  readonly id: "machine-project" | "plain-session";
+  readonly id: "machine-project" | "plain-session" | "sign-in";
   readonly label: string;
   readonly onClick: () => void;
 }

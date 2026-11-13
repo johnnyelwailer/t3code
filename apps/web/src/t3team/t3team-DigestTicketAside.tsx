@@ -75,7 +75,9 @@ export function DigestTicketAside({
     project,
     ticketId: ticket.ticketId,
     // Only on the Chat tab: binding a thread also marks it embedded, which reading Details must not.
-    ...(tab === "chat" && ticketThreadId !== undefined ? { activeThreadId: ticketThreadId } : {}),
+    ...(chatActions && tab === "chat" && ticketThreadId !== undefined
+      ? { activeThreadId: ticketThreadId }
+      : {}),
     projectThreads,
     onRememberEmbeddedThread,
   });

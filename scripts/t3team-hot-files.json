@@ -1,0 +1,24 @@
+{
+  "$comment": "Hot files: files the upstream redesign stack (#28839..#28845) rewrites or heavily rewrites. Fork PRs add thin hooks (<= thresholdAddedLines) only; logic goes in t3team-* files. See docs/UPSTREAM-ALIGNMENT.md.",
+  "thresholdAddedLines": 30,
+  "files": [
+    "apps/web/src/components/ChatView.tsx",
+    "apps/web/src/components/RightPanelTabs.tsx",
+    "apps/web/src/rightPanelStore.ts",
+    "apps/web/src/components/Sidebar.tsx",
+    "apps/web/src/components/sidebar/SidebarChrome.tsx",
+    "apps/web/src/components/sidebar/SidebarThreadRow.tsx",
+    "apps/web/src/components/chat/ChatComposer.tsx",
+    "apps/web/src/components/chat/MessagesTimeline.tsx",
+    "apps/web/src/components/chat/MessagesTimeline.logic.ts",
+    "apps/web/src/components/chat/RightPanelSurfaceContent.tsx",
+    "apps/web/src/components/pullRequest/PullRequestCodeTab.tsx",
+    "apps/web/src/index.css",
+    "apps/web/src/components/settings/SettingsPanels.tsx",
+    "apps/web/src/components/settings/SettingsSidebarNav.tsx",
+    "apps/web/src/components/settings/settingsSearch.ts",
+    "packages/contracts/src/settings.ts",
+    "packages/contracts/src/ipc.ts",
+    "packages/client-runtime/src/voice-input/controller.ts"
+  ]
+}

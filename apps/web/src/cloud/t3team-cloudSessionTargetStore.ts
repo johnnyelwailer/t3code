@@ -126,8 +126,20 @@ export function resolveCloudSessionCreating(
 }
 
 /** The create never reached a session: the entry stays selected and offers Retry. */
-export function failCloudSessionCreate(scopeKey: string): void {
-  apply(scopeKey, { kind: "createFailed" });
+export function failCloudSessionCreate(
+  scopeKey: string,
+  failure?: {
+    readonly message?: string;
+    readonly reason?: string;
+    readonly host?: string;
+  },
+): void {
+  apply(scopeKey, {
+    kind: "createFailed",
+    ...(failure?.message !== undefined ? { message: failure.message } : {}),
+    ...(failure?.reason !== undefined ? { reason: failure.reason } : {}),
+    ...(failure?.host !== undefined ? { host: failure.host } : {}),
+  });
 }
 
 export function clearCloudSessionTarget(scopeKey: string): void {

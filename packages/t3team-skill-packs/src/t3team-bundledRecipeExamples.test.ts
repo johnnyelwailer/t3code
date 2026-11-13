@@ -13,8 +13,11 @@ const ids = (recipes: ReadonlyArray<{ readonly id: string }>) => recipes.map((re
 describe("bundled recipe examples", () => {
   const all = listBundledT3TeamRecipes();
 
-  it("offers only the recipe-authoring entry while the examples flag is off", () => {
-    expect(ids(offeredBundledRecipes(all, false))).toEqual(["manage-project-recipes"]);
+  it("offers only the recipe-authoring entry and the backlog filter while the examples flag is off", () => {
+    expect(ids(offeredBundledRecipes(all, false)).toSorted()).toEqual([
+      "manage-project-recipes",
+      "show-only-assigned-to-me",
+    ]);
   });
 
   it("offers every bundled recipe once the examples flag is on", () => {
@@ -35,7 +38,7 @@ describe("bundled recipe examples", () => {
       ...ids(offeredBundledRecipes(all, false)),
       ...ids(scaffoldedBundledRecipes(all, false)),
     ]);
-    expect(RETIRED_BUNDLED_RECIPE_IDS.size).toBe(22);
+    expect(RETIRED_BUNDLED_RECIPE_IDS.size).toBe(21);
     // Every retired id is a real bundled id, and no kept id is retired: a retired id is hidden in
     // discovery, so a recipe that is offered must never be on the list.
     for (const id of RETIRED_BUNDLED_RECIPE_IDS) expect(bundledIds.has(id)).toBe(true);

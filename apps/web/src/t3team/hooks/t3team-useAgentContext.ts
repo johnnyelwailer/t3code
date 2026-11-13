@@ -9,6 +9,8 @@ import type {
   AgentContextActionRunOptions,
   AgentContextCapabilities,
 } from "~/t3team/t3team-agentContext";
+import { offeredAgentContextCapabilities } from "~/t3team/t3team-contextStarters";
+import { useContextStartersEnabled } from "~/t3team/t3team-contextStartersFlag";
 
 function mapContextMenuActions(capabilities: AgentContextCapabilities) {
   return capabilities.actions.map((action) => ({ id: action.id, label: action.label }));
@@ -16,6 +18,7 @@ function mapContextMenuActions(capabilities: AgentContextCapabilities) {
 
 export function useAgentContext() {
   const { addToChatFromRequest } = useAddToChat();
+  const contextStartersEnabled = useContextStartersEnabled();
   const pinItem = useT3TeamPinnedSidebarStore((state) => state.pinItem);
   const unpinItems = useT3TeamPinnedSidebarStore((state) => state.unpinItems);
   const showSidebarItemsAtTop = useT3TeamSidebarNavPreferencesStore(
@@ -31,7 +34,10 @@ export function useAgentContext() {
       actionId: string,
       options?: AgentContextActionRunOptions,
     ): Promise<boolean> => {
-      const action = capabilities.actions.find((candidate) => candidate.id === actionId);
+      const action = offeredAgentContextCapabilities(
+        capabilities,
+        contextStartersEnabled,
+      ).actions.find((candidate) => candidate.id === actionId);
       if (!action) {
         return false;
       }
@@ -57,7 +63,14 @@ export function useAgentContext() {
         }
       }
     },
-    [addToChatFromRequest, pinItem, removeSidebarItemsFromOrder, showSidebarItemsAtTop, unpinItems],
+    [
+      addToChatFromRequest,
+      contextStartersEnabled,
+      pinItem,
+      removeSidebarItemsFromOrder,
+      showSidebarItemsAtTop,
+      unpinItems,
+    ],
   );
 
   const showAgentContextMenuAt = useCallback(
@@ -67,7 +80,11 @@ export function useAgentContext() {
       y: number;
       options?: AgentContextActionRunOptions;
     }): Promise<boolean> => {
-      if (input.capabilities.actions.length === 0) {
+      const capabilities = offeredAgentContextCapabilities(
+        input.capabilities,
+        contextStartersEnabled,
+      );
+      if (capabilities.actions.length === 0) {
         return false;
       }
 
@@ -76,7 +93,7 @@ export function useAgentContext() {
         return false;
       }
 
-      const actionId = await localApi.contextMenu.show(mapContextMenuActions(input.capabilities), {
+      const actionId = await localApi.contextMenu.show(mapContextMenuActions(capabilities), {
         x: input.x,
         y: input.y,
       });
@@ -84,9 +101,9 @@ export function useAgentContext() {
         return false;
       }
 
-      return runAgentContextAction(input.capabilities, actionId, input.options);
+      return runAgentContextAction(capabilities, actionId, input.options);
     },
-    [runAgentContextAction],
+    [contextStartersEnabled, runAgentContextAction],
   );
 
   const showAgentContextMenu = useCallback(

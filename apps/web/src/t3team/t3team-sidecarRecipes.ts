@@ -12,6 +12,8 @@ import {
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { buildT3TeamActionRecipeLaunchContext } from "~/t3team/t3team-actionRecipeLaunchContext";
 import { WORKFLOW_BACKED_BUNDLED_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
+import { offeredContextStarters } from "~/t3team/t3team-contextStarters";
+import { useContextStartersEnabled } from "~/t3team/t3team-contextStartersFlag";
 import { useOfferedRecipes } from "~/t3team/t3team-offeredRecipes";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import { buildAvailableContextKeys } from "~/t3team/t3team-sidecarRecipeContextKeys";
@@ -166,7 +168,12 @@ export function useT3TeamSidecarRecipeDiscovery(
     fallbackQuickStarts,
     limit: input.limit,
   });
-  return { quickStarts: useOfferedRecipes(quickStarts), status };
+  const offered = useOfferedRecipes(quickStarts);
+  const contextStartersEnabled = useContextStartersEnabled();
+  return {
+    quickStarts: offeredContextStarters(offered, input.surface, contextStartersEnabled),
+    status,
+  };
 }
 
 export function useT3TeamSidecarRecipeQuickStarts(

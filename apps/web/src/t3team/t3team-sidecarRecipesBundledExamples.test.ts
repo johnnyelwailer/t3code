@@ -51,9 +51,9 @@ const ids = (input: T3TeamSidecarRecipeInput, examples?: boolean) =>
   buildT3TeamSidecarRecipeQuickStarts(input, examples).map((quickStart) => quickStart.id);
 
 describe("bundled recipe examples behind BUNDLED_RECIPE_EXAMPLES", () => {
-  it("offers only the recipe-authoring entry by default", () => {
+  it("offers only the recipe-authoring entry and the backlog filter by default", () => {
     expect(ids(ticketInput)).toEqual(["manage-project-recipes"]);
-    expect(ids(dashboardInput)).toEqual([]);
+    expect(ids(dashboardInput)).toEqual(["show-only-assigned-to-me"]);
     expect(ids(digestInput)).toEqual([]);
   });
 

@@ -84,6 +84,7 @@
     "scripts/t3team-context-refresh-e2e-workspace.mjs",
     "scripts/t3team-desktop-asar-dts-afterpack-utils.cjs",
     "scripts/t3team-desktop-asar-dts-afterpack.cjs",
+    "scripts/t3team-hot-file-check.mjs",
     "scripts/t3team-timer-e2e-live-lib.mjs",
     "scripts/t3team-timer-e2e-live.mjs",
     "scripts/t3team-timer-e2e-workspace.mjs",

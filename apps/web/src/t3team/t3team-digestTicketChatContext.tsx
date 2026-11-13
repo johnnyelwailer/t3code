@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 
+import { useContextStartersEnabled } from "~/t3team/t3team-contextStartersFlag";
 import type { TicketKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 
 /**
@@ -18,7 +19,9 @@ const DigestTicketChatContext = createContext<DigestTicketChatActions | null>(nu
 
 export const DigestTicketChatProvider = DigestTicketChatContext.Provider;
 
-/** Null outside the app shell (stories, tests): the ticket aside then offers no chat tab. */
+/** Null outside the app shell (stories, tests) and while `CONTEXT_STARTERS` is off: the ticket
+ * aside then offers no chat tab. */
 export function useDigestTicketChatActions(): DigestTicketChatActions | null {
-  return useContext(DigestTicketChatContext);
+  const actions = useContext(DigestTicketChatContext);
+  return useContextStartersEnabled() ? actions : null;
 }

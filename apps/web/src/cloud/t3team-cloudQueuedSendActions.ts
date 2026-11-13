@@ -114,7 +114,7 @@ export function applyCloudQueuedSendAction(
         queued.messageId,
         action.message,
         action.retryable,
-        failure?.kind === "project_not_resolved"
+        failure?.kind === "project_not_resolved" || failure?.kind === "create_failed"
           ? { kind: failure.kind, reason: failure.reason }
           : undefined,
       );

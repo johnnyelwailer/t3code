@@ -1,8 +1,12 @@
 /**
  * The bundled recipes in `recipes.ts` are examples, not product content: only the recipe-authoring
- * entry is offered. Runtime flag `BUNDLED_RECIPE_EXAMPLES` (default off) offers the rest again.
+ * entry and the agentless backlog filter (kept when `CONTEXT_STARTERS` went off) are offered.
+ * Runtime flag `BUNDLED_RECIPE_EXAMPLES` (default off) offers the rest again.
  */
-export const PRODUCT_BUNDLED_RECIPE_IDS: ReadonlySet<string> = new Set(["manage-project-recipes"]);
+export const PRODUCT_BUNDLED_RECIPE_IDS: ReadonlySet<string> = new Set([
+  "manage-project-recipes",
+  "show-only-assigned-to-me",
+]);
 
 /** Not offered, but the description `Rewrite` control launches `describe-rewrite` by path, so it
  * stays scaffolded. Discovery hides it with the retired ids; the by-path launch does not use it. */
@@ -36,7 +40,7 @@ export function scaffoldedBundledRecipes<Recipe extends { readonly id: string }>
 }
 
 /**
- * The 22 bundled recipes retired from the product (all but the two above), frozen. Discovery hides
+ * The 21 bundled recipes retired from the product (all but the kept ones above), frozen. Discovery hides
  * non-pack copies of them while the examples flag is off. Never change this list; a redesigned
  * recipe MUST use a new id, or it would be hidden. The test guards the overlap with the kept ids.
  */
@@ -50,7 +54,6 @@ export const RETIRED_BUNDLED_RECIPE_IDS: ReadonlySet<string> = new Set([
   "next-best-task",
   "prioritize-pending-work",
   "focus-needs-my-action",
-  "show-only-assigned-to-me",
   "shape-next-backlog-slice",
   "unblock-my-work",
   "stakeholder-update",

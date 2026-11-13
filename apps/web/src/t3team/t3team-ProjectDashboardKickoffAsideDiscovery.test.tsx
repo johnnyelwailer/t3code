@@ -18,6 +18,9 @@ const { mockUseSidecarComposition, discoverRecipes } = vi.hoisted(() => ({
   discoverRecipes: vi.fn(),
 }));
 
+// Exercises the starters themselves; CONTEXT_STARTERS hides them by default.
+vi.mock("~/t3team/t3team-contextStartersFlag", () => ({ useContextStartersEnabled: () => true }));
+
 vi.mock("lucide-react", (importOriginal) => createLucideReactMock(importOriginal));
 
 vi.mock("~/t3team/backend/t3team-index", () => ({

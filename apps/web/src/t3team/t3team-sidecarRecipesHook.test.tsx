@@ -14,6 +14,8 @@ vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
   useFeatureFlag: (key: string) =>
     key === "ORCHESTRATION_RECIPES" || (flags as Record<string, boolean>)[key] === true,
 }));
+// Exercises the starters themselves; CONTEXT_STARTERS hides them by default.
+vi.mock("~/t3team/t3team-contextStartersFlag", () => ({ useContextStartersEnabled: () => true }));
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

@@ -48,4 +48,14 @@ export const RECIPE_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  CONTEXT_STARTERS: {
+    group: "Work items",
+    subgroup: "Recipes",
+    label: "Context starters and ticket chat",
+    description:
+      "Recipe starters on work items, project dashboards and digest rows, and the Chat tab beside a work item. Off: hidden until their redesign; plain chats and the composer keep working.",
+    defaultEnabled: false,
+    requiresRestart: false,
+    addedOn: "2026-11-13",
+  },
 } as const satisfies Record<string, FeatureFlagDefinition>;

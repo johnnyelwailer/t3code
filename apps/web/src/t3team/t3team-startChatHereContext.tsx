@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
+import { useContextStartersEnabled } from "~/t3team/t3team-contextStartersFlag";
 import { startChatHere, type StartChatHereDeps } from "~/t3team/t3team-startChatHere";
 import type { T3TeamViewTarget } from "~/t3team/t3team-viewTarget";
 
@@ -11,9 +12,10 @@ const StartChatHereContext = createContext<StartChatHere | null>(null);
 
 export const StartChatHereProvider = StartChatHereContext.Provider;
 
-/** Null outside the app shell: views there offer no "New chat here". */
+/** Null outside the app shell and while `CONTEXT_STARTERS` is off: no "New chat here" then. */
 export function useStartChatHere(): StartChatHere | null {
-  return useContext(StartChatHereContext);
+  const startChatHere = useContext(StartChatHereContext);
+  return useContextStartersEnabled() ? startChatHere : null;
 }
 
 export function useStartChatHereAction(input: Omit<StartChatHereDeps, "environmentId">) {
