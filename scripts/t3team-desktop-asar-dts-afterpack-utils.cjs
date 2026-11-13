@@ -62,18 +62,18 @@ function buildExistingEntryStreams({ asarPath, header, headerSize }) {
         const size = entry.size ?? 0;
         existingFiles.add(rel);
         const offset = Number(entry.offset);
+        // The asar header records `executable` for packed files only, so an
+        // unpacked file's mode comes from the file on disk.
+        const mode = unpacked
+          ? NodeFS.statSync(NodePath.join(`${asarPath}.unpacked`, rel)).mode & 0o777
+          : entry.executable
+            ? 0o755
+            : 0o644;
         streams.push({
           path: rel,
           type: "file",
           unpacked,
-          stat: {
-            size,
-            mode: entry.executable ? 0o755 : 0o644,
-            uid: 0,
-            gid: 0,
-            mtime: 0,
-            atime: 0,
-          },
+          stat: { size, mode, uid: 0, gid: 0, mtime: 0, atime: 0 },
           streamGenerator: () =>
             unpacked
               ? NodeFS.createReadStream(NodePath.join(`${asarPath}.unpacked`, rel))
