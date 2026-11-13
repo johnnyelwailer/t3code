@@ -1,9 +1,10 @@
 /**
- * Wires the interim Nexi Work updater into the desktop shell: when the packaged flavor is `live`,
+ * Wires the interim Nexi Work updater into the desktop shell: when the packaged flavor is `live`
+ * or `stable` (the flavor that replaces the installed app; `stable` is what desktop-v* tags ship),
  * electron-updater reads its feed from {@link makeNexiUpdateProviderClass} instead of an
  * app-update.yml, and failures it understands (signed out, GHE unreachable, a checksum that did
- * not match) are named so the UI can say what to do. Only the `live` flavor replaces the installed
- * app in place; the side-by-side nightlies must never be updated onto a release.
+ * not match) are named so the UI can say what to do. Only those in-place flavors replace the
+ * installed app; the side-by-side nightlies must never be updated onto a release.
  */
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -63,7 +64,7 @@ export class NexiUpdateFeed extends Context.Service<
   }
 >()("@t3tools/desktop/updates/t3team-nexiUpdateFeed/NexiUpdateFeed") {}
 
-/** No interim feed: upstream builds and every non-live flavor keep electron-updater's own config. */
+/** No interim feed: upstream builds and every non-in-place flavor keep electron-updater's own config. */
 export const disabledLayer = Layer.succeed(
   NexiUpdateFeed,
   NexiUpdateFeed.of({
