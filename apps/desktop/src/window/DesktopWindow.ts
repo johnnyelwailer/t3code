@@ -39,6 +39,7 @@ import { makeQuitShortcutHandler } from "./QuitHold.ts";
 import { resolveDesktopWindowTitle } from "../app/t3team-desktopDistributionBrand.ts";
 import { makeDetachedSurfaceWindows } from "./t3team-DetachedSurfaceWindows.ts";
 import { installMainSessionPermissions } from "./t3team-MainSessionPermissions.ts";
+import { installRendererWatchdog } from "./t3team-rendererWatchdog.ts";
 
 import {
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
@@ -508,6 +509,11 @@ export const make = Effect.gen(function* () {
     pendingMainReveals.set(window, Effect.void);
     yield* rendererHistory.register(window.webContents, { surface: "main" });
     installMainSessionPermissions(window.webContents.session, applicationUrl);
+    installRendererWatchdog(window, {
+      log: (message) => {
+        runFork(logWindowWarning(message));
+      },
+    });
     if (environment.platform === "darwin") {
       window.setAutoHideCursor(false);
     }
