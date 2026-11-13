@@ -70,6 +70,7 @@ import { dynamicToolTitle } from "@t3tools/shared/toolActivity";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { isActorOutboundSendMessageEntry } from "../../t3team/chat/t3team-actorOutbound";
 import { t3teamWorkflowStepRunIds } from "../../t3team/chat/t3team-workflowMessageGroups";
+import { t3teamTimelineReportIds } from "../../t3team/chat/t3team-turnReports";
 import {
   collectToolFilePaths,
   formatReadToolLabel,
@@ -1166,6 +1167,7 @@ function deriveTurnFolds(input: {
       }
       if (entry.kind === "work" && entry.entry.itemType === "notification") continue;
       if (entry.kind === "work" && entry.entry.questionAnswer !== undefined) continue;
+      if (t3teamTimelineReportIds(group.entries).has(entry.id)) continue;
       hiddenEntryIds.add(entry.id);
     }
     if (hiddenEntryIds.size === 0) {

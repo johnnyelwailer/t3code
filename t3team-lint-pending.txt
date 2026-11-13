@@ -221,6 +221,7 @@ apps/server/src/toolauth/t3team-status.test.ts
 apps/server/src/vcs/t3team-GitVcsDriverCheckpointIndex.test.ts
 apps/server/src/vcs/t3team-GitVcsDriverCheckpointIndex.ts
 apps/web/src/browser/t3team-HostedBrowserWebview.panelResize.test.tsx
+apps/web/src/cloud/t3team-CloudSessionSetupProviderAuth.rerender.test.tsx
 apps/web/src/cloud/t3team-cloudQueuedSendCrossWindow.test.ts
 apps/web/src/cloud/t3team-useCanManageRelay.test.tsx
 apps/web/src/cloud/t3team-useCloudSessionListRefresh.test.tsx
@@ -233,6 +234,7 @@ apps/web/src/components/cloud/t3team-CloudEnvironmentExitActions.test.tsx
 apps/web/src/components/cloud/t3team-CloudSessionProvisionPanel.test.tsx
 apps/web/src/components/pullRequest/t3team-usePrTreeDock.ts
 apps/web/src/components/settings/t3team-AgentInstructionsSetting.test.tsx
+apps/web/src/components/settings/t3team-ToolAuthCard.rerender.test.tsx
 apps/web/src/components/settings/t3team-ToolAuthCard.test.tsx
 apps/web/src/components/sidebar/t3team-SidebarProjectScopePicker.test.tsx
 apps/web/src/components/sidebar/t3team-SidebarProjectScopeSiteFailure.test.tsx

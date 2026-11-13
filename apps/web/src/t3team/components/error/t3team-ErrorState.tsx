@@ -22,10 +22,10 @@ export function T3TeamErrorState({
   className,
 }: {
   readonly error: unknown;
-  readonly action?: string;
-  readonly onRetry?: () => void;
-  readonly variant?: T3TeamErrorStateVariant;
-  readonly className?: string;
+  readonly action?: string | undefined;
+  readonly onRetry?: (() => void) | undefined;
+  readonly variant?: T3TeamErrorStateVariant | undefined;
+  readonly className?: string | undefined;
 }) {
   const userFacing = toUserFacingError(error, action ? { action } : undefined);
   const showRetry = Boolean(onRetry) && userFacing.canRetry;

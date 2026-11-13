@@ -132,7 +132,7 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     subgroup: "Project machines",
     label: "Project machines",
     description:
-      "Cloud sessions start from the project's committed machine definition (.nexi/machine.json). Off: a plain session machine.",
+      "Cloud sessions start from the project's committed machine definition (.agents/nexi/machine.json). Off: a plain session machine.",
     defaultEnabled: false,
     requiresRestart: false,
   },

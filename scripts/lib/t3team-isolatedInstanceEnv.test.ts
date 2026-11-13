@@ -45,12 +45,24 @@ describe("resolveAtlassianCallbackPorts", () => {
     assert.isUndefined(resolveAtlassianCallbackPorts({}));
   });
 
-  it("defaults to the registered 3773 for a pinned build", () => {
+  it("defaults to the port the build is actually pinned to, not a hardcoded 3773 or 3774", () => {
     assert.deepEqual(
       resolveAtlassianCallbackPorts({ T3CODE_DESKTOP_BACKEND_PORT: "3774" }),
-      [3773],
+      [3774],
+    );
+    assert.deepEqual(
+      resolveAtlassianCallbackPorts({ T3CODE_DESKTOP_BACKEND_PORT: "3783" }),
+      [3783],
     );
     assert.deepEqual(resolveAtlassianCallbackPorts({ VITE_DESKTOP_PIN_BACKEND_PORT: "1" }), [3773]);
+    // An explicit list always wins, including when it is only 3773.
+    assert.deepEqual(
+      resolveAtlassianCallbackPorts({
+        T3CODE_DESKTOP_BACKEND_PORT: "3783",
+        T3CODE_DESKTOP_ATLASSIAN_CALLBACK_PORTS: "3773,3783",
+      }),
+      [3773, 3783],
+    );
   });
 
   it("parses an explicit list and rejects a bad entry", () => {
@@ -66,11 +78,25 @@ describe("resolveAtlassianCallbackPorts", () => {
 });
 
 describe("isolated instance build output", () => {
-  it("writes isolatedInstance into the branding and drops the t3code:// claim only when asked", () => {
+  it("writes isolatedInstance into the branding and claims nexi-work:// only for live Nexi", () => {
     const on = { T3CODE_DESKTOP_ISOLATED_INSTANCE: "1" };
     assert.isTrue(isIsolatedInstanceBuild(on));
     assert.deepEqual(isolatedBrandingFields(on), { isolatedInstance: true });
     assert.deepEqual(t3codeProtocolClaims(on), []);
+    assert.deepEqual(
+      t3codeProtocolClaims({ ...on, T3CODE_DESKTOP_APP_ID: "ch.nexplore.nexi.work" }),
+      [{ name: "Nexi Work", schemes: ["nexi-work"] }],
+    );
+    assert.deepEqual(t3codeProtocolClaims({ ...on, T3CODE_DESKTOP_PROTOCOL_SCHEME: "nexi-work" }), [
+      { name: "Nexi Work", schemes: ["nexi-work"] },
+    ]);
+    assert.deepEqual(
+      t3codeProtocolClaims({
+        ...on,
+        T3CODE_DESKTOP_APP_ID: "ch.nexplore.nexi.work.nightly",
+      }),
+      [],
+    );
 
     for (const off of [{}, { T3CODE_DESKTOP_ISOLATED_INSTANCE: "0" }]) {
       assert.isFalse(isIsolatedInstanceBuild(off));
@@ -85,13 +111,9 @@ describe("isolated instance build output", () => {
 describe("isolated instance build support", () => {
   const on = { T3CODE_DESKTOP_ISOLATED_INSTANCE: "1" };
 
-  it("builds an isolated instance on macOS only", () => {
-    assert.doesNotThrow(() => assertIsolatedBuildSupported(on, "mac", "Nexi Work Dog"));
-    for (const platform of ["win", "linux"] as const) {
-      assert.throws(
-        () => assertIsolatedBuildSupported(on, platform, "Nexi Work Dog"),
-        /isolated instances are macOS-only.*\b(win|linux)\b/su,
-      );
+  it("builds an isolated instance on macOS, Windows and Linux", () => {
+    for (const platform of ["mac", "win", "linux"] as const) {
+      assert.doesNotThrow(() => assertIsolatedBuildSupported(on, platform, "Nexi Work Dog"));
     }
   });
 

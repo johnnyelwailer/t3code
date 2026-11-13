@@ -17,6 +17,7 @@ import * as ServerConfig from "./config.ts";
 import * as ProjectService from "./project/ProjectService.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
+import * as BuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import {
   t3teamAtlassianConnectBasicRouteLayer,
   t3teamAtlassianConnectOAuthRouteLayer,
@@ -64,6 +65,7 @@ const unreachedHandlerServices = Layer.mergeAll(
   Layer.mock(ProjectService.ProjectService)({}),
   Layer.mock(PullRequestProviderRegistry)({ get: () => null, kinds: [] }),
   Layer.mock(PullRequestService.PullRequestService)({}),
+  Layer.succeed(BuiltInDrivers.SourceControlDrivers, []),
   ServerConfig.layerTest(process.cwd(), { prefix: "t3-feature-flag-route-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
 

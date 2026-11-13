@@ -98,6 +98,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly legacyUserDataDirName: string;
     /** t3team: an isolated instance owns `<appData>/<userDataDirName>` and shares nothing with another install. */
     readonly isolatedInstance: boolean;
+    /** t3team: packaged branding appId, when the build wrote one. */
+    readonly appId: string | undefined;
     /** t3team: the Electron `userData` path of an isolated instance; undefined otherwise. */
     readonly isolatedProfileDir: string | undefined;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
@@ -117,6 +119,7 @@ interface PackagedDesktopBrandingResource {
   readonly isolatedInstance?: boolean;
   readonly linuxDesktopEntryName?: string;
   readonly linuxWmClass?: string;
+  readonly appId?: string;
 }
 
 function readPackagedDesktopBranding(
@@ -320,9 +323,11 @@ const make = Effect.fn("desktop.environment.make")(function* (
         : {}),
     },
     displayName,
-    appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
-    ),
+    appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () => {
+      const packagedAppId = packagedBranding?.appId?.trim();
+      if (packagedAppId) return packagedAppId;
+      return isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code";
+    }),
     linuxDesktopEntryName:
       packagedBranding?.linuxDesktopEntryName?.trim() ||
       resolveLinuxDesktopEntryName(isDevelopment),
@@ -332,6 +337,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
     userDataDirName,
     legacyUserDataDirName,
     isolatedInstance: isolatedHome !== undefined,
+    appId: packagedBranding?.appId?.trim() || undefined,
     isolatedProfileDir:
       isolatedHome === undefined ? undefined : resolveIsolatedProfileDir(isolatedHome, path.join),
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),

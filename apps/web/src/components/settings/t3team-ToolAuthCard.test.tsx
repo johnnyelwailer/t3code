@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import { ToolAuthCard } from "./t3team-ToolAuthCard";
+import { toolAuthCardActionKind } from "./t3team-ToolAuthCardSummary";
 import { TOOL_AUTH_TOOLS } from "./t3team-toolAuthTools";
 
 const CLAUDE_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "claude")!;
@@ -233,6 +234,29 @@ describe("ToolAuthCard", () => {
     expect(markup).not.toContain("Settings → Features");
   });
 
+  it("failed because the account's configured binary is missing: plain words, one Retry, not the raw path", () => {
+    const markup = renderToStaticMarkup(
+      <ToolAuthCard
+        meta={CLAUDE_META}
+        state={{
+          tool: "claude",
+          phase: "failed",
+          reason: "configuredBinaryMissing",
+          message: "The Claude binary set for this account at /no/such/claude-mon was not found.",
+        }}
+        onConnect={noop}
+        onInstall={noop}
+        onSubmitCode={noop}
+        onCancel={noop}
+      />,
+    );
+    expect(markup).toContain("The Claude Code binary set for this account was not found.");
+    expect(markup).toContain("Check the path in provider settings, then try again.");
+    expect(markup).toContain("Retry");
+    expect(markup).not.toContain("/no/such/claude-mon");
+    expect(markup).not.toContain("Install and connect");
+  });
+
   it("expired: shows an Expired badge, the expiry in plain words, and a Reconnect action", () => {
     const markup = renderCard({
       tool: "claude",
@@ -242,5 +266,14 @@ describe("ToolAuthCard", () => {
     expect(markup).toContain("Expired");
     expect(markup).toContain("s sign-in on this machine has expired.");
     expect(markup).toContain("Reconnect");
+  });
+});
+
+describe("toolAuthCardActionKind", () => {
+  it("uses Connect/Retry, not Install, when the account's configured binary is missing", () => {
+    expect(toolAuthCardActionKind("failed", "configuredBinaryMissing")).toBe("connect");
+    expect(toolAuthCardActionKind("expired", "credentialExpired")).toBe("connect");
+    expect(toolAuthCardActionKind("idle", undefined)).toBe("install-or-connect");
+    expect(toolAuthCardActionKind("failed", "notInstalled")).toBe("install-or-connect");
   });
 });

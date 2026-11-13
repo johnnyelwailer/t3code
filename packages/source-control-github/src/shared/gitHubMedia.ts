@@ -1,5 +1,7 @@
 import type { SourceControlMediaUrl } from "@t3tools/source-control-core/shared/definition";
 
+import * as Enterprise from "./t3team-gitHubEnterpriseMedia.ts";
+
 /**
  * Only hosts where a credential is what decides the answer belong here. `objects.githubusercontent.com`
  * and the `private-user-images` links GitHub's own HTML carries are already signed and load on their
@@ -46,21 +48,28 @@ function rawFile(fetchUrl: string): SourceControlMediaUrl {
   return media(fetchUrl, COMMIT_SHA_PATTERN.test(ref) ? { immutable: true } : {});
 }
 
-export function gitHubMediaUrl(url: URL): SourceControlMediaUrl | null {
+export function gitHubMediaUrl(
+  url: URL,
+  isEnterprise = Enterprise.isGitHubEnterpriseMediaHost,
+): SourceControlMediaUrl | null {
   if (url.protocol !== "https:") return null;
   const host = url.hostname.toLowerCase();
-  if (host === RAW_HOST) return rawFile(`https://${host}${url.pathname}${url.search}`);
+  if (host === RAW_HOST || Enterprise.enterpriseHostOfRaw(host, isEnterprise) !== null) {
+    return rawFile(`https://${host}${url.pathname}${url.search}`);
+  }
   if (host === LFS_HOST) return media(`https://${host}${url.pathname}${url.search}`);
-  if (!WEB_HOSTS.has(host)) return null;
+  const rawHost = WEB_HOSTS.has(host) ? RAW_HOST : Enterprise.enterpriseRawHost(host, isEnterprise);
+  if (rawHost === null) return null;
+  const webOrigin = rawHost === RAW_HOST ? "https://github.com" : `https://${host}`;
   // GitHub links an uploaded video bare, with no extension, and an image as markdown.
   if (ATTACHMENT_PATH_PATTERN.test(url.pathname)) {
-    return media(`https://github.com${url.pathname}`, { kind: "video", immutable: true });
+    return media(`${webOrigin}${url.pathname}`, { kind: "video", immutable: true });
   }
   if (LEGACY_ATTACHMENT_PATH_PATTERN.test(url.pathname)) {
-    return media(`https://github.com${url.pathname}`, { immutable: true });
+    return media(`${webOrigin}${url.pathname}`, { immutable: true });
   }
   const repositoryFile = REPOSITORY_FILE_PATTERN.exec(url.pathname);
   return repositoryFile
-    ? rawFile(`https://${RAW_HOST}/${repositoryFile[1]}/${repositoryFile[2]}/${repositoryFile[3]}`)
+    ? rawFile(`https://${rawHost}/${repositoryFile[1]}/${repositoryFile[2]}/${repositoryFile[3]}`)
     : null;
 }

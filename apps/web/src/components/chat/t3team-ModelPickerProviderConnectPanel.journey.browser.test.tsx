@@ -89,6 +89,14 @@ const codexSnapshot: ServerProvider = {
   skills: [],
 };
 const [codex] = deriveProviderInstanceEntries([codexSnapshot]);
+// The pre-login probe: the account is not signed in yet, so the provider snapshot still says so
+// even after the CLI sign-in stream flips to `connected`.
+const codexLapsed: ServerProvider = {
+  ...codexSnapshot,
+  installed: true,
+  auth: { status: "unauthenticated" },
+};
+const [codexLapsedEntry] = deriveProviderInstanceEntries([codexLapsed]);
 
 function setup(refresh: "pending" | "settled" | "failed" = "settled") {
   harness.state.current = new Map();
@@ -142,6 +150,28 @@ describe("model picker connect panel journey", () => {
     await expect
       .element(screen.getByText("Loading Codex models", { exact: false }))
       .toBeInTheDocument();
+    expect(harness.state.refresh).toHaveBeenCalledTimes(1);
+    expect(harness.state.refresh).toHaveBeenCalledWith({
+      environmentId: cloud,
+      input: { instanceId: codexInstance },
+    });
+  });
+
+  it("a sign-in on top of a stale unauthenticated probe re-checks the provider, card still says expired", async () => {
+    setup();
+    await using screen = await render(
+      <ModelPickerProviderConnectPanel
+        entry={codexLapsedEntry!}
+        tool="codex"
+        readiness="needsAuth"
+        environmentId={cloud}
+      />,
+      { router: false },
+    );
+    await phase({ phase: "connected", account: "pj@example.com" });
+    // The provider probe still says unauthenticated, so the card must not claim Signed in…
+    await expect.element(screen.getByText("Expired")).toBeInTheDocument();
+    // …but the raw stream signed in, so the machine is asked to re-check this instance once.
     expect(harness.state.refresh).toHaveBeenCalledTimes(1);
     expect(harness.state.refresh).toHaveBeenCalledWith({
       environmentId: cloud,
