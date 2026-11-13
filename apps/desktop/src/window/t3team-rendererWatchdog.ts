@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDate:off, globalTimers:off, globalConsole:off - Electron main watchdog; now, timers and log are injectable, with Date/setTimeout/console as process-level defaults.
 import * as Electron from "electron";
 
 /** IPC channel for renderer liveness, with optional render counts. */
@@ -177,9 +178,9 @@ export function installRendererWatchdog(
   };
 
   const watchdog = createRendererWatchdog({
-    timeoutMs: options?.timeoutMs,
     log,
     showReloadPrompt: () => showReloadPrompt(),
+    ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   });
 
   const onUnresponsive = () => watchdog.onUnresponsive();
