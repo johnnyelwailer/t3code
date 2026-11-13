@@ -43,6 +43,7 @@ export function useCreateProjectSubmit(scopeKey: string | undefined) {
           backend,
           onRecordCreated: (project) => {
             setRaw({ state: { kind: "creating", project }, scopeKey });
+            input.onRecordCreated?.(project);
           },
         });
       } catch (error) {

@@ -9,6 +9,7 @@ import {
   createRouter,
   Outlet,
   RouterProvider,
+  useNavigate,
   useParams,
   useRouterState,
 } from "@tanstack/react-router";
@@ -178,6 +179,7 @@ function Surface({ stayMounted = false }: { stayMounted?: boolean }) {
   }
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const params = useParams({ strict: false }) as { projectId?: string };
+  const navigate = useNavigate();
   const showCreate = stayMounted || pathname === "/t3team/new";
   return createElement(
     "div",
@@ -186,6 +188,11 @@ function Surface({ stayMounted = false }: { stayMounted?: boolean }) {
       ? createElement(CreateProjectRoute, {
           onCreated: (project) => {
             live.created.push(project);
+            void navigate({
+              to: "/t3team/projects/$projectId",
+              params: { projectId: project.id },
+              replace: true,
+            });
           },
         })
       : null,
@@ -242,10 +249,6 @@ function page() {
   return document.querySelector('[data-testid="create-project-page"]');
 }
 
-function progress() {
-  return document.querySelector('[data-testid="create-project-progress"]');
-}
-
 function buttonByText(text: string) {
   return [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
     button.textContent?.includes(text),
@@ -273,115 +276,94 @@ afterEach(() => {
 });
 
 describe("Add a project with linked repositories", () => {
-  it("unmounts the picker on Add, shows four repos, and does not loop", async () => {
+  it("Add with four repos opens the project immediately and does not loop", async () => {
     const t = await mount("/t3team/new?project=site-ex%3A%3A10002");
     expect(page()).not.toBeNull();
     expect(buttonByText("Add project")).not.toBeUndefined();
-    expect(buttonByText("Adding…")).toBeUndefined();
     const discoveryBefore = live.discoveryRenders;
     expect(discoveryBefore).toBeGreaterThan(0);
 
     const before = t.renders();
     await clickAdd(t);
 
-    expect(progress()).not.toBeNull();
-    expect(buttonByText("Add project")).toBeUndefined();
-    expect(buttonByText("Adding…")).toBeUndefined();
-    expect(progress()?.textContent).toContain("MILO5");
-    expect(progress()?.textContent).toContain("milo5-agentic");
-    expect(progress()?.textContent).toContain("milo5-mocks");
-    expect(progress()?.textContent).toContain("milo5-ops");
-    expect(buttonByText("Continue in background")).not.toBeUndefined();
+    expect(t.path()).toBe("/t3team/projects/p-milo5");
+    expect(page()).toBeNull();
+    expect(document.querySelector('[data-testid="project-page"]')?.textContent).toBe("p-milo5");
+    expect(document.body.textContent).not.toMatch(/Continue in background/i);
     expect(mockCreate).toHaveBeenCalledTimes(1);
-    // The picker (and its discovery hooks) unmounted; further ticks must not retrigger them.
+    expect(live.created).toEqual([RECORD]);
+    // Clones have not finished: finalize is still outstanding.
+    expect(live.finishCreate).toBeDefined();
     const discoveryAfterAdd = live.discoveryRenders;
     await t.settle();
     await t.settle();
     expect(live.discoveryRenders).toBe(discoveryAfterAdd);
     expect(t.renders()).toBeLessThan(RENDER_CAP);
     expect(t.renders() - before).toBeLessThan(20);
-    // The create is still running — clones have not finished.
-    expect(live.created).toEqual([]);
   });
 
-  it("lists ten or more linked repositories and stays within the render budget", async () => {
+  it("Add with twelve repos returns immediately and stays within the render budget", async () => {
     seededLive(TWELVE);
-    live.byUrl = new Map(
-      TWELVE.map((url) => [
-        url,
-        {
-          url,
-          localPath: `/tmp/${url.split("/").pop()}`,
-          status: "pending" as const,
-          syncState: "queued" as const,
-        },
-      ]),
-    );
     const t = await mount("/t3team/new?project=site-ex%3A%3A10002");
+    const before = t.renders();
     await clickAdd(t);
-    expect(progress()).not.toBeNull();
-    for (const url of TWELVE) {
-      expect(progress()?.textContent).toContain(url.split("/").pop());
-    }
+    expect(t.path()).toBe("/t3team/projects/p-milo5");
+    expect(page()).toBeNull();
+    expect(document.querySelector('[data-testid="project-page"]')?.textContent).toBe("p-milo5");
+    expect(document.body.textContent).not.toMatch(/Continue in background/i);
     const mid = t.renders();
     await t.settle();
     await t.settle();
     expect(t.renders() - mid).toBeLessThan(6);
     expect(t.renders()).toBeLessThan(RENDER_CAP);
-  });
-
-  it("shows a slow clone in progress and lets the user continue in the background", async () => {
-    live.byUrl = new Map(
-      FOUR.map((url, index) => [
-        url,
-        {
-          url,
-          localPath: `/tmp/${url.split("/").pop()}`,
-          status: "pending" as const,
-          syncState: index === 0 ? ("cloning" as const) : ("queued" as const),
-        },
-      ]),
-    );
-    const t = await mount("/t3team/new?project=site-ex%3A%3A10002");
-    await clickAdd(t);
-    expect(progress()?.textContent).toContain("Cloning — a large repository takes a while");
-    expect(live.created).toEqual([]);
-    await act(async () => {
-      buttonByText("Continue in background")!.click();
-    });
-    await t.settle();
-    // Left without waiting for finalize; the create promise is still outstanding.
-    expect(live.created).toEqual([RECORD]);
+    expect(t.renders() - before).toBeLessThan(20);
     expect(live.finishCreate).toBeDefined();
   });
 
-  it("on a failed create, offers Try again and a retry starts a new create", async () => {
+  it("a slow clone does not hold the user on the add form", async () => {
     const t = await mount("/t3team/new?project=site-ex%3A%3A10002");
     await clickAdd(t);
-    expect(progress()).not.toBeNull();
-    await act(async () => {
-      live.failCreate?.(new Error("clone failed"));
-      await Promise.resolve();
-    });
-    await t.settle();
-    // The set-up screen comes back with the existing Try again footer.
-    expect(progress()).toBeNull();
+    expect(t.path()).toBe("/t3team/projects/p-milo5");
+    expect(page()).toBeNull();
+    expect(live.created).toEqual([RECORD]);
+    expect(live.finishCreate).toBeDefined();
+    expect(document.body.textContent).not.toMatch(/Continue in background/i);
+  });
+
+  it("a failed record create stays on the form with Try again", async () => {
+    mockCreate.mockReset();
+    mockCreate.mockRejectedValue(new Error("Jira is down"));
+    const t = await mount("/t3team/new?project=site-ex%3A%3A10002");
+    await clickAdd(t);
+    expect(page()).not.toBeNull();
+    expect(t.path()).toContain("/t3team/new");
+    expect(live.created).toEqual([]);
     expect(buttonByText("Try again")).not.toBeUndefined();
-    expect(page()?.textContent).toMatch(/Couldn't add|clone failed|adding MILO5/i);
+    expect(page()?.textContent).toMatch(/Couldn't add|Jira is down|adding MILO5/i);
+    mockCreate.mockReset();
+    mockCreate.mockImplementation(
+      async (input: { onRecordCreated?: (project: unknown) => void }) => {
+        input.onRecordCreated?.(RECORD);
+        return new Promise((resolve, reject) => {
+          live.finishCreate = resolve;
+          live.failCreate = reject;
+        });
+      },
+    );
     await act(async () => {
       buttonByText("Try again")!.click();
     });
     await t.settle();
     await t.settle();
-    expect(mockCreate).toHaveBeenCalledTimes(2);
-    expect(progress()).not.toBeNull();
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(t.path()).toBe("/t3team/projects/p-milo5");
     expect(t.renders()).toBeLessThan(RENDER_CAP);
   });
 
   it("staying mounted after Add still bounds renders (no discovery loop)", async () => {
     const t = await mount("/t3team/new?project=site-ex%3A%3A10002", true);
     await clickAdd(t);
-    expect(progress()).not.toBeNull();
+    expect(live.created).toEqual([RECORD]);
     const mid = t.renders();
     const discoveryMid = live.discoveryRenders;
     await t.settle();
@@ -390,5 +372,6 @@ describe("Add a project with linked repositories", () => {
     expect(t.renders() - mid).toBeLessThan(6);
     expect(live.discoveryRenders).toBe(discoveryMid);
     expect(t.renders()).toBeLessThan(RENDER_CAP);
+    expect(document.body.textContent).not.toMatch(/Continue in background/i);
   });
 });

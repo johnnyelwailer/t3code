@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { RepositoryPicker } from "~/t3team/components/t3team-RepositoryPicker";
-import { Card } from "~/t3team/components/ui/t3team-card";
 import {
   parseRepositoryLabel,
   splitRepositoryInput,
@@ -23,7 +22,6 @@ import { useSaveProjectRepositories } from "~/t3team/hooks/t3team-useSaveProject
 import { useLinkedRepositorySyncStatus } from "~/t3team/hooks/t3team-useLinkedRepositorySyncStatus";
 import { LinkedRepositorySyncStatusLine } from "~/t3team/components/t3team-LinkedRepositorySyncStatusLine";
 import { useGitHubRepositoryDiscovery } from "~/t3team/hooks/t3team-useGitHubRepositoryDiscovery";
-import { LinkedRepositorySyncModal } from "~/t3team/components/t3team-LinkedRepositorySyncModal";
 import { LinkedRepositoryBranchControl } from "~/t3team/components/t3team-LinkedRepositoryBranchControl";
 import { useLinkedRepositoryBranches } from "~/t3team/hooks/t3team-useLinkedRepositoryBranches";
 import { useServerConfig } from "~/t3team/t3team-serverState";
@@ -123,14 +121,13 @@ export function ManageProjectRepositoriesDialog({
     assignMain(url, true);
   };
 
-  const { save, saving, saved, saveError, syncView, unchangedSinceSave } =
-    useSaveProjectRepositories({
-      project,
-      linkedRepositoryUrls,
-      linkedRepositoryBranches: branches.branches,
-      syncStatus,
-      onProjectUpdated,
-    });
+  const { save, saving, saved, saveError, unchangedSinceSave } = useSaveProjectRepositories({
+    project,
+    linkedRepositoryUrls,
+    linkedRepositoryBranches: branches.branches,
+    syncStatus,
+    onProjectUpdated,
+  });
 
   const handleSave = async () => {
     const nextProject = await save();
@@ -162,75 +159,60 @@ export function ManageProjectRepositoriesDialog({
         if (event.target === event.currentTarget && !busy) onClose();
       }}
     >
-      {syncEnabled && syncView.visible ? (
-        <Card
-          role="dialog"
-          aria-label="Linked repositories"
-          className="flex h-full w-full max-w-6xl flex-col overflow-hidden sm:h-[calc(100dvh-4rem)]"
-        >
-          <LinkedRepositorySyncModal
-            steps={syncView.steps}
-            onContinueInBackground={syncView.hide}
-            onDone={onClose}
-            onBack={syncView.hide}
-          />
-        </Card>
-      ) : (
-        <LinkedRepositoriesDialogView
-          projectTitle={project.title ?? "this project"}
+      <LinkedRepositoriesDialogView
+        projectTitle={project.title ?? "this project"}
+        linkedUrls={linkedRepositoryUrls}
+        mainRepositoryUrl={mainRepositoryUrl}
+        adoptedWorkspace={adoptedWorkspace}
+        showMainRepository={mainRepositoryEnabled}
+        onMakeMain={makeMain}
+        onClose={onClose}
+        onSave={() => void handleSave()}
+        saving={saving}
+        mainPending={mainPending}
+        saved={saved !== null}
+        dirty={dirty && !unchangedSinceSave}
+        saveError={saveError}
+        pendingMainUrl={mainState.pendingUrl}
+        mainError={mainState.error}
+        onRetryMain={retryMain}
+      >
+        <RepositoryPicker
+          discovery={discovery}
           linkedUrls={linkedRepositoryUrls}
-          mainRepositoryUrl={mainRepositoryUrl}
-          adoptedWorkspace={adoptedWorkspace}
-          showMainRepository={mainRepositoryEnabled}
-          onMakeMain={makeMain}
-          onClose={onClose}
-          onSave={() => void handleSave()}
-          saving={saving}
-          mainPending={mainPending}
-          saved={saved !== null}
-          dirty={dirty && !unchangedSinceSave}
-          saveError={saveError}
-          pendingMainUrl={mainState.pendingUrl}
-          mainError={mainState.error}
-          onRetryMain={retryMain}
-        >
-          <RepositoryPicker
-            discovery={discovery}
-            linkedUrls={linkedRepositoryUrls}
-            onToggle={toggleRepository}
-            onLinkMany={linkRepositories}
-            renderLinkedStatus={(url) =>
-              syncEnabled ? (
-                <LinkedRepositorySyncStatusLine
-                  entry={syncStatus.byUrl.get(url)}
-                  onSync={syncStatus.syncNow}
+          onToggle={toggleRepository}
+          onLinkMany={linkRepositories}
+          renderLinkedStatus={(url) =>
+            syncEnabled ? (
+              <LinkedRepositorySyncStatusLine
+                entry={syncStatus.byUrl.get(url)}
+                onSync={syncStatus.syncNow}
+              />
+            ) : null
+          }
+          renderLinkedControls={(url) => (
+            <div className="flex flex-col items-start gap-1.5">
+              {mainRepositoryEnabled ? (
+                <LinkedRepositoryMainMarker
+                  isMain={url === mainRepositoryUrl}
+                  onMakeMain={() => makeMain(url)}
+                  disabled={busy}
+                  pending={mainState.pendingUrl === url}
+                  error={mainState.error?.url === url ? mainState.error.message : null}
+                  onRetry={mainState.error?.url === url ? retryMain : undefined}
+                  repositoryLabel={parseRepositoryLabel(url)}
                 />
-              ) : null
-            }
-            renderLinkedControls={(url) => (
-              <div className="flex flex-col items-start gap-1.5">
-                {mainRepositoryEnabled ? (
-                  <LinkedRepositoryMainMarker
-                    isMain={url === mainRepositoryUrl}
-                    onMakeMain={() => makeMain(url)}
-                    disabled={busy}
-                    pending={mainState.pendingUrl === url}
-                    error={mainState.error?.url === url ? mainState.error.message : null}
-                    onRetry={mainState.error?.url === url ? retryMain : undefined}
-                    repositoryLabel={parseRepositoryLabel(url)}
-                  />
-                ) : null}
-                <LinkedRepositoryBranchControl
-                  workspaceRoot={project.workspace?.rootPath}
-                  entry={syncStatus.byUrl.get(url)}
-                  value={branches.branchFor(url)}
-                  onChange={(branch) => branches.setBranch(url, branch)}
-                />
-              </div>
-            )}
-          />
-        </LinkedRepositoriesDialogView>
-      )}
+              ) : null}
+              <LinkedRepositoryBranchControl
+                workspaceRoot={project.workspace?.rootPath}
+                entry={syncStatus.byUrl.get(url)}
+                value={branches.branchFor(url)}
+                onChange={(branch) => branches.setBranch(url, branch)}
+              />
+            </div>
+          )}
+        />
+      </LinkedRepositoriesDialogView>
     </div>
   );
 }
