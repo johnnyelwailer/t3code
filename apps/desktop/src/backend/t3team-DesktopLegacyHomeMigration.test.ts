@@ -39,11 +39,7 @@ const writeState = (homeDir: string, bytes: number, file = "statev2.sqlite") => 
 
 const writeNexiHome = (homeDir: string, bytes = REAL_DB_BYTES) => {
   writeState(homeDir, bytes);
-  writeNexiIdentityMarker(
-    homeDir,
-    { product: "nexi-work", productName: "Nexi Work" },
-    NodePath.join,
-  );
+  writeNexiIdentityMarker(homeDir, { product: "nexi-work", productName: "Nexi Work" }, NodePath.join);
 };
 
 const writeProfile = (profileDir: string, state = '{"os_crypt":{"encrypted_key":"test-key"}}') => {
@@ -128,15 +124,12 @@ describe("migrateLegacyHomeIfNeeded", () => {
         REAL_DB_BYTES,
       );
       assert.isTrue(NodeFS.existsSync(NodePath.join(legacyDir, "worktrees", "proj")));
-      assert.equal(
-        migrateNexiHome({
-          legacyDir,
-          brandedDir,
-          join: NodePath.join,
-          stamp: "testcase",
-        }).status,
-        "skipped-upstream",
-      );
+      assert.equal(migrateNexiHome({
+        legacyDir,
+        brandedDir,
+        join: NodePath.join,
+        stamp: "testcase",
+      }).status, "skipped-upstream");
     } finally {
       cleanup();
     }
@@ -154,9 +147,7 @@ describe("migrateLegacyHomeIfNeeded", () => {
         REAL_DB_BYTES,
       );
       // The empty placeholder was moved aside, never deleted; the source is intact.
-      assert.isTrue(
-        NodeFS.existsSync(NodePath.join(brandedDir, "userdata", "statev2.sqlite.empty-testcase")),
-      );
+      assert.isTrue(NodeFS.existsSync(NodePath.join(brandedDir, "userdata", "statev2.sqlite.empty-testcase")));
       assert.strictEqual(
         NodeFS.statSync(NodePath.join(legacyDir, "userdata", "statev2.sqlite")).size,
         REAL_DB_BYTES,
@@ -310,7 +301,7 @@ describe("migrateNexiProfile", () => {
     }
   });
 
-  it("leaves safeStorage pending on macOS after a profile copy, with no sign-in warning until verification", () => {
+  it("records a visible safeStorage warning on macOS after a profile copy", () => {
     const { brandedDir, profileDir, isolatedProfile, cleanup } = makeTree();
     try {
       writeState(brandedDir, REAL_DB_BYTES);
@@ -324,9 +315,11 @@ describe("migrateNexiProfile", () => {
         platform: "darwin",
       });
       assert.equal(result.status, "ok");
-      assert.equal(result.safeStorage, "pending");
+      assert.equal(result.safeStorage, "unknown");
       const status = readMigrationStatus(isolatedProfile, NodePath.join);
-      assert.isUndefined(migrationWarningForUser(status));
+      const warning = migrationWarningForUser(status);
+      assert.isDefined(warning);
+      assert.match(warning!, /sign in again/i);
     } finally {
       cleanup();
     }
@@ -339,10 +332,7 @@ describe("existing Nexi user upgrade", () => {
     try {
       // Today's packaged Nexi user: state already in nexi-work, profile in t3code-v2.
       writeState(brandedDir, REAL_DB_BYTES);
-      NodeFS.writeFileSync(
-        NodePath.join(brandedDir, "userdata", "clerk-tokens.json"),
-        '{"nexi":true}',
-      );
+      NodeFS.writeFileSync(NodePath.join(brandedDir, "userdata", "clerk-tokens.json"), '{"nexi":true}');
       writeProfile(profileDir, '{"os_crypt":{"encrypted_key":"nexi-key"}}');
       // An unrelated upstream ~/.t3 also exists and must not be touched.
       writeState(legacyDir, REAL_DB_BYTES * 2);

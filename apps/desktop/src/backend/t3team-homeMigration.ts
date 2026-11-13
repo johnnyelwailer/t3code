@@ -14,9 +14,6 @@ export const NEXI_IDENTITY_MARKER_NAME = "nexi-identity.json";
 export const MIGRATION_STAMP_NAME = "migration-stamp.json";
 export const MIGRATION_STATUS_NAME = "migration-status.json";
 
-export const SAFE_STORAGE_SIGN_IN_WARNING =
-  "Nexi Work could not carry your encrypted sign-in onto this app identity. Your projects and threads are intact. Please sign in again.";
-
 const PROFILE_SKIP_NAMES = new Set([
   "LOCK",
   "SingletonLock",
@@ -27,7 +24,7 @@ const PROFILE_SKIP_NAMES = new Set([
 
 export type JoinPath = (first: string, ...segments: string[]) => string;
 
-export function nowIsoForMigration(): string {
+function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
 }
 
@@ -53,18 +50,8 @@ export interface MigrationStatus {
   readonly at: string;
   readonly home?: "ok" | "skipped-upstream" | "skipped-existing" | "verify-failed" | "fresh";
   readonly profile?: "ok" | "skipped-upstream" | "skipped-existing" | "verify-failed" | "fresh";
-  readonly safeStorage?:
-    | "copied"
-    | "windows-local-state"
-    | "unknown"
-    | "not-needed"
-    | "pending"
-    | "verified"
-    | "reencrypted"
-    | "failed"
-    | "unavailable";
+  readonly safeStorage?: "copied" | "windows-local-state" | "unknown" | "not-needed";
   readonly warning?: string | undefined;
-  readonly warningShown?: boolean | undefined;
 }
 
 export function fileSizeOrZero(candidate: string): number {
@@ -143,7 +130,7 @@ export function writeNexiIdentityMarker(
     if (NodeFS.existsSync(path)) return;
     NodeFS.writeFileSync(
       path,
-      `${JSON.stringify({ ...marker, product: "nexi-work", at: marker.at ?? nowIsoForMigration() }, null, 2)}\n`,
+      `${JSON.stringify({ ...marker, product: "nexi-work", at: marker.at ?? nowIso() }, null, 2)}\n`,
       { flag: "wx" },
     );
   } catch {
@@ -243,12 +230,8 @@ export function readMigrationStatus(dir: string, join: JoinPath): MigrationStatu
 export function migrationWarningForUser(status: MigrationStatus | undefined): string | undefined {
   if (!status) return undefined;
   if (status.warning) return status.warning;
-  if (
-    status.safeStorage === "unknown" ||
-    status.safeStorage === "failed" ||
-    status.safeStorage === "unavailable"
-  ) {
-    return SAFE_STORAGE_SIGN_IN_WARNING;
+  if (status.safeStorage === "unknown") {
+    return "Nexi Work could not carry your encrypted sign-in onto this app identity. Your projects and threads are intact. Please sign in again.";
   }
   if (status.home === "verify-failed" || status.profile === "verify-failed") {
     return "Nexi Work could not verify a copy of your previous data. The original files were left in place and were not deleted.";
@@ -395,7 +378,7 @@ export function migrateNexiHome(input: {
   readonly now?: string;
 }): HomeMigrationResult {
   const { legacyDir, brandedDir, join, stamp } = input;
-  const at = input.now ?? nowIsoForMigration();
+  const at = input.now ?? nowIso();
 
   if (legacyDir === brandedDir)
     return { home: brandedDir, copied: false, status: "skipped-existing" };
@@ -558,7 +541,7 @@ export function migrateNexiProfile(input: {
   readonly now?: string;
 }): ProfileMigrationResult {
   const { sourceProfileDir, destinationProfileDir, join, stamp } = input;
-  const at = input.now ?? nowIsoForMigration();
+  const at = input.now ?? nowIso();
 
   if (
     sourceProfileDir === destinationProfileDir ||
@@ -636,10 +619,17 @@ export function migrateNexiProfile(input: {
       join,
     );
     writeNexiIdentityMarker(destinationProfileDir, { product: "nexi-work", at }, join);
-    // Encryption is verified after Electron is ready, when safeStorage can run.
     const safeStorage: MigrationStatus["safeStorage"] =
-      input.platform === "win32" ? "windows-local-state" : "pending";
-    writeMigrationStatus(destinationProfileDir, { at, profile: "ok", safeStorage }, join);
+      input.platform === "win32"
+        ? "windows-local-state"
+        : input.platform === "darwin"
+          ? "unknown"
+          : "copied";
+    const warning =
+      safeStorage === "unknown"
+        ? "Nexi Work could not carry your encrypted sign-in onto this app identity. Your projects and threads are intact. Please sign in again."
+        : undefined;
+    writeMigrationStatus(destinationProfileDir, { at, profile: "ok", safeStorage, warning }, join);
     if (input.adjacentNexiHome) {
       writeMigrationStatus(
         input.adjacentNexiHome,
@@ -647,6 +637,7 @@ export function migrateNexiProfile(input: {
           ...(readMigrationStatus(input.adjacentNexiHome, join) ?? { at }),
           profile: "ok",
           safeStorage,
+          warning,
         },
         join,
       );

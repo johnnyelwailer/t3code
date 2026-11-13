@@ -18,7 +18,6 @@ import * as DesktopApplicationMenu from "../window/DesktopApplicationMenu.ts";
 import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as PreviewPasskeys from "../preview/Passkeys.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
-import { runDesktopSafeStorageMigration } from "../backend/t3team-DesktopSafeStorageMigration.ts";
 import * as DesktopBackendPort from "./DesktopBackendPort.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopLegacyLocalStorage from "./DesktopLegacyLocalStorage.ts";
@@ -146,9 +145,7 @@ const bootstrap = Effect.gen(function* () {
   const settings = yield* desktopSettings.get;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   yield* electronProtocol.registerDesktopProtocol({
-    scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment, {
-      isolatedInstance: environment.isolatedInstance,
-    }),
+    scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment, { isolatedInstance: environment.isolatedInstance }),
     ...(environment.isDevelopment
       ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
       : { assetDirectory: environment.clientAssetsDir }),
@@ -310,7 +307,6 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
-  yield* runDesktopSafeStorageMigration(userDataPath);
   // t3team: commit renderer localStorage (composer drafts) to disk regularly and before quit.
   yield* registerDesktopStorageFlush();
   // t3team: the renderer's `<img>`s of the Atlassian media proxy need its bearer (no cookie there).
