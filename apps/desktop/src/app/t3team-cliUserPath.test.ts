@@ -33,7 +33,7 @@ describe("userShellProfilePaths", () => {
 describe("ensureUnixPathSnippet / removeUnixPathSnippet", () => {
   it("is idempotent, replaces a previous snippet, and leaves other lines (including t3) alone", () => {
     const dir = "/Users/p/.local/bin";
-    const existing = "export EDITOR=vim\n# a t3 comment\nexport PATH=\"$HOME/bin:$PATH\"\n";
+    const existing = 'export EDITOR=vim\n# a t3 comment\nexport PATH="$HOME/bin:$PATH"\n';
     const first = ensureUnixPathSnippet(existing, dir);
     assert.isTrue(first.changed);
     assert.include(first.text, "export EDITOR=vim");

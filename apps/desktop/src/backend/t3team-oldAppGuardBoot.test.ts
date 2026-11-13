@@ -49,19 +49,22 @@ describe("old-app guard boot hooks", () => {
     assert.ok(input.homes.includes(join(homeDirectory, ".t3")));
     assert.ok(input.userDataDirs.includes(join(appData, "t3code-v2")));
     assert.ok(input.userDataDirs.includes(join(appData, "T3 Code (Alpha)")));
-    assert.equal(oldAppIsRunningOnHome({
-      baseDir: join(appData, "fresh-home"),
-      homeDirectory,
-      appDataDirectory: appData,
-      platform: "win32",
-      path: { join },
-      isDevelopment: false,
-      isolatedInstance: true,
-      displayName: "Nexi Work",
-      isolatedProfileDir: undefined,
-      legacyUserDataDirName: undefined,
-      userDataDirName: undefined,
-    }), false);
+    assert.equal(
+      oldAppIsRunningOnHome({
+        baseDir: join(appData, "fresh-home"),
+        homeDirectory,
+        appDataDirectory: appData,
+        platform: "win32",
+        path: { join },
+        isDevelopment: false,
+        isolatedInstance: true,
+        displayName: "Nexi Work",
+        isolatedProfileDir: undefined,
+        legacyUserDataDirName: undefined,
+        userDataDirName: undefined,
+      }),
+      false,
+    );
   });
 
   it.effect("does not copy a Chromium profile while the daily app holds the home", () =>
@@ -85,19 +88,22 @@ describe("old-app guard boot hooks", () => {
           });
           assert.equal(resolved, isolatedProfile);
           assert.equal(NodeFS.existsSync(NodePath.join(isolatedProfile, "Local State")), false);
-          assert.equal(oldAppIsRunningOnHome({
-            baseDir: home,
-            homeDirectory: NodePath.join(root, "user"),
-            appDataDirectory: appData,
-            platform: "darwin",
-            path: { join: NodePath.join },
-            isDevelopment: false,
-            isolatedInstance: true,
-            displayName: "Nexi Work",
-            isolatedProfileDir: isolatedProfile,
-            legacyUserDataDirName: undefined,
-            userDataDirName: undefined,
-          }), true);
+          assert.equal(
+            oldAppIsRunningOnHome({
+              baseDir: home,
+              homeDirectory: NodePath.join(root, "user"),
+              appDataDirectory: appData,
+              platform: "darwin",
+              path: { join: NodePath.join },
+              isDevelopment: false,
+              isolatedInstance: true,
+              displayName: "Nexi Work",
+              isolatedProfileDir: isolatedProfile,
+              legacyUserDataDirName: undefined,
+              userDataDirName: undefined,
+            }),
+            true,
+          );
         } finally {
           held.release();
         }

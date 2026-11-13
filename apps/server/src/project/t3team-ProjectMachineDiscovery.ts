@@ -7,7 +7,10 @@
  *
  * @module t3team-ProjectMachineDiscovery
  */
-import { projectMachineCheckedLocations, projectMachineFilePath } from "@t3tools/project-context/t3teamProjectStateDir";
+import {
+  projectMachineCheckedLocations,
+  projectMachineFilePath,
+} from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   type ProjectId,
   type ProjectMachineDiscovery as Discovery,

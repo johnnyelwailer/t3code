@@ -43,7 +43,7 @@ describe("renderLinuxMetainfoXml", () => {
     });
     assert.include(xml, "<id>ch.nexplore.nexi.work</id>");
     assert.include(xml, "<name>Nexi Work</name>");
-    assert.include(xml, "<launchable type=\"desktop-id\">nexi-work.desktop</launchable>");
+    assert.include(xml, '<launchable type="desktop-id">nexi-work.desktop</launchable>');
     assert.include(xml, "<binary>nexi-work</binary>");
     assert.notInclude(xml, "com.t3tools.t3code");
     assert.notInclude(xml, "<binary>t3code</binary>");

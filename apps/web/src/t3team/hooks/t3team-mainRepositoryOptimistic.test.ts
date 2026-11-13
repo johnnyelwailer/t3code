@@ -27,7 +27,10 @@ describe("main repository optimistic persist", () => {
   });
 
   it("keeps the new main and clears pending on success", () => {
-    const done = completeMainPersist(beginMainPersist(initialMainOptimisticState(ALPHA), BETA), BETA);
+    const done = completeMainPersist(
+      beginMainPersist(initialMainOptimisticState(ALPHA), BETA),
+      BETA,
+    );
     expect(done.mainUrl).toBe(BETA);
     expect(done.committedUrl).toBe(BETA);
     expect(isMainPersistPending(done)).toBe(false);

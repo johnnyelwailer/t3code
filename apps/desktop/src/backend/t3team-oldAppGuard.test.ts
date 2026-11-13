@@ -5,11 +5,19 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 
-import { runHomeGuard, SHARED_HOME_LOCK_HELD_BY_RUNNING_SERVER, type HomeGuardSession, type OldAppGuardState } from "./t3team-oldAppGuard.ts";
+import {
+  runHomeGuard,
+  SHARED_HOME_LOCK_HELD_BY_RUNNING_SERVER,
+  type HomeGuardSession,
+  type OldAppGuardState,
+} from "./t3team-oldAppGuard.ts";
 import { detectOldApp, detectOldAppSync } from "./t3team-oldAppPresence.ts";
 import { inspectOwnershipLock } from "./t3team-oldAppLock.ts";
 import { serverOwnerLockPath, serverRuntimeStatePath } from "./t3team-oldAppPaths.ts";
-import { parseSingletonLockTarget, inspectElectronSingletonLock } from "./t3team-oldAppElectronLock.ts";
+import {
+  parseSingletonLockTarget,
+  inspectElectronSingletonLock,
+} from "./t3team-oldAppElectronLock.ts";
 import {
   OLD_APP_GUARD_ERROR,
   OLD_APP_GUARD_MESSAGE,
@@ -171,11 +179,14 @@ describe("runHomeGuard", () => {
         }
         return found;
       };
-      assert.equal(detectOldAppSync({
-        homes: [tree.home],
-        join: NodePath.join,
-        isAlive: () => true,
-      }).running, true);
+      assert.equal(
+        detectOldAppSync({
+          homes: [tree.home],
+          join: NodePath.join,
+          isAlive: () => true,
+        }).running,
+        true,
+      );
 
       const done = runHomeGuard({
         detect: presence,
@@ -320,7 +331,11 @@ describe("port, Electron lock, and screen copy", () => {
       for (const theme of ["light", "dark"] as const) {
         const html = buildOldAppGuardHtml({ state, theme });
         assert.ok(html.includes(OLD_APP_GUARD_MESSAGE));
-        assert.ok(html.includes(OLD_APP_GUARD_RETRY) || html.includes("Retrying") || html.includes("Starting"));
+        assert.ok(
+          html.includes(OLD_APP_GUARD_RETRY) ||
+            html.includes("Retrying") ||
+            html.includes("Starting"),
+        );
         if (state === "still-running") {
           assert.ok(html.includes(OLD_APP_GUARD_ERROR));
           assert.ok(!html.includes('id="error" hidden') && !html.includes('id="error"  hidden'));

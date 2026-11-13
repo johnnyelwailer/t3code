@@ -6,10 +6,7 @@
  */
 import * as NodeCrypto from "node:crypto";
 
-import {
-  DEFAULT_DESKTOP_APP_ID,
-  resolveDesktopAppId,
-} from "./t3team-releaseFlavor.ts";
+import { DEFAULT_DESKTOP_APP_ID, resolveDesktopAppId } from "./t3team-releaseFlavor.ts";
 import {
   isIsolatedInstanceBuild,
   LIVE_NEXI_APP_ID,
@@ -155,13 +152,13 @@ export function isStaleNexiUninstallEntry(input: {
   return true;
 }
 
-export function protocolSchemesOf(
-  identity: WindowsPackagingIdentity,
-): readonly string[] {
+export function protocolSchemesOf(identity: WindowsPackagingIdentity): readonly string[] {
   return identity.protocols.flatMap((claim) => [...claim.schemes]);
 }
 
-export function overlapsUpstreamWindowsIdentity(identity: WindowsPackagingIdentity): readonly string[] {
+export function overlapsUpstreamWindowsIdentity(
+  identity: WindowsPackagingIdentity,
+): readonly string[] {
   const clashes: string[] = [];
   if (identity.packageName.toLowerCase() === UPSTREAM_WINDOWS_PACKAGE_NAME) {
     clashes.push(`packageName: ${identity.packageName}`);

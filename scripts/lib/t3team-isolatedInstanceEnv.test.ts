@@ -87,10 +87,9 @@ describe("isolated instance build output", () => {
       t3codeProtocolClaims({ ...on, T3CODE_DESKTOP_APP_ID: "ch.nexplore.nexi.work" }),
       [{ name: "Nexi Work", schemes: ["nexi-work"] }],
     );
-    assert.deepEqual(
-      t3codeProtocolClaims({ ...on, T3CODE_DESKTOP_PROTOCOL_SCHEME: "nexi-work" }),
-      [{ name: "Nexi Work", schemes: ["nexi-work"] }],
-    );
+    assert.deepEqual(t3codeProtocolClaims({ ...on, T3CODE_DESKTOP_PROTOCOL_SCHEME: "nexi-work" }), [
+      { name: "Nexi Work", schemes: ["nexi-work"] },
+    ]);
     assert.deepEqual(
       t3codeProtocolClaims({
         ...on,

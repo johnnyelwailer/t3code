@@ -1,9 +1,6 @@
 /**
- * Optimistic state for switching the project's main repository in one click: the new main
- * appears at once, a pending flag follows, and a finished persist either keeps it or, on
- * failure, shows a plain error with Retry and reverts to the previous main (unless the
- * previous main was just unlinked, in which case the promoted main stays and Retry repeats
- * the persist).
+ * Optimistic Make-main: show the new main immediately, revert on a failed
+ * persist unless the previous main was unlinked (then keep it and Retry).
  */
 
 export const MAIN_REPOSITORY_PERSIST_ERROR = "Could not switch the main repository.";
@@ -79,11 +76,13 @@ export function failMainPersist(
 }
 
 /** The URL a Retry should persist: the one that failed. */
-export function retryMainPersistUrl(state: MainRepositoryOptimisticState): string | null | undefined {
+export function retryMainPersistUrl(
+  state: MainRepositoryOptimisticState,
+): string | null | undefined {
   return state.error ? state.error.url : undefined;
 }
 
-export function persistErrorMessage(error: unknown): string {
+export function persistErrorMessage(_error: unknown): string {
   return MAIN_REPOSITORY_PERSIST_ERROR;
 }
 

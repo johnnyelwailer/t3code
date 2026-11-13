@@ -16,7 +16,10 @@ export type ElectronLockInspection = {
 };
 
 /** Chromium writes a symlink (or a file) whose target is `hostname-pid`. */
-export function parseSingletonLockTarget(target: string, hostname = NodeOS.hostname()): number | undefined {
+export function parseSingletonLockTarget(
+  target: string,
+  hostname = NodeOS.hostname(),
+): number | undefined {
   const trimmed = target.trim();
   const prefix = `${hostname}-`;
   const body = trimmed.startsWith(prefix) ? trimmed.slice(prefix.length) : trimmed;

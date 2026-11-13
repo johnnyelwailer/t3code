@@ -8,7 +8,9 @@ export type PortProbeResult =
   | { readonly kind: "not-listening" }
   | { readonly kind: "other" };
 
-const looksLikeEnvironmentDescriptor = (value: unknown): value is {
+const looksLikeEnvironmentDescriptor = (
+  value: unknown,
+): value is {
   environmentId?: unknown;
   serverVersion?: unknown;
   platform?: unknown;

@@ -5,7 +5,7 @@
  */
 
 export const LINKED_REPOSITORIES_HELP =
-  "Linked repositories are the code this project reads from — PRs, branches, and files. The main repository is the workspace that holds project state; agents work there.";
+  "Linked repositories are the code this project reads from (PRs, branches, and files). The main repository is the workspace that holds project state; agents work there.";
 
 export const NO_MAIN_REPOSITORY_MESSAGE =
   "No main repository. A local workspace will be created for this project's state.";
@@ -14,7 +14,9 @@ export const ADOPTED_WORKSPACE_MESSAGE =
   "This project's own workspace is the main workspace. Make any linked repository main with one click.";
 
 export function LinkedRepositoriesHelp() {
-  return <p className="text-xs leading-relaxed text-muted-foreground">{LINKED_REPOSITORIES_HELP}</p>;
+  return (
+    <p className="text-xs leading-relaxed text-muted-foreground">{LINKED_REPOSITORIES_HELP}</p>
+  );
 }
 
 export function LinkedRepositoriesWorkspaceBanner({

@@ -21,11 +21,7 @@ export type RuntimeStateInfo = {
 const isSqliteBusy = (cause: unknown): boolean => {
   if (!(cause instanceof Error)) return false;
   const err = cause as Error & { errcode?: number; code?: string };
-  return (
-    err.errcode === 5 ||
-    err.code === "SQLITE_BUSY" ||
-    /database is locked/i.test(err.message)
-  );
+  return err.errcode === 5 || err.code === "SQLITE_BUSY" || /database is locked/i.test(err.message);
 };
 
 /**

@@ -69,7 +69,7 @@ const css = (theme: OldAppGuardTheme): string => {
   );
 };
 
-const script = (
+const script =
   "window.__nexiSetGuardState=function(state){" +
   "var btn=document.getElementById('retry');" +
   "var err=document.getElementById('error');" +
@@ -99,8 +99,7 @@ const script = (
   "if(this.disabled)return;" +
   "window.__nexiSetGuardState('retrying');" +
   "location.hash='retry-'+Date.now();" +
-  "});"
-);
+  "});";
 
 export function buildOldAppGuardHtml(input: {
   readonly state: OldAppGuardState;
@@ -111,31 +110,31 @@ export function buildOldAppGuardHtml(input: {
   const disabled = oldAppGuardButtonDisabled(state) ? " disabled" : "";
   const label = escapeHtml(oldAppGuardButtonLabel(state));
   return (
-    "<!doctype html><html lang=\"en\" class=\"" +
+    '<!doctype html><html lang="en" class="' +
     input.theme +
-    "\"><head><meta charset=\"utf-8\">" +
+    '"><head><meta charset="utf-8">' +
     "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'\">" +
-    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     "<title>Nexi Work</title><style>" +
     css(input.theme) +
-    "</style></head><body data-state=\"" +
+    '</style></head><body data-state="' +
     state +
-    "\"><div class=\"chrome\" aria-hidden=\"true\"></div>" +
-    "<main class=\"main\"><div class=\"panel\">" +
-    "<p class=\"message\" id=\"message\">" +
+    '"><div class="chrome" aria-hidden="true"></div>' +
+    '<main class="main"><div class="panel">' +
+    '<p class="message" id="message">' +
     escapeHtml(OLD_APP_GUARD_MESSAGE) +
     "</p>" +
-    "<p class=\"error\" id=\"error\" role=\"alert\"" +
+    '<p class="error" id="error" role="alert"' +
     errorHidden +
     ">" +
     escapeHtml(OLD_APP_GUARD_ERROR) +
     "</p>" +
-    "<button type=\"button\" id=\"retry\"" +
+    '<button type="button" id="retry"' +
     disabled +
     ">" +
     label +
     "</button>" +
-    "<div class=\"status\" id=\"status\" aria-live=\"polite\"></div>" +
+    '<div class="status" id="status" aria-live="polite"></div>' +
     "</div></main><script>" +
     script +
     "</script></body></html>"

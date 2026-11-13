@@ -6,11 +6,7 @@ import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeSqlite from "node:sqlite";
 
-import {
-  inspectHomeLock,
-  inspectOwnershipLock,
-  readRuntimeState,
-} from "./t3team-oldAppLock.ts";
+import { inspectHomeLock, inspectOwnershipLock, readRuntimeState } from "./t3team-oldAppLock.ts";
 import { serverOwnerLockPath, serverRuntimeStatePath } from "./t3team-oldAppPaths.ts";
 
 const makeHome = () => {
@@ -164,4 +160,3 @@ describe("shared home ownership lock", () => {
     }
   });
 });
-

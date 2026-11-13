@@ -169,7 +169,6 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   return { copied, failed };
 });
 
-
 /** Copy `machine.json` into `.agents/nexi` when the target file is missing. Runs even when
  * the target directory already exists (the full-dir migration returns early in that case).
  * Never overwrites or deletes; the target wins. Sources stay as a fallback. */

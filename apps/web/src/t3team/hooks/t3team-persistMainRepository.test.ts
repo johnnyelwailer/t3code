@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type {
-  BackendApi,
-  ProjectMainRepositorySwitchResult,
-} from "~/t3team/backend/t3team-types";
+import type { BackendApi, ProjectMainRepositorySwitchResult } from "~/t3team/backend/t3team-types";
 import { persistProjectMainRepository } from "./t3team-persistMainRepository";
 import { readMainRepositoryFromProject } from "./t3team-projectMainRepository";
 
@@ -48,7 +45,7 @@ describe("persistProjectMainRepository", () => {
         readLinkedRepositoryStatus: vi.fn(async () => ({
           linkedRepositories: [{ url: ALPHA, localPath: ALPHA_CHECKOUT, status: "cloned" }],
         })),
-        setMainRepository: vi.fn(async (input: unknown) => {
+        setMainRepository: vi.fn(async (_input: unknown) => {
           calls.push("switch");
           return switched;
         }),

@@ -16,12 +16,10 @@ export const openPrivacySecurity = DesktopIpc.makeIpcMethod({
   result: Schema.Boolean,
   handler: Effect.fn("desktop.ipc.openPrivacySecurity")(function* () {
     return yield* Effect.promise(() =>
-      Electron.shell
-        .openExternal(MAC_PRIVACY_SECURITY_SETTINGS_URL)
-        .then(
-          () => true,
-          () => false,
-        ),
+      Electron.shell.openExternal(MAC_PRIVACY_SECURITY_SETTINGS_URL).then(
+        () => true,
+        () => false,
+      ),
     );
   }),
 });

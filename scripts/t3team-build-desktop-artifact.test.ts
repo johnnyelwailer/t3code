@@ -669,8 +669,9 @@ it.effect("gives a branded Linux build its own executable, WM_CLASS, metainfo an
     assert.include(xml, "<binary>nexi-work</binary>");
     assert.notInclude(xml, "com.t3tools.t3code");
   }).pipe(
-    Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
-    Effect.provide(NodeServices.layer),
+    Effect.provide(
+      Layer.mergeAll(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })), NodeServices.layer),
+    ),
   ),
 );
 
@@ -722,10 +723,7 @@ it.effect("keeps the unbranded and replace-flavor Windows NSIS config byte-ident
     );
     assert.isUndefined((unbranded.win as { executableName?: string }).executableName);
     assert.isUndefined((unbranded.win as { protocols?: unknown }).protocols);
-    assert.equal(
-      resolveStagedPackageNameAndAuthor("win", {}).name,
-      "t3code",
-    );
+    assert.equal(resolveStagedPackageNameAndAuthor("win", {}).name, "t3code");
     assert.equal(resolveStagedPackageNameAndAuthor("win", {}).author, "T3 Tools");
     assert.equal(resolveStagedPackageNameAndAuthor("linux", {}).name, "t3code");
     // A replace flavor (product name + appId, but not isolated) stays t3code.
@@ -737,78 +735,85 @@ it.effect("keeps the unbranded and replace-flavor Windows NSIS config byte-ident
       "t3code",
     );
   }).pipe(
-    Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
-    Effect.provide(NodeServices.layer),
+    Effect.provide(
+      Layer.mergeAll(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })), NodeServices.layer),
+    ),
   ),
 );
 
-it.effect("gives an isolated Windows Nexi build its own dir, GUID, exe, publisher and nexi-work protocol", () =>
-  Effect.gen(function* () {
-    const previous = {
-      isolated: process.env.T3CODE_DESKTOP_ISOLATED_INSTANCE,
-      appId: process.env.T3CODE_DESKTOP_APP_ID,
-      product: process.env.T3CODE_DESKTOP_PRODUCT_NAME,
-    };
-    process.env.T3CODE_DESKTOP_ISOLATED_INSTANCE = "1";
-    process.env.T3CODE_DESKTOP_APP_ID = LIVE_NEXI_APP_ID;
-    process.env.T3CODE_DESKTOP_PRODUCT_NAME = "Nexi Work";
-    try {
-      const isolated = yield* createBuildConfig({
-        platform: "win",
-        target: "nsis",
-        version: "1.2.3",
-        signed: false,
-        mockUpdates: false,
-        productNameOverride: "Nexi Work",
-        appId: LIVE_NEXI_APP_ID,
-      });
-      const nsis = isolated.nsis as {
-        differentialPackage: boolean;
-        include: string;
-        guid: string;
-        uninstallDisplayName: string;
-        shortcutName: string;
+it.effect(
+  "gives an isolated Windows Nexi build its own dir, GUID, exe, publisher and nexi-work protocol",
+  () =>
+    Effect.gen(function* () {
+      const previous = {
+        isolated: process.env.T3CODE_DESKTOP_ISOLATED_INSTANCE,
+        appId: process.env.T3CODE_DESKTOP_APP_ID,
+        product: process.env.T3CODE_DESKTOP_PRODUCT_NAME,
       };
-      assert.deepEqual(
-        {
-          differentialPackage: nsis.differentialPackage,
-          include: nsis.include,
-          guid: nsis.guid,
-          uninstallDisplayName: nsis.uninstallDisplayName,
-          shortcutName: nsis.shortcutName,
-        },
-        {
-          differentialPackage: true,
-          include: NEXI_NSIS_INCLUDE,
-          guid: NEXI_LIVE_NSIS_GUID,
-          uninstallDisplayName: "Nexi Work",
-          shortcutName: "Nexi Work",
-        },
-      );
-      assert.notEqual(nsis.guid, UPSTREAM_NSIS_GUID);
-      const win = isolated.win as {
-        executableName: string;
-        protocols: ReadonlyArray<{ schemes: readonly string[] }>;
-      };
-      assert.equal(win.executableName, "nexi-work");
-      assert.deepEqual(
-        win.protocols.flatMap((claim) => [...claim.schemes]),
-        ["nexi-work"],
-      );
-      const staged = resolveStagedPackageNameAndAuthor("win", process.env);
-      assert.equal(staged.name, "nexi-work");
-      assert.equal(staged.author, "Nexplore");
-    } finally {
-      const restore = (key: string, value: string | undefined) => {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      };
-      restore("T3CODE_DESKTOP_ISOLATED_INSTANCE", previous.isolated);
-      restore("T3CODE_DESKTOP_APP_ID", previous.appId);
-      restore("T3CODE_DESKTOP_PRODUCT_NAME", previous.product);
-    }
-  }).pipe(
-    Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))),
-    Effect.provide(NodeServices.layer),
-  ),
+      process.env.T3CODE_DESKTOP_ISOLATED_INSTANCE = "1";
+      process.env.T3CODE_DESKTOP_APP_ID = LIVE_NEXI_APP_ID;
+      process.env.T3CODE_DESKTOP_PRODUCT_NAME = "Nexi Work";
+      try {
+        const isolated = yield* createBuildConfig({
+          platform: "win",
+          target: "nsis",
+          version: "1.2.3",
+          signed: false,
+          mockUpdates: false,
+          productNameOverride: "Nexi Work",
+          appId: LIVE_NEXI_APP_ID,
+        });
+        const nsis = isolated.nsis as {
+          differentialPackage: boolean;
+          include: string;
+          guid: string;
+          uninstallDisplayName: string;
+          shortcutName: string;
+        };
+        assert.deepEqual(
+          {
+            differentialPackage: nsis.differentialPackage,
+            include: nsis.include,
+            guid: nsis.guid,
+            uninstallDisplayName: nsis.uninstallDisplayName,
+            shortcutName: nsis.shortcutName,
+          },
+          {
+            differentialPackage: true,
+            include: NEXI_NSIS_INCLUDE,
+            guid: NEXI_LIVE_NSIS_GUID,
+            uninstallDisplayName: "Nexi Work",
+            shortcutName: "Nexi Work",
+          },
+        );
+        assert.notEqual(nsis.guid, UPSTREAM_NSIS_GUID);
+        const win = isolated.win as {
+          executableName: string;
+          protocols: ReadonlyArray<{ schemes: readonly string[] }>;
+        };
+        assert.equal(win.executableName, "nexi-work");
+        assert.deepEqual(
+          win.protocols.flatMap((claim) => [...claim.schemes]),
+          ["nexi-work"],
+        );
+        const staged = resolveStagedPackageNameAndAuthor("win", process.env);
+        assert.equal(staged.name, "nexi-work");
+        assert.equal(staged.author, "Nexplore");
+      } finally {
+        const restore = (key: string, value: string | undefined) => {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        };
+        restore("T3CODE_DESKTOP_ISOLATED_INSTANCE", previous.isolated);
+        restore("T3CODE_DESKTOP_APP_ID", previous.appId);
+        restore("T3CODE_DESKTOP_PRODUCT_NAME", previous.product);
+      }
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+          NodeServices.layer,
+        ),
+      ),
+    ),
 );

@@ -3501,10 +3501,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     });
     let metainfoSource = linuxMetainfoPath;
     if (linuxIdentity.branded && metainfoSource === undefined) {
-      const staged = path.join(
-        NodeOS.tmpdir(),
-        `desktop-metainfo-${linuxIdentity.metainfoId}.xml`,
-      );
+      const staged = path.join(NodeOS.tmpdir(), `desktop-metainfo-${linuxIdentity.metainfoId}.xml`);
       NodeFS.writeFileSync(
         staged,
         renderLinuxMetainfoXml({

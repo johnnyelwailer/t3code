@@ -305,25 +305,27 @@ it.layer(NodeServices.layer)("scanCheckout", (it) => {
       }),
     );
 
-    it.effect("an invalid canonical pointer is reported and does not fall back to an older one", () =>
-      Effect.gen(function* () {
-        const result = yield* scan({
-          ".agents/nexi/machine.json": `{ "version": 2 }`,
-          ".nexi/machine.json": `{
+    it.effect(
+      "an invalid canonical pointer is reported and does not fall back to an older one",
+      () =>
+        Effect.gen(function* () {
+          const result = yield* scan({
+            ".agents/nexi/machine.json": `{ "version": 2 }`,
+            ".nexi/machine.json": `{
             "version": 1,
             "devcontainer": ".devcontainer/devcontainer.json"
           }`,
-          ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
-        });
-        expect(result.candidates).toEqual([]);
-        expect(result.rejected).toEqual([
-          {
-            repository: ".",
-            path: ".agents/nexi/machine.json",
-            reason: ".agents/nexi/machine.json is not a valid machine file.",
-          },
-        ]);
-      }),
+            ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+          });
+          expect(result.candidates).toEqual([]);
+          expect(result.rejected).toEqual([
+            {
+              repository: ".",
+              path: ".agents/nexi/machine.json",
+              reason: ".agents/nexi/machine.json is not a valid machine file.",
+            },
+          ]);
+        }),
     );
   });
 

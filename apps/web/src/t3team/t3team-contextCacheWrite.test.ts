@@ -15,7 +15,9 @@ vi.mock("~/t3team/backend/t3team-environmentWorkflowBackend", () => ({
   postToEnvironment: vi.fn(async () => ({})),
 }));
 vi.mock("~/t3team/t3team-contextAttachmentSyncPersist", () => ({
-  persistContextAttachmentPayload: vi.fn(async () => ".agents/nexi/context/misc/p/item/entrypoint.json"),
+  persistContextAttachmentPayload: vi.fn(
+    async () => ".agents/nexi/context/misc/p/item/entrypoint.json",
+  ),
 }));
 
 const SOURCE = "env-local" as EnvironmentId;

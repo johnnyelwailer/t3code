@@ -6,7 +6,10 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import { inspectOldAppElectronLocks, type ElectronLockInspection } from "./t3team-oldAppElectronLock.ts";
+import {
+  inspectOldAppElectronLocks,
+  type ElectronLockInspection,
+} from "./t3team-oldAppElectronLock.ts";
 import { inspectHomeLock, type HomeLockInspection } from "./t3team-oldAppLock.ts";
 import {
   appDataDirectoryForPlatform,
@@ -16,11 +19,7 @@ import {
 } from "./t3team-oldAppPaths.ts";
 import { probeOldNexiPort, type PortProbeResult } from "./t3team-oldAppPort.ts";
 
-export type OldAppSignal =
-  | "ownership-lock"
-  | "runtime-pid"
-  | "backend-port"
-  | "electron-lock";
+export type OldAppSignal = "ownership-lock" | "runtime-pid" | "backend-port" | "electron-lock";
 
 export type OldAppPresence = {
   readonly running: boolean;
@@ -71,11 +70,15 @@ const signalsFrom = (input: {
 }): OldAppSignal[] => {
   const signals: OldAppSignal[] = [];
   if (input.homes.some((home) => home.lock === "held")) signals.push("ownership-lock");
-  if (input.homes.some((home) => home.runtimePidAlive && !home.runtimeIsSelf && home.lock !== "held")) {
+  if (
+    input.homes.some((home) => home.runtimePidAlive && !home.runtimeIsSelf && home.lock !== "held")
+  ) {
     // Live pre-lock server: runtime pid only counts when the exclusive lock is not already the signal.
     signals.push("runtime-pid");
   }
-  if (input.homes.some((home) => home.runtimePidAlive && !home.runtimeIsSelf && home.lock === "held")) {
+  if (
+    input.homes.some((home) => home.runtimePidAlive && !home.runtimeIsSelf && home.lock === "held")
+  ) {
     // Pid confirms the holder is not us; the lock already recorded the signal.
   }
   if (input.port.kind === "identified") signals.push("backend-port");
@@ -120,7 +123,9 @@ export async function detectOldApp(input: DetectOldAppInput): Promise<OldAppPres
 }
 
 /** Sync subset (lock, pid, Electron) for the early user-data path. */
-export function detectOldAppSync(input: Omit<DetectOldAppInput, "probePort" | "skipPort">): OldAppPresence {
+export function detectOldAppSync(
+  input: Omit<DetectOldAppInput, "probePort" | "skipPort">,
+): OldAppPresence {
   const join = input.join ?? NodePath.join;
   const homes = uniqueHomes(input.homes).map((home) =>
     inspectHomeLock({

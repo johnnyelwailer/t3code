@@ -652,7 +652,8 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       t3Home: Option.none(),
     });
     // t3team: never copy or adopt the shared home while the daily Nexi app still holds it.
-    const homeOccupied = explicitT3Home === undefined && oldAppIsRunningOnHome(pickGuardEnvironment(environment));
+    const homeOccupied =
+      explicitT3Home === undefined && oldAppIsRunningOnHome(pickGuardEnvironment(environment));
     const resolvedHomeDir =
       explicitT3Home ??
       (homeOccupied

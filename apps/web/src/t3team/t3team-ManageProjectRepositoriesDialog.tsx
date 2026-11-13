@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { RepositoryPicker } from "~/t3team/components/t3team-RepositoryPicker";
 import { Card } from "~/t3team/components/ui/t3team-card";
-import { parseRepositoryLabel, splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
+import {
+  parseRepositoryLabel,
+  splitRepositoryInput,
+} from "~/t3team/components/t3team-linkedRepositories";
 import { LinkedRepositoriesDialogView } from "~/t3team/components/t3team-LinkedRepositoriesDialogView";
 import { LinkedRepositoryMainMarker } from "~/t3team/components/t3team-LinkedRepositoryMainMarker";
 import {
@@ -134,8 +137,7 @@ export function ManageProjectRepositoriesDialog({
     if (!nextProject) return;
     const localMain = mainState.mainUrl;
     const savedMainRecord = readMainRepositoryFromProject(nextProject);
-    const savedMain =
-      savedMainRecord?.status === "adopted" ? null : (savedMainRecord?.url ?? null);
+    const savedMain = savedMainRecord?.status === "adopted" ? null : (savedMainRecord?.url ?? null);
     if (localMain === savedMain) return;
     const savedUrls = readLinkedRepositoryUrlsFromProject(nextProject);
     if (canPersistMainRepositoryNow(localMain, savedUrls)) {

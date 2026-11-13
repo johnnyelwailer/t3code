@@ -140,7 +140,9 @@ it.effect("keeps an existing .agents/nexi target and skips normalization when fl
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provide(Path.layer),
       );
-      expect(files.get("/repo/.agents/nexi/context/a.json")).toBe(enabled ? "committed" : undefined);
+      expect(files.get("/repo/.agents/nexi/context/a.json")).toBe(
+        enabled ? "committed" : undefined,
+      );
     }
   }),
 );
@@ -189,73 +191,77 @@ it.effect("does not publish an empty .agents/nexi gate when every copy fails, th
   }),
 );
 
-it.effect("drops a partial .agents/nexi when a context rewrite fails so the next call can retry", () =>
-  Effect.gen(function* () {
-    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
-    vi.resetModules();
-    const { ensureNexiProjectStateDir } = yield* Effect.promise(
-      () => import("./t3team-projectMainRepositoryState.ts"),
-    );
-    const source = '{"paths":{"manifest":".t3team/context/m.json"}}';
-    const control = { failCopies: false, failWrites: true, copies: 0 };
-    const { files, directories, fileSystem } = memoryFs(
-      {
-        "/repo/.t3team/context/entrypoint.json": source,
-        "/repo/.t3team/references/reference-repositories.json": "{}",
-      },
-      control,
-    );
-    const run = () =>
-      ensureNexiProjectStateDir("/repo").pipe(
+it.effect(
+  "drops a partial .agents/nexi when a context rewrite fails so the next call can retry",
+  () =>
+    Effect.gen(function* () {
+      vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+      vi.resetModules();
+      const { ensureNexiProjectStateDir } = yield* Effect.promise(
+        () => import("./t3team-projectMainRepositoryState.ts"),
+      );
+      const source = '{"paths":{"manifest":".t3team/context/m.json"}}';
+      const control = { failCopies: false, failWrites: true, copies: 0 };
+      const { files, directories, fileSystem } = memoryFs(
+        {
+          "/repo/.t3team/context/entrypoint.json": source,
+          "/repo/.t3team/references/reference-repositories.json": "{}",
+        },
+        control,
+      );
+      const run = () =>
+        ensureNexiProjectStateDir("/repo").pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provide(Path.layer),
+        );
+      expect(yield* run()).toEqual([]);
+      expect(nexiGate(files, directories)).toBe(false);
+      expect(files.get("/repo/.t3team/context/entrypoint.json")).toBe(source);
+      control.failWrites = false;
+      expect(yield* run()).toEqual([
+        "context/entrypoint.json",
+        "references/reference-repositories.json",
+      ]);
+      expect(JSON.parse(files.get("/repo/.agents/nexi/context/entrypoint.json")!)).toEqual({
+        paths: { manifest: ".agents/nexi/context/m.json" },
+      });
+    }),
+);
+
+it.effect(
+  "migrates a legacy .nexi directory into .agents/nexi and leaves the source in place",
+  () =>
+    Effect.gen(function* () {
+      vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+      vi.resetModules();
+      const { ensureNexiProjectStateDir } = yield* Effect.promise(
+        () => import("./t3team-projectMainRepositoryState.ts"),
+      );
+      const { files, fileSystem } = memoryFs({
+        "/repo/.nexi/context/entrypoint.json": '{"paths":{"manifest":".nexi/context/m.json"}}',
+        "/repo/.nexi/recipes/a/recipe.ts": "export {}",
+      });
+      const copied = yield* ensureNexiProjectStateDir("/repo").pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provide(Path.layer),
       );
-    expect(yield* run()).toEqual([]);
-    expect(nexiGate(files, directories)).toBe(false);
-    expect(files.get("/repo/.t3team/context/entrypoint.json")).toBe(source);
-    control.failWrites = false;
-    expect(yield* run()).toEqual([
-      "context/entrypoint.json",
-      "references/reference-repositories.json",
-    ]);
-    expect(JSON.parse(files.get("/repo/.agents/nexi/context/entrypoint.json")!)).toEqual({
-      paths: { manifest: ".agents/nexi/context/m.json" },
-    });
-  }),
-);
-
-it.effect("migrates a legacy .nexi directory into .agents/nexi and leaves the source in place", () =>
-  Effect.gen(function* () {
-    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
-    vi.resetModules();
-    const { ensureNexiProjectStateDir } = yield* Effect.promise(
-      () => import("./t3team-projectMainRepositoryState.ts"),
-    );
-    const { files, fileSystem } = memoryFs({
-      "/repo/.nexi/context/entrypoint.json": '{"paths":{"manifest":".nexi/context/m.json"}}',
-      "/repo/.nexi/recipes/a/recipe.ts": "export {}",
-    });
-    const copied = yield* ensureNexiProjectStateDir("/repo").pipe(
-      Effect.provideService(FileSystem.FileSystem, fileSystem),
-      Effect.provide(Path.layer),
-    );
-    expect(copied.sort()).toEqual(["context/entrypoint.json", "recipes/a/recipe.ts"]);
-    expect(JSON.parse(files.get("/repo/.agents/nexi/context/entrypoint.json")!)).toEqual({
-      paths: { manifest: ".agents/nexi/context/m.json" },
-    });
-    expect(files.get("/repo/.agents/nexi/recipes/a/recipe.ts")).toBe("export {}");
-    expect(files.get("/repo/.nexi/context/entrypoint.json")).toBe(
-      '{"paths":{"manifest":".nexi/context/m.json"}}',
-    );
-    // Re-run is a no-op: one-time and idempotent.
-    expect(
-      yield* ensureNexiProjectStateDir("/repo").pipe(
-        Effect.provideService(FileSystem.FileSystem, fileSystem),
-        Effect.provide(Path.layer),
-      ),
-    ).toEqual([]);
-    expect(files.get("/repo/.nexi/recipes/a/recipe.ts")).toBe("export {}");
-  }),
+      expect(copied.sort()).toEqual(["context/entrypoint.json", "recipes/a/recipe.ts"]);
+      expect(JSON.parse(files.get("/repo/.agents/nexi/context/entrypoint.json")!)).toEqual({
+        paths: { manifest: ".agents/nexi/context/m.json" },
+      });
+      expect(files.get("/repo/.agents/nexi/recipes/a/recipe.ts")).toBe("export {}");
+      expect(files.get("/repo/.nexi/context/entrypoint.json")).toBe(
+        '{"paths":{"manifest":".nexi/context/m.json"}}',
+      );
+      // Re-run is a no-op: one-time and idempotent.
+      expect(
+        yield* ensureNexiProjectStateDir("/repo").pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provide(Path.layer),
+        ),
+      ).toEqual([]);
+      expect(files.get("/repo/.nexi/recipes/a/recipe.ts")).toBe("export {}");
+    }),
 );
 
 it.effect(
@@ -333,16 +339,10 @@ it.effect(
       });
       const candidates = yield* detectMainRepositoryCandidates([
         { url: "https://github.com/acme/alpha", localPath: "/repo", status: "cloned" },
-      ]).pipe(
-        Effect.provideService(FileSystem.FileSystem, fileSystem),
-        Effect.provide(Path.layer),
-      );
-      expect(candidates).toEqual([
-        { url: "https://github.com/acme/alpha", checkoutPath: "/repo" },
-      ]);
+      ]).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem), Effect.provide(Path.layer));
+      expect(candidates).toEqual([{ url: "https://github.com/acme/alpha", checkoutPath: "/repo" }]);
     }),
 );
-
 
 const MACHINE_POINTER = `{ "version": 1, "devcontainer": ".devcontainer/devcontainer.json" }`;
 const OTHER_POINTER = `{ "version": 1, "devcontainer": ".devcontainer/other.json" }`;
@@ -391,28 +391,30 @@ it.effect("leaves a canonical machine.json alone when it is the only pointer", (
   }),
 );
 
-it.effect("prefers an existing .agents/nexi/machine.json when older pointers are also present", () =>
-  Effect.gen(function* () {
-    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
-    vi.resetModules();
-    const { ensureNexiMachineFile } = yield* Effect.promise(
-      () => import("./t3team-projectMainRepositoryState.ts"),
-    );
-    const { files, fileSystem } = memoryFs({
-      "/repo/.agents/nexi/machine.json": MACHINE_POINTER,
-      "/repo/.nexi/machine.json": OTHER_POINTER,
-      "/repo/.t3team/machine.json": OTHER_POINTER,
-    });
-    expect(
-      yield* ensureNexiMachineFile("/repo").pipe(
-        Effect.provideService(FileSystem.FileSystem, fileSystem),
-        Effect.provide(Path.layer),
-      ),
-    ).toBe(false);
-    expect(files.get("/repo/.agents/nexi/machine.json")).toBe(MACHINE_POINTER);
-    expect(files.get("/repo/.nexi/machine.json")).toBe(OTHER_POINTER);
-    expect(files.get("/repo/.t3team/machine.json")).toBe(OTHER_POINTER);
-  }),
+it.effect(
+  "prefers an existing .agents/nexi/machine.json when older pointers are also present",
+  () =>
+    Effect.gen(function* () {
+      vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+      vi.resetModules();
+      const { ensureNexiMachineFile } = yield* Effect.promise(
+        () => import("./t3team-projectMainRepositoryState.ts"),
+      );
+      const { files, fileSystem } = memoryFs({
+        "/repo/.agents/nexi/machine.json": MACHINE_POINTER,
+        "/repo/.nexi/machine.json": OTHER_POINTER,
+        "/repo/.t3team/machine.json": OTHER_POINTER,
+      });
+      expect(
+        yield* ensureNexiMachineFile("/repo").pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provide(Path.layer),
+        ),
+      ).toBe(false);
+      expect(files.get("/repo/.agents/nexi/machine.json")).toBe(MACHINE_POINTER);
+      expect(files.get("/repo/.nexi/machine.json")).toBe(OTHER_POINTER);
+      expect(files.get("/repo/.t3team/machine.json")).toBe(OTHER_POINTER);
+    }),
 );
 
 it.effect("copies machine.json into an existing .agents/nexi dir and is a no-op on a re-run", () =>

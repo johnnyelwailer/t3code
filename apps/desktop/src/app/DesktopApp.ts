@@ -248,10 +248,9 @@ const bootstrap = Effect.gen(function* () {
         shouldUseDarkColors,
         createWindow: (options) =>
           runPromise(
-            electronWindow.create(
-              options as Parameters<(typeof electronWindow)["create"]>[0],
-              { auxiliary: true },
-            ),
+            electronWindow.create(options as Parameters<(typeof electronWindow)["create"]>[0], {
+              auxiliary: true,
+            }),
           ).then((created) => {
             created.once("ready-to-show", () => {
               if (!created.isDestroyed()) created.show();

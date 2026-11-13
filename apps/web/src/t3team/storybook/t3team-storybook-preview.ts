@@ -15,12 +15,16 @@ import "~/t3team/storybook/t3team-storybook-canvas.css";
  */
 const storyIsDark = (context: {
   readonly globals?: Record<string, unknown>;
-  readonly parameters?: { readonly theme?: unknown; readonly globals?: { readonly theme?: unknown } };
+  readonly parameters?: {
+    readonly theme?: unknown;
+    readonly globals?: { readonly theme?: unknown };
+  };
   readonly name?: string;
   readonly story?: string;
   readonly id?: string;
 }): boolean => {
-  const globalTheme = context.globals?.theme ?? context.parameters?.globals?.theme ?? context.parameters?.theme;
+  const globalTheme =
+    context.globals?.theme ?? context.parameters?.globals?.theme ?? context.parameters?.theme;
   if (globalTheme === "dark") return true;
   if (globalTheme === "light") return false;
   const name = `${context.name ?? ""} ${context.story ?? ""} ${context.id ?? ""}`;
@@ -44,7 +48,11 @@ const themeDecorator: Decorator = (Story, context) => {
   };
   return createElement(
     "div",
-    { className: isDark ? "dark h-full min-h-full" : "h-full min-h-full", style, "data-story-theme": isDark ? "dark" : "light" },
+    {
+      className: isDark ? "dark h-full min-h-full" : "h-full min-h-full",
+      style,
+      "data-story-theme": isDark ? "dark" : "light",
+    },
     createElement(Story),
   );
 };

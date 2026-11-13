@@ -134,9 +134,7 @@ describe("DesktopEnvironment isolated instance", () => {
       Effect.gen(function* () {
         const environment = yield* withBranding(isolated, {}, platform);
         const appData =
-          platform === "win32"
-            ? "/Users/alice/AppData/Roaming"
-            : "/Users/alice/.config";
+          platform === "win32" ? "/Users/alice/AppData/Roaming" : "/Users/alice/.config";
         const home = `${appData}/nexi-work-nightly-dogfood`;
         assert.isTrue(environment.isolatedInstance);
         assert.equal(environment.baseDir, home);

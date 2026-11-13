@@ -149,7 +149,7 @@ describe("inspectRemoteProjectStateOnDefaultBranch", () => {
     }).pipe(Effect.provide(Layer.mergeAll(vcs, sourceControl, NodeServices.layer)));
   });
 
-    it.effect("a committed reference manifest alone is not project state", () => {
+  it.effect("a committed reference manifest alone is not project state", () => {
     const ok = (stdout: string) => ({
       exitCode: 0 as never,
       stdout,
