@@ -258,6 +258,10 @@ export {
 } from "./t3team-sdk.workflowBoundNames.ts";
 export { WORKFLOW_AUTHOR_REFERENCE } from "./t3team-sdk.workflowReference.generated.ts";
 export {
+  WORKFLOW_AUTHOR_ESSENTIALS,
+  WORKFLOW_AUTHOR_TEMPLATE,
+} from "./t3team-sdk.workflowEssentials.ts";
+export {
   collectWorkflowModelLiterals,
   type WorkflowModelLiteral,
 } from "./t3team-sdk.modelLiteralScan.ts";

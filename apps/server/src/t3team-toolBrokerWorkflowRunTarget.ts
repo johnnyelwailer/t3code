@@ -21,6 +21,7 @@ export const resolveRunTarget = Effect.fn("resolveRunTarget")(function* (input: 
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
   readonly workspaceRoot: string;
+  readonly checkoutRoot?: string | undefined;
   readonly runId: string;
   readonly threadId: ThreadId;
   readonly projectId: ProjectId;
@@ -51,6 +52,7 @@ export const resolveRunTarget = Effect.fn("resolveRunTarget")(function* (input: 
             fileSystem,
             path,
             workspaceRoot,
+            checkoutRoot: input.checkoutRoot,
             runId,
             workflowPath,
             providers: input.providers,

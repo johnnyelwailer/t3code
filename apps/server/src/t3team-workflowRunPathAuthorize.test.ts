@@ -106,6 +106,7 @@ const registerPack = (input: {
 
 const authorize = Effect.fn("authorize")(function* (input: {
   readonly workspaceRoot: string;
+  readonly checkoutRoot?: string;
   readonly workflowPath?: string;
   readonly source?: string;
   readonly runId?: string;
@@ -116,6 +117,7 @@ const authorize = Effect.fn("authorize")(function* (input: {
     fileSystem,
     path,
     workspaceRoot: input.workspaceRoot,
+    checkoutRoot: input.checkoutRoot,
     runId: input.runId ?? "run-1",
     args: {
       ...(input.workflowPath === undefined ? {} : { workflowPath: input.workflowPath }),
@@ -416,17 +418,74 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
     );
   });
 
-  it("still refuses a path outside the workspace with the workspace-root message", async () => {
+  // Live incident: a thread working in its own worktree wrote its workflow there, was told it
+  // "resolves outside" the project root, and moved the file into an unrelated folder.
+  it("runs a workflow from the thread's own worktree, relative to it, snapshotted into the project", async () => {
+    await run(
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
+        const checkoutRoot = yield* makeTempDir("t3team-run-auth-wt-");
+        yield* fileSystem.makeDirectory(path.join(checkoutRoot, "flows"), { recursive: true });
+        yield* fileSystem.writeFileString(
+          path.join(checkoutRoot, "flows", "probe.workflow.ts"),
+          WORKFLOW_SOURCE,
+        );
+
+        const result = yield* authorize({
+          workspaceRoot,
+          checkoutRoot,
+          runId: "run-wt",
+          workflowPath: "flows/probe.workflow.ts",
+        });
+        expect(result._tag).toBe("Success");
+        if (result._tag === "Success") {
+          expect(result.success).toBe(
+            path.join(workspaceRoot, ".t3team-runs", "run-wt", "workflow.ts"),
+          );
+        }
+      }),
+    );
+  });
+
+  it("falls back to the project root for a relative path that only exists there", async () => {
+    await run(
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
+        const checkoutRoot = yield* makeTempDir("t3team-run-auth-wt-");
+        yield* fileSystem.writeFileString(
+          path.join(workspaceRoot, "root.workflow.ts"),
+          WORKFLOW_SOURCE,
+        );
+
+        const result = yield* authorize({
+          workspaceRoot,
+          checkoutRoot,
+          workflowPath: "root.workflow.ts",
+        });
+        expect(result._tag).toBe("Success");
+      }),
+    );
+  });
+
+  it("refuses a path outside every root and names the roots and the intent alternative", async () => {
     await run(
       Effect.gen(function* () {
         const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
+        const checkoutRoot = yield* makeTempDir("t3team-run-auth-wt-");
         const refused = yield* authorize({
           workspaceRoot,
+          checkoutRoot,
           workflowPath: "../outside.workflow.ts",
         });
         expect(refused._tag).toBe("Failure");
         if (refused._tag === "Failure") {
-          expect(refused.failure).toContain("resolves outside");
+          expect(refused.failure).toContain(`'${checkoutRoot}'`);
+          expect(refused.failure).toContain(`'${workspaceRoot}'`);
+          expect(refused.failure).toContain("omit workflowPath and pass intent");
         }
       }),
     );

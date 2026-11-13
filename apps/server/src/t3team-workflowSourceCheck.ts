@@ -89,16 +89,17 @@ export function checkWorkflowSourceForValidate(input: {
   const workflowPath = "<inline>";
   const result = checkWorkflowSource({ ...input, absolutePath: workflowPath });
   if (result.ok) return result.audited;
+  // Errors first: they are the fix list, and the meta/shape echo after them can be long.
   return {
     ok: false,
-    workflowPath,
-    ...(result.audited?.meta === undefined ? {} : { meta: result.audited.meta }),
-    ...(result.audited?.shape === undefined ? {} : { shape: result.audited.shape }),
     errors: result.findings.map((item) => ({
       path: workflowPath,
       phase: item.phase,
       message: item.message,
     })),
+    workflowPath,
+    ...(result.audited?.meta === undefined ? {} : { meta: result.audited.meta }),
+    ...(result.audited?.shape === undefined ? {} : { shape: result.audited.shape }),
   };
 }
 
