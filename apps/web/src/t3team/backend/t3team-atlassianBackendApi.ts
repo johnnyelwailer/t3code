@@ -43,6 +43,10 @@ export function createAtlassianBackendApi(httpBaseUrl: string): AtlassianBackend
       });
     },
 
+    async getTempoStatus(): Promise<{ configured: boolean }> {
+      return post<object, { configured: boolean }>("/api/t3team/tempo/status", {});
+    },
+
     async connectBasic(
       input: AtlassianBasicConnectInput,
     ): Promise<ReadonlyArray<IntegrationAccount>> {

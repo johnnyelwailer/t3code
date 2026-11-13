@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { T3TeamPackagedEnvError, t3teamFillPackagedAtlassianEnv } from "./t3team-packaged-env.ts";
+import { t3teamFillPackagedAtlassianEnv } from "./t3team-packaged-env.ts";
 
 describe("t3teamFillPackagedAtlassianEnv", () => {
   it("fills a missing client secret from the build environment", () => {
@@ -31,14 +31,10 @@ describe("t3teamFillPackagedAtlassianEnv", () => {
     expect(result.text).toBe("T3TEAM_ATLASSIAN_CLIENT_ID=id\nT3TEAM_ATLASSIAN_CLIENT_SECRET=s\n");
   });
 
-  it("refuses a client id without a secret, without echoing values", () => {
-    try {
-      t3teamFillPackagedAtlassianEnv("T3TEAM_ATLASSIAN_CLIENT_ID=visible-id", {});
-      expect.unreachable();
-    } catch (error) {
-      expect(error).toBeInstanceOf(T3TeamPackagedEnvError);
-      expect(String(error)).not.toContain("visible-id");
-    }
+  it("allows a client id without a secret (hive #1055 ships ids only)", () => {
+    const result = t3teamFillPackagedAtlassianEnv("T3TEAM_ATLASSIAN_CLIENT_ID=visible-id", {});
+    expect(result.text).toBe("T3TEAM_ATLASSIAN_CLIENT_ID=visible-id");
+    expect(result.filledKeys).toEqual([]);
   });
 
   it("leaves a build without Atlassian config alone", () => {

@@ -1,15 +1,9 @@
 import * as Data from "effect/Data";
 
 /**
- * Fills the Atlassian OAuth keys into the desktop app's packaged `Resources/.env`.
- *
- * The packaged `.env` used to be a verbatim copy of whichever repo `.env` the build found. When
- * that file lacked the client secret (CI builds pass it as a build env var/secret instead), the
- * app only had a secret when it happened to be launched from a shell that exported one. Without
- * it every token refresh was refused and Jira asked for a new sign-in after each restart.
- *
- * This only fills keys the file does not already define (the file wins), never logs values, and
- * refuses a distribution build that ships a client id without its secret.
+ * Fills the Atlassian OAuth keys into the desktop app's packaged `Resources/.env`; the file wins,
+ * and values are never logged. A client id without its secret no longer fails the build: the
+ * release ships ids only, Jira sign-in moves to the broker, and Tempo uses the personal API token.
  */
 const ALIASES = {
   T3TEAM_ATLASSIAN_CLIENT_ID: [
@@ -105,12 +99,9 @@ export function t3teamFillPackagedAtlassianEnv(
   const hasClientId = firstValue(finalValues, ALIASES.T3TEAM_ATLASSIAN_CLIENT_ID) !== "";
   const hasSecret = firstValue(finalValues, ALIASES.T3TEAM_ATLASSIAN_CLIENT_SECRET) !== "";
   if (hasClientId && !hasSecret) {
-    throw new T3TeamPackagedEnvError({
-      message:
-        "The packaged desktop .env has an Atlassian client id but no client secret. Set " +
-        "T3TEAM_ATLASSIAN_CLIENT_SECRET (or T3WORK_ATLASSIAN_CLIENT_SECRET) in the build " +
-        "environment or the repo .env; without it Jira sign-in is lost on every restart.",
-    });
+    process.emitWarning(
+      "Packaged .env has an Atlassian client id but no client secret: Jira session refresh is unavailable until the broker lands (hive #1055).",
+    );
   }
   return { text, filledKeys };
 }

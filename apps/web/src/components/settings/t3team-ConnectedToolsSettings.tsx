@@ -6,6 +6,7 @@ import { useFeatureFlag } from "../../t3team/t3team-useFeatureFlag";
 import { useToolAuthActions, useToolAuthStates } from "../../state/t3team-toolauth";
 import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
 import { JiraConnectionSettings } from "./t3team-JiraConnectionSettings";
+import { TempoTokenSettings } from "./t3team-TempoTokenSettings";
 import { ToolAuthCard } from "./t3team-ToolAuthCard";
 import { TOOL_AUTH_TOOLS, type ToolAuthToolMeta } from "./t3team-toolAuthTools";
 
@@ -40,6 +41,7 @@ export function ConnectedToolsSettings() {
         </SettingsSection>
       ) : null}
       {jiraEnabled ? <JiraConnectionSettings /> : null}
+      {jiraEnabled ? <TempoTokenSettings /> : null}
     </SettingsPageContainer>
   );
 }
