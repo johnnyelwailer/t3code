@@ -1,23 +1,17 @@
 /**
- * Compile t3team-installer.nsh the way electron-builder does: once as the
- * installer and once with BUILD_UNINSTALLER, both with warnings as errors
- * (`makensis -WX`). An unused un.StrStr is warning 6010 and failed the
- * rc.22 Windows installer (hive/nx-nexi run 414188077).
- *
- * The installer identity is unchanged: no /D, APP_ID stays ch.nexplore.nexi.work.
- * When makensis is missing, the static check still runs; set
- * T3TEAM_NSIS_REQUIRE_MAKENSIS=1 (fork CI) to require a real compile.
+ * Compile t3team-installer.nsh with makensis -WX. Unused un.StrStr is warning 6010.
+ * No /D; APP_ID stays ch.nexplore.nexi.work.
  */
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import * as NodeAssert from "node:assert/strict";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeTest from "node:test";
+import * as NodeURL from "node:url";
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const NSH_PATH = join(SCRIPT_DIR, "..", "resources", "t3team-installer.nsh");
+const SCRIPT_DIR = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
+const NSH_PATH = NodePath.join(SCRIPT_DIR, "..", "resources", "t3team-installer.nsh");
 const NEXI_APP_ID = "ch.nexplore.nexi.work";
 const REQUIRE_MAKENSIS = process.env.T3TEAM_NSIS_REQUIRE_MAKENSIS === "1";
 
@@ -76,7 +70,7 @@ export function unusedUninstallStrFuncDeclarations(source) {
 
 function findMakensis() {
   const candidate = process.env.MAKENSIS || "makensis";
-  const result = spawnSync(candidate, ["-VERSION"], { encoding: "utf8" });
+  const result = NodeChildProcess.spawnSync(candidate, ["-VERSION"], { encoding: "utf8" });
   if (result.error?.code === "ENOENT") return null;
   return candidate;
 }
@@ -149,17 +143,20 @@ export function compileInstallerInclude(nshPath, uninstaller) {
   if (!makensis) {
     return { skipped: true, reason: "makensis not on PATH" };
   }
-  const dir = mkdtempSync(join(tmpdir(), "t3team-nsis-"));
-  const outFile = join(dir, uninstaller ? "uninstaller-pass.exe" : "installer-pass.exe");
-  const scriptPath = join(dir, uninstaller ? "uninstaller.nsi" : "installer.nsi");
-  writeFileSync(scriptPath, harnessSource({ uninstaller, outFile, nshDir: dirname(nshPath) }));
+  const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-nsis-"));
+  const outFile = NodePath.join(dir, uninstaller ? "uninstaller-pass.exe" : "installer-pass.exe");
+  const scriptPath = NodePath.join(dir, uninstaller ? "uninstaller.nsi" : "installer.nsi");
+  NodeFS.writeFileSync(
+    scriptPath,
+    harnessSource({ uninstaller, outFile, nshDir: NodePath.dirname(nshPath) }),
+  );
   const args = ["-WX", "-V2", scriptPath];
-  assert.equal(
+  NodeAssert.equal(
     args.some((arg) => arg.toUpperCase().startsWith("/D")),
     false,
     "the compile harness must never pass NSIS /D",
   );
-  const result = spawnSync(makensis, args, { encoding: "utf8", cwd: dir });
+  const result = NodeChildProcess.spawnSync(makensis, args, { encoding: "utf8", cwd: dir });
   return {
     skipped: false,
     dir,
@@ -176,16 +173,19 @@ function formatCompileOutput(result) {
   return [result.stdout, result.stderr, result.error?.message].filter(Boolean).join("\n");
 }
 
-test("the uninstaller does not declare an unused Un* StrFunc macro (rc.22 warning 6010)", () => {
-  assert.ok(existsSync(NSH_PATH), `missing ${NSH_PATH}`);
-  const source = readFileSync(NSH_PATH, "utf8");
-  const { unused, declared, missingBlock } = unusedUninstallStrFuncDeclarations(source);
-  assert.equal(missingBlock, false, "expected a BUILD_UNINSTALLER block");
-  assert.deepEqual(declared, ["UnStrRep"]);
-  assert.deepEqual(unused, []);
-});
+NodeTest.test(
+  "the uninstaller does not declare an unused Un* StrFunc macro (rc.22 warning 6010)",
+  () => {
+    NodeAssert.ok(NodeFS.existsSync(NSH_PATH), `missing ${NSH_PATH}`);
+    const source = NodeFS.readFileSync(NSH_PATH, "utf8");
+    const { unused, declared, missingBlock } = unusedUninstallStrFuncDeclarations(source);
+    NodeAssert.equal(missingBlock, false, "expected a BUILD_UNINSTALLER block");
+    NodeAssert.deepEqual(declared, ["UnStrRep"]);
+    NodeAssert.deepEqual(unused, []);
+  },
+);
 
-test("the static check fails on the rc.22 unused un.StrStr declaration", () => {
+NodeTest.test("the static check fails on the rc.22 unused un.StrStr declaration", () => {
   const fixture = `
 !ifdef BUILD_UNINSTALLER
   \${UnStrRep}
@@ -199,22 +199,25 @@ test("the static check fails on the rc.22 unused un.StrStr declaration", () => {
 !macroend
 `;
   const { unused, declared } = unusedUninstallStrFuncDeclarations(fixture);
-  assert.deepEqual(declared, ["UnStrRep", "UnStrStr"]);
-  assert.deepEqual(unused, ["UnStrStr"]);
+  NodeAssert.deepEqual(declared, ["UnStrRep", "UnStrStr"]);
+  NodeAssert.deepEqual(unused, ["UnStrStr"]);
 });
 
-test("the include keeps the isolated Nexi identity and never mentions NSIS /D as a switch", () => {
-  const source = readFileSync(NSH_PATH, "utf8");
-  assert.match(source, /ch\.nexplore\.nexi\.work/);
-  assert.match(source, /Never pass \/D/);
-  assert.match(source, /%LOCALAPPDATA%\\Programs\\nexi-work/);
-});
+NodeTest.test(
+  "the include keeps the isolated Nexi identity and never mentions NSIS /D as a switch",
+  () => {
+    const source = NodeFS.readFileSync(NSH_PATH, "utf8");
+    NodeAssert.match(source, /ch\.nexplore\.nexi\.work/);
+    NodeAssert.match(source, /Never pass \/D/);
+    NodeAssert.match(source, /%LOCALAPPDATA%\\Programs\\nexi-work/);
+  },
+);
 
-test("makensis -WX compiles the installer and uninstaller passes", (t) => {
+NodeTest.test("makensis -WX compiles the installer and uninstaller passes", (t) => {
   const makensis = findMakensis();
   if (!makensis) {
     if (REQUIRE_MAKENSIS) {
-      assert.fail("makensis is required (T3TEAM_NSIS_REQUIRE_MAKENSIS=1) but was not found");
+      NodeAssert.fail("makensis is required (T3TEAM_NSIS_REQUIRE_MAKENSIS=1) but was not found");
     }
     t.skip("makensis not on PATH");
     return;
@@ -227,13 +230,25 @@ test("makensis -WX compiles the installer and uninstaller passes", (t) => {
       const result = compileInstallerInclude(NSH_PATH, uninstaller);
       if (result.dir) dirs.push(result.dir);
       const output = formatCompileOutput(result);
-      assert.equal(result.status, 0, `${label} pass failed (exit ${result.status}):\n${output}`);
-      assert.doesNotMatch(output, /warning 6010/, `${label} pass emitted warning 6010:\n${output}`);
-      assert.equal(existsSync(result.outFile), true, `${label} did not write ${result.outFile}`);
+      NodeAssert.equal(
+        result.status,
+        0,
+        `${label} pass failed (exit ${result.status}):\n${output}`,
+      );
+      NodeAssert.doesNotMatch(
+        output,
+        /warning 6010/,
+        `${label} pass emitted warning 6010:\n${output}`,
+      );
+      NodeAssert.equal(
+        NodeFS.existsSync(result.outFile),
+        true,
+        `${label} did not write ${result.outFile}`,
+      );
     }
   } finally {
     for (const dir of dirs) {
-      rmSync(dir, { recursive: true, force: true });
+      NodeFS.rmSync(dir, { recursive: true, force: true });
     }
   }
 });
