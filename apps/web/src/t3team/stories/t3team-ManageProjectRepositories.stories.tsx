@@ -185,6 +185,7 @@ export const MakeMainRetry: Story = {
 };
 
 export const SeveralRepositoriesDark: Story = {
+  globals: { theme: "dark" },
   args: {
     projectTitle: "Project Alpha",
     linkedUrls: [ALPHA, BETA, GAMMA],
@@ -194,6 +195,7 @@ export const SeveralRepositoriesDark: Story = {
 };
 
 export const NoMainExistingProjectDark: Story = {
+  globals: { theme: "dark" },
   args: {
     projectTitle: "Project Alpha",
     linkedUrls: [ALPHA, BETA],
