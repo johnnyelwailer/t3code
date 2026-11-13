@@ -216,6 +216,9 @@ import {
 import {
   CloudSessionCancelInputSchema,
   CloudSessionCreateInputSchema,
+  CloudSessionDeleteInfoSchema,
+  CloudSessionDeleteInputSchema,
+  CloudSessionDeleteResultSchema,
   CloudSessionFailedError,
   CloudSessionListResultSchema,
   CloudSessionSchema,
@@ -234,6 +237,7 @@ import {
 import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationGetWorkflowScriptError,
+  OrchestrationV2GetNativeChildWorkError,
   OrchestrationV2StopWorkflowError,
   OrchestrationV2ForceStopThreadError,
   OrchestrationV2DispatchCommandError,
@@ -460,11 +464,6 @@ import {
   T3TeamStopThreadCascadeResult,
 } from "./t3team-threadStopCascade.ts";
 import {
-  T3TeamContextBindingError,
-  T3TeamContextBindingRecordInput,
-  T3TeamContextBindingRecordResult,
-} from "./t3team-contextBinding.ts";
-import {
   T3TeamThreadHandoffCapture,
   T3TeamThreadHandoffError,
   T3TeamThreadHandoffPrepareInput,
@@ -642,6 +641,8 @@ export const WS_METHODS = {
   cloudSessionList: "cloud.session.list",
   cloudSessionCreate: "cloud.session.create",
   cloudSessionCancel: "cloud.session.cancel",
+  cloudSessionDelete: "cloud.session.delete",
+  cloudSessionDeleteInfo: "cloud.session.deleteInfo",
   projectMachineDiscover: "cloud.projectMachine.discover",
   projectMachineSetSource: "cloud.projectMachine.setSource",
 
@@ -727,8 +728,6 @@ export const WS_METHODS = {
   // t3team: "Move to" another machine (capability-gated by `capabilities.t3team.threadHandoff`).
   t3teamThreadHandoffPrepare: "t3team.threadHandoff.prepare",
   t3teamThreadHandoffRecord: "t3team.threadHandoff.record",
-  // t3team: the view a chat thread was started from (flag `CONTEXT_CHAT_TAB`).
-  t3teamContextBindingRecord: "t3team.contextBinding.record",
 } as const;
 
 const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -1164,6 +1163,18 @@ const WsCloudSessionCreateRpc = Rpc.make(WS_METHODS.cloudSessionCreate, {
 const WsCloudSessionCancelRpc = Rpc.make(WS_METHODS.cloudSessionCancel, {
   payload: CloudSessionCancelInputSchema,
   success: Schema.Void,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionDeleteRpc = Rpc.make(WS_METHODS.cloudSessionDelete, {
+  payload: CloudSessionDeleteInputSchema,
+  success: CloudSessionDeleteResultSchema,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionDeleteInfoRpc = Rpc.make(WS_METHODS.cloudSessionDeleteInfo, {
+  payload: CloudSessionDeleteInputSchema,
+  success: CloudSessionDeleteInfoSchema,
   error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
 });
 
@@ -2008,6 +2019,15 @@ const WsOrchestrationV2GetWorkflowScriptRpc = Rpc.make(
   },
 );
 
+const WsOrchestrationV2GetNativeChildWorkRpc = Rpc.make(
+  ORCHESTRATION_V2_WS_METHODS.getNativeChildWork,
+  {
+    payload: OrchestrationV2RpcSchemas.getNativeChildWork.input,
+    success: OrchestrationV2RpcSchemas.getNativeChildWork.output,
+    error: Schema.Union([OrchestrationV2GetNativeChildWorkError, EnvironmentAuthorizationError]),
+  },
+);
+
 const WsOrchestrationV2GetTurnItemRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.getTurnItem, {
   payload: OrchestrationV2RpcSchemas.getTurnItem.input,
   success: OrchestrationV2RpcSchemas.getTurnItem.output,
@@ -2058,13 +2078,6 @@ const WsT3TeamThreadHandoffRecordRpc = Rpc.make(WS_METHODS.t3teamThreadHandoffRe
   payload: T3TeamThreadHandoffRecordInput,
   success: T3TeamThreadHandoffRecordResult,
   error: Schema.Union([T3TeamThreadHandoffError, EnvironmentAuthorizationError]),
-});
-
-// t3team: context binding — which view a thread was started from, a thread fact.
-const WsT3TeamContextBindingRecordRpc = Rpc.make(WS_METHODS.t3teamContextBindingRecord, {
-  payload: T3TeamContextBindingRecordInput,
-  success: T3TeamContextBindingRecordResult,
-  error: Schema.Union([T3TeamContextBindingError, EnvironmentAuthorizationError]),
 });
 
 // t3team: fork thread facts side stream (snapshot, then per-thread changes).
@@ -2365,6 +2378,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsCloudSessionListRpc,
   WsCloudSessionCreateRpc,
   WsCloudSessionCancelRpc,
+  WsCloudSessionDeleteRpc,
+  WsCloudSessionDeleteInfoRpc,
   WsProjectMachineDiscoverRpc,
   WsProjectMachineSetSourceRpc,
   WsPullRequestsListRpc,
@@ -2496,6 +2511,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeResourceTelemetryRpc,
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,
+  WsOrchestrationV2GetNativeChildWorkRpc,
   WsOrchestrationV2StopWorkflowRpc,
   WsOrchestrationV2ForceStopThreadRpc,
   WsOrchestrationV2GetTurnItemRpc,
@@ -2521,5 +2537,4 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeCommandOutputRpc,
   WsT3TeamThreadHandoffPrepareRpc,
   WsT3TeamThreadHandoffRecordRpc,
-  WsT3TeamContextBindingRecordRpc,
 ).middleware(RpcScopeAuthorization);

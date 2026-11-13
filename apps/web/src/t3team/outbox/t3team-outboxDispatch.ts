@@ -77,6 +77,12 @@ function failureText(result: AtomCommandResult<unknown, unknown>): string {
   return error instanceof Error ? error.message : "The message could not be sent.";
 }
 
+/** The squashed failure as an object, so tag-based retry checks see the original error. */
+function failureError(result: AtomCommandResult<unknown, unknown>): unknown {
+  if (result._tag !== "Failure") return new Error("The message could not be sent.");
+  return squashAtomCommandFailure(result);
+}
+
 async function dispatchTurnStart(
   entry: T3TeamOutboxEntry,
   deps: T3TeamOutboxDispatchDeps,
@@ -113,7 +119,8 @@ async function dispatchTurnStart(
   });
   if (result._tag === "Success") return { outcome: "delivered" };
   const error = failureText(result);
-  if (isAtomCommandInterrupted(result) || !isTransientT3TeamOutboxError(error)) {
+  const dispatchError = failureError(result);
+  if (isAtomCommandInterrupted(result) || !isTransientT3TeamOutboxError(dispatchError)) {
     return { outcome: "failed", error };
   }
   return { outcome: "retry" };

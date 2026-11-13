@@ -63,6 +63,14 @@
       "types": "./src/t3team-runPromptCopy.ts",
       "default": "./src/t3team-runPromptCopy.ts"
     },
+    "./t3team-turnReports": {
+      "types": "./src/t3team-turnReports.ts",
+      "default": "./src/t3team-turnReports.ts"
+    },
+    "./t3team-environmentFilter": {
+      "types": "./src/t3team-environmentFilter.ts",
+      "default": "./src/t3team-environmentFilter.ts"
+    },
     "./t3team-credentialSourceOptions": {
       "types": "./src/t3team-credentialSourceOptions.ts",
       "default": "./src/t3team-credentialSourceOptions.ts"
@@ -86,6 +94,10 @@
     "./state/local-thread-overrides": {
       "types": "./src/state/t3team-localThreadOverrides.ts",
       "default": "./src/state/t3team-localThreadOverrides.ts"
+    },
+    "./state/thread-answers": {
+      "types": "./src/state/t3team-threadAnswers.ts",
+      "default": "./src/state/t3team-threadAnswers.ts"
     },
     "./state/cloud-sessions": {
       "types": "./src/state/t3team-cloudSessions.ts",
@@ -274,6 +286,10 @@
     "./state/runtime": {
       "types": "./src/state/runtime.ts",
       "default": "./src/state/runtime.ts"
+    },
+    "./state/t3team-cloudCheckoutAdoption": {
+      "types": "./src/state/t3team-cloudCheckoutAdoption.ts",
+      "default": "./src/state/t3team-cloudCheckoutAdoption.ts"
     },
     "./state/usage": {
       "types": "./src/state/usage.ts",

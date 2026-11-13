@@ -17,8 +17,10 @@ import { CLI_RELEASE_BASE_URL_ENV } from "@t3tools/shared/cliRelease";
 import * as ProcessRunner from "../processRunner.ts";
 import {
   ensurePinnedRuntimeInstalled,
+  launcherOwnsVersionsDir,
   pinnedRuntimeCommand,
   pinnedRuntimePaths,
+  pinnedRuntimeVersionsDir,
   PinnedRuntimeInstallError,
 } from "./pinnedRuntime.ts";
 import {
@@ -31,13 +33,11 @@ import {
   serviceStateHasPendingUpdate,
   type ServiceState,
 } from "./serviceProtocol.ts";
+import {
+  type BootServiceIdentity,
+  resolveBootServiceIdentity,
+} from "./t3team-bootServiceIdentity.ts";
 
-const BOOT_SERVICE_NAME = "t3code";
-export const BOOT_SERVICE_UNIT_FILE = `${BOOT_SERVICE_NAME}.service`;
-// `.service` suffix keeps the label distinct from the desktop app's bundle id
-// (com.t3tools.t3code), so launchd and TCC records never collide.
-export const BOOT_SERVICE_LAUNCHD_LABEL = "com.t3tools.t3code.service";
-export const BOOT_SERVICE_PLIST_FILE = `${BOOT_SERVICE_LAUNCHD_LABEL}.plist`;
 const BOOT_SERVICE_UNIT_ENV = "T3_BOOT_SERVICE_UNIT";
 export const BOOT_SERVICE_LOG_FILE = "boot-service.log";
 
@@ -89,11 +89,20 @@ export interface BootServicePlan {
 }
 
 /** Service units cannot rely on the user's shell or PATH. */
-export function renderBootServiceUnit(plan: BootServicePlan): string {
+export function renderBootServiceUnit(
+  plan: BootServicePlan,
+  identity: BootServiceIdentity = resolveBootServiceIdentity(),
+): string {
   // The user manager has no reliable network-online target; server networking retries itself.
+  const identityEnv = identity.appId
+    ? [
+        `Environment=T3CODE_DESKTOP_APP_ID=${quoteSystemdValue(identity.appId)}`,
+        `Environment=T3_BOOT_SERVICE_IDENTITY=${quoteSystemdValue(identity.appId)}`,
+      ]
+    : [];
   return [
     "[Unit]",
-    "Description=T3 Code server",
+    `Description=${identity.description}`,
     "StartLimitIntervalSec=300",
     "StartLimitBurst=5",
     "",
@@ -101,7 +110,8 @@ export function renderBootServiceUnit(plan: BootServicePlan): string {
     "Type=simple",
     "WorkingDirectory=%h",
     `Environment=T3CODE_HOME=${quoteSystemdValue(plan.baseDir)}`,
-    `Environment=${BOOT_SERVICE_UNIT_ENV}=${BOOT_SERVICE_UNIT_FILE}`,
+    `Environment=${BOOT_SERVICE_UNIT_ENV}=${identity.unitFile}`,
+    ...identityEnv,
     `ExecStart=${plan.program.map(quoteSystemdValue).join(" ")}`,
     // Let the launcher mark an explicit stop before it signals the server.
     // systemd still SIGKILLs the whole cgroup if graceful shutdown times out.
@@ -138,6 +148,7 @@ function escapeXmlText(value: string): string {
 export function renderBootServicePlist(
   plan: BootServicePlan,
   options: { readonly homeDir: string; readonly environmentPath: string },
+  identity: BootServiceIdentity = resolveBootServiceIdentity(),
 ): string {
   // Allow 90s stops for update handoffs.
   // Interactive avoids background throttling.
@@ -148,7 +159,7 @@ export function renderBootServicePlist(
     `<plist version="1.0">`,
     `<dict>`,
     `  <key>Label</key>`,
-    `  <string>${BOOT_SERVICE_LAUNCHD_LABEL}</string>`,
+    `  <string>${identity.launchdLabel}</string>`,
     `  <key>ProgramArguments</key>`,
     `  <array>`,
     ...plan.program.map((argument) => `    <string>${escapeXmlText(argument)}</string>`),
@@ -160,7 +171,15 @@ export function renderBootServicePlist(
     `    <key>T3CODE_HOME</key>`,
     `    <string>${escapeXmlText(plan.baseDir)}</string>`,
     `    <key>${BOOT_SERVICE_UNIT_ENV}</key>`,
-    `    <string>${BOOT_SERVICE_PLIST_FILE}</string>`,
+    `    <string>${identity.plistFile}</string>`,
+    ...(identity.appId
+      ? [
+          `    <key>T3CODE_DESKTOP_APP_ID</key>`,
+          `    <string>${escapeXmlText(identity.appId)}</string>`,
+          `    <key>T3_BOOT_SERVICE_IDENTITY</key>`,
+          `    <string>${escapeXmlText(identity.appId)}</string>`,
+        ]
+      : []),
     `  </dict>`,
     `  <key>WorkingDirectory</key>`,
     `  <string>${escapeXmlText(options.homeDir)}</string>`,
@@ -212,14 +231,10 @@ export interface BootServiceManager {
 function systemdManager(input: {
   readonly path: Path.Path;
   readonly homeDir: string;
+  readonly identity: BootServiceIdentity;
 }): BootServiceManager {
-  const unitPath = input.path.join(
-    input.homeDir,
-    ".config",
-    "systemd",
-    "user",
-    BOOT_SERVICE_UNIT_FILE,
-  );
+  const unitFile = input.identity.unitFile;
+  const unitPath = input.path.join(input.homeDir, ".config", "systemd", "user", unitFile);
   const prepareActivation = [
     {
       step: "reloading systemd user units",
@@ -229,18 +244,18 @@ function systemdManager(input: {
     {
       step: "enabling the service",
       command: "systemctl",
-      args: ["--user", "enable", BOOT_SERVICE_UNIT_FILE],
+      args: ["--user", "enable", unitFile],
     },
   ];
   return {
     kind: "systemd",
     unitPath,
-    render: renderBootServiceUnit,
+    render: (plan) => renderBootServiceUnit(plan, input.identity),
     stop: [
       {
         step: "stopping the installed service",
         command: "systemctl",
-        args: ["--user", "stop", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "stop", unitFile],
         timeout: STOP_STEP_TIMEOUT,
       },
     ],
@@ -249,14 +264,14 @@ function systemdManager(input: {
       {
         step: "starting the service",
         command: "systemctl",
-        args: ["--user", "restart", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "restart", unitFile],
       },
     ],
     restart: [
       {
         step: "restarting the service after a failed update",
         command: "systemctl",
-        args: ["--user", "restart", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "restart", unitFile],
       },
     ],
     handoff: [
@@ -264,14 +279,14 @@ function systemdManager(input: {
       {
         step: "restarting the service",
         command: "systemctl",
-        args: ["--user", "restart", "--no-block", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "restart", "--no-block", unitFile],
       },
     ],
     deactivate: [
       {
         step: "stopping the service",
         command: "systemctl",
-        args: ["--user", "disable", "--now", BOOT_SERVICE_UNIT_FILE],
+        args: ["--user", "disable", "--now", unitFile],
         timeout: STOP_STEP_TIMEOUT,
       },
     ],
@@ -290,24 +305,29 @@ function launchdManager(input: {
   readonly homeDir: string;
   readonly uid: number;
   readonly environmentPath: string;
+  readonly identity: BootServiceIdentity;
 }): BootServiceManager {
   const unitPath = input.path.join(
     input.homeDir,
     "Library",
     "LaunchAgents",
-    BOOT_SERVICE_PLIST_FILE,
+    input.identity.plistFile,
   );
   const domainTarget = `gui/${input.uid}`;
-  const serviceTarget = `${domainTarget}/${BOOT_SERVICE_LAUNCHD_LABEL}`;
+  const serviceTarget = `${domainTarget}/${input.identity.launchdLabel}`;
   // Unloaded jobs may reject bootout/enable. Bootstrap starts RunAtLoad/KeepAlive jobs; kickstart would restart them.
   return {
     kind: "launchd",
     unitPath,
     render: (plan) =>
-      renderBootServicePlist(plan, {
-        homeDir: input.homeDir,
-        environmentPath: input.environmentPath,
-      }),
+      renderBootServicePlist(
+        plan,
+        {
+          homeDir: input.homeDir,
+          environmentPath: input.environmentPath,
+        },
+        input.identity,
+      ),
     // bootout --wait is undocumented but waits through ExitTimeOut, preventing bootstrap EIO races.
     stop: [
       {
@@ -359,12 +379,13 @@ function selectBootServiceManager(input: {
   readonly uid: number | undefined;
   readonly path: Path.Path;
   readonly environmentPath: string;
+  readonly identity: BootServiceIdentity;
 }): BootServiceManager | undefined {
   if (input.homeDir === "") {
     return undefined;
   }
   if (input.platform === "linux") {
-    return systemdManager({ path: input.path, homeDir: input.homeDir });
+    return systemdManager({ path: input.path, homeDir: input.homeDir, identity: input.identity });
   }
   if (input.platform === "darwin" && input.uid !== undefined) {
     return launchdManager({
@@ -372,6 +393,7 @@ function selectBootServiceManager(input: {
       homeDir: input.homeDir,
       uid: input.uid,
       environmentPath: input.environmentPath,
+      identity: input.identity,
     });
   }
   return undefined;
@@ -535,13 +557,16 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   );
   const homeDir = yield* Config.String("HOME").pipe(Config.withDefault(""));
   const installerPath = yield* Config.String("PATH").pipe(Config.withDefault(""));
+  const identity = resolveBootServiceIdentity();
   const runningInsideService =
     (yield* Config.String(BOOT_SERVICE_UNIT_ENV).pipe(Config.withDefault(""))) ===
-    BOOT_SERVICE_UNIT_FILE;
+    identity.unitFile;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const runner = yield* ProcessRunner.ProcessRunner;
   const host = input.host ?? { execPath: hostExecPath };
+  const runtimePaths = pinnedRuntimePaths(path, input.baseDir, input.cliVersion, platform);
+  const versionsDir = pinnedRuntimeVersionsDir(path, input.baseDir);
   const xmlSafeInstallerDirectories = installerPath.split(":").filter(
     (directory) =>
       directory.length > 0 &&
@@ -550,17 +575,23 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
         return code >= 0x20 || code === 0x09 || code === 0x0a || code === 0x0d;
       }),
   );
+  // During an update, the running CLI and a PATH inherited from the service name the runtime
+  // being replaced. The service and its agent shells should find the runtime it starts.
   const environmentPath = Array.from(
-    new Set([
-      ...xmlSafeInstallerDirectories,
-      path.dirname(host.execPath),
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      "/usr/bin",
-      "/bin",
-      "/usr/sbin",
-      "/sbin",
-    ]),
+    new Set(
+      [
+        ...xmlSafeInstallerDirectories,
+        path.dirname(host.execPath),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+      ].map((directory) =>
+        launcherOwnsVersionsDir(path, versionsDir, directory) ? runtimePaths.versionDir : directory,
+      ),
+    ),
   ).join(":");
 
   const detectedManager = selectBootServiceManager({
@@ -569,12 +600,12 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     uid,
     path,
     environmentPath,
+    identity,
   });
   const unitPath = detectedManager?.unitPath ?? "";
   const logPath = path.join(input.logsDir, BOOT_SERVICE_LOG_FILE);
   const statePath = path.join(input.baseDir, "runtime", SERVICE_STATE_FILE);
   const restartPendingPath = path.join(input.baseDir, "runtime", SERVICE_RESTART_PENDING_FILE);
-  const runtimePaths = pinnedRuntimePaths(path, input.baseDir, input.cliVersion, platform);
   const writeDurably = (filePath: string, contents: string) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -678,8 +709,8 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
     if (includeService && succeeded(manager)) {
       const [enabled, active] = yield* Effect.all(
         [
-          probe("systemctl", ["--user", "is-enabled", BOOT_SERVICE_UNIT_FILE]),
-          probe("systemctl", ["--user", "is-active", BOOT_SERVICE_UNIT_FILE]),
+          probe("systemctl", ["--user", "is-enabled", identity.unitFile]),
+          probe("systemctl", ["--user", "is-active", identity.unitFile]),
         ],
         { concurrency: "unbounded" },
       );
@@ -923,16 +954,14 @@ export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
         ? yield* Effect.map(
             Effect.all(
               [
-                probe("systemctl", ["--user", "is-enabled", BOOT_SERVICE_UNIT_FILE]),
-                probe("systemctl", ["--user", "is-active", BOOT_SERVICE_UNIT_FILE]),
+                probe("systemctl", ["--user", "is-enabled", identity.unitFile]),
+                probe("systemctl", ["--user", "is-active", identity.unitFile]),
               ],
               { concurrency: "unbounded" },
             ),
             ([enabled, active]) => succeeded(active) || succeeded(enabled),
           )
-        : succeeded(
-            yield* probe("launchctl", ["print", `gui/${uid}/${BOOT_SERVICE_LAUNCHD_LABEL}`]),
-          );
+        : succeeded(yield* probe("launchctl", ["print", `gui/${uid}/${identity.launchdLabel}`]));
     return yield* Effect.acquireUseRelease(
       // Require every stop before repair when restoring, so the server releases the database.
       // Otherwise stops are best-effort; launchd rejects bootout of an unloaded job.

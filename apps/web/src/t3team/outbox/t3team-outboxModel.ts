@@ -194,12 +194,34 @@ function outboxErrorMessage(error: unknown): string | null {
 }
 
 /**
+ * Tag-based retry decision, mirroring the upstream mobile outbox
+ * (`shouldRetryThreadOutboxDelivery` in apps/mobile's thread-outbox-model):
+ * an in-flight transport failure (a dropped-socket RpcClientError, a
+ * not-yet-ready environment) is transient and retries; a server answer — a
+ * dispatch rejection or an authorization failure — is permanent.
+ */
+const PERMANENT_OUTBOX_ERROR_TAGS = new Set([
+  "OrchestrationDispatchCommandError",
+  "EnvironmentAuthorizationError",
+]);
+const TRANSIENT_OUTBOX_ERROR_TAGS = new Set([
+  "ConnectionTransientError",
+  "RpcClientError",
+  "EnvironmentRpcUnavailableError",
+  "EnvironmentNotRegisteredError",
+]);
+
+/**
  * Whether a failed dispatch is a connectivity failure worth retrying once the
  * environment is back. Anything the server actually answered (validation,
  * invariant rejection) is permanent: the entry is surfaced as failed instead.
  */
 export function isTransientT3TeamOutboxError(error: unknown): boolean {
   if (isEnvironmentTransientError(error)) return true;
+  if (isRecord(error) && typeof error._tag === "string") {
+    if (PERMANENT_OUTBOX_ERROR_TAGS.has(error._tag)) return false;
+    if (TRANSIENT_OUTBOX_ERROR_TAGS.has(error._tag)) return true;
+  }
   const message = outboxErrorMessage(error);
   if (message === null) return false;
   if (isTransportConnectionErrorMessage(message)) return true;

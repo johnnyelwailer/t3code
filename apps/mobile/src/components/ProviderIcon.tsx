@@ -9,7 +9,9 @@ import {
 import { useId, useState } from "react";
 import { resolveOfficialAcpRegistryIconUrl } from "@t3tools/contracts";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
+import { NexploreMark } from "./t3team-NexploreMark";
 import { AppText as Text } from "./ui/AppText";
+import { cn } from "../lib/cn";
 import { getProviderClient } from "@t3tools/client-runtime/provider-clients";
 
 type ProviderIconProps = {
@@ -86,6 +88,9 @@ export function ProviderIcon(props: ProviderIconProps) {
   if (props.provider === "acpRegistry") {
     return <AcpRegistryProviderIcon color={mono} iconUrl={props.iconUrl} size={size} />;
   }
+  if (props.provider === "nexplore") {
+    return <NexploreMark size={size} />;
+  }
 
   if (props.provider === "claudeAgent") {
     return (
@@ -158,7 +163,7 @@ export function ProviderInstanceIcon(props: {
   readonly displayName: string;
   readonly accentColor?: string;
   readonly showBadge?: boolean;
-  readonly surfaceColor: string;
+  readonly surfaceColor?: string;
 }) {
   const accentColor = normalizeProviderAccentColor(props.accentColor);
   return (
@@ -173,14 +178,14 @@ export function ProviderInstanceIcon(props: {
           style={{ position: "absolute", right: -3, bottom: -3, width: 32, alignItems: "flex-end" }}
         >
           <View
-            className={accentColor ? undefined : "bg-card"}
+            className={cn(!accentColor && "bg-card", !props.surfaceColor && "border-screen")}
             style={{
               height: 12,
               minWidth: 12,
               paddingHorizontal: 2,
               borderRadius: 999,
               borderWidth: 1,
-              borderColor: props.surfaceColor,
+              ...(props.surfaceColor ? { borderColor: props.surfaceColor } : {}),
               backgroundColor: accentColor,
               alignItems: "center",
               justifyContent: "center",

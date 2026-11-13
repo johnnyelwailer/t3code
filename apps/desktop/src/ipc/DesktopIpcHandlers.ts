@@ -37,10 +37,11 @@ import {
   getAppBranding,
   getLocalEnvironmentBootstraps,
   getLocalEnvironmentBearerToken,
-  getRelayTelemetryEnabled,
+  installRelayTelemetryEnabled,
   getSystemLocale,
   getWindowFullscreenState,
   openExternal,
+  readMedia,
   openSystemSettings,
   checkSystemPermission,
   pasteAsText,
@@ -78,6 +79,7 @@ import {
   publishVoiceWidget,
   sendVoiceWidgetCommand,
 } from "./methods/t3team-voiceWidget.ts";
+import { openPrivacySecurity } from "./methods/t3team-openPrivacySecurity.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import * as AppActivationIpc from "./methods/appActivation.ts";
 import * as WebLinksIpc from "./methods/webLinks.ts";
@@ -105,7 +107,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handleSync(takeLegacyLocalStorage);
   yield* ipc.handle(completeLegacyLocalStorage);
   yield* ipc.handleSync(getAppBranding);
-  yield* ipc.handleSync(getRelayTelemetryEnabled);
+  yield* installRelayTelemetryEnabled();
   yield* ipc.handleSync(getSystemLocale);
   yield* ipc.handleSync(getWindowFullscreenState);
   yield* ipc.handleSync(getLocalEnvironmentBootstraps);
@@ -164,9 +166,11 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setTheme);
   yield* ipc.handle(showContextMenu);
   yield* ipc.handle(openExternal);
+  yield* ipc.handle(readMedia);
   yield* ipc.handle(receiveProviderAuthCallback);
   yield* ipc.handle(cancelProviderAuthCallback);
   yield* ipc.handle(openSystemSettings);
+  yield* ipc.handle(openPrivacySecurity);
   yield* ipc.handle(checkSystemPermission);
   yield* ipc.handle(pasteAsText);
   yield* ipc.handle(revealWindow);

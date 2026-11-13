@@ -513,7 +513,7 @@ it.effect("launches in a linked environment with the caller's modes, retry-safe"
       const [launched, relaunched] = (yield* Ref.get(seen)).launches;
       // The thread there runs with the caller's own modes here, below the
       // link's full access, and a retry asks for the same thread.
-      expect(launched).toMatchObject({ runtimeMode: "full-access", interactionMode: "plan" });
+      expect(launched).toMatchObject({ runtimeMode: "auto", interactionMode: "plan" });
       expect(relaunched?.threadId).toBe(launched?.threadId);
       expect(retried.structuredContent).toEqual(first.structuredContent);
 

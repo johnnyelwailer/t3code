@@ -16,6 +16,7 @@ import * as Schema from "effect/Schema";
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import { DelegatedTaskPreparation } from "./mcp/t3team-delegatedTaskPreparation.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
+import { ProjectEnrichmentService } from "./project/ProjectEnrichmentService.ts";
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
 import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
@@ -64,7 +65,7 @@ const project: OrchestrationProjectShell = {
   updatedAt: "2026-10-25T00:00:00.000Z",
 };
 
-const services = (projectLookupDies: boolean) =>
+const services = (projectLookupDies: boolean, workspaceHasRemote = true) =>
   Layer.mergeAll(
     NodeServices.layer,
     Layer.mock(GitWorkflowService)({}),
@@ -76,7 +77,15 @@ const services = (projectLookupDies: boolean) =>
       getShell: () =>
         projectLookupDies
           ? Effect.die(new Error("project lookup died"))
-          : Effect.succeed(Option.some(project)),
+          : Effect.succeed(Option.some({ ...project, repositoryIdentity: null })),
+    }),
+    Layer.mock(ProjectEnrichmentService)({
+      readRepositoryIdentity: (workspaceRoot) =>
+        Effect.succeed(
+          workspaceHasRemote && workspaceRoot === project.workspaceRoot
+            ? (project.repositoryIdentity ?? null)
+            : null,
+        ),
     }),
     Layer.mock(T3TeamChildThreadMetadata)({
       upsert: () => Effect.die(new Error("child metadata write died")),
@@ -87,13 +96,17 @@ const services = (projectLookupDies: boolean) =>
     }),
   );
 
-const hook = (placement: DelegateCloudSessions | undefined, projectLookupDies = true) =>
+const hook = (
+  placement: DelegateCloudSessions | undefined,
+  projectLookupDies = true,
+  workspaceHasRemote = true,
+) =>
   T3TeamDelegatedTaskPreparationLive.pipe(
     Layer.provide(
       placement === undefined
-        ? services(projectLookupDies)
+        ? services(projectLookupDies, workspaceHasRemote)
         : Layer.merge(
-            services(projectLookupDies),
+            services(projectLookupDies, workspaceHasRemote),
             Layer.succeed(DelegateCloudSessionPlacement, placement),
           ),
     ),
@@ -145,6 +158,21 @@ describe("T3TeamDelegatedTaskPreparationLive cloudSession wiring", () => {
         assert.strictEqual(refused.code, "orchestration_error");
         assert.match(refused.message, /Could not read the child's project/);
       }).pipe(Effect.provide(hook(sessions)));
+    }),
+  );
+
+  it.effect("a project whose workspace has no readable remote is refused by name", () =>
+    Effect.gen(function* () {
+      const { sessions, starts } = yield* fakeCloudSessions({ sessions: [ready] });
+      yield* Effect.gen(function* () {
+        const preparation = yield* DelegatedTaskPreparation;
+        const refused = yield* Effect.flip(
+          preparation.prepare(prepareInput({ cloudSession: "new" })),
+        );
+        assert.strictEqual(refused.code, "invalid_request");
+        assert.include(refused.message, `project "${project.title}" (${project.workspaceRoot})`);
+      }).pipe(Effect.provide(hook(sessions, false, false)));
+      assert.strictEqual(yield* Ref.get(starts), 0);
     }),
   );
 

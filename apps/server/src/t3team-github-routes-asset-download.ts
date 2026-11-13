@@ -2,12 +2,15 @@
 import * as NodeBuffer from "node:buffer";
 
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
 import * as GitHubApi from "@t3tools/source-control-github/server/t3team-GitHubApi";
+import * as BuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
 import { fetchAssetResponse } from "./t3team-github-routes-asset-fetch.ts";
+import { fetchProxiedMedia } from "./t3team-github-routes-asset-media.ts";
 import type {
   GitHubAssetDownloadRequest,
   GitHubDownloadedAsset,
@@ -59,7 +62,7 @@ export function downloadGitHubAsset(
 ): Effect.Effect<
   GitHubDownloadedAsset,
   T3TeamAtlassianError,
-  HttpClient.HttpClient | GitHubApi.GitHubApi
+  HttpClient.HttpClient | GitHubApi.GitHubApi | BuiltInDrivers.SourceControlDrivers
 > {
   const host = readTrimmedString(input.host) ?? "github.com";
   const url = readTrimmedString(input.url);
@@ -79,10 +82,14 @@ export function downloadGitHubAsset(
   }
 
   return Effect.gen(function* () {
-    const token = isGitHubHostedAsset(parsedUrl.host, host)
-      ? yield* readGitHubToken(host, parsedUrl.host)
-      : undefined;
-    const response = yield* fetchAssetResponse(parsedUrl, token);
+    const proxied = yield* fetchProxiedMedia(parsedUrl.href);
+    const token =
+      Option.isNone(proxied) && isGitHubHostedAsset(parsedUrl.host, host)
+        ? yield* readGitHubToken(host, parsedUrl.host)
+        : undefined;
+    const response = Option.isSome(proxied)
+      ? proxied.value
+      : yield* fetchAssetResponse(parsedUrl, token);
     const okResponse = yield* HttpClientResponse.matchStatus({
       "2xx": (success) => Effect.succeed(success),
       orElse: (failed) =>
@@ -115,5 +122,5 @@ export function downloadGitHubAsset(
       ...(mimeType ? { mimeType } : {}),
       sizeBytes: bytes.byteLength,
     } satisfies GitHubDownloadedAsset;
-  });
+  }).pipe(Effect.scoped);
 }

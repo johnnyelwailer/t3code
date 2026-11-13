@@ -18,8 +18,22 @@ export const makeSessionTag = (name: string | null) =>
     return `${segment === "" ? "" : `${segment}.`}s${value.toString(36)}`;
   });
 
+// The tag's own shape, wherever it sits: a run name can carry other bracketed parts.
+const TAG_RANDOM = String.raw`s[0-9a-z]+`;
+const TAG_SEGMENT = String.raw`[A-Za-z0-9_-]+`;
+const NAMED_TAG = new RegExp(String.raw`\[(${TAG_SEGMENT})\.${TAG_RANDOM}\]`);
+const ANY_TAG = new RegExp(String.raw`\[(?:${TAG_SEGMENT}\.)?${TAG_RANDOM}\]`);
+
 /** The name a run's tag carries, or undefined for a plain session (or a run that predates names). */
 export function sessionNameFromRunName(runName: string): string | undefined {
-  // The tag's own shape, wherever it sits: a run name can carry other bracketed parts.
-  return /\[([A-Za-z0-9_-]+)\.s[0-9a-z]+\]/.exec(runName)?.[1];
+  return NAMED_TAG.exec(runName)?.[1];
+}
+
+/**
+ * Whether a `session.yml` run was started by this app, from its run name alone. A CI, e2e or
+ * flag-verification run labels itself (`[e2e-…]`, `[flag-verify-…]`) and so carries no
+ * `s<base36>` part; it runs under the same login, so the picker would otherwise offer it.
+ */
+export function isAppStartedSessionRun(runName: string): boolean {
+  return ANY_TAG.test(runName);
 }

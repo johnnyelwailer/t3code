@@ -93,11 +93,11 @@ describe("ProjectSidebarTicketEntry browser", () => {
         expect(setClientSettings).toHaveBeenCalled();
       });
 
-      const lastCall = setClientSettings.mock.calls.at(-1) as [Record<string, unknown>] | undefined;
+      const lastCall = (
+        setClientSettings.mock.calls.at(-1) as unknown as [object] | undefined
+      )?.[0] as { t3team?: { storedSidebarNavPreferencesJson?: string } } | undefined;
       const savedPreferences = JSON.parse(
-        typeof lastCall?.[0]?.t3teamStoredSidebarNavPreferencesJson === "string"
-          ? lastCall[0].t3teamStoredSidebarNavPreferencesJson
-          : "{}",
+        lastCall?.t3team?.storedSidebarNavPreferencesJson ?? "{}",
       ) as T3TeamSidebarNavPreferences;
       expect(savedPreferences[project.id]?.orderedItemIds).toEqual([
         buildTicketSidebarPinnedItemId({ projectId: project.id, ticketId: "ticket-2" }),

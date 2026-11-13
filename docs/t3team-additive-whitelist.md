@@ -22,7 +22,17 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20261031` → the 2026-10-31 upstream sync merge commit
+- Current: `t3team/fork-baseline-20261102b` → the 2026-11-02 sync branch after it absorbed the
+  10 upstream commits (`d01b92c061..7cf653bca6`) and fork main `8c8e38d5a5` that landed after the
+  first merge. Grandfathered: everything in `t3team/fork-baseline-20261102` below, plus those
+  merges. The fork's Android extra-tab slot on top of upstream's reworked floating tabs is
+  re-applied after this baseline, so it is measured.
+- Before that: `t3team/fork-baseline-20261102` → the 2026-11-02 upstream sync merge commit
+  `7b0e95cbeb` (351 upstream commits absorbed, `79f1fadfc6..d01b92c061`, on top of fork main
+  `8d16c7f944`). Grandfathered: upstream's tree (managed policy, child approvals in parent
+  threads, migration 077 at fork id 127) plus the conflict resolutions that port the fork
+  features into it (47 conflicted files). Post-merge fixes stay measured.
+- Before that: `t3team/fork-baseline-20261031` → the 2026-10-31 upstream sync merge commit
   `c9bb891a26` (429 upstream commits absorbed, `52f4ec6f9..79f1fadfc6`, on top of fork main
   `20ca81b84a`). Grandfathered: upstream's tree (side chats beside the main thread, #26901)
   plus the conflict resolutions that port the fork features into it (74 conflicted files).
@@ -555,8 +565,9 @@ All already listed in `allowedModifiedFiles`; each gains only the voice-surface 
 ## Settings → Features page (2026-10-22)
 
 - `apps/web/src/components/settings/FoldedSettingsSection.tsx` — optional `defaultOpen`, so the Features page's group sections start open; the default keeps every existing fold closed.
-- `apps/web/src/routes/settings.features.tsx` (unprefixed new file) — TanStack's file router derives the URL from the file name, like `settings.connected-tools.tsx`.
-- Already listed, each gains only the Features seam: `SettingsSidebarNav.tsx` (the nav entry, hidden while `SETTINGS_FEATURES_PAGE` is off), `routeTree.gen.ts` (generated entry), `packages/client-runtime/src/state/server.ts` (spreads `createFeatureFlagAtoms` from `t3team-featureFlags.ts`).
+- `apps/web/src/routes/settings.features.tsx` (unprefixed new file) — TanStack's file router derives the URL from the file name, like `settings.connected-tools.tsx`. Since 2026-11-06 it only redirects to `/settings/labs`, keeping search and hash.
+- Already listed, each gains only the Features seam: `SettingsSidebarNav.tsx` (no Features entry of its own since 2026-11-06: the page lives on `/settings/labs`, which keeps its own route and labels it Features), `routeTree.gen.ts` (generated entry), `packages/client-runtime/src/state/server.ts` (spreads `createFeatureFlagAtoms` from `t3team-featureFlags.ts`).
+- `apps/web/src/components/settings/LabsSettingsPanel.tsx` (approved by Phil, 2026-11-06): two slots that put Nexi's feature switches on upstream's Labs page, labelled Features, so Settings has one entry instead of Labs plus Features. Both render nothing while `SETTINGS_FEATURES_PAGE` is off.
 - `apps/server/src/bin.ts` — one `await import("./t3team-featureFlagBoot.ts")` ahead of the CLI graph, so the release preset is installed before any module reads a startup-only flag or resolves the state directory.
 - `packages/client-runtime/src/rpc/session.ts` — advertises the `featureFlags` capability so the server streams `featureFlagsUpdated`.
 - `packages/client-runtime/src/state/serverConfigProjection.ts` — one `featureFlagsUpdated` case that replaces `config.featureFlags`.
@@ -626,6 +637,12 @@ Each edit is one call into `apps/mobile/src/lib/t3team-urlPolicy.ts`, a no-op wi
 
 - `apps/web/src/hooks/useSidebarProjectGroups.ts`, `components/settings/useSettingsProjectGroups.ts`, `components/CommandPaletteLookups.ts`, `components/chat/DraftHeroHeadline.tsx` — run the project list through `useCloudAdoptedProjects` (`t3team-cloudCheckoutProjectAdoption.ts`) before grouping: a cloud session's checkout (named after a runner folder, unbound) adopts the title and work-source binding of the primary environment's project for the same repository, so both group as one project under the user's name and icon. One changed line each (plus the import); with no broker environment the list is returned unchanged.
 
+## Cloud checkout joins the user's project on the phone (2026-11-03, #999)
+
+- `packages/client-runtime/src/state/t3team-cloudCheckoutAdoption.ts` and `...test.ts` — the #777 adoption rule, moved from `apps/web` to client-runtime so both surfaces share one implementation: the `primaryEnvironmentId` input becomes an `isOwnEnvironment` predicate (web passes its primary environment; the phone passes every non-machine environment). Web's `t3team-cloudCheckoutProjectAdoption.ts` now re-exports it; its test moved here.
+- `apps/mobile/src/state/t3team-cloudAdoption.ts` and `...test.ts` — the phone's application: a broker (`BrokerConnectionTarget`) environment is a cloud session machine; its checkouts adopt the title and work-source binding of the user's own project of the same repository, so the Chats project pills, the new-task project picker, the thread navigation sidebar and the PR filters list the project once, under the user's name and icon, with its Jira link. The view keeps every project's environment and id; the raw catalog (`useProjects`) is untouched, so the attach binding still sees the machine's real project.
+- `apps/mobile/src/features/home/HomeRouteScreen.tsx`, `features/threads/new-task-flow-provider.tsx`, `features/threads/ThreadNavigationSidebar.tsx`, `features/pull-requests/PullRequestListFilters.tsx` — one changed line each: the project list those selectors group comes from `useCloudAdoptedProjects` (or `cloudAdoptedProjectsAtom`) instead of the raw catalog. `features/threads/new-task-flow-provider.test.tsx` — the provider's project list now comes from the adoption module, so the test routes its `projects` mock to `useCloudAdoptedProjects` (the module itself stays mocked out, as every other state module in that test does).
+
 ## Mobile `newTaskTop` and `environmentPickerTop` seams (2026-10-29)
 
 - `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx` — renders the distribution's `newTaskTop` slot (isolated, nothing without one) first in the New task project list: one import and one line, so a distribution can offer another way to start a thread (a cloud session) next to the stock ones.
@@ -644,3 +661,40 @@ A draft can wait for an environment the catalog does not list yet (a cloud sessi
 - `apps/mobile/src/features/threads/NewTaskDraftScreen.tsx` — shows the pending draft's status card above the composer controls, lets its reason block Send, and does not remember its placeholder project as the last used one: one import pair and three lines.
 - `apps/mobile/src/state/pending-new-tasks-model.ts`, `use-pending-new-tasks.ts` — a draft the distribution holds is listed in the Chats list even while empty, with its project's title: two predicates in `t3team-pendingDraft.ts`, one added input and one hook call.
 - `apps/mobile/src/features/threads/thread-list-v2-items.tsx` — a draft row shows the distribution's live status (`PendingDraftRowStatus`) instead of the static "Draft", and its project title when the catalog has none.
+
+- `apps/server/src/usage/UsageService.test.ts` — one test (`reports saved usage of a removed directory only for windows it reaches`) pins the clock with `TestClock` because its 2026-08-01 fixtures fall out of the 92-day usage cache retention on 2026-11-01T10:00Z; three lines, test only. Upstream will hit the same date dependence: remove this entry when the sync brings an upstream fix. Awaits human approval.
+- `packages/provider-cursor/src/server/driver.test.ts` — fork test updated for upstream's HttpClient-based Cursor catalog (`CursorSdkCatalog`, upstream #28718/#24639): the test that keeps an explicit API key's account out of the CLI login's Limits now answers `/v1/me` and the models list through an HttpClient mock like the neighbouring tests, instead of mocking `Cursor.me`/`Cursor.models.list`. Test only; removable once upstreamed. Approved by Phil 2026-11-02.
+
+## Mobile provider icon for the `nexplore` driver (2026-11-03)
+
+- `apps/mobile/src/components/ProviderIcon.tsx` — one branch before the package-icon lookup: the `nexplore` driver draws `NexploreMark` (`t3team-NexploreMark.tsx`), as the web's `PROVIDER_ICON_BY_PROVIDER` already does. Without it the driver fell through to the generic default glyph.
+
+## Settings registry: fork settings move out of the hot files (2026-11-07)
+
+- `apps/web/src/clientPersistenceStorage.ts` — the browser's client-settings load path runs the fork's legacy-key alias (`migrateLegacyT3TeamClientSettingsJson`, `packages/contracts/src/t3team-settings.ts`) before decoding, so values persisted under the old flat `t3team*` keys keep reading after the fork's settings moved under the `t3team` namespace. Write path unchanged; two lines.
+- `apps/web/src/components/settings/useAvailableSettingsSearchItems.ts` — joins the fork's registered search items (`useT3TeamSettingsSearchItems`, `~/t3team/settings/t3team-settingsRegistry.tsx`) after the upstream availability filter, so the command palette and the settings nav search find the fork rows (connected tools, Nexi feature switches, voice). Flag-gated fork sections join here, where a hook can decide their visibility; three lines.
+
+## Composer forwards the ready-provider flag (2026-11-10, #656)
+
+- `apps/web/src/components/chat/useComposerProviderModel.ts` — ChatComposer passes `AGENTS_PREFER_READY_PROVIDER` into this hook, which was dropping it. The hook forwards the flag into `resolveComposerProviderSelection` and omits it when undefined. Claude stays selected in that function; the preference itself stays in `t3team-readyProviderPreference.ts`. Two lines.
+
+## Isolated Nexi Work identity seams (2026-11-13, #918)
+
+Thin hooks so an isolated Nexi Work instance can run next to t3code. All identity logic lives in `t3team-` modules; these files only call those modules or pass an optional field.
+
+- `apps/desktop/src/electron/ElectronProtocol.ts` — registers the `nexi-work` privileged scheme via `isolatedDesktopSchemePrivileges` before Electron is ready. `getDesktopScheme` / `getDesktopUrl` stay the upstream 1-arg forms.
+- `apps/desktop/src/app/DesktopClerk.ts`, `DesktopLegacyLocalStorage.ts`, `DesktopLifecycle.ts`, `DesktopLinuxUrlHandler.ts`, `DesktopPreReadyPlatform.ts` — call `t3team-desktopScheme` (and, for early Linux, `t3team-earlyPackagedBranding`) with `environment.isolatedInstance` or packaged branding. Optional `packagedBranding` on early-settings input is the seam for the isolated home.
+- `apps/desktop/src/app/DesktopEarlyElectronStartup.ts` — optional `packagedBranding` / `appDataDirectory` fields; `resolveEarlyDesktopSettingsPath` and `resolveEarlyLinuxElectronOptions` call `t3team-earlyPackagedBranding`. `resolveLinuxDesktopEntryName` stays the upstream 1-arg form.
+- `apps/desktop/src/app/DesktopCliShim.ts` — optional `isolatedInstance` / `appId` on `renderCliShim`; names, marker and env vars come from `t3team-cliIdentity`.
+- `apps/desktop/src/wsl/DesktopWslEnvironment.ts` — optional `runtimeParent` on the install/prune/invalidate scripts (default `$HOME/.t3/wsl-runtime`); the layer passes `wslRuntimeParentExpression` from `t3team-wslRuntimeParent`.
+- `apps/server/src/cloud/bootService.ts` — optional `BootServiceIdentity` on unit/plist render and the managers, defaulting to `resolveBootServiceIdentity` from `t3team-bootServiceIdentity`.
+- `apps/server/src/cloud/serviceProtection.ts`, `apps/server/src/serverOwnership.ts`, `apps/server/src/cli/update.ts` — read the unit/plist/launchd names from `resolveBootServiceIdentity`.
+- `packages/project-context/src/t3teamProjectStateDir.ts` and its test — thin re-export of `t3team-projectStateDir` (`.agents/nexi` default, lookup order, machine-pointer helpers). The test only asserts the re-export.
+
+## Daily-app home guard (2026-11-13, rc.20)
+
+rc.20 takes over `nexi-work` as the upgrade, but must not run the home or profile takeover or start a second server while the daily Nexi app (`com.t3tools.t3code`, port 3773) is still using that folder. Detection, the quit-and-retry screen, and the retry loop live in `t3team-oldApp*` modules. These upstream files only call those modules.
+
+- `apps/desktop/src/app/DesktopApp.ts` — before `primaryBackend.start`, run `runDesktopHomeGuard`: if the daily app is detected, show the inline quit-and-retry screen and wait for Retry to see it gone; then continue the normal boot. A few lines, already on the whitelist.
+- `apps/desktop/src/app/DesktopUserData.ts` — skip `migrateNexiProfile` when `detectOldAppSync` reports the daily app on the adjacent Nexi home, so the Chromium-profile copy does not run against a live profile. Already on the whitelist.
+- `apps/desktop/src/backend/DesktopBackendConfiguration.ts` — if the daily app still holds the home, do not call `migrateLegacyHomeIfNeeded` and do not write the identity marker. Defense in depth; bootstrap already waits for the home to be free. Already on the whitelist.

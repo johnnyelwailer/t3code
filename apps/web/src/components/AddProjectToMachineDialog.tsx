@@ -1,10 +1,11 @@
-import { useParams } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   getAddProjectInitialQuery,
   getCloneDestinationPath,
   getCloneDirectoryName,
 } from "@t3tools/client-runtime/operations/projects";
+import { resolvePastedPath } from "@t3tools/shared/path";
 import {
   type EnvironmentId,
   type ProjectIgnoredFile,
@@ -94,6 +95,7 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
   const project = useProject(request.projectRef);
   const handleNewThread = useNewThreadHandler();
   const { draftId: routeDraftId } = useParams({ strict: false });
+  const navigate = useNavigate();
   const { environments } = useEnvironments();
   const targets = useAddProjectTargets(project, useLogicalProjectEnvironments(project, false));
   const [targetId, setTargetId] = useState(request.targetEnvironmentId);
@@ -284,7 +286,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
                     {target ? (
                       <EnvironmentMachineIcon kind={target.machine} className="size-3.5 shrink-0" />
                     ) : null}
-                    <span className="truncate">{target?.label ?? "No machine available"}</span>
+                    <span className="truncate">
+                      {target?.label ?? "No connected machine can take this project"}
+                    </span>
                   </span>
                 )}
                 <span className="flex min-w-0 font-mono text-muted-foreground text-xs">
@@ -316,7 +320,9 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
               <Input
                 id={`${id}-path`}
                 value={destinationPath}
-                onChange={(event) => setPathOverride(event.target.value)}
+                onChange={(event) =>
+                  setPathOverride(resolvePastedPath(destinationPath, event.target.value))
+                }
                 spellCheck={false}
                 autoComplete="off"
               />
@@ -387,9 +393,21 @@ function AddProjectToMachineDialog({ request }: { request: AddProjectToMachineRe
             <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
-            <Button type="submit" disabled={unavailable || submitting}>
-              {submitting ? "Starting…" : `Clone to ${target?.label ?? "machine"}`}
-            </Button>
+            {target === null ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  close();
+                  void navigate({ to: "/settings/connections" });
+                }}
+              >
+                Connect a machine
+              </Button>
+            ) : (
+              <Button type="submit" disabled={unavailable || submitting}>
+                {submitting ? "Starting…" : `Clone to ${target.label}`}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogPopup>

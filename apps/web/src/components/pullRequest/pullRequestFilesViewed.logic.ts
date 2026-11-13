@@ -19,6 +19,22 @@ export function isStaleViewedState(state: PullRequestFileViewedState | undefined
   return state === "dismissed";
 }
 
+/**
+ * What a checkbox shows. A file pushed to since it was cleared keeps its tick, with the change
+ * flagged beside it, so the reader sees what they once cleared and what has moved since. Counts
+ * stay on `isFileViewed`: only a file whose current code was seen is done.
+ */
+export function isFileTicked(
+  path: string,
+  states: FileViewedStates | null,
+  overlay: FileViewedOverlay,
+): boolean {
+  const pressed = overlay.get(path);
+  if (pressed !== undefined) return pressed;
+  const state = states?.get(path);
+  return isViewedState(state) || isStaleViewedState(state);
+}
+
 export function isFileViewed(
   path: string,
   states: FileViewedStates | null,

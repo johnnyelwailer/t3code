@@ -15,7 +15,7 @@
  * is never touched. Startup: an initial sync for source-bound projects without
  * an icon, and a sweep of bindings whose project no longer exists.
  * `project.deleted` removes the binding row (deletes from any path: MCP, CLI).
- * Gated by `t3teamProjectSourceIconIngestEnabled` (on by default, fail-open).
+ * Gated by `t3team.projectSourceIconIngest` (on by default, fail-open).
  */
 import { type ApplicationStoredEvent, CommandId, type ProjectId } from "@t3tools/contracts";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";

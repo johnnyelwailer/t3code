@@ -136,7 +136,17 @@ export const makeAccountOAuthClient = (account: AccountDefinition, http: HttpCli
         Effect.mapError((): RefreshFailure => "unreachable"),
         Effect.flatMap((response) =>
           response.status >= 400 && response.status < 500
-            ? Effect.fail<RefreshFailure>("rejected")
+            ? HttpClientResponse.schemaBodyJson(ErrorResponse)(response).pipe(
+                Effect.map((body) => body.error),
+                Effect.orElseSucceed(() => undefined),
+                // Only a grant the issuer calls dead signs the user out (RFC 6749 §5.2:
+                // invalid_grant). A throttled (429) or otherwise refused call keeps the sign-in.
+                Effect.flatMap((error) =>
+                  Effect.fail<RefreshFailure>(
+                    error === "invalid_grant" ? "rejected" : "unreachable",
+                  ),
+                ),
+              )
             : HttpClientResponse.filterStatusOk(response).pipe(
                 Effect.flatMap(HttpClientResponse.schemaBodyJson(TokenResponse)),
                 Effect.mapError((): RefreshFailure => "unreachable"),

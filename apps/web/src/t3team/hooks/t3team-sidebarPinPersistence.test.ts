@@ -54,7 +54,10 @@ describe("sidebar pin persistence", () => {
     expect(
       readStoredSidebarPinsFromServerSettings({
         ...DEFAULT_SERVER_SETTINGS,
-        t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin, githubPin]),
+        t3team: {
+          ...DEFAULT_SERVER_SETTINGS.t3team,
+          storedSidebarPinsJson: JSON.stringify([jiraPin, githubPin]),
+        },
       }),
     ).toEqual([jiraPin, githubPin]);
   });
@@ -74,7 +77,10 @@ describe("sidebar pin persistence", () => {
     expect(
       readStoredSidebarPinsFromClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin, githubPin]),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedSidebarPinsJson: JSON.stringify([jiraPin, githubPin]),
+        },
       }),
     ).toEqual([jiraPin, githubPin]);
   });
@@ -94,7 +100,10 @@ describe("sidebar pin persistence", () => {
     expect(
       readStoredSidebarPinsFromClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
-        t3teamStoredSidebarPinsJson: JSON.stringify([original, replacement]),
+        t3team: {
+          ...DEFAULT_CLIENT_SETTINGS.t3team,
+          storedSidebarPinsJson: JSON.stringify([original, replacement]),
+        },
       }),
     ).toEqual([replacement]);
   });
@@ -112,7 +121,10 @@ describe("sidebar pin persistence", () => {
       persistence: {
         getClientSettings: vi.fn().mockResolvedValue({
           ...DEFAULT_CLIENT_SETTINGS,
-          t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin]),
+          t3team: {
+            ...DEFAULT_CLIENT_SETTINGS.t3team,
+            storedSidebarPinsJson: JSON.stringify([jiraPin]),
+          },
         }),
         setClientSettings,
       },
@@ -120,11 +132,11 @@ describe("sidebar pin persistence", () => {
 
     await expect(migrateLegacyStoredSidebarPinsToServer()).resolves.toEqual([jiraPin]);
     expect(mockUpdatePrimaryServerSettings).toHaveBeenCalledWith({
-      t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin]),
+      t3team: { storedSidebarPinsJson: JSON.stringify([jiraPin]) },
     });
     expect(setClientSettings).toHaveBeenCalledWith({
       ...DEFAULT_CLIENT_SETTINGS,
-      t3teamStoredSidebarPinsJson: "",
+      t3team: { ...DEFAULT_CLIENT_SETTINGS.t3team, storedSidebarPinsJson: "" },
     });
   });
 
@@ -143,7 +155,10 @@ describe("sidebar pin persistence", () => {
       persistence: {
         getClientSettings: vi.fn().mockResolvedValue({
           ...DEFAULT_CLIENT_SETTINGS,
-          t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin]),
+          t3team: {
+            ...DEFAULT_CLIENT_SETTINGS.t3team,
+            storedSidebarPinsJson: JSON.stringify([jiraPin]),
+          },
         }),
         setClientSettings: vi.fn().mockResolvedValue(undefined),
       },
@@ -163,7 +178,7 @@ describe("sidebar pin persistence", () => {
 
     await vi.waitFor(() => {
       expect(mockUpdatePrimaryServerSettings).toHaveBeenCalledWith({
-        t3teamStoredSidebarPinsJson: JSON.stringify([jiraPin]),
+        t3team: { storedSidebarPinsJson: JSON.stringify([jiraPin]) },
       });
     });
   });

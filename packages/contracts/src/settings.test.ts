@@ -41,7 +41,7 @@ const encodeServerSettingsPatch = Schema.encodeSync(ServerSettingsPatch);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
 describe("storage cleanup settings", () => {
-  it("keeps cleanup disabled for existing installations", () => {
+  it("keeps worktree cleanup off and expires diagnostics after 30 days by default", () => {
     expect(decodeServerSettings({}).worktreeCleanup).toBeNull();
     expect(decodeServerSettings({}).storageCleanup).toEqual({
       worktreeAfterDays: null,
@@ -50,9 +50,16 @@ describe("storage cleanup settings", () => {
       worktreeOnDelete: false,
       worktreeUnchanged: false,
       worktreeKeepWhen: "uncommitted-changes",
-      browserArtifactsAfterDays: null,
-      logsAfterDays: null,
+      browserArtifactsAfterDays: 30,
+      logsAfterDays: 30,
     });
+  });
+
+  it("keeps an explicit opt-out of diagnostics retention", () => {
+    expect(
+      decodeServerSettings({ storageCleanup: { logsAfterDays: null } }).storageCleanup
+        .logsAfterDays,
+    ).toBeNull();
   });
 
   it("accepts partial custom patches but requires complete stored project rules", () => {
@@ -126,6 +133,26 @@ describe("ServerSettings usage price overrides", () => {
       expect(() => decodeServerSettingsPatch({ usagePriceOverrides })).toThrow();
     }
   });
+
+  it("ignores an invalid model filter without dropping the other settings", () => {
+    const valid = { include: [{ provider: "newer-provider", model: "orbit-1" }] };
+    expect(decodeServerSettings({ usageModelFilter: valid }).usageModelFilter).toEqual(valid);
+    const settings = decodeServerSettings({
+      usageModelFilter: { exclude: [{ model: "" }] },
+      usageModelAliases: { "drift-9": "orbit-1" },
+    });
+    expect(settings.usageModelFilter).toBeUndefined();
+    expect(settings.usageModelAliases).toEqual({ "drift-9": "orbit-1" });
+  });
+});
+
+it("drops a hand-edited non-string hidden tag and keeps the rest of the settings", () => {
+  const settings = decodeServerSettings({
+    hiddenThreadTags: ["private", 123],
+    hideTaggedThreads: true,
+  });
+  expect(settings.hiddenThreadTags).toEqual(["private"]);
+  expect(settings.hideTaggedThreads).toBe(true);
 });
 
 describe("ServerSettings secret providers", () => {
@@ -386,22 +413,44 @@ describe("ServerSettings usage-limit recovery", () => {
   });
 });
 
-describe("ServerSettings sidebar pin persistence", () => {
-  it("defaults to undefined so server config stays sparse", () => {
-    expect(DEFAULT_SERVER_SETTINGS.t3teamStoredSidebarPinsJson).toBeUndefined();
-    expect(DEFAULT_SERVER_SETTINGS.t3teamStoredSidecarCompositionJson).toBeUndefined();
-    expect(decodeServerSettingsPatch({}).t3teamStoredSidebarPinsJson).toBeUndefined();
+describe("ServerSettings linked environments", () => {
+  it("is on unless a stored value says otherwise", () => {
+    expect(decodeServerSettings({}).linkedEnvironmentsEnabled).toBe(true);
+    expect(DEFAULT_SERVER_SETTINGS.linkedEnvironmentsEnabled).toBe(true);
+    expect(
+      decodeServerSettings({ linkedEnvironmentsEnabled: false }).linkedEnvironmentsEnabled,
+    ).toBe(false);
+  });
+});
+
+describe("ServerSettings t3team namespace", () => {
+  it("defaults to sparse so server config stays sparse", () => {
+    expect(DEFAULT_SERVER_SETTINGS.t3team.storedSidebarPinsJson).toBeUndefined();
+    expect(DEFAULT_SERVER_SETTINGS.t3team.storedSidecarCompositionJson).toBeUndefined();
+    expect(decodeServerSettingsPatch({}).t3team).toBeUndefined();
   });
 
   it("trims pin and sidecar composition JSON in patches", () => {
     const pinPatch = decodeServerSettingsPatch({
-      t3teamStoredSidebarPinsJson: '  [{"id":"pin-1"}]  ',
-      t3teamStoredSidecarCompositionJson:
-        '  {"sections":[{"sectionId":"quick-starts","collapsed":true}]}  ',
+      t3team: {
+        storedSidebarPinsJson: '  [{"id":"pin-1"}]  ',
+        storedSidecarCompositionJson:
+          '  {"sections":[{"sectionId":"quick-starts","collapsed":true}]}  ',
+      },
     });
-    expect(pinPatch.t3teamStoredSidebarPinsJson).toBe('[{"id":"pin-1"}]');
-    expect(pinPatch.t3teamStoredSidecarCompositionJson).toBe(
+    expect(pinPatch.t3team?.storedSidebarPinsJson).toBe('[{"id":"pin-1"}]');
+    expect(pinPatch.t3team?.storedSidecarCompositionJson).toBe(
       '{"sections":[{"sectionId":"quick-starts","collapsed":true}]}',
+    );
+  });
+
+  it("keeps fork toggle defaults on", () => {
+    const decoded = decodeServerSettings({});
+    expect(decoded.t3team.activityLabels).toBe(true);
+    expect(decoded.t3team.projectScopePills).toBe(true);
+    expect(decoded.t3team.projectSourceIconIngest).toBe(true);
+    expect(decodeServerSettings({ t3team: { activityLabels: false } }).t3team.activityLabels).toBe(
+      false,
     );
   });
 });

@@ -70,6 +70,7 @@ import { dynamicToolTitle } from "@t3tools/shared/toolActivity";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 import { isActorOutboundSendMessageEntry } from "../../t3team/chat/t3team-actorOutbound";
 import { t3teamWorkflowStepRunIds } from "../../t3team/chat/t3team-workflowMessageGroups";
+import { t3teamTimelineReportIds } from "../../t3team/chat/t3team-turnReports";
 import {
   collectToolFilePaths,
   formatReadToolLabel,
@@ -595,6 +596,8 @@ type MessagesTimelineRowContent =
       message: ChatMessage;
       projectedItem?: OrchestrationV2ProjectedTurnItem;
       showAssistantMeta: boolean;
+      /** The latest finished reply of a still-running response shows only its timestamp. */
+      showAssistantTimestamp: boolean;
       showAssistantCopyButton: boolean;
       assistantCopyStreaming: boolean;
       assistantTurnDiffSummary?: TurnDiffSummary | undefined;
@@ -1164,6 +1167,7 @@ function deriveTurnFolds(input: {
       }
       if (entry.kind === "work" && entry.entry.itemType === "notification") continue;
       if (entry.kind === "work" && entry.entry.questionAnswer !== undefined) continue;
+      if (t3teamTimelineReportIds(group.entries).has(entry.id)) continue;
       hiddenEntryIds.add(entry.id);
     }
     if (hiddenEntryIds.size === 0) {
@@ -2132,10 +2136,10 @@ export function deriveMessagesTimelineRows(input: {
       timelineEntry.message.role === "assistant" &&
       runIdIsActiveResponse(timelineEntry.message.runId);
 
-    const showAssistantMeta =
+    const isTerminalAssistantMessage =
       timelineEntry.message.role === "assistant" &&
-      terminalAssistantMessageIds.has(timelineEntry.message.id) &&
-      !assistantResponseStillInProgress;
+      terminalAssistantMessageIds.has(timelineEntry.message.id);
+    const showAssistantMeta = isTerminalAssistantMessage && !assistantResponseStillInProgress;
 
     nextRows.push({
       kind: "message",
@@ -2146,6 +2150,10 @@ export function deriveMessagesTimelineRows(input: {
         ? {}
         : { projectedItem: timelineEntry.projectedItem }),
       showAssistantMeta,
+      showAssistantTimestamp:
+        isTerminalAssistantMessage &&
+        assistantResponseStillInProgress &&
+        !timelineEntry.message.streaming,
       showAssistantCopyButton: showAssistantMeta,
       assistantCopyStreaming: timelineEntry.message.streaming || assistantResponseStillInProgress,
       assistantTurnDiffSummary:
@@ -2627,6 +2635,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.message === bm.message &&
         a.projectedItem === bm.projectedItem &&
         a.showAssistantMeta === bm.showAssistantMeta &&
+        a.showAssistantTimestamp === bm.showAssistantTimestamp &&
         a.showAssistantCopyButton === bm.showAssistantCopyButton &&
         a.assistantCopyStreaming === bm.assistantCopyStreaming &&
         a.assistantTurnDiffSummary === bm.assistantTurnDiffSummary &&

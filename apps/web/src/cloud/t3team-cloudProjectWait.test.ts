@@ -6,6 +6,7 @@ import {
   CLOUD_PROJECT_WAIT_EXPECTED_SECONDS,
   CLOUD_PROJECT_WAIT_SLOW_SECONDS,
   cloudProjectWaitDiagnostic,
+  cloudProjectWaitParkedMessage,
   presentCloudProjectWait,
 } from "./t3team-cloudProjectWaitPresentation";
 import {
@@ -59,10 +60,13 @@ describe("classifyCloudProjectWait", () => {
       CLOUD_PROJECT_WAIT_SLOW_SECONDS,
     );
     expect(unknown).toMatchObject({
-      detail: "The cloud machine reported no scratch folder",
+      detail: "The cloud machine has no folder to work in",
       blocking: true,
     });
-    expect(unknown.text).not.toMatch(/report its settings|has not reported/);
+    // A blocked wait is not "taking longer": it says what is wrong and what to do instead.
+    expect(unknown.text).toBe(
+      "The cloud machine has no folder to work in. Send your message in its own project, or cancel to choose another machine.",
+    );
     expect(reason({ scratch: true })).toBe("scratch-opening");
     expect(reason({})).toBe("project-list-pending");
     expect(reason({ projects: [machineProject("/srv/other", null)] })).toBe("project-not-listed");
@@ -100,23 +104,25 @@ describe("presentCloudProjectWait", () => {
     input({ projects: [machineProject("/srv/other", null)] }),
   );
 
-  it("is quiet at first, says what is expected, then names the unmet condition", () => {
+  it("is quiet at first, then says plainly what is going on, with the diagnostic kept apart", () => {
     const first = presentCloudProjectWait(listed, CLOUD_PROJECT_WAIT_EXPECTED_SECONDS - 1);
     expect(first).toMatchObject({
       level: "waiting",
-      detail: "Waiting for the cloud machine to list “nx-nexi”",
+      detail: "Waiting for “nx-nexi” on the cloud machine",
       text: null,
       diagnostic: null,
       blocking: false,
     });
     const expected = presentCloudProjectWait(listed, CLOUD_PROJECT_WAIT_EXPECTED_SECONDS);
     expect(expected.level).toBe("expected");
-    expect(expected.text).toContain("registers its working folder as its project");
+    expect(expected.text).toBe(
+      "Waiting for “nx-nexi” on the cloud machine. Your message sends as soon as it is there.",
+    );
     expect(expected.diagnostic).toBeNull();
     const slow = presentCloudProjectWait(listed, CLOUD_PROJECT_WAIT_SLOW_SECONDS);
     expect(slow.level).toBe("slow");
-    expect(slow.text).toContain("Taking longer than usual");
-    expect(slow.text).toContain("no project at /home/runner/work/nx-nexi is listed");
+    expect(slow.text).toBe(`This is taking longer than usual. ${expected.text}`);
+    // The folder, the environment and the project count live here and nowhere else.
     expect(slow.diagnostic).toBe(
       "project-wait reason=project-not-listed environment=env-cloud cwd=/home/runner/work/nx-nexi projects=1",
     );
@@ -128,29 +134,33 @@ describe("presentCloudProjectWait", () => {
         projects: [machineProject("/home/runner/work/nx-nexi", "ghe/hive/other", "other")],
       }),
     );
-    expect(presentCloudProjectWait(wait, 0)).toMatchObject({
+    expect(presentCloudProjectWait(wait, CLOUD_PROJECT_WAIT_SLOW_SECONDS)).toMatchObject({
       blocking: true,
-      detail: "The machine's project “other” is a different repository than “nx-nexi”",
+      detail: "The cloud machine is working in a different repository",
+      text: "The cloud machine is working in a different repository. Send your message in its project “other”, or cancel to choose another machine.",
     });
   });
 
-  it("writes none for a missing folder and singular wording for one project", () => {
+  it("names the draft's project when it has a title, and says 'this project' when it has none", () => {
     const wait = classifyCloudProjectWait(
       input({ expectedCwd: null, projects: [machineProject("/srv/other", null)] }),
     );
     expect(cloudProjectWaitDiagnostic(wait)).toContain("cwd=none projects=1");
     expect(presentCloudProjectWait(wait, 0).detail).toBe(
-      "The machine's only project is not “nx-nexi”",
+      "Waiting for “nx-nexi” on the cloud machine",
     );
-    const many = classifyCloudProjectWait(
+    const unnamed = classifyCloudProjectWait(
       input({
         expectedCwd: null,
         composer: null,
         projects: [machineProject("/a", null), machineProject("/b", null)],
       }),
     );
-    expect(presentCloudProjectWait(many, 0).detail).toBe(
-      "None of the machine's 2 projects is this project",
+    expect(presentCloudProjectWait(unnamed, 0).detail).toBe(
+      "Waiting for this project on the cloud machine",
+    );
+    expect(cloudProjectWaitParkedMessage(unnamed)).toBe(
+      "The cloud machine hasn't opened this project yet. Your message is saved.",
     );
   });
 });
@@ -249,9 +259,9 @@ describe("setup card model", () => {
     });
     expect(model.currentStep).toMatchObject({
       id: "project",
-      label: "Waiting for the cloud machine to send its project list",
+      label: "Connecting to the cloud machine",
     });
-    expect(model.activity).toBe("Waiting for the cloud machine to send its project list…");
+    expect(model.activity).toBe("Connecting to the cloud machine…");
     expect(model.projectWait).toBe(wait);
     expect(
       buildCloudSessionSetup({ ...model, session: null, machineConnected: false }).projectWait,

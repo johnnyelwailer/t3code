@@ -17,6 +17,7 @@ import * as ServerConfig from "./config.ts";
 import * as ProjectService from "./project/ProjectService.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
+import * as BuiltInDrivers from "./sourceControl/builtInDrivers.ts";
 import {
   t3teamAtlassianConnectBasicRouteLayer,
   t3teamAtlassianConnectOAuthRouteLayer,
@@ -32,7 +33,6 @@ import {
   t3teamGitHubPullRequestContextRouteLayer,
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
-import { t3teamVoiceRouteLayer } from "./t3team-voice-routes.ts";
 
 let handlerRuns = 0;
 const probeRouteLayer = HttpRouter.add(
@@ -57,7 +57,6 @@ const routes = Layer.mergeAll(
   t3teamGitHubPullRequestContextRouteLayer,
   t3teamGitHubAssetRouteLayer,
   t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
-  t3teamVoiceRouteLayer,
 );
 
 /** What the GitHub handlers would read; a gated request never reaches them. */
@@ -66,6 +65,7 @@ const unreachedHandlerServices = Layer.mergeAll(
   Layer.mock(ProjectService.ProjectService)({}),
   Layer.mock(PullRequestProviderRegistry)({ get: () => null, kinds: [] }),
   Layer.mock(PullRequestService.PullRequestService)({}),
+  Layer.succeed(BuiltInDrivers.SourceControlDrivers, []),
   ServerConfig.layerTest(process.cwd(), { prefix: "t3-feature-flag-route-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
@@ -135,14 +135,5 @@ describe("whenRouteFeatureEnabled", () => {
     const response = await run(post("/api/t3team/project/workspace/recipes/discover"));
     expect(response.status).toBe(403);
     expect(JSON.parse(response.body)).toMatchObject({ code: "feature_disabled" });
-  });
-
-  it("closes the voice routing call while voice sessions are off, and answers once on", async () => {
-    const off = await run(post("/api/t3team/voice/route"));
-    expect(off.status).toBe(403);
-
-    replaceFeatureFlagPresetValues(new Map([["VOICE_SESSIONS", true]]));
-    const on = await run(post("/api/t3team/voice/route"));
-    expect(on.status).toBe(400);
   });
 });

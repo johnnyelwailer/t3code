@@ -18,6 +18,7 @@ import {
   selectThreadRightPanelState,
   useRightPanelStore,
 } from "./rightPanelStore";
+import type { T3TeamViewTarget } from "./t3team/t3team-viewTarget";
 
 const refA = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-A"));
 const refB = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-B"));
@@ -79,74 +80,6 @@ describe("rightPanelStore", () => {
         .getState()
         .entries.map((entry) => (entry.kind === "panel-tab" ? entry.surface.id : null)),
     ).toEqual(["device", "diff", pr.id]);
-  });
-
-  it("activatePinned selects no surface, opens the panel and keeps every tab", () => {
-    const store = useRightPanelStore.getState();
-    store.open(refA, "files");
-    store.open(refA, "diff");
-    store.activatePinned(refA);
-    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
-
-    expect(state.isOpen).toBe(true);
-    expect(state.activeSurfaceId).toBeNull();
-    expect(state.surfaces.map((surface) => surface.id)).toEqual(["files", "diff"]);
-    expect(useClosedViewStore.getState().entries).toEqual([]);
-
-    store.activateSurface(refA, "files");
-    expect(
-      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).activeSurfaceId,
-    ).toBe("files");
-  });
-
-  it("activatePinned reopens a hidden panel and does not touch closed-view history", () => {
-    const store = useRightPanelStore.getState();
-    store.open(refA, "files");
-    store.open(refA, "diff");
-    store.closeSurface(refA, "diff");
-    const closedBefore = useClosedViewStore.getState().entries;
-    store.close(refA);
-    store.activatePinned(refA);
-    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
-
-    expect(state.isOpen).toBe(true);
-    expect(state.activeSurfaceId).toBeNull();
-    expect(state.surfaces.map((surface) => surface.id)).toEqual(["files"]);
-    expect(useClosedViewStore.getState().entries).toEqual(closedBefore);
-  });
-
-  it("keeps the pinned selection, with or without tabs, through a persisted-state migration", () => {
-    const store = useRightPanelStore.getState();
-    store.open(refA, "files");
-    store.activatePinned(refA);
-    store.activatePinned(refB);
-    const persisted = JSON.parse(
-      JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey }),
-    );
-    const migrated = migratePersistedRightPanelState(persisted);
-    const withTab = selectThreadRightPanelState(migrated.byThreadKey, refA);
-    const alone = selectThreadRightPanelState(migrated.byThreadKey, refB);
-
-    expect({ isOpen: withTab.isOpen, active: withTab.activeSurfaceId }).toEqual({
-      isOpen: true,
-      active: null,
-    });
-    expect(withTab.surfaces.map((surface) => surface.id)).toEqual(["files"]);
-    expect({ isOpen: alone.isOpen, active: alone.activeSurfaceId }).toEqual({
-      isOpen: true,
-      active: null,
-    });
-  });
-
-  it("activatePinned on a panel with no state opens it empty", () => {
-    useRightPanelStore.getState().activatePinned(refB);
-    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB);
-
-    expect({ isOpen: state.isOpen, active: state.activeSurfaceId, tabs: state.surfaces }).toEqual({
-      isOpen: true,
-      active: null,
-      tabs: [],
-    });
   });
 
   it("reopens the active tab first after a bulk close", () => {
@@ -1351,116 +1284,9 @@ describe("rightPanelStore", () => {
     expect(store.getUserActionRevision(refA)).toBe(revision);
   });
 
-  describe("side chat (thread surfaces)", () => {
-    it("opens a peer thread as an activated, visible thread surface", () => {
-      useRightPanelStore.getState().openBrowser(refA, "tab-a");
-
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
-
-      expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
-        isOpen: true,
-        activeSurfaceId: "thread:thread-C",
-        surfaces: [
-          { id: "browser:tab-a", kind: "preview", resourceId: "tab-a" },
-          { id: "thread:thread-C", kind: "thread", threadId: "thread-C", environmentId: "env-1" },
-        ],
-      });
-      expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe(
-        "thread",
-      );
-      expect(
-        selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)?.kind,
-      ).toBe("thread");
-    });
-
-    it("does not duplicate a thread surface that is already open", () => {
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
-
-      const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
-      expect(state.surfaces).toHaveLength(1);
-      expect(state.activeSurfaceId).toBe("thread:thread-C");
-    });
-
-    it("keeps several peer threads open as coexisting tabs", () => {
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-D");
-
-      const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
-      expect(state.surfaces.map((surface) => surface.id)).toEqual([
-        "thread:thread-C",
-        "thread:thread-D",
-      ]);
-      expect(state.activeSurfaceId).toBe("thread:thread-D");
-    });
-
-    it("is a no-op when a thread is opened as its own side chat", () => {
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-A");
-
-      expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
-        isOpen: false,
-        activeSurfaceId: null,
-        surfaces: [],
-      });
-    });
-
-    it("scopes side chats per thread: opening on one thread never touches another", () => {
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
-
-      expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB)).toEqual({
-        isOpen: false,
-        activeSurfaceId: null,
-        surfaces: [],
-      });
-      const active = selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA);
-      expect(active?.kind === "thread" ? active.threadId : null).toBe("thread-C");
-    });
-
-    it("closing a thread surface falls back to the neighboring surface like any tab", () => {
-      useRightPanelStore.getState().openBrowser(refA, "tab-a");
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
-      useRightPanelStore.getState().openThreadSurface(refA, "thread-D");
-
-      useRightPanelStore.getState().closeSurface(refA, "thread:thread-C");
-
-      expect(
-        selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces.map(
-          (surface) => surface.id,
-        ),
-      ).toEqual(["browser:tab-a", "thread:thread-D"]);
-      // The active surface survived the close; the closed tab did not swallow activation.
-      expect(
-        selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)
-          .activeSurfaceId,
-      ).toBe("thread:thread-D");
-    });
-
-    it("migration keeps valid thread surfaces and drops malformed ones", () => {
-      expect(
-        migratePersistedRightPanelState({
-          byThreadKey: {
-            "env-1:thread-A": {
-              isOpen: true,
-              activeSurfaceId: "thread:thread-C",
-              surfaces: [
-                {
-                  id: "thread:thread-C",
-                  kind: "thread",
-                  threadId: "thread-C",
-                  environmentId: "env-1",
-                },
-                {
-                  id: "thread:thread-X",
-                  kind: "thread",
-                  threadId: "thread-Y",
-                  environmentId: "env-1",
-                },
-                { id: "thread:thread-Z", kind: "thread", environmentId: "env-1" },
-              ],
-            },
-          },
-        }),
-      ).toEqual({
+  it("migration drops the retired fork thread surfaces and keeps upstream side chats", () => {
+    expect(
+      migratePersistedRightPanelState({
         byThreadKey: {
           "env-1:thread-A": {
             isOpen: true,
@@ -1472,49 +1298,105 @@ describe("rightPanelStore", () => {
                 threadId: "thread-C",
                 environmentId: "env-1",
               },
+              { id: "side-chat:thread-D", kind: "side-chat", threadId: "thread-D" },
             ],
           },
         },
-        threadPanelVisibilityByThreadKey: {},
-      });
+      }),
+    ).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: "side-chat:thread-D",
+          surfaces: [{ id: "side-chat:thread-D", kind: "side-chat", threadId: "thread-D" }],
+        },
+      },
+      threadPanelVisibilityByThreadKey: {},
     });
+  });
 
-    it("migration falls back to a surviving surface when the active thread surface is malformed", () => {
-      expect(
-        migratePersistedRightPanelState({
-          byThreadKey: {
-            "env-1:thread-A": {
-              isOpen: true,
-              activeSurfaceId: "thread:thread-C",
-              surfaces: [
-                { id: "thread:thread-C", kind: "thread", environmentId: "env-1" },
-                {
-                  id: "thread:thread-D",
-                  kind: "thread",
-                  threadId: "thread-D",
-                  environmentId: "env-1",
-                },
-              ],
-            },
-          },
-        }),
-      ).toEqual({
+  it("opens a view tab once per target and activates it again on a repeat open", () => {
+    const store = useRightPanelStore.getState();
+    const revision = store.getUserActionRevision(refA);
+    store.openView(refA, { kind: "my-work", projectId: "p1" });
+    store.openView(refA, {
+      kind: "work-item",
+      projectId: "p1",
+      ticketId: "t-1",
+      displayId: "NX-1",
+    });
+    store.openView(refA, { kind: "my-work", projectId: "p1" });
+
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(state.surfaces.map((surface) => surface.id)).toEqual([
+      "view:my-work:p1",
+      "view:work-item:p1:t-1",
+    ]);
+    expect(state).toMatchObject({ isOpen: true, activeSurfaceId: "view:my-work:p1" });
+    expect(store.getUserActionRevision(refA)).toBe(revision + 3);
+  });
+
+  it("reopens a closed view tab on its own target, with no workspace needed", async () => {
+    const store = useRightPanelStore.getState();
+    const target: T3TeamViewTarget = {
+      kind: "work-item",
+      projectId: "p1",
+      ticketId: "t-1",
+      displayId: "NX-1",
+    };
+    store.openView(refA, target);
+    store.closeSurface(refA, "view:work-item:p1:t-1");
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
+    ).toEqual([]);
+    await reopenClosedView(useClosedViewStore.getState().entries[0]!, {
+      workspaceAvailable: false,
+      openPreview: () => {
+        throw new Error("A view tab must not create a browser session");
+      },
+    });
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      id: "view:work-item:p1:t-1",
+      kind: "view",
+      target,
+    });
+  });
+
+  it("migration keeps valid view tabs and drops ones whose target no longer validates", () => {
+    expect(
+      migratePersistedRightPanelState({
         byThreadKey: {
           "env-1:thread-A": {
             isOpen: true,
-            activeSurfaceId: "thread:thread-D",
+            activeSurfaceId: "view:work-item:p1:t-1",
             surfaces: [
               {
-                id: "thread:thread-D",
-                kind: "thread",
-                threadId: "thread-D",
-                environmentId: "env-1",
+                id: "view:work-item:p1:t-1",
+                kind: "view",
+                target: { kind: "work-item", projectId: "p1", ticketId: "t-1", stale: true },
               },
+              { id: "view:my-work:", kind: "view", target: { kind: "my-work", projectId: "" } },
+              { id: "view:board:p1", kind: "view", target: { kind: "board", projectId: "p1" } },
+              { id: "view:x", kind: "view" },
             ],
           },
         },
-        threadPanelVisibilityByThreadKey: {},
-      });
+      }),
+    ).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: "view:work-item:p1:t-1",
+          surfaces: [
+            {
+              id: "view:work-item:p1:t-1",
+              kind: "view",
+              target: { kind: "work-item", projectId: "p1", ticketId: "t-1" },
+            },
+          ],
+        },
+      },
+      threadPanelVisibilityByThreadKey: {},
     });
   });
 

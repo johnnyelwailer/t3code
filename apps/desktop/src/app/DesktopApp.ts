@@ -9,6 +9,7 @@ import * as Crypto from "effect/Crypto";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
+import { getDesktopScheme } from "../electron/t3team-desktopScheme.ts";
 import * as ElectronSafeStorage from "../electron/ElectronSafeStorage.ts";
 import { installDesktopIpcHandlers } from "../ipc/DesktopIpcHandlers.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
@@ -19,6 +20,7 @@ import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as PreviewPasskeys from "../preview/Passkeys.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopBackendPort from "./DesktopBackendPort.ts";
+import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopLegacyLocalStorage from "./DesktopLegacyLocalStorage.ts";
 import * as DesktopLifecycle from "./DesktopLifecycle.ts";
@@ -42,6 +44,13 @@ import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { pinnedBackendPortFromDefine } from "./t3team-isolatedInstance.ts";
+import * as ElectronTheme from "../electron/ElectronTheme.ts";
+import * as ElectronWindow from "../electron/ElectronWindow.ts";
+import {
+  pickGuardEnvironment,
+  runDesktopHomeGuard,
+  wrapGuardBrowserWindow,
+} from "../backend/t3team-oldAppGuardBoot.ts";
 
 const makeDesktopRunId = Crypto.Crypto.pipe(
   Effect.flatMap((crypto) => crypto.randomUUIDv4()),
@@ -145,7 +154,9 @@ const bootstrap = Effect.gen(function* () {
   const settings = yield* desktopSettings.get;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   yield* electronProtocol.registerDesktopProtocol({
-    scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
+    scheme: getDesktopScheme(environment.isDevelopment, {
+      isolatedInstance: environment.isolatedInstance,
+    }),
     ...(environment.isDevelopment
       ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
       : { assetDirectory: environment.clientAssetsDir }),
@@ -225,8 +236,41 @@ const bootstrap = Effect.gen(function* () {
     if (settings.wslOnly === true && settings.wslBackendEnabled === true) {
       yield* desktopWindow.showConnectingSplash;
     }
+    // t3team: if the daily Nexi app still holds the shared home, show a quit-and-retry
+    // screen and do not start a second server or run the home takeover until it quits.
+    const electronTheme = yield* ElectronTheme.ElectronTheme;
+    const electronWindow = yield* ElectronWindow.ElectronWindow;
+    const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    yield* Effect.promise(() =>
+      runDesktopHomeGuard({
+        environment: pickGuardEnvironment(environment),
+        shouldUseDarkColors,
+        createWindow: (options) =>
+          runPromise(
+            electronWindow.create(options as Parameters<(typeof electronWindow)["create"]>[0], {
+              auxiliary: true,
+            }),
+          ).then((created) => {
+            created.once("ready-to-show", () => {
+              if (!created.isDestroyed()) created.show();
+            });
+            return wrapGuardBrowserWindow(created as never);
+          }),
+      }),
+    );
     yield* primaryBackend.start;
     yield* logBootstrapInfo("bootstrap backend start requested");
+    // WSL-only fallback can change the primary endpoint before readiness.
+    const config = yield* primaryBackend.currentConfig;
+    if (
+      !environment.isDevelopment &&
+      !settings.wslOnly &&
+      Option.isSome(config) &&
+      Option.isNone(config.value.preflightFailure)
+    ) {
+      yield* desktopWindow.ensureMain;
+    }
     yield* appActivation.start.pipe(
       Effect.tap(() => logBootstrapInfo("desktop app control socket ready")),
       Effect.catch((error) => logStartupError("desktop app control socket unavailable", { error })),
@@ -297,6 +341,24 @@ const startup = Effect.gen(function* () {
     Effect.catchCause((cause) => fatalStartupCause("whenReady", cause)),
   );
   yield* logStartupInfo("app ready");
+  // Isolated packaged Nexi: put `nexi` on PATH on first launch (idempotent; never clobbers `t3`).
+  // The launchd/systemd boot service is still only installed by `nexi service install`, not here.
+  if (environment.isPackaged && environment.isolatedInstance) {
+    const cli = yield* DesktopCliCommand.DesktopCliCommand;
+    yield* Effect.forkScoped(
+      cli.install.pipe(
+        Effect.tap((state) =>
+          logStartupInfo("cli command path prepared", {
+            installedPath: state.installedPath,
+            onPath: state.onPath,
+          }),
+        ),
+        Effect.catch((error) =>
+          logStartupInfo("cli command path not prepared", { message: error.message }),
+        ),
+      ),
+    );
+  }
   // t3team: commit renderer localStorage (composer drafts) to disk regularly and before quit.
   yield* registerDesktopStorageFlush();
   // t3team: the renderer's `<img>`s of the Atlassian media proxy need its bearer (no cookie there).

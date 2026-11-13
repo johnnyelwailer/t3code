@@ -1,6 +1,6 @@
 /**
  * Sidebar project scope pills (2026-09-14) — the one-click alternative to the "All projects"
- * dropdown, behind the `t3teamProjectScopePillsEnabled` setting (on by default).
+ * dropdown, behind the `t3team.projectScopePills` setting (on by default).
  *
  * Production component only: `T3TeamSidebarProjectScopePillsView` (the disc stack; the container
  * adds the Jira catalog from live hooks) as `Sidebar.tsx` renders it under the search row. The searchable project menu is upstream's header combobox

@@ -32,6 +32,9 @@ export interface FeatureFlagDefinition {
   /** False when a user value cannot take effect (read outside the server, or data-location
    * flags that must match the release). Env and release preset still apply. */
   readonly userToggleable?: boolean;
+  /** `YYYY-MM-DD` the switch first shipped (its first commit). Settings → Features marks it New
+   * for 30 days and shows the month it arrived. */
+  readonly addedOn?: string;
 }
 
 export interface RegisteredFeatureFlag extends FeatureFlagDefinition {

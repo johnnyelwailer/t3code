@@ -20,7 +20,11 @@ import { cn } from "~/lib/utils";
 export type ProjectFaviconProject = Pick<
   EnvironmentProject,
   "environmentId" | "workspaceRoot" | "title" | "faviconPath" | "projectIcon"
->;
+> & {
+  /** When a cloud checkout adopts the user's project, load the favicon from that environment. */
+  readonly faviconEnvironmentId?: EnvironmentProject["environmentId"];
+  readonly faviconWorkspaceRoot?: string;
+};
 export function ProjectFavicon(input: {
   project: ProjectFaviconProject;
   className?: string | undefined;
@@ -37,8 +41,8 @@ function AutomaticProjectFavicon(input: Parameters<typeof ProjectFavicon>[0]) {
   const { project } = input;
   const src = useAtomValue(
     projectFaviconUrlAtom({
-      environmentId: project.environmentId,
-      cwd: project.workspaceRoot,
+      environmentId: project.faviconEnvironmentId ?? project.environmentId,
+      cwd: project.faviconWorkspaceRoot ?? project.workspaceRoot,
       faviconPath: project.faviconPath,
     }),
   );
@@ -55,8 +59,8 @@ function AutomaticProjectFavicon(input: Parameters<typeof ProjectFavicon>[0]) {
   }
 
   const cacheKey = getProjectFaviconResourceKey(
-    project.environmentId,
-    project.workspaceRoot,
+    project.faviconEnvironmentId ?? project.environmentId,
+    project.faviconWorkspaceRoot ?? project.workspaceRoot,
     project.faviconPath,
   );
 

@@ -53,6 +53,11 @@ export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
   cwd: Schema.NullOr(Schema.String),
   approvalPolicy: Schema.optional(Schema.Unknown),
   sandboxPolicy: Schema.optional(Schema.Unknown),
+  /**
+   * The administrator's ceiling, when a managed policy sets one. `runtimeMode` is already under
+   * it; adapters use it to refuse native mode choices a user makes beside T3 Code's own.
+   */
+  maxRuntimeMode: Schema.optional(RuntimeMode),
 });
 export type ProviderAdapterV2RuntimePolicy = typeof ProviderAdapterV2RuntimePolicy.Type;
 
@@ -156,6 +161,7 @@ export const ProviderAdapterV2Event = Schema.Union([
     runOrdinal: PositiveInt,
     status: Schema.Literals(["completed", "interrupted", "cancelled"]),
     failure: Schema.Null,
+    reason: Schema.optional(Schema.String),
     threadDisposition: Schema.Literals(["reusable", "broken"]),
   }),
   Schema.Struct({
@@ -400,6 +406,15 @@ export class ProviderAdapterProtocolError extends Schema.TaggedError<ProviderAda
   }
 }
 
+export class ProviderAdapterSessionStoppedError extends Schema.TaggedError<ProviderAdapterSessionStoppedError>()(
+  "ProviderAdapterSessionStoppedError",
+  { driver: ProviderDriverKind },
+) {
+  override get message(): string {
+    return `No running ${this.driver} session owns this thread.`;
+  }
+}
+
 export const ProviderAdapterV2Error = Schema.Union([
   ProviderAdapterCapabilitiesError,
   ProviderAdapterOpenSessionError,
@@ -417,6 +432,7 @@ export const ProviderAdapterV2Error = Schema.Union([
   ProviderAdapterRuntimeRequestResponseError,
   ProviderAdapterEventStreamError,
   ProviderAdapterProtocolError,
+  ProviderAdapterSessionStoppedError,
 ]);
 export type ProviderAdapterV2Error = typeof ProviderAdapterV2Error.Type;
 
@@ -501,6 +517,7 @@ export type ProviderAdapterV2RollbackTarget =
       readonly checkpointId: CheckpointId;
       readonly appRunOrdinal: number;
       readonly providerTurn: OrchestrationV2ProviderTurn;
+      readonly message?: Pick<OrchestrationV2ConversationMessage, "role" | "text" | "attachments">;
     };
 
 export interface ProviderAdapterV2RollbackThreadInput {
@@ -531,6 +548,8 @@ export interface ProviderAdapterV2HistoricalContext {
 
 export interface ProviderAdapterV2McpTool {
   readonly name: string;
+  // Apps reject a `hostContext.toolInfo.tool` without one.
+  readonly inputSchema: unknown;
   readonly _meta?: unknown;
   readonly annotations?: unknown;
 }

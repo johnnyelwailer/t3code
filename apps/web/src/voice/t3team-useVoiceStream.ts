@@ -93,6 +93,7 @@ export function useVoiceStream(
           const text = sanitizeTranscript(event.text);
           setView((current) => ({
             ...current,
+            partial: "",
             ...writingDone(current),
             heard: text === "" ? current.heard : { text, atMs: Date.now() },
           }));

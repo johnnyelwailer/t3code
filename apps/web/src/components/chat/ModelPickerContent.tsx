@@ -69,8 +69,6 @@ import {
 import { resolveProviderInstanceReadiness } from "../../t3team-providerInstanceReadiness";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 import { toolAuthToolForDriverKind } from "../settings/t3team-toolAuthTools";
-import { useFeatureFlag } from "../../t3team/t3team-useFeatureFlag";
-
 type ModelPickerItem = {
   slug: string;
   name: string;
@@ -376,6 +374,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   docked?: boolean;
   /** Right at the end of the search text moves into the popup's effort column. */
   onFocusEffort?: () => void;
+  /** Closes the list column, inside the popup's fixed height. */
+  listFooter?: ReactNode;
 }) {
   const {
     searchInputRef,
@@ -600,14 +600,14 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
    * this is the actual moment the user hits the problem, not a settings page
    * they may never visit. Only for tools with a sign-in flow at all
    * (`toolAuthToolForDriverKind` returns `undefined` for cursor/grok/
-   * opencode/...), and only while `INTEGRATIONS_TOOL_AUTH` is on; the rest fall back to
-   * today's behaviour (an empty list).
+   * opencode/...); the rest fall back to today's behaviour (an empty list).
    * Suppressed while searching: search already flattens matches across every
    * *ready* instance regardless of which tab is selected, so the connect
    * panel would be showing the wrong instance's state.
+   * `INTEGRATIONS_TOOL_AUTH` is checked inside the panel, against the TARGET environment: reading
+   * it from the primary server put an Install button in front of a cloud machine that refuses it.
    */
-  const toolAuthEnabled = useFeatureFlag("INTEGRATIONS_TOOL_AUTH");
-  const connectPanelCandidate = useMemo(() => {
+  const connectPanelTarget = useMemo(() => {
     if (isSearching || selectedInstanceId === "favorites") {
       return null;
     }
@@ -625,7 +625,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     }
     return { entry, tool, readiness };
   }, [entryByInstanceId, isSearching, selectedInstanceId]);
-  const connectPanelTarget = toolAuthEnabled ? connectPanelCandidate : null;
 
   // Fit the tallest tab so switching tabs never resizes the popup and moves the rail under the cursor.
   const tallestTabUnits = (() => {
@@ -882,16 +881,17 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         ref={pickerContentRef}
         className={cn(
           "relative flex w-screen max-w-90 flex-row overflow-hidden",
-          props.docked
-            ? "max-sm:h-56 max-sm:min-h-0! max-sm:w-full max-sm:max-w-none"
-            : "max-h-86.5",
+          props.docked ? "max-sm:h-56 max-sm:w-full max-sm:max-w-none" : "max-h-86.5",
         )}
+        // Docked, the popup sets the height; a minimum here would overflow short windows.
         style={
-          isSearching
-            ? { height: searchHeight }
-            : {
-                minHeight: `min(calc(var(--spacing) * ${tallestTabUnits + LIST_CHROME_UNITS} + 1px), calc(var(--spacing) * 86.5))`,
-              }
+          props.docked
+            ? undefined
+            : isSearching
+              ? { height: searchHeight }
+              : {
+                  minHeight: `min(calc(var(--spacing) * ${tallestTabUnits + LIST_CHROME_UNITS} + 1px), calc(var(--spacing) * 86.5))`,
+                }
         }
         data-model-picker-content="true"
       >
@@ -1051,7 +1051,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
             {connectPanelTarget ? (
               <ModelPickerProviderConnectPanel
-                {...(props.environmentId ? { environmentId: props.environmentId } : {})}
+                environmentId={props.environmentId}
                 entry={connectPanelTarget.entry}
                 tool={connectPanelTarget.tool}
                 readiness={connectPanelTarget.readiness}
@@ -1129,6 +1129,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               onOpenProviderSetup={onOpenProviderSetup}
               connectPanelOpen={connectPanelTarget !== null}
             />
+            {props.listFooter}
           </div>
         </Combobox>
       </div>

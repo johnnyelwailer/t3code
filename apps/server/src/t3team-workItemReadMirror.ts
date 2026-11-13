@@ -11,6 +11,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
 import { readT3TeamMirrorSyncStatus } from "./t3team-atlassian-mirrorSyncState.ts";
+import { toMirrorFreshness } from "./t3team-workItemReadFreshness.ts";
 import type { WorkItemResource } from "./t3team-workItemReadQuery.ts";
 import type { JiraMirrorBinding } from "./t3team-workflowSignalWorkItemProjectMirror.ts";
 
@@ -40,6 +41,10 @@ export const isMirrorReady = (binding: JiraMirrorBinding) =>
   readT3TeamMirrorSyncStatus(binding).pipe(
     Effect.map((status) => status.lastSuccessAtMs !== undefined),
   );
+
+/** When the mirror last finished a catch-up, and whether it has failed since. */
+export const readMirrorFreshness = (binding: JiraMirrorBinding) =>
+  readT3TeamMirrorSyncStatus(binding).pipe(Effect.map(toMirrorFreshness));
 
 export const searchMirror = Effect.fn("t3team.workItemRead.mirrorSearch")(function* (
   binding: JiraMirrorBinding,

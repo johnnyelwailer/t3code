@@ -11,6 +11,7 @@ import {
 } from "../../t3team/t3team-betaFlags";
 import { useFeatureFlag } from "../../t3team/t3team-useFeatureFlag";
 import { Button } from "../ui/button";
+import { T3TeamCompanionSetting } from "./t3team-CompanionSetting";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 
 interface BetaFlagOption<K extends keyof T3TeamBetaFlags> {
@@ -50,9 +51,18 @@ function BetaFlagSelect<K extends keyof T3TeamBetaFlags>({
   );
 }
 
-/** Hidden while `MYWORK_DIGEST_VARIANTS` is off: the digest then ignores these choices. */
+/**
+ * The t3team rows at the Interface seam: the digest variants, hidden while
+ * `MYWORK_DIGEST_VARIANTS` is off because the digest then ignores them, and the companion switch.
+ */
 export function T3TeamBetaSettings() {
-  return useFeatureFlag("MYWORK_DIGEST_VARIANTS") ? <BetaSettingsSection /> : null;
+  const digestVariants = useFeatureFlag("MYWORK_DIGEST_VARIANTS");
+  return (
+    <>
+      {digestVariants ? <BetaSettingsSection /> : null}
+      <T3TeamCompanionSetting />
+    </>
+  );
 }
 
 function BetaSettingsSection() {

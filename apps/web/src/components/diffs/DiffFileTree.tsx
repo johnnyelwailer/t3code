@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from "@pierre/trees";
+import type { FileTreeVisibleRow, GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree, useFileTreeSelector } from "@pierre/trees/react";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -23,6 +23,8 @@ import {
 
 export type { DiffFileTreeEntry } from "./diffFileTree.logic";
 
+const NO_ACCESSORY_ROWS: readonly FileTreeVisibleRow[] = [];
+
 interface DiffFileTreeProps {
   readonly entries: ReadonlyArray<DiffFileTreeEntry>;
   readonly onSelectFile: (path: string) => void;
@@ -32,6 +34,7 @@ interface DiffFileTreeProps {
   readonly headerAccessory?: ReactNode;
   readonly footer?: ReactNode;
   readonly className?: string;
+  readonly renderRowAccessory?: (path: string, row: FileTreeVisibleRow) => ReactNode;
 }
 
 export function DiffFileTree({
@@ -43,6 +46,7 @@ export function DiffFileTree({
   headerAccessory,
   footer,
   className,
+  renderRowAccessory,
 }: DiffFileTreeProps) {
   const { resolvedTheme } = useTheme();
   const paths = entries.map((entry) => entry.path);
@@ -81,6 +85,8 @@ export function DiffFileTree({
   });
 
   const { model } = useFileTree({
+    renderRowDecoration: ({ item }) =>
+      renderRowAccessory ? { slot: `diff-review-${item.path}` } : null,
     density: "compact",
     flattenEmptyDirectories: true,
     initialExpansion: "open",
@@ -91,6 +97,13 @@ export function DiffFileTree({
     sort: ordering.sort,
     unsafeCSS: PIERRE_TREE_UNSAFE_CSS,
   });
+  const visibleRows = useFileTreeSelector(
+    model,
+    (current) =>
+      renderRowAccessory ? current.getVisibleRows(0, current.getVisibleCount()) : NO_ACCESSORY_ROWS,
+    (left, right) =>
+      left.length === right.length && left.every((row, index) => row.path === right[index]?.path),
+  );
   const allDirectoriesExpanded = useFileTreeSelector(model, (currentModel) =>
     areAllDirectoriesExpanded(currentModel, directoryPaths),
   );
@@ -222,6 +235,12 @@ export function DiffFileTree({
         aria-label={ariaLabel}
         onClickCapture={(event) => {
           if (
+            event.nativeEvent
+              .composedPath()
+              .some(
+                (node) =>
+                  node instanceof HTMLElement && node.hasAttribute("data-diff-row-accessory"),
+              ) ||
             event.defaultPrevented ||
             event.button !== 0 ||
             event.ctrlKey ||
@@ -244,7 +263,15 @@ export function DiffFileTree({
         }}
         className="min-h-0 flex-1 overflow-hidden"
         style={pierreTreeStyle(resolvedTheme)}
-      />
+      >
+        {renderRowAccessory
+          ? visibleRows.map((row) => (
+              <span data-diff-row-accessory key={row.path} slot={`diff-review-${row.path}`}>
+                {renderRowAccessory(presented.selectionPath(row.path), row)}
+              </span>
+            ))
+          : null}
+      </FileTree>
       {footer}
     </div>
   );

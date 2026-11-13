@@ -186,6 +186,8 @@ export type PackFeatureFlagDefinition = {
   readonly requiresRestart: boolean;
   /** Older env names the pack still honors. */
   readonly envAliases?: readonly string[];
+  /** `YYYY-MM-DD` the switch first shipped; Settings → Features marks it New for 30 days. */
+  readonly addedOn?: string;
 };
 
 export type PackActivationContext = HostServiceRegistration & {

@@ -3,6 +3,7 @@ import { FEATURE_FLAG_GROUPS, listFeatureFlags } from "@t3tools/project-context/
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  featureFlagFreshness,
   featureFlagGroupSummary,
   featureFlagLockReason,
   featureFlagSourceChip,
@@ -32,6 +33,8 @@ const flag = (
   ...overrides,
 });
 
+const NOW = new Date("2026-11-06T12:00:00Z");
+
 describe("groupFeatureFlags", () => {
   it("orders sections by the view's groups, skips empty ones and appends unknown groups", () => {
     const sections = groupFeatureFlags({
@@ -43,7 +46,7 @@ describe("groupFeatureFlags", () => {
       ],
     });
     expect(sections.map((section) => section.group)).toEqual(["Agent", "Platform", "Pack only"]);
-    expect(featureFlagGroupSummary(sections[0]!)).toBe("1 of 1 on");
+    expect(featureFlagGroupSummary(sections[0]!, NOW)).toBe("1 of 1 on");
   });
 
   it("nests subgroups one level inside their group, keeping registry order", () => {
@@ -80,6 +83,39 @@ describe("groupFeatureFlags", () => {
     expect(sections.every((section) => FEATURE_FLAG_GROUPS.some((g) => g === section.group))).toBe(
       true,
     );
+  });
+});
+
+describe("featureFlagFreshness", () => {
+  it("marks a switch New for 30 days and names the month it arrived", () => {
+    expect(featureFlagFreshness({ addedOn: "2026-10-30" }, NOW)).toEqual({
+      isNew: true,
+      label: "Since Oct 2026",
+    });
+    expect(featureFlagFreshness({ addedOn: "2026-10-06" }, NOW)).toEqual({
+      isNew: false,
+      label: "Since Oct 2026",
+    });
+  });
+
+  it("calls a switch without a usable date Established", () => {
+    expect(featureFlagFreshness({}, NOW)).toEqual({ isNew: false, label: "Established" });
+    expect(featureFlagFreshness({ addedOn: "soon" }, NOW)).toEqual({
+      isNew: false,
+      label: "Established",
+    });
+  });
+
+  it("counts the new switches of a group, subgroups included", () => {
+    const [section] = groupFeatureFlags({
+      groups: ["Agent"],
+      flags: [
+        flag({ key: "A", enabled: true, addedOn: "2026-11-01" }),
+        flag({ key: "B", subgroup: "Tools", addedOn: "2026-10-20" }),
+        flag({ key: "C", subgroup: "Tools" }),
+      ],
+    });
+    expect(featureFlagGroupSummary(section!, NOW)).toBe("1 of 3 on · 2 new");
   });
 });
 

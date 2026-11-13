@@ -104,7 +104,11 @@ import {
   resolveSelectableProviderInstanceEntry,
   type ProviderInstanceEntry,
 } from "../providerInstances";
-import { resolveReadyProviderOverride } from "../t3team-readyProviderPreference";
+import {
+  isClaudeAuthSlotInstance,
+  resolveReadyProviderOverride,
+} from "../t3team-readyProviderPreference";
+import { applyProviderSelectionFallbackRule } from "../t3team-providerSelectionFallback";
 
 type ThreadProjection = EnvironmentThread["projection"];
 type ThreadStructureRow = ThreadStructure["visibleTurnItems"][number];
@@ -494,9 +498,13 @@ export function resolveComposerProviderSelection(input: {
   const requestedInstanceId = input.candidateInstanceIds.find(
     (candidate) => candidate != null && candidate !== NO_PROVIDER_MODEL_SELECTION.instanceId,
   );
+  const requestedEntry = input.entries.find((entry) => entry.instanceId === requestedInstanceId);
   const requestedDriverKind =
     input.lockedProvider ??
-    input.entries.find((entry) => entry.instanceId === requestedInstanceId)?.driverKind ??
+    requestedEntry?.driverKind ??
+    (isClaudeAuthSlotInstance(requestedInstanceId)
+      ? ProviderDriverKind.make("claudeAgent")
+      : undefined) ??
     input.entries[0]?.driverKind ??
     ProviderDriverKind.make("unconfigured");
   const lockedContinuationGroupKey = input.lockedProvider
@@ -514,7 +522,7 @@ export function resolveComposerProviderSelection(input: {
       (!lockedContinuationGroupKey || entry.continuationGroupKey === lockedContinuationGroupKey) &&
       (!requiresExactInstance || entry.instanceId === input.lockedInstanceId),
   );
-  const selectedProviderEntry =
+  const resolvedProviderEntry =
     (input.preferReadyProvider
       ? resolveReadyProviderOverride({
           entries: compatibleEntries,
@@ -533,6 +541,26 @@ export function resolveComposerProviderSelection(input: {
       undefined,
     ) ??
     resolveSelectableProviderInstanceEntry(compatibleEntries, undefined);
+  // A Claude pick uses this machine's one Claude instance (one store slot). Another
+  // ready provider must not take the thread.
+  const claudeRequested =
+    input.lockedProvider === "claudeAgent" ||
+    requestedEntry?.driverKind === "claudeAgent" ||
+    isClaudeAuthSlotInstance(requestedInstanceId);
+  const claudeOnMachine = compatibleEntries.find(
+    (entry) => entry.driverKind === "claudeAgent" && entry.enabled,
+  );
+  const claudePinnedEntry =
+    claudeRequested &&
+    claudeOnMachine !== undefined &&
+    resolvedProviderEntry?.driverKind !== "claudeAgent"
+      ? claudeOnMachine
+      : resolvedProviderEntry;
+  // Last word on the selection: a provider the user or the thread already chose is not replaced by
+  // a different one, and the allowed swaps (Nexplore AI, same-driver) go back to the composer to
+  // label. See t3team-providerSelectionFallback.ts.
+  const { entry: selectedProviderEntry, fallback: providerFallback } =
+    applyProviderSelectionFallbackRule({ requestedEntry, resolvedEntry: claudePinnedEntry });
   const unavailableProviderInstanceId = selectedProviderEntry
     ? undefined
     : input.lockedProvider
@@ -544,6 +572,7 @@ export function resolveComposerProviderSelection(input: {
     requestedDriverKind,
     lockedContinuationGroupKey,
     unavailableProviderInstanceId,
+    providerFallback,
   };
 }
 
@@ -1110,14 +1139,15 @@ export function hasServerAcknowledgedLocalDispatch(input: {
   if (input.hasPendingApproval || input.hasPendingUserInput || Boolean(input.threadError)) {
     return true;
   }
+  const latestUserMessageChanged =
+    input.localDispatch.latestUserMessageId !== (input.latestUserMessageId ?? null);
   if (input.phase === "connecting" || derivePhase(input.runtime ?? null) === "connecting") {
-    return false;
+    // A message queued behind other work, such as an idle compaction the shell hides, has landed.
+    return input.runtime?.status === "queued" && latestUserMessageChanged;
   }
 
   const latestRun = input.latestRun ?? null;
   const runtime = input.runtime ?? null;
-  const latestUserMessageChanged =
-    input.localDispatch.latestUserMessageId !== (input.latestUserMessageId ?? null);
   const latestRunChanged =
     input.localDispatch.latestRunId !== (latestRun?.runId ?? null) ||
     input.localDispatch.latestRunRequestedAt !== (latestRun?.requestedAt ?? null) ||
@@ -1260,8 +1290,13 @@ export interface PlanFollowUpComposerSnapshot {
   readonly environmentContexts: ReadonlyArray<EnvironmentContextRecord>;
 }
 
+// A draft typed while the send was in flight is newer and stays. Composer refs and the cursor
+// belong to the thread on screen, so they follow only while the follow-up's route is current.
 export function restorePlanFollowUpComposer(input: {
   readonly snapshot: PlanFollowUpComposerSnapshot;
+  readonly draftHasUserContent: boolean;
+  readonly routeIsCurrent: boolean;
+  readonly writeComposerRefs: (snapshot: PlanFollowUpComposerSnapshot) => void;
   readonly writePrompt: (prompt: string) => void;
   readonly writeTerminalContexts: (contexts: ReadonlyArray<TerminalContextDraft>) => void;
   readonly writeReviewComments: (comments: ReadonlyArray<ReviewCommentContext>) => void;
@@ -1274,12 +1309,15 @@ export function restorePlanFollowUpComposer(input: {
     detectTrigger: boolean;
   }) => void;
 }): void {
+  if (input.draftHasUserContent) return;
+  if (input.routeIsCurrent) input.writeComposerRefs(input.snapshot);
   input.writePrompt(input.snapshot.prompt);
   input.writeTerminalContexts(input.snapshot.terminalContexts);
   input.writeReviewComments(input.snapshot.reviewComments);
   input.writePreviewAnnotations(input.snapshot.previewAnnotations);
   input.writeThreadContexts(input.snapshot.threadContexts);
   input.writeEnvironmentContexts(input.snapshot.environmentContexts);
+  if (!input.routeIsCurrent) return;
   input.resetCursor({
     cursor: collapseExpandedComposerCursor(input.snapshot.prompt, input.snapshot.prompt.length),
     prompt: input.snapshot.prompt,

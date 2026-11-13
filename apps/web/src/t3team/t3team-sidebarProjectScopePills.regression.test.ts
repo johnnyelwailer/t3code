@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - regression guard reads component source from disk.
 /**
  * Static regression guard: the sidebar renders the one-click project scope
- * pills when `t3teamProjectScopePillsEnabled` is on (the distribution default).
+ * pills when `t3team.projectScopePills` is on (the distribution default).
  *
  * The 2026-09-18 upstream sync replaced the sidebar header with
  * `SidebarThreadHeader` and dropped the pills' JSX, leaving only the import and

@@ -24,6 +24,7 @@ import {
 } from "@t3tools/contracts";
 
 import packageJson from "../../package.json" with { type: "json" };
+import { parseBearerToken } from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as DeviceService from "../device/DeviceService.ts";
@@ -58,6 +59,13 @@ import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import * as OrchestratorHandlers from "./toolkits/orchestrator/handlers.ts";
 import { OrchestratorToolkit } from "./toolkits/orchestrator/tools.ts";
+import {
+  CloudSessionDeleteToolkit,
+  cloudSessionDeleteHandlers,
+} from "./toolkits/orchestrator/t3team-cloudSessionDelete.ts";
+import { layer as CloudSessionServiceLayer } from "../cloud/t3team-CloudSessionService.ts";
+import { layer as CloudSessionMachinesLayer } from "../cloud/t3team-CloudSessionMachine.ts";
+import { layer as ProjectMachineDiscoveryLayer } from "../project/t3team-ProjectMachineDiscovery.ts";
 import * as PreviewHandlers from "./toolkits/preview/handlers.ts";
 import {
   PreviewSnapshotTool,
@@ -80,7 +88,10 @@ import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolki
 import { T3TeamToolkitHandlersLive } from "./toolkits/t3team/handlers.ts";
 import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./toolkits/t3team/t3team-mcpToolAliases.ts";
 import { withToolNameAliases } from "./toolkits/t3team/t3team-mcpToolAliasProtocol.ts";
-import { withFeatureGatedToolList } from "./toolkits/t3team/t3team-mcpToolFeatureGate.ts";
+import {
+  isMcpToolEnabled,
+  withFeatureGatedToolList,
+} from "./toolkits/t3team/t3team-mcpToolFeatureGate.ts";
 import { advertiseToolDocs } from "./toolkits/t3team/t3team-toolDocs.ts";
 import { withThreadScopedToolList } from "./toolkits/t3team/t3team-mcpToolThreadList.ts";
 import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
@@ -203,6 +214,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
   const clients = yield* Effect.serviceOption(McpClientAuthenticator);
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const runtimeModeCeiling = serverSettings.managedPolicy?.limits?.maxRuntimeMode;
   const linksEnabled = serverSettings.getSettings.pipe(
     Effect.map((settings) => settings.linkedEnvironmentsEnabled),
     Effect.orElseSucceed(() => false),
@@ -210,10 +222,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
   return Effect.fn("McpHttpServer.authenticateRequest")(function* (httpEffect) {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const authorization = request.headers.authorization;
-    const token =
-      authorization?.startsWith("Bearer ") === true
-        ? authorization.slice("Bearer ".length).trim()
-        : "";
+    const token = parseBearerToken(request) ?? "";
     const invocation =
       (yield* registry.resolve(token)) ??
       (Option.isSome(clients) && token.length > 0
@@ -221,7 +230,14 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         : undefined);
     if (!invocation) {
       yield* Effect.logWarning("rejected MCP request with an unusable credential", {
-        reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",
+        reason:
+          authorization === undefined
+            ? "missing_authorization_header"
+            : authorization.split(" ", 1)[0]?.toLowerCase() !== "bearer"
+              ? "unsupported_scheme"
+              : token.length === 0
+                ? "missing_bearer_token"
+                : "unknown_or_expired_token",
       });
       return unauthorized({
         request,
@@ -229,8 +245,9 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         offerOAuth: Option.isSome(clients) && !looksLikeProviderToken(token),
       });
     }
-    const limited = withModeLimit(invocation, request);
-    if (limited === undefined) return invalidModeLimit;
+    const asked = withModeLimit(invocation, request);
+    if (asked === undefined) return invalidModeLimit;
+    const limited = McpInvocationContext.withRuntimeModeCeiling(asked, runtimeModeCeiling);
     const linkedEnvironments = yield* linksEnabled;
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     return yield* httpEffect.pipe(
@@ -1187,7 +1204,11 @@ export const layerMcpTransport = McpServer.layerHttp({
   allowSessionTermination: true,
 }).pipe(Layer.provide(layerMcpAuthMiddleware));
 
-/** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
+/**
+ * Every tool the default MCP server advertises. AgentContextBudget.test.ts measures this set.
+ * `cloud_session_delete` is not in it: that tool joins `layer` only while
+ * CLOUD_SESSION_STOP_DELETE is on, so the measured budget stays the flag-off surface.
+ */
 export const layerTools = Layer.mergeAll(
   layerPreviewToolkit,
   layerOrchestratorToolkit,
@@ -1203,4 +1224,20 @@ export const layerTools = Layer.mergeAll(
   layerHtmlToolkit,
 );
 
-export const layer = layerTools.pipe(Layer.provideMerge(layerMcpTransport));
+const layerCloudSessionDeleteToolkit = toolkitRegistration(
+  CloudSessionDeleteToolkit,
+  cloudSessionDeleteHandlers,
+).pipe(
+  Layer.provide(CloudSessionServiceLayer),
+  Layer.provide(CloudSessionMachinesLayer.pipe(Layer.provide(ProjectMachineDiscoveryLayer))),
+);
+
+/** The wire server. The delete tool is absent unless its flag is already on. */
+export const layer = Layer.unwrap(
+  Effect.sync(() =>
+    (isMcpToolEnabled("cloud_session_delete")
+      ? Layer.mergeAll(layerTools, layerCloudSessionDeleteToolkit)
+      : layerTools
+    ).pipe(Layer.provideMerge(layerMcpTransport)),
+  ),
+);

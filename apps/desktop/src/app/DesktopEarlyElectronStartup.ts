@@ -9,26 +9,31 @@ import {
   type LinuxPasswordStoreSwitch,
   type LinuxPasswordStorePreference,
 } from "../linuxSecretStorage.ts";
+import { resolveDesktopStateDir, type JoinPath } from "./DesktopStatePaths.ts";
 import {
-  resolveDesktopBaseDir,
-  resolveDesktopStateDir,
-  type JoinPath,
-} from "./DesktopStatePaths.ts";
+  type EarlyPackagedBranding,
+  resolveBrandedLinuxDesktopEntryName,
+  resolveEarlyDesktopBaseDir,
+} from "./t3team-earlyPackagedBranding.ts";
+
+export type { EarlyPackagedBranding } from "./t3team-earlyPackagedBranding.ts";
 
 interface EarlyDesktopSettingsInput {
   readonly env: NodeJS.ProcessEnv;
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
   readonly readFileString: (path: string) => string;
+  readonly packagedBranding?: EarlyPackagedBranding | undefined;
+  readonly appDataDirectory?: string;
 }
 
 type EarlyLinuxElectronOptionsInput = EarlyDesktopSettingsInput;
 
 export interface EarlyLinuxElectronOptions {
   readonly isDevelopment: boolean;
-  readonly linuxWmClass: string;
   readonly linuxDesktopEntryName: string;
   readonly passwordStore: LinuxPasswordStoreSwitch | null;
+  readonly isolatedInstance: boolean;
 }
 
 export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
@@ -53,13 +58,11 @@ function resolveEarlyDesktopSettingsPath(input: {
   readonly env: NodeJS.ProcessEnv;
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
+  readonly packagedBranding?: EarlyPackagedBranding | undefined;
+  readonly appDataDirectory?: string;
 }): string {
-  const t3Home = Option.fromUndefinedOr(input.env.T3CODE_HOME);
-  const baseDir = resolveDesktopBaseDir({
-    homeDirectory: input.homeDirectory,
-    joinPath: input.joinPath,
-    t3Home,
-  });
+  const { baseDir, isolated } = resolveEarlyDesktopBaseDir(input);
+  const t3Home = isolated ? Option.none<string>() : Option.fromUndefinedOr(input.env.T3CODE_HOME);
   const stateDir = resolveDesktopStateDir({
     baseDir,
     isDevelopment: isDevelopmentEnvironment(input.env),
@@ -146,12 +149,16 @@ export function resolveEarlyLinuxElectronOptions(
   const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
     isDevelopment,
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
-    linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
+    linuxDesktopEntryName: resolveBrandedLinuxDesktopEntryName(
+      isDevelopment,
+      input.packagedBranding,
+      resolveLinuxDesktopEntryName(isDevelopment),
+    ),
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,
       env: input.env,
     }),
+    isolatedInstance: input.packagedBranding?.isolatedInstance === true,
   };
 }
 

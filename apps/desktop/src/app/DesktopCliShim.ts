@@ -5,11 +5,15 @@ import * as Option from "effect/Option";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
+import {
+  cliBinaryName,
+  cliPathLinkName,
+  cliShimMarker,
+  isolatedShimEnvVars,
+} from "./t3team-cliIdentity.ts";
 
 // AppImage mounts change each run; the launcher must mount the image itself.
 const { logInfo, logWarning } = makeComponentLogger("desktop-cli-shim");
-
-export const MARKER = "Written by T3 Code: runs the desktop app's bundled t3 CLI.";
 
 const SERVER_ENTRY = "apps/server/dist/bin.mjs";
 
@@ -26,11 +30,28 @@ export type CliShimTarget =
   | { readonly kind: "windows"; readonly executable: string; readonly entry: string };
 
 /** Embed this install's home and executable path so `sudo`, which clears the environment, uses the same install. */
+function isolatedShimEnvLines(input: {
+  readonly isolatedInstance?: boolean;
+  readonly appId?: string | undefined;
+}): { readonly windows: ReadonlyArray<string>; readonly unix: ReadonlyArray<string> } {
+  const windows: string[] = [];
+  const unix: string[] = [];
+  for (const { name, value } of isolatedShimEnvVars(input)) {
+    windows.push(`set "${name}=${cmdText(value)}"`);
+    unix.push(`export ${name}=${shellWord(value)}`);
+  }
+  return { windows, unix };
+}
+
 export const renderCliShim = (input: {
   readonly target: CliShimTarget;
   readonly shimPath: string;
   readonly t3Home: string;
+  readonly isolatedInstance?: boolean;
+  readonly appId?: string | undefined;
 }) => {
+  const marker = cliShimMarker(input.isolatedInstance === true);
+  const identityEnv = isolatedShimEnvLines(input);
   const { target } = input;
   if (target.kind === "windows") {
     const utf8 = [target.executable, target.entry, input.shimPath, input.t3Home].some((value) =>
@@ -39,7 +60,7 @@ export const renderCliShim = (input: {
     const restore = utf8 ? ["chcp %t3_codepage% >nul"] : [];
     return [
       "@echo off",
-      `rem ${MARKER}`,
+      `rem ${marker}`,
       // Delayed expansion would rewrite `!name!` in paths and arguments.
       "setlocal EnableExtensions DisableDelayedExpansion",
       // Ctrl-C skips codepage restoration, so switch to UTF-8 only for non-ASCII install paths.
@@ -51,6 +72,7 @@ export const renderCliShim = (input: {
         : []),
       `set "T3CODE_CLI_PATH=${cmdText(input.shimPath)}"`,
       `if not defined T3CODE_HOME set "T3CODE_HOME=${cmdText(input.t3Home)}"`,
+      ...identityEnv.windows,
       'set "ELECTRON_RUN_AS_NODE=1"',
       // Electron's Windows executable starts without stdin; this tells the CLI to reopen the console.
       'set "T3CODE_DESKTOP_CLI_LAUNCHER=1"',
@@ -69,10 +91,11 @@ export const renderCliShim = (input: {
   }
   const header = [
     "#!/bin/sh",
-    `# ${MARKER}`,
+    `# ${marker}`,
     `export T3CODE_CLI_PATH=${shellWord(input.shimPath)}`,
     `home=${shellWord(input.t3Home)}`,
     'export T3CODE_HOME="${T3CODE_HOME:-$home}"',
+    ...identityEnv.unix,
     "export ELECTRON_RUN_AS_NODE=1",
     `app=${shellWord(target.kind === "appimage" ? target.appImage : target.executable)}`,
     'if [ ! -x "$app" ]; then',
@@ -116,7 +139,10 @@ export const launcherPath = (environment: DesktopEnvironment.DesktopEnvironment[
   environment.path.join(
     environment.baseDir,
     "bin",
-    environment.platform === "win32" ? "t3.cmd" : "t3",
+    cliBinaryName({
+      isolatedInstance: environment.isolatedInstance,
+      platform: environment.platform,
+    }),
   );
 
 export const install = Effect.gen(function* () {
@@ -137,12 +163,20 @@ export const install = Effect.gen(function* () {
         }),
         onNone: () => ({ kind: "direct" as const, executable: process.execPath, entry }),
       });
-  const content = renderCliShim({ target, shimPath, t3Home: environment.baseDir });
+  const content = renderCliShim({
+    target,
+    shimPath,
+    t3Home: environment.baseDir,
+    isolatedInstance: environment.isolatedInstance,
+    appId: environment.appId,
+  });
+  const marker = cliShimMarker(environment.isolatedInstance);
+  const commandName = cliPathLinkName(environment.isolatedInstance);
 
   return yield* Effect.gen(function* () {
     const existing = yield* fs.readFileString(shimPath).pipe(Effect.option);
-    if (Option.isSome(existing) && !existing.value.includes(MARKER)) {
-      yield* logWarning("leaving a t3 launcher the app did not write", { shimPath });
+    if (Option.isSome(existing) && !existing.value.includes(marker)) {
+      yield* logWarning(`leaving a ${commandName} launcher the app did not write`, { shimPath });
       return Option.none<string>();
     }
     if (Option.getOrUndefined(existing) !== content) {
@@ -150,14 +184,15 @@ export const install = Effect.gen(function* () {
       const staging = `${shimPath}.${process.pid}.tmp`;
       yield* fs.writeFileString(staging, content, { mode: 0o755 });
       yield* fs.rename(staging, shimPath);
-      yield* logInfo("installed t3 launcher", { shimPath });
+      yield* logInfo(`installed ${commandName} launcher`, { shimPath });
     }
     return Option.some(shimPath);
   }).pipe(
     Effect.catchCause((cause) =>
-      logWarning("could not install t3 launcher", { shimPath, cause: Cause.pretty(cause) }).pipe(
-        Effect.as(Option.none<string>()),
-      ),
+      logWarning(`could not install ${commandName} launcher`, {
+        shimPath,
+        cause: Cause.pretty(cause),
+      }).pipe(Effect.as(Option.none<string>())),
     ),
     Effect.withSpan("desktop.cliShim.install"),
   );

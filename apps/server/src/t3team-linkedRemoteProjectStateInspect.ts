@@ -1,6 +1,6 @@
 /**
- * Targeted remote queries for a linked repository's committed project-state tree (`.nexi` /
- * `.t3team`) without materializing a full reference checkout. Uses a shallow fetch of the
+ * Targeted remote queries for a linked repository's committed project-state tree
+ * (`.agents/nexi`, then `.nexi`, then `.t3team`) without materializing a full reference checkout. Uses a shallow fetch of the
  * default branch tip and `git ls-tree` on the remote ref — no blob checkout.
  *
  * **Committed-only:** this sees what is on the remote default branch, not uncommitted local
@@ -10,9 +10,8 @@
  * @module t3team-linkedRemoteProjectStateInspect
  */
 import {
-  NEXI_PROJECT_STATE_DIR,
   PROJECT_STATE_DIR,
-  T3TEAM_PROJECT_STATE_DIR,
+  projectStateDirLookupOrder,
 } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -38,11 +37,7 @@ export type RemoteProjectStateInspectResult = {
 
 const REMOTE_FETCH_TIMEOUT_MS = INSPECT_TIMEOUT_MS;
 
-const STATE_DIR_CANDIDATES: ReadonlyArray<string> = [
-  PROJECT_STATE_DIR,
-  T3TEAM_PROJECT_STATE_DIR,
-  NEXI_PROJECT_STATE_DIR,
-];
+const STATE_DIR_CANDIDATES: ReadonlyArray<string> = projectStateDirLookupOrder();
 
 /** Committed project-state paths under `stateDirName`; machine-local bookkeeping that a repository
  * committed by accident (its `references/` manifest, child worktrees) is not project state. */
@@ -73,7 +68,7 @@ export class RemoteProjectStateInspectError extends Schema.TaggedError<RemotePro
   }
 }
 
-/** Shallow-fetch `url`'s default branch in a temp git dir and count `.nexi`/`.t3team` entries.
+/** Shallow-fetch `url`'s default branch in a temp git dir and count project-state entries.
  * Authenticates exactly as a linked clone does: the same prepared clone URL and the clone's env
  * (`CLONE_ENV`, git's own credential helper). A remote that cannot be read FAILS — only a read
  * that worked can say "no project state here". The temp dir is released on every exit. */

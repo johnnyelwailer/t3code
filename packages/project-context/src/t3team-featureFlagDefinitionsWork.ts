@@ -3,6 +3,15 @@ import type { FeatureFlagDefinition } from "./t3team-featureFlagTypes.ts";
 /** Work surfaces: My Work, work items, integrations and cloud. A new flag's code default is the
  * conservative user-nightly value; dogfood builds turn the rest on through their preset. */
 export const WORK_FEATURE_FLAG_DEFINITIONS = {
+  PR_TREE_REVIEW_CONTROLS: {
+    group: "UI & rendering",
+    label: "File tree review controls",
+    description:
+      "Folder viewed checkboxes and changed-since-viewed markers in the PR Code file tree.",
+    defaultEnabled: false,
+    requiresRestart: false,
+    addedOn: "2026-11-03",
+  },
   MYWORK_DIGEST: {
     group: "My Work",
     label: "My Work digest",
@@ -81,12 +90,31 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  NEXI_WELCOME_SETUP: {
+    group: "UI & rendering",
+    label: "Nexi welcome setup",
+    description:
+      "Single-page Nexi Work first-run setup on /welcome (account, agents, Jira, GitHub, cloud). Off: the upstream multi-step WelcomeWizard.",
+    defaultEnabled: false,
+    requiresRestart: false,
+    addedOn: "2026-11-10",
+  },
   CLOUD_SESSIONS: {
     group: "Cloud & machines",
     subgroup: "Cloud sessions",
     label: "Cloud sessions",
     description:
       "Run a thread on a cloud machine: create, list, cancel and claim sessions, with queued sends.",
+    defaultEnabled: false,
+    requiresRestart: false,
+    addedOn: "2026-09-14",
+  },
+  CLOUD_SESSION_STOP_DELETE: {
+    group: "Cloud & machines",
+    subgroup: "Cloud sessions",
+    label: "Stop and delete cloud sessions",
+    description:
+      "Stop and delete a cloud machine from its row and the thread's machine menu. Stop keeps the workspace; delete saves unpushed work to a wip/ branch, then removes the machine's snapshots and resume branch. Off: sessions end only by their own time.",
     defaultEnabled: false,
     requiresRestart: false,
   },
@@ -104,7 +132,7 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     subgroup: "Project machines",
     label: "Project machines",
     description:
-      "Cloud sessions start from the project's committed machine definition (.nexi/machine.json). Off: a plain session machine.",
+      "Cloud sessions start from the project's committed machine definition (.agents/nexi/machine.json). Off: a plain session machine.",
     defaultEnabled: false,
     requiresRestart: false,
   },
@@ -116,5 +144,6 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
       "delegate_task accepts extensions.cloudSession: the child runs its turns on a Nexi cloud session of its project (a fitting one, or one it starts), and its messages and completion come back here. Off: the option is not offered and no remote environment instance exists.",
     defaultEnabled: false,
     requiresRestart: true,
+    addedOn: "2026-10-24",
   },
 } as const satisfies Record<string, FeatureFlagDefinition>;

@@ -6,6 +6,8 @@ import { FeatureFlagsSettings } from "~/components/settings/t3team-FeatureFlagsS
 import { buildFeatureFlagsViewFixture } from "~/components/settings/t3team-featureFlagsSettings.fixture";
 
 const view = buildFeatureFlagsViewFixture();
+/** Fixed so the New badges in the baseline do not age out. */
+const STORY_NOW = new Date("2026-11-06T12:00:00Z");
 const withoutUserValues = buildFeatureFlagsViewFixture({ userValues: false });
 
 /** What `server.setFeatureFlag` answers: a user value, or the preset/default layer on reset. */
@@ -31,6 +33,7 @@ function FeatureFlagsStory({
   return (
     <div className="mx-auto w-full max-w-3xl py-6">
       <FeatureFlagsSettings
+        now={STORY_NOW}
         controller={{
           view: current,
           loadError: null,

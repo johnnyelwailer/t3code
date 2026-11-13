@@ -129,12 +129,41 @@ describe("DesktopEnvironment isolated instance", () => {
   );
 
   it.effect.each(["win32", "linux"] as const)(
-    "an isolated build refuses to start on %s: only macOS is isolated",
+    "an isolated build owns its app-data directory on %s",
     (platform) =>
       Effect.gen(function* () {
-        const exit = yield* Effect.exit(withBranding(isolated, {}, platform));
-        assert.isTrue(Exit.isFailure(exit));
-        assert.match(String(exit), /isolated instances are macOS-only/u);
+        const environment = yield* withBranding(isolated, {}, platform);
+        const appData =
+          platform === "win32" ? "/Users/alice/AppData/Roaming" : "/Users/alice/.config";
+        const home = `${appData}/nexi-work-nightly-dogfood`;
+        assert.isTrue(environment.isolatedInstance);
+        assert.equal(environment.baseDir, home);
+        assert.equal(environment.stateDir, `${home}/userdata`);
+        assert.equal(environment.isolatedProfileDir, `${home}/electron-profile`);
+        const userData = yield* resolveUserDataPath(environment).pipe(
+          Effect.provide(NodeServices.layer),
+        );
+        assert.equal(userData, `${home}/electron-profile`);
       }),
+  );
+
+  it.effect("uses the packaged appId as the runtime AppUserModelID", () =>
+    Effect.gen(function* () {
+      const environment = yield* withBranding({
+        ...isolated,
+        appId: "ch.nexplore.nexi.work",
+      });
+      assert.equal(environment.appUserModelId, "ch.nexplore.nexi.work");
+    }),
+  );
+
+  it.effect("lets T3CODE_DESKTOP_APP_USER_MODEL_ID override the packaged appId", () =>
+    Effect.gen(function* () {
+      const environment = yield* withBranding(
+        { ...isolated, appId: "ch.nexplore.nexi.work" },
+        { T3CODE_DESKTOP_APP_USER_MODEL_ID: "custom.id" },
+      );
+      assert.equal(environment.appUserModelId, "custom.id");
+    }),
   );
 });

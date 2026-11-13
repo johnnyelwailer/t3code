@@ -86,19 +86,24 @@ export function CloudSessionRow({
   session,
   onAction,
   onSecondaryAction,
+  onDelete,
   onForget,
   actionPending = false,
   secondaryActionPending = false,
+  deletePending = false,
   pendingLabel,
   showAction = true,
 }: {
   readonly session: CloudSession;
   readonly onAction?: ((session: CloudSession) => void) | undefined;
   readonly onSecondaryAction?: ((session: CloudSession) => void) | undefined;
+  /** Delete the machine's persistent state; absent when the stop/delete feature is off. */
+  readonly onDelete?: ((session: CloudSession) => void) | undefined;
   /** Forget the ready machine's saved connection; absent when it is not saved here. */
   readonly onForget?: ((session: CloudSession) => void) | undefined;
   readonly actionPending?: boolean;
   readonly secondaryActionPending?: boolean;
+  readonly deletePending?: boolean;
   /** Label for the primary button while it is in flight; defaults to "Working…". */
   readonly pendingLabel?: string | null;
   /** False for history rows, which have nothing to act on. */
@@ -167,9 +172,11 @@ export function CloudSessionRow({
             presentation={presentation}
             onAction={onAction}
             onSecondaryAction={onSecondaryAction}
+            onDelete={onDelete}
             onForget={onForget}
             actionPending={actionPending}
             secondaryActionPending={secondaryActionPending}
+            deletePending={deletePending}
             pendingLabel={pendingLabel}
           />
         ) : null}

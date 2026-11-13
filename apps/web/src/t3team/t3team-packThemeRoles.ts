@@ -30,6 +30,10 @@ export const T3TEAM_PACK_ONLY_COLOR_TOKENS: Readonly<Record<string, string>> = {
   // Raw CSS value (color, gradient, or url(...)) applied via `background` on the Team sidebar
   // header's background layer; unset falls back to transparent.
   sidebarHeaderBackground: "--t3team-sidebar-header-background",
+  // Text painted in the primary colour (`text-primary`, links, accent labels). Upstream has one
+  // `--primary` for fills and text alike; a fill colour that carries white text is often too dark
+  // to read as text on a dark canvas. Unset keeps `--primary` (see t3team-index-primaryText.css).
+  primaryText: "--t3team-primary-text",
 };
 
 /**

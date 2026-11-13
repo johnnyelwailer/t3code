@@ -82,6 +82,15 @@ const isAtlassianAccountUsable = (accountId: string): boolean =>
   findAuthForAccountId(atlassianAuths, accountId) !== undefined &&
   !accountNeedsReconnect(accountId);
 
+/** The project's Jira binding when its account is usable here, else null. */
+export const usableJiraBindingOfProject = (
+  project: Pick<OrchestrationProjectShell, "source">,
+  accountUsable: (accountId: string) => boolean = isAtlassianAccountUsable,
+): JiraMirrorBinding | null => {
+  const binding = jiraBindingOfProject(project);
+  return binding !== null && accountUsable(binding.accountId) ? binding : null;
+};
+
 /**
  * The thread's project Jira binding when its account is usable here, else null. The one question
  * behind both the tool list and the call, so they cannot disagree.
@@ -95,11 +104,7 @@ export const makeUsableJiraBindingForThread =
   }) =>
   (threadId: ThreadId): Effect.Effect<JiraMirrorBinding | null> =>
     input.loadThreadProject(threadId).pipe(
-      Effect.map(({ project }) => {
-        const binding = jiraBindingOfProject(project);
-        const usable = input.accountUsable ?? isAtlassianAccountUsable;
-        return binding !== null && usable(binding.accountId) ? binding : null;
-      }),
+      Effect.map(({ project }) => usableJiraBindingOfProject(project, input.accountUsable)),
       Effect.catch(() => Effect.succeed(null)),
     );
 

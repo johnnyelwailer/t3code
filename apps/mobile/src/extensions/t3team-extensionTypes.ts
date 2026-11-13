@@ -1,4 +1,5 @@
 import type { BrokerEnvironmentGateway } from "@t3tools/client-runtime/connection";
+import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { RepositoryIdentity } from "@t3tools/contracts";
 import type * as Stream from "effect/Stream";
 import type { ComponentType } from "react";
@@ -44,13 +45,26 @@ export interface WorkspaceExtraTab {
   readonly Component: ComponentType;
 }
 
+/** The facts the stock project icon is drawn from, as the Chats list's own rows pass them. */
+export type HomeProjectIconFacts = Pick<
+  EnvironmentProject,
+  "environmentId" | "workspaceRoot" | "faviconPath" | "projectIcon"
+>;
+
 /**
  * What the Android Chats list offers a distribution's quick filter row: the same project and
  * environment selection the header menu edits, so both stay in sync (persisted by the stock list).
  */
 export interface HomeFiltersProps {
-  /** The projects of the selected environment, most recently active first. */
-  readonly projects: ReadonlyArray<{ readonly key: string; readonly label: string }>;
+  /**
+   * The projects of the selected environment, most recently active first. `icon` is what
+   * `HomeProjectIcon` draws the project's own icon (favicon, emoji or monogram) from.
+   */
+  readonly projects: ReadonlyArray<{
+    readonly key: string;
+    readonly label: string;
+    readonly icon: HomeProjectIconFacts;
+  }>;
   /** The selected project's key, or null for all projects. */
   readonly selectedProjectKey: string | null;
   readonly onSelectProject: (key: string | null) => void;

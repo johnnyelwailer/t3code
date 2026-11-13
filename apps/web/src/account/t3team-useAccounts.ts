@@ -32,10 +32,14 @@ function publish(next: Partial<AccountsSnapshot>) {
   for (const listener of listeners) listener();
 }
 
+/** A server that answers with anything but a list (older, or not a T3 server) knows no accounts. */
+const accountsOf = (result: { readonly accounts?: ReadonlyArray<AccountStatus> } | null) =>
+  Array.isArray(result?.accounts) ? result.accounts : null;
+
 const refresh = () =>
   accountsApi
     .list()
-    .then((result) => result.accounts)
+    .then(accountsOf)
     .catch(() => snapshot.accounts);
 
 function syncPolling() {
@@ -55,7 +59,7 @@ function run(call: () => Promise<unknown>) {
   publish({ pending: true, error: null });
   void call()
     .then(() => accountsApi.list())
-    .then((result) => publish({ accounts: result.accounts, pending: false }))
+    .then((result) => publish({ accounts: accountsOf(result), pending: false }))
     .catch((cause: unknown) =>
       publish({
         pending: false,
@@ -76,6 +80,8 @@ function subscribe(listener: () => void) {
 export function useAccounts(): AccountsSnapshot & {
   readonly signIn: (accountId: string) => void;
   readonly signOut: (accountId: string) => void;
+  /** Reads the accounts again; starts no sign-in. */
+  readonly retry: () => void;
   /** Copies the device code and opens the issuer's code page (when the issuer has one). */
   readonly openVerification: (accountId: string) => void;
 } {
@@ -101,6 +107,7 @@ export function useAccounts(): AccountsSnapshot & {
     ...current,
     signIn: useCallback((accountId: string) => run(() => accountsApi.signIn(accountId)), []),
     signOut: useCallback((accountId: string) => run(() => accountsApi.signOut(accountId)), []),
+    retry: useCallback(() => run(() => Promise.resolve()), []),
     openVerification,
   };
 }
@@ -116,6 +123,7 @@ export function useAccount(accountId: string | null) {
     error: accounts.error,
     signIn: () => accountId !== null && accounts.signIn(accountId),
     signOut: () => accountId !== null && accounts.signOut(accountId),
+    retry: accounts.retry,
     openVerification: () => accountId !== null && accounts.openVerification(accountId),
   };
 }

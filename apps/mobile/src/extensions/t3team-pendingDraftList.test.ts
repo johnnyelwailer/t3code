@@ -62,7 +62,8 @@ describe("buildPendingNewTasks with a distribution's pending drafts", () => {
     expect(task?.title).toBe("Fix the login bug");
   });
 
-  it("stops holding a draft that was retargeted to another project", () => {
+  it("keeps holding a draft that was retargeted to another project, with the retargeted stamp", () => {
+    // Choosing another project on the pending draft must not drop its live status.
     const retargeted: ComposerDraft = {
       ...draft(),
       project: {
@@ -71,12 +72,18 @@ describe("buildPendingNewTasks with a distribution's pending drafts", () => {
         createdAt: "2026-10-30T00:00:00.000Z",
       },
     };
-    expect(
-      buildPendingNewTasks({
-        queuedMessages: [],
-        drafts: { [draftKey]: retargeted },
-        pendingDrafts: new Map([[draftKey, pending]]),
-      }),
-    ).toEqual([]);
+    const tasks = buildPendingNewTasks({
+      queuedMessages: [],
+      drafts: { [draftKey]: retargeted },
+      pendingDrafts: new Map([[draftKey, pending]]),
+    });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      kind: "draft",
+      key: `draft-task:${draftKey}`,
+      title: "Cloud session",
+      projectId: ProjectId.make("real"),
+      draftKey,
+    });
   });
 });

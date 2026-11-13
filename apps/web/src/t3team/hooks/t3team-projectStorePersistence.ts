@@ -37,7 +37,7 @@ export function mergeStoredProjects(
 export function readStoredProjectsFromClientSettings(
   settings: ClientSettings | null | undefined,
 ): ProjectShellProject[] {
-  return parseStoredProjects(settings?.t3teamStoredProjectsJson);
+  return parseStoredProjects(settings?.t3team.storedProjectsJson);
 }
 
 export async function hydrateStoredProjects(): Promise<ProjectShellProject[]> {
@@ -58,12 +58,15 @@ export async function hydrateStoredProjects(): Promise<ProjectShellProject[]> {
       saveStoredProjects(mergedProjects);
     }
 
-    const persistedJson = settings?.t3teamStoredProjectsJson ?? "";
+    const persistedJson = settings?.t3team.storedProjectsJson ?? "";
     if (persistedJson !== mergedJson && (persistedJson.length > 0 || mergedProjects.length > 0)) {
       await localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...currentSettings,
-        t3teamStoredProjectsJson: mergedJson,
+        t3team: {
+          ...currentSettings.t3team,
+          storedProjectsJson: mergedJson,
+        },
       });
     }
 
@@ -117,7 +120,10 @@ export function persistStoredProjects(projects: ReadonlyArray<ProjectShellProjec
       localApi.persistence.setClientSettings({
         ...DEFAULT_CLIENT_SETTINGS,
         ...currentSettings,
-        t3teamStoredProjectsJson: nextJson,
+        t3team: {
+          ...currentSettings.t3team,
+          storedProjectsJson: nextJson,
+        },
       });
     })
     .catch(() => {

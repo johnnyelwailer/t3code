@@ -42,7 +42,6 @@ export function App({
   onOpenDashboard,
   onOpenTicket,
   onOpenThread,
-  onCloseEmbeddedThread,
   onProjectCreated,
 }: AppProps = {}) {
   const store = useProjectStore();
@@ -191,7 +190,6 @@ export function App({
           onOpenThread={handleSelectThread}
           onOpenFullThread={handleOpenFullThread}
           onOpenEmbeddedThread={handleOpenEmbeddedThread}
-          {...(onCloseEmbeddedThread ? { onCloseEmbeddedThread } : {})}
           onKickoffProjectThread={handleCreateProjectKickoffThread}
           onKickoffTicketThread={handleCreateTicketKickoffThread}
           onKickoffTicketThreadBeside={handleCreateTicketKickoffThreadBeside}

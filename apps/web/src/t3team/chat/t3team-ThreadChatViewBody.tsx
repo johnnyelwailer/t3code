@@ -24,6 +24,7 @@ export interface ThreadChatViewBodyProps {
   projectId: string;
   /** Absent on threads that do not belong to a work item — nothing can be staged for those. */
   ticketId?: string | undefined;
+  ticketDisplayId?: string | undefined;
   hasServerThread: boolean;
   showKickoffPlaceholder: boolean;
   kickoffMessage: string | undefined;
@@ -50,6 +51,7 @@ export function ThreadChatViewBody({
   threadId,
   projectId,
   ticketId,
+  ticketDisplayId,
   hasServerThread,
   showKickoffPlaceholder,
   kickoffMessage,
@@ -65,14 +67,10 @@ export function ThreadChatViewBody({
   bootstrapProgress,
   retryThreadBootstrap,
   composerState: {
-    clearThreadAttachments,
     composerDropTarget,
-    contextAttachments,
     dispatchTurnStartOverride,
     enqueueOfflineTurnStart,
-    prepareComposerContextAttachments,
     prepareTurnStart,
-    removeContextAttachment,
     resolveWorkflowDecision,
     submitRecipeCardAction,
     onOpenThread,
@@ -82,12 +80,7 @@ export function ThreadChatViewBody({
   // Handed over unconditionally: the accessory self-gates (attachment strip, staged action card,
   // staged note rows), so this must NOT re-derive "is anything staged" from attachments alone.
   const contextAttachmentSlot = (
-    <T3TeamThreadComposerAccessory
-      projectId={projectId}
-      {...(ticketId ? { ticketId } : {})}
-      attachments={contextAttachments}
-      onRemoveAttachment={removeContextAttachment}
-    />
+    <T3TeamThreadComposerAccessory projectId={projectId} {...(ticketId ? { ticketId } : {})} />
   );
   // ChatView reads its send model from the context handle, and the app-wide one belongs to the
   // primary thread. An embedded peer thread scopes its own, or its composer hijacks the primary's.
@@ -159,14 +152,16 @@ export function ThreadChatViewBody({
           composerContextAttachmentSlot={contextAttachmentSlot}
           composerContainerProps={composerDropTarget.composerContainerProps}
           composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-          composerContextAttachments={contextAttachments}
-          prepareComposerContextAttachments={prepareComposerContextAttachments}
-          onComposerContextAttachmentsConsumed={clearThreadAttachments}
           onSubmitRecipeCardAction={submitRecipeCardAction}
           dispatchWorkflowDecision={resolveWorkflowDecision}
           {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
           onOpenThread={onOpenThread}
           {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
+          viewTabSource={{
+            projectId,
+            ...(ticketId ? { ticketId } : {}),
+            ...(ticketDisplayId ? { ticketDisplayId } : {}),
+          }}
         />
       </ComposerHandleContext>
     </div>

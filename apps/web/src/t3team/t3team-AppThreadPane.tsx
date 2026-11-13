@@ -1,11 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { PanelRightOpenIcon } from "lucide-react";
 import { useCanGoBack, useNavigate } from "@tanstack/react-router";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { ThreadId } from "@t3tools/contracts";
-import { usePrimaryEnvironmentId } from "~/state/environments";
-import { useRightPanelStore } from "~/rightPanelStore";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
@@ -21,7 +17,6 @@ export function AppThreadPane({
   resolvedThread,
   onOpenTicket,
   onOpenEmbeddedThread,
-  onCloseEmbeddedThread,
   onThreadKickoffConsumed,
   onRememberFullThread,
   onBackToDashboard,
@@ -31,7 +26,6 @@ export function AppThreadPane({
   resolvedThread: ProjectThread | null;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onOpenEmbeddedThread: (projectId: string, threadId: string) => void;
-  onCloseEmbeddedThread: () => void;
   onThreadKickoffConsumed: (threadId: string) => void;
   onRememberFullThread: (threadId: string) => void;
   onBackToDashboard: (projectId: string) => void;
@@ -39,7 +33,6 @@ export function AppThreadPane({
   const canGoBack = useCanGoBack();
   const navigate = useNavigate();
   const { selectStandaloneThread } = useProjectStore();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const canOpenEmbedded = Boolean(resolvedThread?.ticketId || resolvedThread?.dashboardMode);
   // Upstream retires the draft behind a promoted thread on its own thread
   // route; the Team shell owns this route instead, so it has to do it here.
@@ -52,26 +45,6 @@ export function AppThreadPane({
 
     onRememberFullThread(resolvedThread.id);
   }, [onRememberFullThread, resolvedThread]);
-
-  // Legacy migration: routes written while side chat was the `?chatThreadId` split pane still
-  // carry the peer in the URL. The split pane is retired — the peer is now a side-chat tab in
-  // this thread's right panel — so adopt it there and strip the search param (replace, so the
-  // old URL does not linger in history). A thread is never its own side chat.
-  const embeddedThreadId = view.embeddedThreadId;
-  useEffect(() => {
-    if (!embeddedThreadId || embeddedThreadId === view.threadId) {
-      return;
-    }
-    if (primaryEnvironmentId) {
-      useRightPanelStore
-        .getState()
-        .openThreadSurface(
-          scopeThreadRef(primaryEnvironmentId, ThreadId.make(view.threadId)),
-          embeddedThreadId,
-        );
-    }
-    onCloseEmbeddedThread();
-  }, [embeddedThreadId, onCloseEmbeddedThread, primaryEnvironmentId, view.threadId]);
 
   const handleBack = useCallback(() => {
     // Subagent threads must return to their parent. Relying on history.back alone

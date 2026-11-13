@@ -67,6 +67,7 @@ import { DispatchModeLimit, exceededDispatchModeLimit } from "./DispatchModeLimi
 import { projectTurnItemForDetail } from "./WireProjection.ts";
 import * as LegacyV1ThreadImporter from "./legacy/LegacyV1ThreadImporter.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { providerInstanceDisabledMessage } from "./t3team-providerInstanceDisabledMessage.ts";
 
 export type ThreadManagementSendMode = "auto" | "queue" | "steer" | "restart";
 
@@ -319,7 +320,7 @@ export class ThreadManagementProviderInstanceDisabledError extends Schema.Tagged
   },
 ) {
   override get message(): string {
-    return `Provider instance "${this.instanceId}" is disabled for project ${this.projectId}.`;
+    return providerInstanceDisabledMessage(this.instanceId, this.projectId);
   }
 }
 
@@ -951,7 +952,7 @@ const make = Effect.gen(function* () {
       const records = yield* getProjectThreadRecords(
         input,
         ["runs", "messages", "subagents", "providerThreads"],
-        { messageRoles: ["user"] },
+        { messageRoles: ["user"], monitorNotificationsOnly: true },
       );
       const progress = delegatedTaskProgress(records);
       // A thread rolled back past all its work, with nothing left running, has no answer to wait for.

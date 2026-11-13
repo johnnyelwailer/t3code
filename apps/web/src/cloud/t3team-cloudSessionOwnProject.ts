@@ -4,7 +4,7 @@
  * only a folder there; a checkout may not carry its repository identity yet).
  *
  * The binding is by session, not by git key: a session is picked for one composer project
- * (`CloudSessionTarget.projectKey`, dropped by the project-follow hook once the project changes),
+ * (`CloudSessionTarget.projectKey`; checkout binds at queue from the composer project),
  * and its server registers its working directory as its project on startup
  * (`--auto-bootstrap-project-from-cwd`). So its own project is the one in the session's
  * environment whose workspace root is that server's `cwd`.

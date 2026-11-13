@@ -17,7 +17,7 @@ export function useCloudAdoptedProjects(
   const { presentationById } = useEnvironments();
   return adoptCloudCheckoutProjects({
     projects,
-    primaryEnvironmentId,
+    isOwnEnvironment: (environmentId) => environmentId === primaryEnvironmentId,
     isCloudSessionEnvironment: (environmentId) =>
       presentationById.get(environmentId)?.entry.target._tag === "BrokerConnectionTarget",
   });

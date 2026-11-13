@@ -9,6 +9,7 @@
 import { readFeatureFlag } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
 
+import { withAgentNotices } from "./t3team-agentNotices.ts";
 import { withPressureLines } from "./t3team-resourcePressureToolLine.ts";
 import { type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFilter.ts";
@@ -142,7 +143,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           : {}),
       });
       return refuseWorkItemReadUnlessConnected(
-        withPressureLines(binding, deps.resourcePressure),
+        withAgentNotices(withPressureLines(binding, deps.resourcePressure), deps.agentNotices),
         jiraConnected,
       );
     });

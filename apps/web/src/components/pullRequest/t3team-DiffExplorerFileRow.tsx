@@ -24,9 +24,28 @@ export interface DiffExplorerFileRowProps {
   readonly file: DiffExplorerFile;
   readonly selected: boolean;
   readonly viewed: boolean;
+  /** Ticked, but pushed to since it was viewed: flagged beside the tick. */
+  readonly changed: boolean;
   readonly showFullPath: boolean;
   readonly onSelect: (key: string) => void;
   readonly onToggleViewed: (key: string) => void;
+}
+
+function ChangedMarker() {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label="Changed since you viewed it"
+            className="size-1.5 shrink-0 rounded-full bg-warning"
+          />
+        }
+      />
+      <TooltipPopup side="top">Changed since you viewed it</TooltipPopup>
+    </Tooltip>
+  );
 }
 
 /** The folders of a path, with a line-break opportunity after each slash. */
@@ -75,6 +94,7 @@ export function DiffExplorerFileRow({
   file,
   selected,
   viewed,
+  changed,
   showFullPath,
   onSelect,
   onToggleViewed,
@@ -100,13 +120,17 @@ export function DiffExplorerFileRow({
         selected && "bg-foreground/[0.08]",
       )}
     >
-      <Checkbox
-        aria-label={`Mark ${file.path} as ${viewed ? "not viewed" : "viewed"}`}
-        checked={viewed}
-        onCheckedChange={() => onToggleViewed(file.key)}
-        onClick={(event) => event.stopPropagation()}
-        className="size-3.5 sm:size-3.5"
-      />
+      {/* Base UI answers a click on the box by clicking a hidden sibling input, and that second
+          click bubbles to the row; stopping it on the root alone leaves the file opening. */}
+      <span className="flex shrink-0" onClick={(event) => event.stopPropagation()}>
+        <Checkbox
+          aria-label={`Mark ${file.path} as ${viewed ? "not viewed" : "viewed"}`}
+          checked={viewed}
+          onCheckedChange={() => onToggleViewed(file.key)}
+          className="size-3.5 sm:size-3.5"
+        />
+      </span>
+      {changed ? <ChangedMarker /> : null}
       {showFullPath ? (
         <FullPath path={file.path} viewed={viewed} />
       ) : (

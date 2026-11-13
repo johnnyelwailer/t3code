@@ -16,6 +16,8 @@ vi.mock("../../state/entities", () => ({
   useThreadProjection: () => ({ projection: state.projection }),
   useThreadRelationshipShells: () => [],
   useThreadShells: () => [],
+  useHiddenThreadKeys: () => new Set(),
+  useAnyEnvironmentHiding: () => false,
   useProjects: () => [],
   useServerConfigs: () => new Map(),
 }));
@@ -25,7 +27,7 @@ vi.mock("../../lib/archivedThreadsState", () => ({
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("~/hooks/useSettings", () => ({
   usePrimarySettings: (selector: (settings: Record<string, unknown>) => unknown) =>
-    selector({ t3teamActivityLabelsEnabled: true }),
+    selector({ t3team: { activityLabels: true } }),
 }));
 vi.mock("~/t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
 vi.mock("../ui/tooltip", () => ({

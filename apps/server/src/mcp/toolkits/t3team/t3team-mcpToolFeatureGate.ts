@@ -11,8 +11,10 @@ import {
   type ReadFeatureFlagEnv,
 } from "@t3tools/project-context/t3teamFeatureFlags";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import type { McpProtocol } from "effect/ai";
 
+import { ServerConfig } from "../../../config.ts";
 import { T3TeamMcpToolError } from "./t3team-mcpToolError.ts";
 
 const MCP_TOOL_FEATURE_FLAGS: ReadonlyMap<string, FeatureFlagKey> = new Map([
@@ -39,7 +41,23 @@ const MCP_TOOL_FEATURE_FLAGS: ReadonlyMap<string, FeatureFlagKey> = new Map([
   ["t3_recipe_validate", "ORCHESTRATION_RECIPES"],
   ["t3_work_item_draft", "WORKITEM_DETAIL_DRAFTS"],
   ["t3_work_item_change_set", "WORKITEM_DETAIL_DRAFTS"],
+  ["cloud_session_delete", "CLOUD_SESSION_STOP_DELETE"],
 ]);
+
+/**
+ * Tools that only make sense in a cloud session. A desktop server's threads already run on the
+ * user's computer, so these are neither listed nor callable there, whatever their flag says.
+ */
+const CLOUD_SESSION_ONLY_MCP_TOOLS: ReadonlyMap<string, string> = new Map([
+  [
+    "request_desktop_route",
+    "This thread already runs on the user's own computer, so there is nothing to route through it: a host that fails here (DNS, connect, TLS) fails for the user too. Do not ask again; tell the user what failed so they can check the address, VPN or DNS.",
+  ],
+]);
+
+const runsOnUsersComputer = Effect.serviceOption(ServerConfig).pipe(
+  Effect.map((config) => Option.isSome(config) && config.value.mode === "desktop"),
+);
 
 /** The flag that switches `toolName`, if one does. */
 function mcpToolFeatureFlag(toolName: string): FeatureFlagKey | undefined {
@@ -63,7 +81,14 @@ export const whenMcpToolEnabled =
   (params: P): Effect.Effect<A, E | T3TeamMcpToolError, R> =>
     Effect.suspend((): Effect.Effect<A, E | T3TeamMcpToolError, R> =>
       isMcpToolEnabled(toolName)
-        ? handle(params)
+        ? runsOnUsersComputer.pipe(
+            Effect.flatMap((local): Effect.Effect<A, E | T3TeamMcpToolError, R> => {
+              const refusal = local ? CLOUD_SESSION_ONLY_MCP_TOOLS.get(toolName) : undefined;
+              return refusal === undefined
+                ? handle(params)
+                : Effect.fail(new T3TeamMcpToolError({ message: refusal }));
+            }),
+          )
         : Effect.fail(new T3TeamMcpToolError({ message: mcpToolDisabledMessage(toolName) })),
     );
 
@@ -77,7 +102,7 @@ interface ToolListingCore {
   };
 }
 
-/** `tools/list` without the tools whose flag is off; `tools/call` is untouched. */
+/** `tools/list` without the tools whose flag is off or that this host cannot serve; `tools/call` is untouched. */
 export const withFeatureGatedToolList = <Version extends McpProtocol.ProtocolVersion>(
   adapter: McpProtocol.ProtocolAdapter<Version>,
   readEnv?: ReadFeatureFlagEnv,
@@ -91,11 +116,15 @@ export const withFeatureGatedToolList = <Version extends McpProtocol.ProtocolVer
         tools: {
           ...core.tools,
           list: (profile: unknown) =>
-            core.tools
-              .list(profile)
-              .pipe(
-                Effect.map((tools) => tools.filter((tool) => isMcpToolEnabled(tool.name, readEnv))),
+            Effect.all([core.tools.list(profile), runsOnUsersComputer]).pipe(
+              Effect.map(([tools, local]) =>
+                tools.filter(
+                  (tool) =>
+                    isMcpToolEnabled(tool.name, readEnv) &&
+                    !(local && CLOUD_SESSION_ONLY_MCP_TOOLS.has(tool.name)),
+                ),
               ),
+            ),
         },
       },
       lifecycle,

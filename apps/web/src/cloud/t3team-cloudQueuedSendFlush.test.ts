@@ -52,6 +52,15 @@ describe("decideCloudQueuedSendFlush", () => {
         session: session("ready"),
         machineConnected: true,
         projectId: ProjectId.make("p"),
+        providerReady: false,
+      }).kind,
+    ).toBe("wait");
+    expect(
+      decideCloudQueuedSendFlush({
+        ...base,
+        session: session("ready"),
+        machineConnected: true,
+        projectId: ProjectId.make("p"),
       }),
     ).toEqual({ kind: "dispatch", environmentId: "env-cloud", projectId: "p" });
   });
@@ -93,6 +102,29 @@ describe("decideCloudQueuedSendFlush", () => {
         connectFailure: { sessionId: "session-9", message: "relay denied" },
       }),
     ).toEqual({ kind: "fail", message: "relay denied", retryable: true });
+  });
+
+  it("connects a ready session whose machine is still parked on the session that ended", () => {
+    // The parked flag belongs to the binding the environment still carries, not to this record.
+    expect(
+      decideCloudQueuedSendFlush({
+        ...base,
+        session: session("ready"),
+        environmentSessionEnded: true,
+      }),
+    ).toEqual({ kind: "connect", session: session("ready") });
+    // Not ready yet: the flag is the sooner answer, and the message is kept for a retry.
+    expect(
+      decideCloudQueuedSendFlush({
+        ...base,
+        session: session("preparing"),
+        environmentSessionEnded: true,
+      }),
+    ).toMatchObject({
+      kind: "fail",
+      retryable: true,
+      failure: { kind: "session_ended", environmentId: "env-cloud" },
+    });
   });
 
   it("opens the machine's scratch project for a No-project draft instead of waiting forever", () => {

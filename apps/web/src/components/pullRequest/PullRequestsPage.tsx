@@ -21,6 +21,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowDownUpIcon, LayersIcon, Plug2Icon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from "react";
+import { useOpenLinkedPullRequest } from "./t3team-useOpenLinkedPullRequest";
 
 import {
   collectPullRequestListFacets,
@@ -43,6 +44,7 @@ import {
   pullRequestOverrideAfterAction,
   reusePullRequestEntries,
   settlePullRequestOverrides,
+  comparePullRequestsByRecency,
   largestPullRequestReadCount,
 } from "./pullRequestList.logic";
 import {
@@ -630,7 +632,7 @@ export function PullRequestsPage() {
       const held = new Set(ordered.entries.map(pullRequestEntryKey));
       const arrived = answered.entries.filter((entry) => !held.has(pullRequestEntryKey(entry)));
       const appended = rankPullRequestMatches(
-        arrived.toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+        arrived.toSorted(comparePullRequestsByRecency),
         sentParsed.text,
       );
       setOrdered({ key: filterKey, source: answered, entries: [...ordered.entries, ...appended] });
@@ -1084,11 +1086,11 @@ export function PullRequestsPage() {
     if (rightPanelState.isOpen) setMaximized((value) => !value);
   };
   const onGuideShown = () => setMaximized(true);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens the URL-linked pull request in the right panel store
-  useEffect(() => {
-    if (!pullRequestsSupported || rightPanelRef === null || linkedSelection === null) return;
-    useRightPanelStore.getState().openPullRequest(rightPanelRef, linkedSelection);
-  }, [linkedSelection, pullRequestsSupported, rightPanelRef]);
+  useOpenLinkedPullRequest({
+    rightPanelRef,
+    supported: pullRequestsSupported,
+    linkedSelection,
+  });
 
   const selected =
     rightPanelState.isOpen && activePullRequestSurface !== null

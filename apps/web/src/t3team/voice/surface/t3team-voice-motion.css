@@ -30,7 +30,7 @@
 }
 @keyframes t3team-voice-revise {
   from {
-    color: var(--primary);
+    color: var(--t3team-primary-text, var(--primary));
   }
   to {
     color: inherit;

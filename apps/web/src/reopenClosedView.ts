@@ -151,11 +151,11 @@ export async function reopenClosedView(
     case "pull-request":
       panels.openPullRequest(ref, surface);
       break;
-    case "thread":
-      // t3team: side-chat (thread) surfaces are not reopenable yet — open question for Phil
-      return false;
     case "side-chat":
       panels.openSideChat(ref, surface.threadId);
+      break;
+    case "view":
+      panels.openView(ref, surface.target);
       break;
     default:
       panels.open(ref, surface.kind);

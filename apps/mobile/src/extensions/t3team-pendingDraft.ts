@@ -68,18 +68,12 @@ export function draftRowTitle(
 }
 
 /**
- * The pending draft while the project it is stamped on, or selected, is still its placeholder's.
- * Once the draft is retargeted to a real project the hold no longer applies.
+ * The draft's hold while the distribution keeps it in the map: the map is the source of truth.
+ * Choosing another project on the draft retargets its stamp but keeps the draft pending, so the
+ * hold survives the retarget. The distribution drops the entry when the draft is no longer pending.
  */
-export function pendingDraftHolding(
-  pending: PendingDraft | null | undefined,
-  project: { readonly environmentId: string; readonly projectId: string } | null | undefined,
-): PendingDraft | null {
-  if (!pending || !project) return null;
-  const held = pending.project;
-  return held.environmentId === project.environmentId && held.id === project.projectId
-    ? pending
-    : null;
+export function pendingDraftHolding(pending: PendingDraft | null | undefined): PendingDraft | null {
+  return pending ?? null;
 }
 
 /**

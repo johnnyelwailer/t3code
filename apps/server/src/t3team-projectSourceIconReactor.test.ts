@@ -117,7 +117,7 @@ const makeTestLayer = (input: {
     Layer.provideMerge(
       Layer.succeed(ServerSettings.ServerSettingsService, {
         getSettings: Effect.succeed({
-          t3teamProjectSourceIconIngestEnabled: input.flagEnabled,
+          t3team: { projectSourceIconIngest: input.flagEnabled },
         } as never),
       } as never),
     ),

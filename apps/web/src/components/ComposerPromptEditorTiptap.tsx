@@ -73,7 +73,9 @@ import {
   ComposerBoldSelectionOnlyExtension,
   convertBulletItemToTask,
   ComposerCodeExtension,
+  ComposerBoldExtension,
   ComposerItalicExtension,
+  ComposerStrikeExtension,
   ComposerTaskItemExtension,
   ComposerTaskListExtension,
   flatToMarkdown,
@@ -102,6 +104,11 @@ import {
   markAsClipboardEdit,
 } from "~/composer-undo-grouping";
 import { collectInlineContextIds } from "~/lib/composerContextReferences";
+import {
+  composerVoiceGhostPluginKey,
+  ComposerVoiceGhostExtension,
+  updateVoiceGhost,
+} from "./t3team-composerVoiceGhost";
 import { resolveDiffThemeName } from "~/lib/diffRendering";
 import { cn, isMacPlatform } from "~/lib/utils";
 import { basenameOfPath } from "~/pierre-icons";
@@ -138,6 +145,8 @@ export interface ComposerPromptEditorHandle {
     contextIds: string[];
   };
   isCaretOnVisualEdge: (edge: "start" | "end") => boolean;
+  /** Shows the live dictation preview as muted ghost text at the end of the draft. "" hides it. */
+  setVoiceGhost: (text: string) => void;
 }
 
 export interface ComposerPromptEditorProps {
@@ -831,7 +840,8 @@ function createComposerExtensions(richText: boolean) {
       listKeymap: false,
       undoRedo: { newGroupDelay: COMPOSER_UNDO_GROUP_DELAY },
       italic: false,
-      ...(richText ? {} : { bold: false, strike: false }),
+      bold: false,
+      strike: false,
     }),
     ComposerUndoGroupingExtension,
     ComposerTextDirectionExtension,
@@ -840,10 +850,13 @@ function createComposerExtensions(richText: boolean) {
     ComposerCitationExtension,
     ComposerContextReferenceExtension,
     ComposerMarkersExtension,
+    ComposerVoiceGhostExtension,
     ...(richText
       ? [
           ComposerBoldSelectionOnlyExtension,
           ComposerItalicExtension,
+          ComposerBoldExtension,
+          ComposerStrikeExtension,
           ComposerCodeExtension,
           ComposerCodeBlockExtension.extend({
             addNodeView() {
@@ -992,6 +1005,7 @@ function ComposerPromptEditorTiptapInner(
   const [openCitation, setOpenCitation] = useState<OpenCitationComment | null>(null);
   const citationDraftRef = useRef<{ key: string; comment: string } | null>(null);
   const [isEmpty, setIsEmpty] = useState(value.length === 0);
+  const [hasVoiceGhost, setHasVoiceGhost] = useState(false);
 
   const citationCommentActions = {
     openComment: openCitation,
@@ -1013,7 +1027,7 @@ function ComposerPromptEditorTiptapInner(
 
   const handleEditorChange = (updated: TiptapEditor) => {
     const map = serializeEditorDoc(updated.state.doc);
-    const contextIds = literalText ? [] : map.contextIds;
+    const contextIds = literalText ? [] : [...map.contextIds];
     const { from, to } = updated.state.selection;
     const fromFlat = pmToFlat(map, from);
     const toFlat = pmToFlat(map, to);
@@ -1468,7 +1482,7 @@ function ComposerPromptEditorTiptapInner(
       value: map.value,
       cursor: collapseExpandedComposerCursor(map.value, expandedCursor, literalText),
       expandedCursor,
-      contextIds: literalText ? [] : map.contextIds,
+      contextIds: literalText ? [] : [...map.contextIds],
     };
     const toFlat = pmToFlat(map, to);
     selectionRangeRef.current = {
@@ -1698,6 +1712,12 @@ function ComposerPromptEditorTiptapInner(
         }
       },
       readSnapshot,
+      setVoiceGhost: (text) => {
+        if (!editor) return;
+        if (composerVoiceGhostPluginKey.getState(editor.state) === text) return;
+        editor.view.dispatch(updateVoiceGhost(editor.state.tr, text));
+        setHasVoiceGhost(text !== "");
+      },
       isCaretOnVisualEdge: (edge) => {
         const snapshot = readSnapshot();
         if (snapshot.value.length === 0) return true;
@@ -1814,7 +1834,7 @@ function ComposerPromptEditorTiptapInner(
               onCopyCapture={(event) => handleCopyCut(event, false)}
               onCutCapture={(event) => handleCopyCut(event, true)}
             />
-            {isEmpty && contextRecords.size === 0 && placeholder ? (
+            {isEmpty && !hasVoiceGhost && contextRecords.size === 0 && placeholder ? (
               <div
                 className={cn(
                   "pointer-events-none absolute inset-0 leading-relaxed text-placeholder",

@@ -28,6 +28,8 @@ import { createThreadJobsController } from "~/t3team/backend/t3team-thread-jobsB
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import { T3TeamCompanionSlot } from "~/t3team/packs/t3team-CompanionSlot";
+import { T3TeamRunCompanion } from "~/t3team/chat/t3team-RunCompanion";
+import { threadCompanionMood } from "~/t3team/packs/t3team-threadCompanionMood";
 import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 import type { T3TeamTimelineRowProps } from "~/t3team/chat/t3team-timelineRowProps";
@@ -570,13 +572,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const normalizedFindQuery = findQuery.trim();
   const findActive = findExpanded;
 
-  const disclosurePinsEndRef = useRef(false);
-  const pinDisclosureToEnd = () => {
-    if (!disclosurePinsEndRef.current) return;
-    const element = listRef.current?.getScrollableNode();
-    if (element) element.scrollTop = element.scrollHeight;
-  };
-
   const scheduleDisclosureSettle = () => {
     if (disclosureSettleFrameRef.current !== null) {
       cancelAnimationFrame(disclosureSettleFrameRef.current);
@@ -585,10 +580,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
       cancelAnimationFrame(disclosureSettleSecondFrameRef.current);
     }
     disclosureSettleFrameRef.current = requestAnimationFrame(() => {
-      pinDisclosureToEnd();
       disclosureSettleSecondFrameRef.current = requestAnimationFrame(() => {
-        pinDisclosureToEnd();
-        disclosurePinsEndRef.current = false;
         disclosureAnchorKeyRef.current = null;
         setDisclosureToggleSettling(false);
         disclosureSettleFrameRef.current = null;
@@ -599,13 +591,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
 
   const suspendEndScrollMaintenanceForDisclosure = (anchorKey: string) => {
     disclosureAnchorKeyRef.current = anchorKey;
-    disclosurePinsEndRef.current = resolveTimelineIsAtEnd(listRef.current?.getState()) === true;
     setDisclosureToggleSettling(true);
     scheduleDisclosureSettle();
   };
 
   const shouldRestoreVisibleContentPosition = (row: MessagesTimelineRow) => {
-    if (disclosurePinsEndRef.current) return false;
     const disclosureAnchorKey = disclosureAnchorKeyRef.current;
     return disclosureAnchorKey === null || row.id === disclosureAnchorKey;
   };
@@ -1108,8 +1098,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   };
 
   const handleItemSizeChanged = () => {
-    if (disclosurePinsEndRef.current) {
-      queueMicrotask(pinDisclosureToEnd);
+    if (disclosureAnchorKeyRef.current !== null) {
       scheduleDisclosureSettle();
     }
     scheduleMinimapRefresh();
@@ -1458,6 +1447,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
           </div>
         </TimelineRowCtx>
       ) : null}
+      <T3TeamRunCompanion
+        key={listIdentityKey}
+        working={isWorking}
+        latestRunStatus={latestRun?.status}
+      />
     </TimelineListFooter>
   );
 
@@ -1483,7 +1477,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
           style={{ paddingBottom: emptyPlaceholderInset }}
         >
           <div className="flex flex-col items-center gap-3">
-            <T3TeamCompanionSlot placement="thread.new" mood="newThread" size="md" />
+            <T3TeamCompanionSlot
+              placement="thread.new"
+              mood={threadCompanionMood({ working: isWorking, latestRunStatus: latestRun?.status })}
+              size="md"
+            />
             <p className="text-sm text-muted-foreground">
               Send a message to start the conversation.
             </p>

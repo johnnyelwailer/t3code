@@ -8,7 +8,7 @@ import {
   type ConnectionRoute,
 } from "./catalog.ts";
 import { pullRequestRoutingConnectionKey } from "./pullRequestRoutingPermissions.ts";
-import { BearerConnectionTarget, RelayConnectionTarget } from "./model.ts";
+import { BearerConnectionTarget, BrokerConnectionTarget, RelayConnectionTarget } from "./model.ts";
 import {
   connectionRouteId,
   connectionRouteKind,
@@ -87,6 +87,31 @@ describe("connection routes", () => {
   it("keeps a user's order when a saved route is replaced", () => {
     const repaired = direct("lan", "http://192.168.1.11:3773/");
     expect(upsertRoute([RELAY, LAN], repaired)).toEqual([RELAY, repaired]);
+  });
+
+  it("puts a newly paired route ahead of saved routes of the same kind", () => {
+    const pasted = direct("lan-2", "http://192.168.1.11:3773/");
+    expect(upsertRoute([LAN, TAILNET], pasted)).toEqual([pasted, LAN, TAILNET]);
+  });
+
+  it("queues a new cloud session's broker route behind the saved ones", () => {
+    const broker = (sessionId: string): ConnectionRoute => ({
+      target: new BrokerConnectionTarget({
+        environmentId: ENVIRONMENT_ID,
+        label: "Cloud",
+        sessionId,
+      }),
+      profile: Option.none(),
+    });
+    const ended = broker("run-ended");
+    const fresh = broker("run-new");
+    expect(upsertRoute([ended], fresh)).toEqual([ended, fresh]);
+  });
+
+  it("keeps a newly paired route behind a different kind of the same rank", () => {
+    const vpn = direct("vpn", "http://100.101.102.103:3773/");
+    const pasted = direct("ts-2", "http://[fd7a:115c:a1e0::2]:3773/");
+    expect(upsertRoute([vpn, TAILNET], pasted)).toEqual([vpn, pasted, TAILNET]);
   });
 
   it("shows a dragged order only until the saved routes catch up or change", () => {

@@ -4,10 +4,11 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { AuthMcpClientAccess } from "./auth.ts";
 import {
-  CredentialHost,
+  CredentialHostInput,
   CredentialScope,
   CredentialVariableName,
 } from "./t3team-credentialSources.ts";
+import { OrchestratorMcpCloudSessions } from "./t3team-environmentCloudSessions.ts";
 import {
   ContextTransferId,
   EnvironmentId,
@@ -72,7 +73,7 @@ const OrchestratorMcpSchedule = Schema.Union([
   OrchestratorMcpScheduleFromJsonString,
 ]).annotate({
   description:
-    "Trigger: {type:'interval',everyMs}, {type:'fixed_time',timeOfDay,weekdays?}, or {type:'webhook'}.",
+    "Trigger: {type:'interval',everyMs}, {type:'fixed_time',timeOfDay,weekdays?}, {type:'once',runAt}, or {type:'webhook'}.",
 });
 
 const OrchestratorMcpTargetOptionsFromRecord = Schema.Record(
@@ -693,6 +694,8 @@ export const OrchestratorMcpEnvironmentLinksResult = Schema.Struct({
   links: Schema.Array(OrchestratorMcpEnvironmentLink),
   /** What to do when the machine the user means is not among `links`. */
   notListed: Schema.String,
+  /** Nexi cloud sessions: only with the cloud-session placement on. */
+  cloudSessions: Schema.optional(OrchestratorMcpCloudSessions),
 });
 export type OrchestratorMcpEnvironmentLinksResult =
   typeof OrchestratorMcpEnvironmentLinksResult.Type;
@@ -781,6 +784,9 @@ export const OrchestratorMcpScheduledTask = Schema.Struct({
       "Public URL for the sender. Absent: no T3 Connect tunnel. The user must enable T3 Connect remote access.",
   }),
   webhookSignature: Schema.optional(Schema.Literals(["none", "set"])),
+  blockedByPolicy: Schema.optional(Schema.String).annotate({
+    description: "Present when an administrator's policy stops this task from running.",
+  }),
 });
 export type OrchestratorMcpScheduledTask = typeof OrchestratorMcpScheduledTask.Type;
 
@@ -828,9 +834,9 @@ export const OrchestratorMcpRequestSecretInput = Schema.Struct({
     description:
       'secretRef (default) for a T3 tool. file for a shell CLI: read the path in your command, e.g. TOKEN="$(cat <file>)" wrangler whoami.',
   }),
-  host: Schema.optional(CredentialHost).annotate({
+  host: Schema.optional(CredentialHostInput).annotate({
     description:
-      "The host the credential is for (e.g. npm.pkg.github.com). Lets the card offer the user's own sign-in for it.",
+      "The host the credential is for (e.g. npm.pkg.github.com). Lets the card offer the user's own sign-in for it",
   }),
   name: Schema.optional(CredentialVariableName).annotate({
     description:

@@ -2,56 +2,73 @@ import type { ToolAuthState } from "@t3tools/contracts";
 import { create } from "zustand";
 
 /**
- * A cloud-session action that stopped because the GitHub CLI is not signed in to a host it
- * needs (the session host, or the project's repository host). Instead of an error toast, the app
- * runs the gh device sign-in itself (`CloudSessionSignInDialogHost`) and repeats the action once
- * gh reports connected.
+ * GitHub sign-in needed: record an offer, not an open dialog.
+ * The dialog opens only when the user accepts (InvNoAutoDialog).
  */
-type CloudSessionSignInRequest = {
-  /**
-   * The host the failed request needs, from the failure itself. Absent only when the server did
-   * not say, which signs in to the deployment's default host.
-   */
+export type CloudSessionSignInRequest = {
   readonly host?: string | undefined;
-  /** Runs every action that failed for this host again, after the sign-in completed. */
   readonly retry: () => void;
-  /** The actions `retry` runs; a second one for the same host joins it. */
   readonly retries: Array<() => void>;
 };
 
 type CloudSessionSignInStore = {
+  /** Opens the dialog. Set only from a user action (acceptCloudSessionSignInOffer). */
   readonly request: CloudSessionSignInRequest | null;
+  /** Inline CTA; does not open the dialog. */
+  readonly offer: CloudSessionSignInRequest | null;
 };
 
 export const useCloudSessionSignInStore = create<CloudSessionSignInStore>(() => ({
   request: null,
+  offer: null,
 }));
 
-/**
- * Start the gh sign-in for `host`; `retry` runs once it succeeds. While a sign-in for the same
- * host is open, another action for it joins that one (same request object, so the running
- * sign-in is not restarted) and both run after it. One for a different host is refused (`false`):
- * replacing the open request would drop the first action, so the caller reports it instead.
- */
-export function requestCloudSessionSignIn(retry: () => void, host?: string): boolean {
-  const open = useCloudSessionSignInStore.getState().request;
+function joinOrStart(
+  slot: "request" | "offer",
+  retry: () => void,
+  host: string | undefined,
+): boolean {
+  const state = useCloudSessionSignInStore.getState();
+  const open = state[slot];
   if (open !== null) {
     if (open.host !== host) return false;
     open.retries.push(retry);
     return true;
   }
+  // A dialog already open for this host takes the retry; a different host is refused.
+  if (slot === "offer" && state.request !== null) {
+    if (state.request.host !== host) return false;
+    state.request.retries.push(retry);
+    return true;
+  }
   const retries = [retry];
   useCloudSessionSignInStore.setState({
-    request: { host, retries, retry: () => retries.forEach((run) => run()) },
+    [slot]: { host, retries, retry: () => retries.forEach((run) => run()) },
   });
   return true;
 }
 
+/** Record a Sign-in CTA. Does not open the dialog. */
+export function offerCloudSessionSignIn(retry: () => void, host?: string): boolean {
+  return joinOrStart("offer", retry, host);
+}
+
 /**
- * Whether a gh state is about the host the request needs. gh's status belongs to one host: a
- * `connected` for another host, or one that names no host, says nothing about this one. A request
- * that names no host is for the default host, which any state speaks for.
+ * Open the gh sign-in dialog for `host` and run `retry` once it succeeds.
+ * Call only from a user action (the Sign-in button).
  */
+export function requestCloudSessionSignIn(retry: () => void, host?: string): boolean {
+  return joinOrStart("request", retry, host);
+}
+
+/** The user clicked Sign in: promote the offer to a dialog request. */
+export function acceptCloudSessionSignInOffer(): boolean {
+  const { offer } = useCloudSessionSignInStore.getState();
+  if (offer === null) return false;
+  useCloudSessionSignInStore.setState({ offer: null });
+  return requestCloudSessionSignIn(offer.retry, offer.host);
+}
+
 export function toolAuthStateIsForHost(
   state: Pick<ToolAuthState, "hostname"> | undefined,
   host: string | undefined,
@@ -60,5 +77,5 @@ export function toolAuthStateIsForHost(
 }
 
 export function clearCloudSessionSignIn() {
-  useCloudSessionSignInStore.setState({ request: null });
+  useCloudSessionSignInStore.setState({ request: null, offer: null });
 }

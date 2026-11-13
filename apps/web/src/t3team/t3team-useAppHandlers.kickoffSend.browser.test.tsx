@@ -21,7 +21,8 @@ import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
 
 vi.mock("~/localApi", () => ({ readLocalApi: () => null }));
 vi.mock("~/state/environments", () => ({ usePrimaryEnvironmentId: () => "env-1" }));
-vi.mock("~/state/entities", () => ({
+vi.mock("~/state/entities", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/state/entities")>()),
   useProjects: () => [],
   useThreadShells: () => [],
   readProjects: () => [],

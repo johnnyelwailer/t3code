@@ -14,6 +14,43 @@ export function ensureT3TeamContextBlobColumns() {
       CREATE INDEX IF NOT EXISTS idx_t3team_context_artifacts_blob_sha256
       ON t3team_context_artifacts (blob_sha256)
     `;
+    yield* sql`
+      CREATE INDEX IF NOT EXISTS idx_t3team_context_blobs_purged_at
+      ON t3team_context_blobs (purged_at) WHERE purged_at IS NOT NULL
+    `;
+  });
+}
+
+/** A purged row's file is gone and nothing reads it; the window only absorbs a re-link racing the purge. */
+export const T3TEAM_CONTEXT_BLOB_TOMBSTONE_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Deletes at most `limit` purged blob rows older than the tombstone window that no artifact
+ * references. Cache churn marked up to 118k rows a day purged and kept every one forever.
+ */
+export function deleteExpiredT3TeamContextBlobTombstones(input: {
+  readonly now: number;
+  readonly limit: number;
+}) {
+  return Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const purgedBefore = input.now - T3TEAM_CONTEXT_BLOB_TOMBSTONE_RETENTION_MS;
+    const rows = yield* sql<{ readonly deleted: number }>`
+      DELETE FROM t3team_context_blobs
+      WHERE sha256 IN (
+        SELECT blob.sha256
+        FROM t3team_context_blobs AS blob INDEXED BY idx_t3team_context_blobs_purged_at
+        WHERE blob.purged_at IS NOT NULL
+          AND blob.purged_at < ${purgedBefore}
+          AND NOT EXISTS (
+            SELECT 1 FROM t3team_context_artifacts
+            WHERE t3team_context_artifacts.blob_sha256 = blob.sha256
+          )
+        LIMIT ${input.limit}
+      )
+      RETURNING 1 AS deleted
+    `;
+    return rows.length;
   });
 }
 

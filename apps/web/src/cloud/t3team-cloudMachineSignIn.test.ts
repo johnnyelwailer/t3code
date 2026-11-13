@@ -24,7 +24,7 @@ function session(phase: CloudSession["phase"]): CloudSession {
 }
 
 describe("signInDescriptionForEnvironment", () => {
-  it("asks a live cloud session's machine to sign in again", () => {
+  it("asks a live cloud session's machine to sign in", () => {
     expect(signInDescriptionForEnvironment([session("ready")], CLOUD_ENV)).toBe(
       CLOUD_MACHINE_SIGN_IN_COPY,
     );

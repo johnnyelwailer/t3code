@@ -1,0 +1,241 @@
+/**
+ * Selecting Claude on a cloud session shows the inline sign-in card and waits for the user: no
+ * install starts on its own. Clicking it installs, raises zero error toasts, and the flush becomes
+ * dispatch once the provider is ready.
+ */
+import {
+  EnvironmentId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ProjectId,
+  type ServerProvider,
+  type ToolAuthState,
+} from "@t3tools/contracts";
+import { useSyncExternalStore } from "react";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { userEvent } from "vite-plus/test/browser";
+
+import { act, render } from "../../test/render";
+import { decideCloudQueuedSendFlush } from "./t3team-cloudQueuedSendFlush";
+import { decodeCloudQueuedSend } from "./t3team-cloudQueuedSendModel";
+import { CloudQueuedSendProviderEnsure } from "./t3team-CloudQueuedSendProviderEnsureGate";
+import {
+  resetCloudQueuedSendProviderReadyStore,
+  setCloudQueuedSendProviderReady,
+} from "./t3team-cloudQueuedSendProviderReadyStore";
+import { CloudSessionSetupCard } from "./t3team-CloudSessionSetupCard";
+
+const harness = vi.hoisted(() => {
+  const toastAdd = vi.fn();
+  // The real actions answer with a `ToolAuthActionOutcome`; `started` is what keeps the card's
+  // pending state up until the status stream reports the first phase.
+  const install = vi.fn(async () => ({
+    kind: "started" as const,
+    state: { tool: "claude" as const, phase: "installing" as const },
+  }));
+  const start = vi.fn(async () => ({
+    kind: "started" as const,
+    state: { tool: "claude" as const, phase: "starting" as const },
+  }));
+  type Listener = () => void;
+  const listeners = new Set<Listener>();
+  const state = {
+    current: new Map<string, ToolAuthState>(),
+    install,
+    start,
+    toastAdd,
+  };
+  return {
+    state,
+    listeners,
+    set(next: Map<string, ToolAuthState>) {
+      state.current = next;
+      for (const listener of listeners) listener();
+    },
+  };
+});
+
+vi.mock("~/components/ui/toast", () => ({
+  toastManager: { add: harness.state.toastAdd },
+  stackedThreadToast: (input: unknown) => input,
+}));
+vi.mock("~/state/t3team-toolauth", () => ({
+  toolAuthEnvironment: { install: "install", start: "start" },
+  useToolAuthStates: () =>
+    useSyncExternalStore(
+      (listener) => {
+        harness.listeners.add(listener);
+        return () => harness.listeners.delete(listener);
+      },
+      () => harness.state.current,
+    ),
+  useToolAuthActions: () => ({
+    onConnect: harness.state.start,
+    onInstall: harness.state.install,
+    onSubmitCode: () => {},
+    onCancel: () => {},
+  }),
+}));
+vi.mock("~/state/use-atom-command", () => ({
+  useAtomCommand: (command: unknown) =>
+    command === "install" ? harness.state.install : harness.state.start,
+}));
+vi.mock("~/state/environments", () => ({
+  useEnvironmentProviders: () =>
+    new Map([
+      [
+        EnvironmentId.make("env-cloud"),
+        [
+          {
+            instanceId: ProviderInstanceId.make("claudeAgent"),
+            driver: ProviderDriverKind.make("claudeAgent"),
+            displayName: "Claude",
+            enabled: true,
+            installed: false,
+            version: null,
+            status: "error",
+            auth: { status: "unknown" },
+            checkedAt: "2026-01-01T00:00:00.000Z",
+            models: [],
+            slashCommands: [],
+            skills: [],
+          } satisfies ServerProvider,
+        ],
+      ],
+    ]),
+  usePrimaryEnvironmentId: () => EnvironmentId.make("env-primary"),
+}));
+vi.mock("./t3team-cloudMachineSignIn", () => ({
+  useSignInDescriptionForEnvironment: () => null,
+  useToolAuthMachineLabel: () => "this cloud machine",
+}));
+vi.mock("~/t3team/t3team-useToolAuthEnvironmentFlag", () => ({
+  useToolAuthEnvironmentAvailability: () => "enabled",
+}));
+
+const noRouter: { readonly router: false } = { router: false };
+const cloud = EnvironmentId.make("env-cloud");
+const queued = decodeCloudQueuedSend({
+  messageId: "msg-claude",
+  messageText: "hello claude",
+  outgoingText: "hello claude",
+  titleSeed: "hello claude",
+  modelSelection: { instanceId: "claudeAgent", model: "claude-sonnet-4" },
+  runtimeMode: "full-access",
+  interactionMode: "default",
+  sessionId: "session-cloud",
+  sessionLabel: "cloud",
+  createdAt: "2026-11-10T17:00:00.000Z",
+})!;
+
+function phase(next: Partial<ToolAuthState> & Pick<ToolAuthState, "phase">) {
+  return act(async () => {
+    harness.set(new Map([["claude", { tool: "claude", ...next }]]));
+  });
+}
+
+describe("cloud Claude provider gate", () => {
+  it("waits for a click, installs, raises no error toasts, then dispatches when ready", async () => {
+    harness.state.toastAdd.mockReset();
+    harness.state.install.mockClear();
+    harness.state.start.mockClear();
+    harness.set(new Map());
+    resetCloudQueuedSendProviderReadyStore();
+
+    await using screen = await render(
+      <>
+        <CloudQueuedSendProviderEnsure queued={queued} environmentId={cloud} projectReady={true} />
+        <CloudSessionSetupCard
+          facts={{
+            session: {
+              sessionId: "session-cloud",
+              providerKind: "github_actions",
+              phase: "ready",
+              environmentId: cloud,
+              elapsedSeconds: 10,
+              remainingSeconds: null,
+              machineLabel: "ubuntu",
+              failureReason: null,
+              detailsUrl: null,
+            },
+            machineConnected: true,
+            projectReady: true,
+            providerReady: false,
+            queued,
+            delivery: "queued",
+          }}
+          frozenElapsedSeconds={10}
+        />
+      </>,
+      noRouter,
+    );
+
+    // No action without user input: the gate publishes needsInstall and stops there.
+    await expect
+      .element(screen.getByTestId("toolauth-primary-action"))
+      .toHaveTextContent("Install and connect");
+    expect(harness.state.install).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByTestId("toolauth-primary-action"));
+    expect(harness.state.install).toHaveBeenCalledTimes(1);
+    // The click is visible straight away, before the machine reports anything.
+    await expect.element(screen.getByTestId("toolauth-pending")).toBeInTheDocument();
+    expect(harness.state.toastAdd).not.toHaveBeenCalled();
+    expect(
+      decideCloudQueuedSendFlush({
+        queued,
+        target: null,
+        session: {
+          sessionId: "session-cloud",
+          phase: "ready",
+          environmentId: cloud,
+        } as never,
+        connectFailure: null,
+        machineConnected: true,
+        projectId: ProjectId.make("project-1"),
+        scratch: false,
+        threadExists: false,
+        providerReady: false,
+      }).kind,
+    ).toBe("wait");
+
+    await phase({
+      phase: "awaiting-open",
+      url: "https://claude.ai/login",
+      displayCode: "CLAUDE-42",
+    });
+    await expect.element(screen.getByText("CLAUDE-42")).toBeInTheDocument();
+    expect(
+      screen.container.querySelector("[data-cloud-setup-provider-auth='claude']"),
+    ).not.toBeNull();
+    expect(harness.state.toastAdd).not.toHaveBeenCalled();
+
+    act(() => {
+      setCloudQueuedSendProviderReady(queued.messageId, { kind: "ready" });
+    });
+    expect(
+      decideCloudQueuedSendFlush({
+        queued,
+        target: null,
+        session: {
+          sessionId: "session-cloud",
+          phase: "ready",
+          environmentId: cloud,
+        } as never,
+        connectFailure: null,
+        machineConnected: true,
+        projectId: ProjectId.make("project-1"),
+        scratch: false,
+        threadExists: false,
+        providerReady: true,
+      }),
+    ).toEqual({
+      kind: "dispatch",
+      environmentId: cloud,
+      projectId: ProjectId.make("project-1"),
+    });
+    expect(harness.state.toastAdd.mock.calls.filter((call) => call[0]?.type === "error")).toEqual(
+      [],
+    );
+  });
+});

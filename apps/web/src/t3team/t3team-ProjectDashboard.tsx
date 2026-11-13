@@ -8,10 +8,12 @@ import { t3SurfaceBackdrops } from "~/t3team/components/ui/t3team-surface";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/t3team/components/ui/t3team-menu";
 import { useProjectDashboardViewTab } from "~/t3team/hooks/t3team-useProjectDashboardViewTab";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
+import { LinkedRepositorySyncChips } from "~/t3team/components/t3team-LinkedRepositorySyncChips";
 import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepairBanner";
 import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBacklogView";
 import { ProjectDashboardMyWorkView } from "~/t3team/t3team-ProjectDashboardMyWorkView";
 import { ProjectMyWorkViewSwitch } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import { NewChatHereButton } from "~/t3team/t3team-NewChatHereButton";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 export function ProjectDashboard({
@@ -77,8 +79,12 @@ export function ProjectDashboard({
             </MenuPopup>
           </Menu>
         </div>
+        {dashboardMode === "backlog" ? null : (
+          <NewChatHereButton target={{ kind: "my-work", projectId: project.id }} />
+        )}
       </header>
 
+      <LinkedRepositorySyncChips workspaceRoot={project.workspace?.rootPath} />
       <ProjectBindingRepairBanner project={project} onProjectUpdated={onProjectUpdated} />
 
       <section
