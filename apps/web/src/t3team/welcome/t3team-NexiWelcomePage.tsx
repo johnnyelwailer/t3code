@@ -9,7 +9,12 @@ import { NexiWelcomeGitHubRow } from "./t3team-NexiWelcomeGitHubRow";
 import { NexiWelcomeJiraRow } from "./t3team-NexiWelcomeJiraRow";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
 import { useNexiWelcomeActions } from "./t3team-useNexiWelcomeActions";
-import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeLayout";
+import {
+  StartFooter,
+  WelcomePageShell,
+  WelcomeSection,
+  WelcomeSectionsGrid,
+} from "./t3team-welcomeLayout";
 
 /**
  * Nexi Work single-page first-run setup. Replaces the multi-step WelcomeWizard when
@@ -36,9 +41,18 @@ function NexiWelcomeRows({
   const entraSignedIn = a.account.account?.auth._tag === "SignedIn";
 
   return (
-    <WelcomePageShell title={`Set up ${productName}`}>
+    <WelcomePageShell
+      title={`Set up ${productName}`}
+      footer={
+        <StartFooter
+          agentReady={a.agentReady}
+          onStart={() => void a.onStart()}
+          onStartWithoutAgent={() => void a.onStart()}
+        />
+      }
+    >
       <NexiWelcomeHeader />
-      <div className="border-t border-border/50">
+      <WelcomeSectionsGrid>
         <WelcomeSection title="Agents">
           <NexiWelcomeAgentsSection
             rows={a.agentRows}
@@ -105,12 +119,7 @@ function NexiWelcomeRows({
             onSkip={() => a.skip("cloud")}
           />
         </WelcomeSection>
-      </div>
-      <StartFooter
-        agentReady={a.agentReady}
-        onStart={() => void a.onStart()}
-        onStartWithoutAgent={() => void a.onStart()}
-      />
+      </WelcomeSectionsGrid>
     </WelcomePageShell>
   );
 }

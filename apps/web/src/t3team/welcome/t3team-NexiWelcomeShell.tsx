@@ -2,60 +2,82 @@ import type { ReactNode } from "react";
 
 import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
 import { isElectron } from "~/env";
+import {
+  welcomeTitleAlign,
+  welcomeTitleBarHeaderClass,
+  welcomeTitleTextClass,
+} from "./t3team-welcomeTitleBar";
 
 /**
- * The welcome setup always owns the whole window: a fixed surface above whichever layout mounts
- * it, so it can never show as a column beside the sidebar. `narrow` is the phone-width story frame.
+ * The welcome setup owns the whole window. `narrow` is the phone-width story frame.
+ * The footer sits outside the scroll region so Start stays reachable on a short screen.
  */
 export function WelcomePageShell({
   children,
   narrow,
   title,
+  footer,
+  platform,
 }: {
   readonly children: ReactNode;
   readonly narrow?: boolean | undefined;
-  /** Shown in the titlebar strip, where the app shows its page title. */
   readonly title?: string | undefined;
+  readonly footer?: ReactNode;
+  /** Override for tests and screenshots. Defaults to the current navigator platform. */
+  readonly platform?: string | undefined;
 }) {
+  const resolvedPlatform = platform ?? (typeof navigator === "undefined" ? "" : navigator.platform);
+  const align = welcomeTitleAlign(resolvedPlatform);
+
   if (narrow) {
     return (
       <div
-        className="relative min-h-screen bg-sidebar text-foreground"
+        className="relative flex min-h-screen flex-col bg-sidebar text-foreground"
         data-nexi-welcome=""
         style={{ width: 390, marginInline: "auto" }}
       >
-        <div className="px-3 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           <WelcomeCard>{children}</WelcomeCard>
         </div>
+        {footer ? <WelcomeFooter>{footer}</WelcomeFooter> : null}
       </div>
     );
   }
+
   return (
     <div
       className="fixed inset-0 z-40 flex flex-col bg-sidebar text-foreground"
       data-nexi-welcome=""
+      data-welcome-title-align={align}
     >
-      <WorkspacePageHeader
-        electron={isElectron}
-        className="justify-center border-b border-border/50 px-4"
-      >
-        {title ? (
-          <span className="text-sm font-medium text-muted-foreground/70">{title}</span>
-        ) : null}
+      <WorkspacePageHeader electron={isElectron} className={welcomeTitleBarHeaderClass(align)}>
+        {title ? <span className={welcomeTitleTextClass(align)}>{title}</span> : null}
       </WorkspacePageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
-        <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both" data-welcome-scroll="">
+        <div className="@container/welcome-page mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
           <WelcomeCard>{children}</WelcomeCard>
         </div>
       </div>
+      {footer ? <WelcomeFooter>{footer}</WelcomeFooter> : null}
     </div>
   );
 }
 
 function WelcomeCard({ children }: { readonly children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-background px-5 py-6 shadow-lg shadow-black/10 sm:px-10 sm:py-9">
+    <div className="rounded-2xl border border-border/60 bg-background px-5 py-6 shadow-lg shadow-black/10 sm:px-10 sm:py-8">
       {children}
+    </div>
+  );
+}
+
+function WelcomeFooter({ children }: { readonly children: ReactNode }) {
+  return (
+    <div
+      className="shrink-0 border-t border-border/50 bg-background/95 px-4 py-3 backdrop-blur sm:px-8"
+      data-welcome-footer=""
+    >
+      <div className="mx-auto w-full max-w-7xl">{children}</div>
     </div>
   );
 }

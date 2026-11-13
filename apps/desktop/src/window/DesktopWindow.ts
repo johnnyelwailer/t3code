@@ -39,6 +39,7 @@ import { makeQuitShortcutHandler } from "./QuitHold.ts";
 import { resolveDesktopWindowTitle } from "../app/t3team-desktopDistributionBrand.ts";
 import { makeDetachedSurfaceWindows } from "./t3team-DetachedSurfaceWindows.ts";
 import { installMainSessionPermissions } from "./t3team-MainSessionPermissions.ts";
+import { sizeSetupWindowFromScreen } from "./t3team-setupWindowSize.ts";
 
 import {
   ATLASSIAN_OAUTH_POPUP_HEIGHT,
@@ -476,9 +477,16 @@ export const make = Effect.gen(function* () {
     if (persistedBounds !== null && initialBounds === DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE) {
       yield* logWindowWarning("saved main window bounds could not be restored; using defaults");
     }
+    // First launch (no restored bounds): size the window to the setup page
+    // within this display's work area. A missing screen API keeps the default.
+    const setupBounds =
+      initialBounds === DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE
+        ? sizeSetupWindowFromScreen(Electron.screen)
+        : null;
+    const windowBounds = setupBounds ?? initialBounds;
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
     const window = yield* electronWindow.create({
-      ...initialBounds,
+      ...windowBounds,
       minWidth: 840,
       minHeight: 620,
       show: false,
