@@ -4,10 +4,10 @@
 !include "StrFunc.nsh"
 !include "WinMessages.nsh"
 !ifdef BUILD_UNINSTALLER
+  ; Only declare Un* macros the uninstaller calls. ${UnStrStr} defines un.StrStr;
+  ; leaving it unused is warning 6010, which electron-builder treats as an error.
   ${UnStrRep}
-  ${UnStrStr}
   !define T3StrRep '${UnStrRep}'
-  !define T3StrStr '${UnStrStr}'
 !else
   ${StrRep}
   ${StrStr}
