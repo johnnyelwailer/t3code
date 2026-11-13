@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { LinkedRepositorySyncResult } from "~/t3team/backend/t3team-types";
-import { FOUR_REPOS, RENDER_CAP, bumpRenderCount, flushEffects } from "~/t3team/test/t3team-liveShapedSurface";
+import {
+  FOUR_REPOS,
+  RENDER_CAP,
+  bumpRenderCount,
+  flushEffects,
+} from "~/t3team/test/t3team-liveShapedSurface";
 import { replaceLinkedRepositoryUrlsInProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 
 const live = vi.hoisted(() => {
@@ -51,11 +56,8 @@ vi.mock("./t3team-projectMainRepository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./t3team-projectMainRepository")>();
   return {
     ...actual,
-    applyMainRepositoryAutoDetection: async ({
+    applyMainRepositoryAutoDetection: async ({ project }: { project: ProjectShellProject }) =>
       project,
-    }: {
-      project: ProjectShellProject;
-    }) => project,
   };
 });
 
@@ -132,7 +134,13 @@ describe("batched repository updates", () => {
     document.body.append(host);
     root = createRoot(host);
     await act(async () => {
-      root!.render(createElement(SyncHost, { onByUrl: (next) => { size = next; } }));
+      root!.render(
+        createElement(SyncHost, {
+          onByUrl: (next) => {
+            size = next;
+          },
+        }),
+      );
     });
     await flushEffects();
     expect(size).toBe(4);
