@@ -102,9 +102,8 @@ export function resolveT3TeamAppearanceDefaults(input: {
     return {};
   }
   const defaults = input.defaults;
-  const patch: T3TeamAppearanceDefaultsPatch = {
-    ...(defaults.glassOpacity === undefined ? {} : { glassOpacity: defaults.glassOpacity }),
-  };
+  const patch: T3TeamAppearanceDefaultsPatch =
+    defaults.glassOpacity === undefined ? {} : { glassOpacity: defaults.glassOpacity };
   // A defaults block that declares nothing is still "handled": recording the marker stops this
   // from re-deciding on every mount.
   return Object.keys(patch).length === 0

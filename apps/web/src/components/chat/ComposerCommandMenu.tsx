@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { memo, useLayoutEffect, useRef } from "react";
 
-import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
+import { type ComposerTriggerKind } from "../../composer-logic";
 import { cn } from "~/lib/utils";
 import type { T3TeamSlashCommand } from "~/t3team/composer/t3team-composerMenuItems";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";

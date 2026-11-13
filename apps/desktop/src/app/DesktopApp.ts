@@ -22,7 +22,6 @@ import * as PreviewPasskeys from "../preview/Passkeys.ts";
 import * as DesktopBackendManager from "../backend/DesktopBackendManager.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopBackendPort from "./DesktopBackendPort.ts";
-import * as DesktopCliCommand from "./DesktopCliCommand.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopLegacyLocalStorage from "./DesktopLegacyLocalStorage.ts";
 import * as DesktopLifecycle from "./DesktopLifecycle.ts";
