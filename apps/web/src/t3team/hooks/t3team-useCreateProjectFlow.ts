@@ -76,8 +76,14 @@ export function useCreateProjectFlow(onCreated: (project: ProjectShellProject) =
       entry,
       linkedRepositoryUrls: selection.linkedRepositoryUrls,
       setupProfileId,
+      onRecordCreated: (record) => {
+        // The form already has everything it needs: leave and open the project
+        // the instant the record exists. Clones continue in the background.
+        navigation.leaveThen(() => onCreated(record));
+      },
     });
-    if (project) navigation.leaveThen(() => onCreated(project));
+    // Finalize may have moved the workspace or detected a main repository: refresh the store.
+    if (project) onCreated(project);
   };
 
   return {

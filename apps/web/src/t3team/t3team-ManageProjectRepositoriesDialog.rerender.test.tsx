@@ -60,9 +60,6 @@ vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
 vi.mock("~/t3team/components/t3team-LinkedRepositorySyncStatusLine", () => ({
   LinkedRepositorySyncStatusLine: () => null,
 }));
-vi.mock("~/t3team/components/t3team-LinkedRepositorySyncModal", () => ({
-  LinkedRepositorySyncModal: () => null,
-}));
 vi.mock("~/t3team/components/t3team-LinkedRepositoryBranchControl", () => ({
   LinkedRepositoryBranchControl: () => null,
 }));
