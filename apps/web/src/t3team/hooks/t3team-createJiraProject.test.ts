@@ -119,4 +119,42 @@ describe("createJiraProject", () => {
     });
     expect(mockFinalize.mock.calls[0]![0].customProfile).toBe(customProfile);
   });
+
+  it("notifies the caller as soon as the record exists, before workspace setup finishes", async () => {
+    const record = { id: "p1", workspace: { rootPath: "/tmp/p1" } };
+    mockCreate.mockReturnValue(record);
+    let finishFinalize: (project: unknown) => void = () => {};
+    mockFinalize.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishFinalize = resolve;
+        }),
+    );
+    const onRecordCreated = vi.fn();
+    writeIntegrationCache(projectsCacheKey, [external]);
+    const { backend } = backendWith([]);
+    const pending = createJiraProject({
+      backend,
+      entry,
+      linkedRepositoryUrls: [
+        "https://github.com/hive/MILO5",
+        "https://github.com/hive/milo5-agentic",
+        "https://github.com/hive/milo5-mocks",
+        "https://github.com/hive/milo5-ops",
+      ],
+      setupProfileId: "product-partner",
+      onRecordCreated,
+    });
+    // Flush Effect.runPromise so the record is created; finalize is still outstanding.
+    await vi.waitFor(() => expect(onRecordCreated).toHaveBeenCalledWith(record));
+    expect(mockFinalize).toHaveBeenCalled();
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finishFinalize({ ...record, finalized: true });
+    await expect(pending).resolves.toEqual({ ...record, finalized: true });
+  });
 });

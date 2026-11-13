@@ -45,6 +45,8 @@ export type CreateJiraProjectInput = {
   readonly linkedRepositoryUrls: ReadonlyArray<string>;
   readonly setupProfileId: string;
   readonly customProfile?: T3TeamProfile | undefined;
+  /** Called as soon as the project record exists, before workspace bootstrap and clones. */
+  readonly onRecordCreated?: (project: ProjectShellProject) => void;
 };
 
 /** Creates the project record, then provisions its workspace (repos, setup profile). */
@@ -66,6 +68,7 @@ export async function createJiraProject(
       raw: buildInitialRaw(external.raw, linkedRepositoryUrls, setupProfileId),
     }),
   );
+  input.onRecordCreated?.(project);
   return finalizeCreatedProject({
     backend,
     project,

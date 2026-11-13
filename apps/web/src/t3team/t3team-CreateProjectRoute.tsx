@@ -12,6 +12,7 @@ import { spansMultipleSites } from "~/t3team/hooks/t3team-createProjectCatalogRo
 import { CreateProjectChooseStep } from "~/t3team/t3team-CreateProjectChooseStep";
 import { CreateProjectConnectPanel } from "~/t3team/t3team-CreateProjectConnectPanel";
 import { CreateProjectPage } from "~/t3team/t3team-CreateProjectPage";
+import { CreateProjectProgress } from "~/t3team/t3team-CreateProjectProgress";
 import { CreateProjectSetupFooter } from "~/t3team/t3team-CreateProjectSetupFooter";
 import { CreateProjectSetupStep } from "~/t3team/t3team-CreateProjectSetupStep";
 import {
@@ -56,8 +57,9 @@ export function CreateProjectRoute({
 }) {
   const flow = useCreateProjectFlow(onCreated);
   const { entry, catalogState, navigation } = flow;
-  // While a create runs the set-up screen stays put, even if the URL moves under it (browser Back):
-  // the create is not cancellable, and a different screen would hide what is happening.
+  // While a create runs we keep the chosen entry on screen even if the URL moves (browser Back):
+  // the create is not cancellable. The set-up / discovery screen itself unmounts — see below —
+  // and is replaced by per-repository progress so a picker render loop cannot peg the app.
   const lastEntryRef = useRef(entry);
   if (entry) lastEntryRef.current = entry;
   // Opening an already-added project must not mount Setup (or its discovery hooks) while
@@ -85,10 +87,10 @@ export function CreateProjectRoute({
       onClose={navigation.close}
       dismissible={dismissible}
       footer={
-        shownEntry ? (
+        shownEntry && !flow.creating ? (
           <CreateProjectSetupFooter
             projectTitle={shownEntry.title}
-            creating={flow.creating}
+            creating={false}
             error={flow.submitState.kind === "error" ? flow.submitState.error : null}
             onBack={navigation.backToChoose}
             onCreate={() => void flow.create()}
@@ -102,6 +104,27 @@ export function CreateProjectRoute({
         <OpenExistingProjectRedirect
           projectId={flow.deepLinkExistingId}
           open={navigation.openProject}
+        />
+      ) : shownEntry && flow.creating ? (
+        <CreateProjectProgress
+          urls={flow.selection.linkedRepositoryUrls}
+          workspaceRoot={
+            flow.submitState.kind === "creating"
+              ? flow.submitState.project?.workspace?.rootPath
+              : undefined
+          }
+          onContinueInBackground={() => {
+            const project =
+              flow.submitState.kind === "creating" ? flow.submitState.project : undefined;
+            if (project) navigation.leaveThen(() => onCreated(project));
+          }}
+          onDone={() => {
+            const project =
+              flow.submitState.kind === "creating" ? flow.submitState.project : undefined;
+            if (project) navigation.leaveThen(() => onCreated(project));
+          }}
+          onRetry={() => void flow.create()}
+          onCancel={() => navigation.close()}
         />
       ) : shownEntry ? (
         <SetupScreen flow={flow} entry={shownEntry} />
