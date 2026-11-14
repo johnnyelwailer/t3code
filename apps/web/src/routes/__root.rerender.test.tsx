@@ -105,20 +105,34 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("~/t3team/welcome/t3team-useNexiWelcomeEnabled", () => ({
-  useNexiWelcomeEnabled: () => {
+  useNexiWelcomeEnabled: () => hooks.useSelected((state) => state.nexiWelcome),
+}));
+
+// RootRouteBranch calls this on every render before it picks a branch, so it is the branch's counter.
+vi.mock("../components/promptLinks/HostedPromptLinkLanding", () => ({
+  useHostedPromptLinkLanding: () => {
     hooks.count.fn("branch");
-    return hooks.useSelected((state) => state.nexiWelcome);
+    return null;
   },
 }));
 
 vi.mock("../components/AppSidebarLayout", () => ({
-  AppSidebarLayout: ({ children }: { children?: ReactNode }) => {
+  AppSidebarLayout: ({
+    children,
+    showSidebar,
+  }: {
+    children?: ReactNode;
+    showSidebar?: boolean;
+  }) => {
     hooks.count.fn("sidebar");
-    return <div data-testid="sidebar">{children}</div>;
+    return showSidebar === false ? children : <div data-testid="sidebar">{children}</div>;
   },
 }));
 
 vi.mock("../components/CommandPalette", () => ({ CommandPalette: hooks.Pass }));
+vi.mock("../components/mcp/UseInAnotherAppDialog", () => ({
+  UseInAnotherAppDialogHost: hooks.Empty,
+}));
 vi.mock("../components/CustomSnoozeDialog", () => ({ CustomSnoozeDialogHost: hooks.Empty }));
 vi.mock("../components/chat/GuestShareControls", () => ({ GuestShareDialogHost: hooks.Empty }));
 vi.mock("../components/AddProjectToMachineDialog", () => ({
@@ -203,9 +217,6 @@ vi.mock("../cloud/t3team-CloudQueuedSendFlusher", () => ({ CloudQueuedSendFlushe
 vi.mock("../t3team/voice/t3team-VoiceSessionHost", () => ({ T3TeamVoiceSessionHost: hooks.Empty }));
 vi.mock("../t3team/t3team-appBrandName", () => ({ useT3TeamAppDisplayName: () => "Nexi Work" }));
 vi.mock("../t3team/chat/t3team-threadComposingSignal", () => ({}));
-vi.mock("../components/promptLinks/HostedPromptLinkLanding", () => ({
-  useHostedPromptLinkLanding: () => null,
-}));
 vi.mock("../localEnvironment", () => ({ isLocalEnvironmentDisabled: () => false }));
 vi.mock("../lib/desktopSnapShot", () => ({ getDesktopSnapShotBridge: () => null }));
 vi.mock("../lib/snapShotSetupResume", () => ({ shouldResumeSnapShotSetupOnStartup: () => false }));
@@ -216,6 +227,8 @@ vi.mock("../state/entities", () => ({ readProject: () => null }));
 vi.mock("../state/server", () => ({
   primaryServerConfigAtom: { __id: "config" },
   primaryServerWelcomeAtom: { __id: "welcome" },
+  // Read at module load by state/presentation, which the root reaches through upstream imports.
+  serverEnvironment: { configValueAtom: { __id: "config" } },
 }));
 vi.mock("lucide", () => ({ Check: hooks.Empty, Copy: hooks.Empty }));
 
@@ -290,22 +303,23 @@ describe("RootRouteBranch re-renders", () => {
     counter.expectRerendered({});
   });
 
-  it("renders the welcome page without the sidebar when the Nexi welcome page is on", async () => {
+  it("renders the welcome page without the sidebar, whichever welcome page is on", async () => {
     hooks.store.replace({ ...hooks.initial(), pathname: "/welcome", nexiWelcome: true });
     await act(async () => {
       root.render(<RootView />);
     });
     expect(container.querySelector("[data-testid='sidebar']")).toBeNull();
     expect(container.querySelector("[data-testid='outlet']")).not.toBeNull();
-    // EventRouter is not on the welcome branch.
-    counter.expectRerendered({ branch: 1, outlet: 1 });
+    // EventRouter is not on the welcome branch; the layout renders with its sidebar hidden.
+    counter.expectRerendered({ branch: 1, sidebar: 1, outlet: 1 });
 
     counter.reset();
     await act(async () => {
       hooks.store.set({ nexiWelcome: false });
     });
-    counter.expectRerendered({ branch: 1, sidebar: 1, outlet: 1 });
-    expect(container.querySelector("[data-testid='sidebar']")).not.toBeNull();
+    // The welcome route picks its page; the root does not read the flag.
+    counter.expectRerendered({});
+    expect(container.querySelector("[data-testid='sidebar']")).toBeNull();
   });
 
   it("latches a visit to /welcome and does not navigate for that bootstrap thread on the way back", async () => {

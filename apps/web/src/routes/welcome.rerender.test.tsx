@@ -2,10 +2,10 @@
 /* oxlint-disable t3code/require-disposable-render -- The shared render helper imports vite-plus/test/browser and can only run in Browser Mode. */
 // @vitest-environment jsdom
 /**
- * WelcomeRouteView holds a dismissed flag and reads the path, the hash, and
- * the Nexi welcome flag. A store notify that does not change those, or a
- * hash change after the wizard is dismissed, must not reopen setup. The
- * render count is the budget.
+ * WelcomeRouteView holds a dismissed flag and reads the path, the hash, the
+ * environment catalog, and the Nexi welcome flag. A store notify that does not
+ * change those, or a hash change after setup is dismissed, must not reopen
+ * setup. The render count is the budget.
  */
 import { act, Suspense, type ComponentType } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -40,15 +40,17 @@ interface WelcomeStore {
   readonly pathname: string;
   readonly hash: string;
   readonly nexiWelcome: boolean;
-  readonly authStatus: "authenticated" | "hosted-static";
+  readonly primaryEnvironmentId: string | null;
+  readonly catalogReady: boolean;
 }
 
 const hooks = vi.hoisted(() => {
   const initial = (): WelcomeStore => ({
     pathname: "/welcome",
     hash: "",
-    nexiWelcome: false,
-    authStatus: "authenticated",
+    nexiWelcome: true,
+    primaryEnvironmentId: "e1",
+    catalogReady: true,
   });
   let state = initial();
   const listeners = new Set<() => void>();
@@ -73,13 +75,13 @@ const hooks = vi.hoisted(() => {
   };
   const navigate = vi.fn(async () => {});
   const openNewThread = vi.fn(async () => {});
-  const wizardDone = { fn: async (_projectRef?: unknown) => {} };
+  const setupDone = { fn: async (_projectRef?: unknown) => {} };
   const count = { fn: (_id: string) => {} };
   const { useSyncExternalStore } = require("react") as typeof import("react");
   function useSelected<S>(select: (state: WelcomeStore) => S): S {
     return useSyncExternalStore(store.subscribe, () => select(store.get()));
   }
-  return { store, initial, navigate, openNewThread, wizardDone, count, useSelected };
+  return { store, initial, navigate, openNewThread, setupDone, count, useSelected };
 });
 
 vi.mock("@tanstack/react-router", async (importOriginal) => {
@@ -89,9 +91,6 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
     createFileRoute: () => (opts: { component: unknown; beforeLoad?: unknown }) => ({
       ...opts,
       options: opts,
-      useRouteContext: () => ({
-        authGateState: { status: hooks.store.get().authStatus },
-      }),
     }),
     useNavigate: () => hooks.navigate,
     useLocation: ({
@@ -112,6 +111,15 @@ vi.mock("~/t3team/welcome/t3team-useNexiWelcomeEnabled", () => ({
   },
 }));
 
+vi.mock("../state/environments", () => ({
+  usePrimaryEnvironmentId: () => hooks.useSelected((state) => state.primaryEnvironmentId),
+  useEnvironments: () => {
+    const isReady = hooks.useSelected((state) => state.catalogReady);
+    const primary = hooks.useSelected((state) => state.primaryEnvironmentId);
+    return { isReady, environments: primary === null ? [] : [{ environmentId: primary }] };
+  },
+}));
+
 vi.mock("~/hooks/useHandleNewThread", () => ({
   useNewThreadHandler: () => hooks.openNewThread,
 }));
@@ -123,30 +131,28 @@ vi.mock("../components/NoProjectsHero", () => ({
   },
 }));
 
-vi.mock("../components/onboarding/WelcomeWizard", () => ({
-  WelcomeWizard: (props: {
-    localAvailable: boolean;
-    resumeEnvironmentId: unknown;
-    onDone: (projectRef?: unknown) => Promise<void>;
-  }) => {
-    hooks.count.fn("wizard");
-    hooks.wizardDone.fn = props.onDone;
-    return (
-      <div data-testid="wizard">
-        <span data-testid="wizard-local">{props.localAvailable ? "local" : "hosted"}</span>
-        <button type="button" onClick={() => void props.onDone()}>
-          done
-        </button>
-        <button type="button" onClick={() => void props.onDone({ id: "p1" })}>
-          done-project
-        </button>
-      </div>
-    );
+// Each setup page records its onDone so a test can finish setup the way the page would.
+vi.mock("~/t3team/welcome/t3team-NexiWelcomePage", () => ({
+  NexiWelcomePage: (props: { onDone: (projectRef?: unknown) => Promise<void> }) => {
+    hooks.count.fn("nexi");
+    hooks.setupDone.fn = props.onDone;
+    return <div data-testid="nexi">nexi</div>;
+  },
+}));
+
+vi.mock("../components/onboarding/WelcomePage", () => ({
+  WelcomePage: (props: { onDone: (projectRef?: unknown) => Promise<void> }) => {
+    hooks.count.fn("upstream");
+    hooks.setupDone.fn = props.onDone;
+    return <div data-testid="upstream">upstream</div>;
   },
 }));
 
 const counter = renderCounter();
 hooks.count.fn = (id: string) => counter.count(id);
+
+const shown = (container: HTMLElement) =>
+  ["nexi", "upstream", "hero"].filter((id) => container.querySelector(`[data-testid='${id}']`));
 
 async function renderWelcome(root: Root) {
   await act(async () => {
@@ -182,11 +188,10 @@ describe("WelcomeRouteView re-renders", () => {
     container.remove();
   });
 
-  it("does not re-render when a location notify carries the same path and hash", async () => {
+  it("shows the Nexi welcome alone and does not re-render on a notify with the same state", async () => {
     await renderWelcome(root);
-    expect(container.querySelector("[data-testid='wizard']")).not.toBeNull();
-    expect(container.querySelector("[data-testid='hero']")).not.toBeNull();
-    counter.expectRerendered({ welcome: 1, hero: 1, wizard: 1 });
+    expect(shown(container)).toEqual(["nexi"]);
+    counter.expectRerendered({ welcome: 1, nexi: 1 });
 
     counter.reset();
     await act(async () => {
@@ -195,93 +200,82 @@ describe("WelcomeRouteView re-renders", () => {
     counter.expectRerendered({});
   });
 
-  it("hides the empty-home hero when the Nexi welcome page is on, and brings it back when the flag goes off", async () => {
-    hooks.store.replace({ ...hooks.initial(), nexiWelcome: true });
+  it("falls back to the upstream Welcome page when the Nexi welcome flag goes off", async () => {
     await renderWelcome(root);
-    expect(container.querySelector("[data-testid='hero']")).toBeNull();
-    expect(container.querySelector("[data-testid='wizard']")).not.toBeNull();
-    counter.expectRerendered({ welcome: 1, wizard: 1 });
-
     counter.reset();
     await act(async () => {
       hooks.store.set({ nexiWelcome: false });
     });
-    // The wizard keeps its props, so it sits this update out.
-    counter.expectRerendered({ welcome: 1, hero: 1 });
-    expect(container.querySelector("[data-testid='hero']")).not.toBeNull();
-    expect(container.querySelector("[data-testid='wizard']")).not.toBeNull();
+    expect(shown(container)).toEqual(["upstream"]);
+    counter.expectRerendered({ welcome: 1, upstream: 1 });
+  });
+
+  it("waits for the environment catalog before choosing a computer", async () => {
+    hooks.store.replace({
+      ...hooks.initial(),
+      nexiWelcome: false,
+      primaryEnvironmentId: null,
+      catalogReady: false,
+    });
+    await renderWelcome(root);
+    expect(shown(container)).toEqual([]);
+    counter.reset();
+    await act(async () => {
+      hooks.store.set({ primaryEnvironmentId: "e1", catalogReady: true });
+    });
+    expect(shown(container)).toEqual(["upstream"]);
   });
 
   it("does not show setup when the path is no longer /welcome, even if it was not dismissed", async () => {
     await renderWelcome(root);
     counter.reset();
-
     await act(async () => {
       hooks.store.set({ pathname: "/" });
     });
-    // The empty-home hero is already on screen and sits this update out.
-    counter.expectRerendered({ welcome: 1 });
-    expect(container.querySelector("[data-testid='wizard']")).toBeNull();
-    expect(container.querySelector("[data-testid='hero']")).not.toBeNull();
+    counter.expectRerendered({ welcome: 1, hero: 1 });
+    expect(shown(container)).toEqual(["hero"]);
   });
 
   it("dismisses setup once, and a later hash change does not reopen it", async () => {
     await renderWelcome(root);
-    expect(container.querySelector("[data-testid='wizard']")).not.toBeNull();
     counter.reset();
-
     await act(async () => {
-      await hooks.wizardDone.fn();
+      await hooks.setupDone.fn();
     });
     expect(hooks.navigate).toHaveBeenCalledWith({ to: "/", replace: true });
-    expect(container.querySelector("[data-testid='wizard']")).toBeNull();
-    expect(container.querySelector("[data-testid='hero']")).not.toBeNull();
-    counter.expectRerendered({ welcome: 1 });
+    expect(shown(container)).toEqual(["hero"]);
+    counter.expectRerendered({ welcome: 1, hero: 1 });
 
     counter.reset();
     await act(async () => {
-      hooks.store.set({ hash: "#agents:e1" });
+      hooks.store.set({ hash: "agents:e1" });
     });
     // The route still reads the hash, so it re-renders once, but setup stays closed.
     counter.expectRerendered({ welcome: 1 });
-    expect(container.querySelector("[data-testid='wizard']")).toBeNull();
+    expect(shown(container)).toEqual(["hero"]);
   });
 
   it("opens a thread when setup finishes with a project, and falls back home if that open fails", async () => {
     await renderWelcome(root);
-    counter.reset();
-
     await act(async () => {
-      await hooks.wizardDone.fn({ id: "p1" });
+      await hooks.setupDone.fn({ id: "p1" });
     });
-    expect(hooks.openNewThread).toHaveBeenCalledTimes(1);
     expect(hooks.openNewThread).toHaveBeenCalledWith({ id: "p1" }, { replace: true });
     expect(hooks.navigate).not.toHaveBeenCalled();
-    expect(container.querySelector("[data-testid='wizard']")).toBeNull();
-    counter.expectRerendered({ welcome: 1 });
+    expect(shown(container)).toEqual(["hero"]);
 
     await act(async () => {
       root.unmount();
     });
     hooks.openNewThread.mockReset();
     hooks.openNewThread.mockRejectedValue(new Error("open failed"));
-    hooks.navigate.mockReset();
     hooks.store.replace(hooks.initial());
     root = createRoot(container);
     await renderWelcome(root);
-    counter.reset();
     await act(async () => {
-      await hooks.wizardDone.fn({ id: "p2" });
+      await hooks.setupDone.fn({ id: "p2" });
     });
     expect(hooks.openNewThread).toHaveBeenCalledTimes(1);
     expect(hooks.navigate).toHaveBeenCalledWith({ to: "/", replace: true });
-    expect(container.querySelector("[data-testid='wizard']")).toBeNull();
-    counter.expectRerendered({ welcome: 1 });
-  });
-
-  it("marks the hosted-static session as not locally available", async () => {
-    hooks.store.replace({ ...hooks.initial(), authStatus: "hosted-static" });
-    await renderWelcome(root);
-    expect(container.querySelector("[data-testid='wizard-local']")?.textContent).toBe("hosted");
   });
 });
