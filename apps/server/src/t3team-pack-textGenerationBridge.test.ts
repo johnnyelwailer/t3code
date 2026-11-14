@@ -119,4 +119,43 @@ describe("pack text generation bridge", () => {
       expect(received?.aborted).toBe(true);
     }),
   );
+
+  // Cold local compaction wraps generateStructured in Effect.timeout(SUMMARY_TIMEOUT)
+  // (orchestration-v2/t3team-coldLocalCompactionLive.ts): at the timeout the pack's request
+  // is aborted too, so it stops holding a gateway slot for a result nobody reads. Intended.
+  it.live("aborts the pack's request when a caller's timeout fires", () =>
+    Effect.gen(function* () {
+      let received: AbortSignal | undefined;
+      const hanging: PackProviderDriverDefinition = {
+        ...definition,
+        create: async () => ({
+          ...instance,
+          textGeneration: {
+            ...instance.textGeneration!,
+            generateStructured: (input: { readonly signal?: AbortSignal }) => {
+              received = input.signal;
+              return new Promise<unknown>(() => {});
+            },
+          },
+        }),
+      };
+      const built = yield* Effect.scoped(
+        bridgePackProviderDriver(hanging).create({
+          instanceId: ProviderInstanceId.make("custom-pack"),
+          displayName: "Pack provider",
+          environment: [],
+          enabled: true,
+          config: {},
+        }),
+      ).pipe(Effect.provide(McpProviderSessions.layer));
+      const outcome = yield* built.textGeneration.generateStructured!({
+        cwd: "/tmp",
+        prompt: "Summarize the transcript",
+        outputSchema: Schema.Struct({ summary: Schema.String }),
+        modelSelection: { instanceId: ProviderInstanceId.make("custom-pack"), model: "pack/model" },
+      }).pipe(Effect.timeout("20 millis"), Effect.exit);
+      expect(outcome._tag).toBe("Failure");
+      expect(received?.aborted).toBe(true);
+    }),
+  );
 });

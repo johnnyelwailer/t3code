@@ -44,8 +44,9 @@ export const bridgePackTextGeneration = (
   const service = packInstance.textGeneration;
   if (!service) return unsupportedTextGeneration(driver);
 
-  // Interrupting the effect aborts `signal`, so a cancelled call (e.g. a superseded child
-  // status) stops its provider request instead of running on until its own timeout.
+  // Interrupting the effect aborts `signal`. generateStructured callers that interrupt: a
+  // superseded child status, cold local compaction's Effect.timeout. Workflow repair runs
+  // in its own Effect.runPromise and is never interrupted.
   const attempt = <A>(operation: string, run: (signal: AbortSignal) => Promise<A>) =>
     Effect.tryPromise({
       try: run,
