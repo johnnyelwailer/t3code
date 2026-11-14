@@ -13,6 +13,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
+import { ServerConfig } from "./config.ts";
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import { DelegatedTaskPreparation } from "./mcp/t3team-delegatedTaskPreparation.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
@@ -69,6 +70,9 @@ const services = (projectLookupDies: boolean, workspaceHasRemote = true) =>
   Layer.mergeAll(
     NodeServices.layer,
     Layer.mock(GitWorkflowService)({}),
+    ServerConfig.layerTest(process.cwd(), { prefix: "t3-delegate-prep-" }).pipe(
+      Layer.provide(NodeServices.layer),
+    ),
     Layer.mock(SourceControlProviderRegistry)({ resolveLink: () => undefined }),
     Layer.mock(T3TeamLinkedRepositorySync)({ phase: () => undefined }),
     Layer.mock(ProjectSetupScriptRunner)({}),

@@ -4,9 +4,7 @@ import { t3teamRandomHex } from "./t3team-random.ts";
 import type * as Path from "effect/Path";
 
 import {
-  CHILD_WORKTREES_DIR_NAME,
   deriveReferenceDirectoryName,
-  HIDDEN_T3TEAM_DIR,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 
@@ -40,9 +38,11 @@ function sanitizeScopedPathSegment(value: string): string {
     .slice(0, 80);
 }
 
+/** A child's worktree lives in the server's worktrees directory, laid out like upstream's
+ * `<repository>/<branch>` worktrees: the host writes nothing into a user's checkout. */
 export function buildScopedChildWorktreePath(input: {
   readonly path: Path.Path;
-  readonly projectWorkspaceRoot: string;
+  readonly worktreesRoot: string;
   readonly repoFullName: string;
   readonly repoRef: string;
   readonly worktreeKey: string;
@@ -51,13 +51,7 @@ export function buildScopedChildWorktreePath(input: {
   const refDirectory = sanitizeScopedPathSegment(input.repoRef) || "default";
   const childDirectory = input.worktreeKey.slice(0, 8).toLowerCase();
 
-  return input.path.join(
-    input.projectWorkspaceRoot,
-    HIDDEN_T3TEAM_DIR,
-    CHILD_WORKTREES_DIR_NAME,
-    repoDirectory,
-    `${refDirectory}-${childDirectory}`,
-  );
+  return input.path.join(input.worktreesRoot, repoDirectory, `${refDirectory}-${childDirectory}`);
 }
 
 export function readLinkedRepositories(

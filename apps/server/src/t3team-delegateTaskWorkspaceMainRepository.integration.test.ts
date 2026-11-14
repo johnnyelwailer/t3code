@@ -64,7 +64,7 @@ describe("resolveDelegatedWorkspace with a selected main repository", () => {
       key: "on",
     });
     expect(resolved.repository).toBe(MAIN_URL);
-    expect(resolved.worktreePath.startsWith(mainCheckout)).toBe(true);
+    expect(resolved.worktreePath.startsWith(mainCheckout)).toBe(false);
     expect(commonDir(resolved.worktreePath)).toBe(mainGitDir());
   });
 
@@ -88,7 +88,7 @@ describe("resolveDelegatedWorkspace with a selected main repository", () => {
     writeMainManifest(mainEntry);
     const resolved = await ok({ workspaceRoot: mainCheckout, key: "unset" });
     expect(resolved.repository).toBe(MAIN_URL);
-    expect(resolved.worktreePath.startsWith(mainCheckout)).toBe(true);
+    expect(commonDir(resolved.worktreePath)).toBe(mainGitDir());
   });
 
   it("accepts a URL-less selected record before the manifest names it", async () => {
@@ -100,7 +100,7 @@ describe("resolveDelegatedWorkspace with a selected main repository", () => {
       key: "url-less",
     });
     expect(resolved.repository).toBeNull();
-    expect(resolved.worktreePath).toContain(mainCheckout);
+    expect(commonDir(resolved.worktreePath)).toBe(mainGitDir());
   });
 
   it("normalizes an old adopted manifest on disk and preserves flag-off isolation", async () => {

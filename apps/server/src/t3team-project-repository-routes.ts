@@ -20,11 +20,9 @@ import {
 } from "./t3team-atlassian-http.ts";
 import {
   ensureWorkspaceGitRepository,
-  ensureWorkspaceGitignore,
   detectMainRepository,
 } from "./t3team-project-repository-services.ts";
 import {
-  MAIN_REPOSITORY_GITIGNORE_ENTRIES,
   normalizeT3TeamWorkspaceRoot,
   toT3TeamError,
   type BootstrapWorkspaceRequest,
@@ -129,8 +127,7 @@ const bootstrapRouteLayer = HttpRouter.add(
     const workspaceRepositoryInitialized = yield* ensureWorkspaceGitRepository(workspaceRoot);
     // A workspace that is ALREADY a git repository (monorepo, wrapper repo) is adopted as the
     // project main repository instead of being wrapped with reference clones (GHE #42): sub-work
-    // happens in worktrees of the main repository itself, and only the machine-local `.t3team/`
-    // subpaths stay gitignored so committed team state can live in the repository.
+    // happens in worktrees of the main repository itself.
     const mainRepository: MainRepositoryBootstrapResult | undefined = workspaceRepositoryInitialized
       ? undefined
       : yield* detectMainRepository({
@@ -139,11 +136,6 @@ const bootstrapRouteLayer = HttpRouter.add(
             ? { sourceControlProviders: sourceControlProvidersOption.value }
             : {}),
         });
-    yield* ensureWorkspaceGitignore(
-      workspaceRoot,
-      mainRepository ? MAIN_REPOSITORY_GITIGNORE_ENTRIES : undefined,
-    );
-
     const response = yield* bootstrapWorkspaceReferences({
       workspaceRoot,
       workspaceRepositoryInitialized,

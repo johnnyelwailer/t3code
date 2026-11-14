@@ -13,6 +13,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
+import { ServerConfig } from "./config.ts";
 import {
   DelegatedTaskPreparation,
   type DelegatedTaskPreparationShape,
@@ -59,6 +60,7 @@ const make = Effect.gen(function* () {
     fileSystem: yield* FileSystem.FileSystem,
     path: yield* Path.Path,
     gitWorkflow: yield* GitWorkflowService,
+    worktreesRoot: (yield* ServerConfig).worktreesDir,
     sourceControlProviders: yield* SourceControlProviderRegistry,
     // A child delegated into a linked repository not cloned yet clones it on demand.
     linkedRepositorySync: yield* T3TeamLinkedRepositorySync,
