@@ -6,6 +6,7 @@ import {
   EnvironmentId,
   MessageId,
   NodeId,
+  OrchestrationV2DispatchCommandError,
   ORCHESTRATION_V2_WS_METHODS,
   ProjectId,
   ProviderInstanceId,
@@ -69,7 +70,9 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
   readonly projection?: OrchestrationV2ThreadProjection;
   readonly projectionRequests?: ThreadId[];
   readonly advertiseThreadStop?: boolean;
-  readonly lostReplies?: Array<Cause.Cause<RpcClientError.RpcClientError>>;
+  readonly lostReplies?: Array<
+    Cause.Cause<RpcClientError.RpcClientError | OrchestrationV2DispatchCommandError>
+  >;
   readonly replyLost?: Deferred.Deferred<void>;
 }) {
   const client = {
@@ -363,7 +366,15 @@ describe("V2 environment commands", () => {
       const supervisor = yield* makeSupervisor({
         commands,
         projects: [],
-        lostReplies: [Cause.die(new Error("rejected"))],
+        lostReplies: [
+          Cause.fail(
+            new OrchestrationV2DispatchCommandError({
+              commandId: CommandId.make("command-rejected"),
+              commandType: "message.dispatch",
+              message: "Previously rejected.",
+            }),
+          ),
+        ],
       });
       const exit = yield* startThreadTurn({
         commandId: CommandId.make("command-rejected"),
@@ -381,6 +392,11 @@ describe("V2 environment commands", () => {
         Effect.exit,
       );
       expect(exit._tag).toBe("Failure");
+      if (exit._tag === "Failure") {
+        expect(Option.getOrNull(Cause.findErrorOption(exit.cause))?._tag).toBe(
+          "OrchestrationV2DispatchCommandError",
+        );
+      }
       expect(commands).toHaveLength(1);
     }).pipe(Effect.provide(layerTestCrypto)),
   );
