@@ -25,7 +25,6 @@ import {
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
-import { MAIN_REPOSITORY_GITIGNORE_ENTRIES } from "./t3team-project-repository-utils.ts";
 import { isSameRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 
 describe("T3TeamLinkedRepositorySync", () => {
@@ -175,10 +174,6 @@ describe("T3TeamLinkedRepositorySync", () => {
       const localPath = first.linkedRepositories[0]!.localPath;
       yield* settleAll([localPath]);
       NodeFS.writeFileSync(NodePath.join(localPath, "AGENTS.md"), "scaffolded by T3\n");
-      NodeFS.writeFileSync(
-        NodePath.join(localPath, ".gitignore"),
-        `${MAIN_REPOSITORY_GITIGNORE_ENTRIES[0]}\n`,
-      );
 
       yield* bootstrap(harness.workspaceRoot, [url], false, { [url]: "feature/pj" });
       yield* settleAll([localPath]);
@@ -220,7 +215,7 @@ describe("T3TeamLinkedRepositorySync", () => {
     },
   );
 
-  it.live("reverts the scaffold edit to a tracked .gitignore when it blocks the switch", () => {
+  it.live("never reverts a modified .gitignore; reports the blocked switch instead", () => {
     const harness = makeHarness();
     const url = makeOrigin(harness.root, "tracked-ignore");
     NodeFS.writeFileSync(NodePath.join(url, ".gitignore"), "node_modules/\n");
@@ -231,18 +226,15 @@ describe("T3TeamLinkedRepositorySync", () => {
       const first = yield* bootstrap(harness.workspaceRoot, [url], true);
       const localPath = first.linkedRepositories[0]!.localPath;
       yield* settleAll([localPath]);
-      NodeFS.appendFileSync(
-        NodePath.join(localPath, ".gitignore"),
-        `${MAIN_REPOSITORY_GITIGNORE_ENTRIES[0]}\n`,
-      );
+      NodeFS.appendFileSync(NodePath.join(localPath, ".gitignore"), ".agents/nexi/references/\n");
 
       yield* bootstrap(harness.workspaceRoot, [url], false, { [url]: "feature/pj" });
       yield* settleAll([localPath]);
       const [entry] = (yield* readLinkedRepositoryStatus(harness.workspaceRoot)).linkedRepositories;
-      expect(entry?.error).toBeUndefined();
-      expect(currentBranch(localPath)).toBe("feature/pj");
+      expect(entry?.error).toContain('Could not switch to "feature/pj"');
+      expect(currentBranch(localPath)).toBe("main");
       expect(NodeFS.readFileSync(NodePath.join(localPath, ".gitignore"), "utf8")).toBe(
-        "node_modules/\n*.log\n",
+        "node_modules/\n.agents/nexi/references/\n",
       );
     }).pipe(Effect.provide(harness.layer), Effect.ensuring(Effect.sync(harness.cleanup)));
   });
