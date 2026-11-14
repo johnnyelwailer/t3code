@@ -9,6 +9,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { DesktopUpdateStatusIcon } from "./DesktopUpdateStatusIcon";
 import { NexiUpdatePopoverView } from "./t3team-NexiUpdatePopoverView";
 import { readKey, writeKey } from "./t3team-updateNoticeStorage";
+import { UpdateNotesAutoPop } from "./t3team-UpdateNotesAutoPop";
 import { useUpdateNotesAttention } from "./t3team-useUpdateNotesAttention";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import type { NexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
@@ -52,10 +53,6 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
   const attention = useUpdateNotesAttention(
     useFeatureFlag("UI_UPDATE_BADGE_ROW_ACTIONS") ? view.version : null,
   );
-  if (attention.pop) {
-    attention.markPopped();
-    setOpen(true);
-  }
   const onOpenChange = (next: boolean) => {
     setOpen(next);
     if (next) attention.markSeen();
@@ -125,6 +122,14 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
           />
         </PopoverPopup>
       </Popover>
+      {attention.pop ? (
+        <UpdateNotesAutoPop
+          onPop={() => {
+            attention.markPopped();
+            setOpen(true);
+          }}
+        />
+      ) : null}
     </SidebarMenuItem>
   );
 }

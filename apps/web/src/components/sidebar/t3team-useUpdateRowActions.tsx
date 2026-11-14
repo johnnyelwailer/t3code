@@ -1,13 +1,10 @@
-import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
-import { Fragment, useState } from "react";
-
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import type { DesktopUpdateButtonAction } from "../desktopUpdate.logic";
-import { type ServerUpdateTarget, useServerUpdate } from "../ServerUpdateAction";
+import type { ServerUpdateTarget } from "../ServerUpdateAction";
 import { UpdateEntryChip } from "./t3team-UpdateEntryChip";
 import { appRestartScope } from "./t3team-nexiUpdateNotice.logic";
+import { ProviderUpdateEntries, ServerUpdateEntry } from "./t3team-UpdateRowEntries";
 import type { UpdateEntryCell } from "./t3team-updateEntryCell";
-import { useProviderEntryUpdate } from "./t3team-useProviderEntryUpdate";
 import type { UpdateEverythingRow } from "./updateEverything.logic";
 
 const APP_ACTIONS = {
@@ -23,18 +20,8 @@ export function useUpdateRowActions(
   onUpdateApp: () => void,
 ) {
   const enabled = useFeatureFlag("UI_UPDATE_BADGE_ROW_ACTIONS");
-  const updateServer = useServerUpdate();
-  const providers = useProviderEntryUpdate();
-  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
   if (!enabled) return null;
   const appScope = appRestartScope(rows);
-
-  const run = (key: string, work: () => Promise<unknown>) => {
-    setPending((keys) => new Set(keys).add(key));
-    void work().finally(() =>
-      setPending((keys) => new Set([...keys].filter((pendingKey) => pendingKey !== key))),
-    );
-  };
 
   const appEntry = (row: UpdateEverythingRow, label: string) => {
     if (row.app === "this-app") {
@@ -55,54 +42,17 @@ export function useUpdateRowActions(
     }
     const server = servers.find((target) => target.environmentId === row.environmentId);
     if (server === undefined) return null;
-    const key = `${server.environmentId}:server`;
-    return (
-      <UpdateEntryChip
-        label={label}
-        action={{
-          label: `Update ${row.label}`,
-          icon: "update",
-          restartEnvironmentIds: [server.environmentId],
-          pending: pending.has(key),
-          onClick: () => run(key, () => updateServer(server)),
-        }}
-      />
-    );
-  };
-
-  const providerEntry = (row: UpdateEverythingRow, label: string) => {
-    const environmentId = row.environmentId;
-    const candidate = providers.machines
-      .find((machine) => machine.environmentId === environmentId)
-      ?.candidates.find(
-        (option) => (PROVIDER_DISPLAY_NAMES[option.driver] ?? option.driver) === label,
-      );
-    if (environmentId === null || candidate === undefined) {
-      return <UpdateEntryChip label={label} action={null} />;
-    }
-    const key = `${environmentId}:provider:${candidate.driver}`;
-    return (
-      <UpdateEntryChip
-        label={label}
-        action={{
-          label: `Update ${label} on ${row.label}`,
-          icon: "update",
-          restartEnvironmentIds: [],
-          pending: pending.has(key),
-          onClick: () => run(key, () => providers.update(environmentId, row.label, candidate)),
-        }}
-      />
-    );
+    return <ServerUpdateEntry label={label} machineLabel={row.label} server={server} />;
   };
 
   return (row: UpdateEverythingRow, cell: UpdateEntryCell) =>
     cell.kind === "app" ? (
       appEntry(row, cell.label)
     ) : (
-      <span className="flex flex-wrap items-start gap-1">
-        {row.providers.map((provider) => (
-          <Fragment key={provider}>{providerEntry(row, provider)}</Fragment>
-        ))}
-      </span>
+      <ProviderUpdateEntries
+        environmentId={row.environmentId}
+        machineLabel={row.label}
+        providers={row.providers}
+      />
     );
 }

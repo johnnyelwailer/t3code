@@ -286,7 +286,6 @@ function SidebarUpdateControl() {
     state,
     action,
     everything,
-    runsEverything,
     showsNotesPopover: showReleaseNotesPopover,
     setNotesOpen: setReleaseNotesOpen,
     closeDialog: () => setIsConfirmingEverything(false),
@@ -596,6 +595,7 @@ function SidebarUpdateControl() {
         ) : null}
       </Popover>
       {confirmDialog}
+      {t3team.autoPop}
     </SidebarMenuItem>
   );
 }

@@ -11,6 +11,6 @@ export const writeKey = (key: string, value: string): void => {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // best effort: the notice then simply comes back next start
+    return;
   }
 };
