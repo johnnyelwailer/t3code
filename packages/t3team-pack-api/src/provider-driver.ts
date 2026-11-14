@@ -104,6 +104,8 @@ export type PackTextGeneration = {
     readonly cwd: string;
     readonly prompt: string;
     readonly modelSelection: unknown;
+    /** Aborted when the host cancels the call; the pack should stop its request. */
+    readonly signal?: AbortSignal;
   }): Promise<unknown>;
 };
 

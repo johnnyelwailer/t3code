@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@t3tools/contracts";
 import type { PackProviderDriverDefinition, PackProviderInstance } from "@t3team/pack-api";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
@@ -70,6 +71,52 @@ describe("pack text generation bridge", () => {
         modelSelection: { instanceId: ProviderInstanceId.make("custom-pack"), model: "pack/model" },
       });
       expect(label).toEqual({ label: "Checking status" });
+    }),
+  );
+
+  it.effect("aborts the pack's request when the structured generation is interrupted", () =>
+    Effect.gen(function* () {
+      let received: AbortSignal | undefined;
+      let started!: () => void;
+      const startedPromise = new Promise<void>((resolve) => (started = resolve));
+      const hanging: PackProviderDriverDefinition = {
+        ...definition,
+        create: async () => ({
+          ...instance,
+          textGeneration: {
+            ...instance.textGeneration!,
+            generateStructured: (input: { readonly signal?: AbortSignal }) => {
+              received = input.signal;
+              started();
+              return new Promise<unknown>(() => {});
+            },
+          },
+        }),
+      };
+      const built = yield* Effect.scoped(
+        bridgePackProviderDriver(hanging).create({
+          instanceId: ProviderInstanceId.make("custom-pack"),
+          displayName: "Pack provider",
+          environment: [],
+          enabled: true,
+          config: {},
+        }),
+      ).pipe(Effect.provide(McpProviderSessions.layer));
+      const fiber = yield* Effect.forkChild(
+        built.textGeneration.generateStructured!({
+          cwd: "/tmp",
+          prompt: "Summarize status",
+          outputSchema: Schema.Struct({ status: Schema.String }),
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("custom-pack"),
+            model: "pack/model",
+          },
+        }),
+      );
+      yield* Effect.promise(() => startedPromise);
+      expect(received?.aborted).toBe(false);
+      yield* Fiber.interrupt(fiber);
+      expect(received?.aborted).toBe(true);
     }),
   );
 });
