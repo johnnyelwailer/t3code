@@ -11,6 +11,7 @@ import {
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { resolveRunInitiatingPrompt } from "@t3tools/client-runtime/t3team-runPromptCopy";
 import { t3teamDisplayedUserMessage } from "~/t3team/chat/t3team-messageFraming";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 import { getT3TeamRenderableAttachments } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamMessageAttachmentList } from "~/t3team/chat/t3team-messageAttachmentList";
 import { T3TeamRecipeKickoffBadge } from "~/t3team/chat/t3team-RecipeKickoffBadge";
@@ -428,6 +429,7 @@ function UserMessageProjectedStatus({ row }: { row: Extract<TimelineRow, { kind:
 
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  const productName = useT3TeamAppBaseName();
   const { onImageExpand, onFileOpen } = ctx;
   const coarsePointer = useMediaQuery({ pointer: "coarse" });
   const senderThreadId = row.message.senderThreadId;
@@ -847,7 +849,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
           className="me-1 text-2xs text-muted-foreground/70"
           data-user-message-attribution="t3code"
         >
-          Sent by T3 Code
+          Sent by {productName}
         </p>
       ) : null}
       {/* The row's heading already names the guest for screen readers. */}

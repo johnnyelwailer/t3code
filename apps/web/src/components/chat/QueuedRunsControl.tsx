@@ -6,6 +6,7 @@ import {
   replaceComposerContextReferences,
 } from "@t3tools/shared/composerContextReferences";
 import { VOICE_STATE_KIND } from "../../t3team/voice/t3team-voiceLiveState";
+import { useT3TeamAppBaseName } from "~/t3team/t3team-appBrandName";
 import type {
   ChatAttachment as ContractChatAttachment,
   EnvironmentId,
@@ -411,6 +412,7 @@ function QueuedMessage(props: {
 }) {
   const presentation = props.message ? resolveUserMessagePresentation(props.message) : null;
   const attribution = presentation?.attribution ?? null;
+  const productName = useT3TeamAppBaseName();
   const scheduledTaskId = presentation?.scheduledTaskId;
   const senderThreadId = props.message?.senderThreadId;
   const [expanded, setExpanded] = useState(false);
@@ -439,7 +441,7 @@ function QueuedMessage(props: {
   return (
     <>
       {attribution === "t3code" ? (
-        <p className="me-1 text-2xs text-muted-foreground/70">Sent by T3 Code</p>
+        <p className="me-1 text-2xs text-muted-foreground/70">Sent by {productName}</p>
       ) : null}
       {presentation?.guestName === undefined ? null : (
         <GuestMessageName name={presentation.guestName} />
