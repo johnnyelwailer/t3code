@@ -42,7 +42,7 @@ import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
 import { SidebarUpdateCapsule } from "./SidebarUpdateCapsule";
 import { NexiUpdateReadyFooter } from "./t3team-NexiUpdateReadyFooter";
 import { getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
-import { useUpdateDialogAppOnly } from "./t3team-useUpdateDialogAppOnly";
+import { UpdatePopoverNotes, useUpdateDialogAppOnly } from "./t3team-useUpdateDialogAppOnly";
 import { UpdateEverythingDialog } from "./UpdateEverythingDialog";
 import type { UpdateEverythingRun, UpdateRunLocalState } from "./updateEverything.logic";
 import {
@@ -584,11 +584,15 @@ function SidebarUpdateControl() {
             side="top"
             tooltipStyle
           >
-            <SidebarUpdateReleaseNotes
-              shell={window.desktopBridge}
-              state={state}
-              tooltip={tooltip}
-            />
+            {appOnly.releaseNotes ? (
+              <UpdatePopoverNotes title={tooltip}>{appOnly.releaseNotes}</UpdatePopoverNotes>
+            ) : (
+              <SidebarUpdateReleaseNotes
+                shell={window.desktopBridge}
+                state={state}
+                tooltip={tooltip}
+              />
+            )}
           </PopoverPopup>
         ) : null}
       </Popover>

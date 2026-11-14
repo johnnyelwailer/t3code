@@ -125,6 +125,18 @@ describe("SidebarUpdatePill release notes", () => {
   });
 });
 
+describe("SidebarUpdatePill plain notes", () => {
+  it("shows the dialog's notes list on hover behind the flag", async () => {
+    setup(nightlyUpdate([{ ...RELEASE_NOTES[0]!, items: ["fix(web): faster sidebar"] }]), {
+      appOnly: true,
+    });
+    await using _screen = await render(<SidebarUpdatePill />);
+    await userEvent.tab();
+    const notes = page.getByRole("region", { name: "What's changed" });
+    await expect.element(notes.getByText("Faster sidebar")).toBeVisible();
+  });
+});
+
 describe("SidebarUpdatePill update everything", () => {
   it("does not refocus the update button after a pointer cancel", async () => {
     setup(null, { hasUpdates: true });
