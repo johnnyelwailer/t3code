@@ -1,3 +1,4 @@
+import { pickPillScopedProject } from "@t3tools/client-runtime/t3team-pillScope";
 import type { ScopedProjectRef } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
@@ -65,18 +66,16 @@ export function pickScopedDefaultProject<
   readonly scopedProjectRefs: ReadonlyArray<ScopedProjectRef> | null;
   readonly offlineEnvironmentIds: ReadonlySet<string>;
   readonly fallback: T | undefined;
+  /** The sidebar's selected environment: with no project scope, a new thread starts in it. */
+  readonly preferredEnvironmentId?: string | null;
 }): T | undefined {
-  const { scopedProjectRefs } = input;
-  if (scopedProjectRefs === null || scopedProjectRefs.length === 0) {
-    return input.fallback;
-  }
-  const inScope = input.orderedProjects.filter((project) =>
-    scopedProjectRefs.some(
-      (ref) => ref.environmentId === project.environmentId && ref.projectId === project.id,
-    ),
-  );
-  return (
-    inScope.find((project) => !input.offlineEnvironmentIds.has(project.environmentId)) ??
-    input.fallback
-  );
+  return pickPillScopedProject({
+    orderedProjects: input.orderedProjects,
+    scope: {
+      environmentId: input.preferredEnvironmentId ?? null,
+      projectRefs: input.scopedProjectRefs,
+    },
+    offlineEnvironmentIds: input.offlineEnvironmentIds,
+    fallback: input.fallback,
+  });
 }

@@ -90,6 +90,8 @@ export type T3TeamStartChildLinkedRepositoryServices = {
   readonly path: Path.Path;
   readonly sourceControlProviders: SourceControlProviderRegistry["Service"];
   readonly gitWorkflow: GitWorkflowService["Service"];
+  /** The server's worktrees directory; child worktrees are created under it. */
+  readonly worktreesRoot: string;
   /** Clones a linked repository on demand when a child is delegated into one not cloned yet. */
   readonly linkedRepositorySync?: T3TeamLinkedRepositorySync["Service"];
 };

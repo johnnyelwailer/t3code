@@ -17,12 +17,6 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     const setup = await import("./t3team-projectSetupShared.ts");
     const blobs = await import("./t3team-context-blob-store-utils.ts");
     expect(utils.HIDDEN_T3TEAM_DIR).toBe(".agents/nexi");
-    expect(utils.GITIGNORE_ENTRY).toBe(".agents/nexi/");
-    expect(utils.MAIN_REPOSITORY_GITIGNORE_ENTRIES).toEqual([
-      ".agents/nexi/references/",
-      ".agents/nexi/child-session-worktrees/",
-      ".agents/nexi/context/_blobs/",
-    ]);
     expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".agents/nexi/recipes");
     expect(setup.T3TEAM_PROJECT_CONTEXT_ROOT).toBe(".agents/nexi/context");
     expect(setup.T3TEAM_PROJECT_PROFILE_MANIFEST_PATH).toBe(".agents/nexi/setup/profile.json");

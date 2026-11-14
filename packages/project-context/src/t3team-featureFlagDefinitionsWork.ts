@@ -12,6 +12,15 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: false,
     addedOn: "2026-11-03",
   },
+  UI_PILL_GLOBAL_SCOPE: {
+    group: "UI & rendering",
+    label: "Pills as global scope",
+    description:
+      "The selected project and environment pills scope New thread and the command palette, on desktop and phone; an environment switched off in Settings loses its pill. Off: the pills filter only their own list.",
+    defaultEnabled: true,
+    requiresRestart: false,
+    addedOn: "2026-11-14",
+  },
   MYWORK_DIGEST: {
     group: "My Work",
     label: "My Work digest",

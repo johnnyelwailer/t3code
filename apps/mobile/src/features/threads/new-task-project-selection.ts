@@ -152,6 +152,8 @@ export function newTaskDestination(options: {
   readonly requestId: string;
   readonly useLastProject: boolean | undefined;
   readonly currentProject: ProjectRef | undefined;
+  /** t3team: the Home pills' project and environment, ahead of the remembered project. */
+  readonly scopedProject?: ProjectRef | undefined;
   readonly lastProject: ProjectRef | undefined;
 }) {
   const find = (ref: ProjectRef | undefined) =>
@@ -163,8 +165,10 @@ export function newTaskDestination(options: {
   const last = find(options.lastProject);
   const project =
     options.useLastProject === false
-      ? undefined
-      : (find(options.currentProject) ?? (last?.archivedAt == null ? last : undefined));
+      ? find(options.scopedProject)
+      : (find(options.currentProject) ??
+        find(options.scopedProject) ??
+        (last?.archivedAt == null ? last : undefined));
   return project
     ? {
         draft: {

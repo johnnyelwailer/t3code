@@ -41,6 +41,7 @@ import { cn } from "../../lib/cn";
 import { deriveBottomControlInsets } from "../../lib/reserved-regions";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
 import { useNativeLayoutMetrics } from "../../native/native-layout-metrics";
+import { useHomePillScopeFilter } from "../home/t3team-pillScope";
 import { T3KeyboardCommands } from "../../native/T3KeyboardCommands";
 import {
   useProjects,
@@ -226,7 +227,13 @@ export function CommandPalette(props: {
   const selectDetail = useSelectWorkspaceDetail();
   const runCommand = props.onCommand;
   const projects = useProjects();
-  const threads = useVisibleThreadShells();
+  // t3team: the Home pills scope the palette's threads, message matches included.
+  const inPillScope = useHomePillScopeFilter();
+  const visibleThreads = useVisibleThreadShells();
+  const threads = useMemo(
+    () => visibleThreads.filter((thread) => inPillScope(thread)),
+    [visibleThreads, inPillScope],
+  );
   const activeThreadRef = parseActiveThreadPath(props.pathname);
   const activeThread = useThreadShell(activeThreadRef);
   const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });

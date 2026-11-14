@@ -71,6 +71,10 @@
       "types": "./src/t3team-environmentFilter.ts",
       "default": "./src/t3team-environmentFilter.ts"
     },
+    "./t3team-pillScope": {
+      "types": "./src/t3team-pillScope.ts",
+      "default": "./src/t3team-pillScope.ts"
+    },
     "./t3team-credentialSourceOptions": {
       "types": "./src/t3team-credentialSourceOptions.ts",
       "default": "./src/t3team-credentialSourceOptions.ts"

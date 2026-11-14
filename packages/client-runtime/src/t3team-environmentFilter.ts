@@ -3,6 +3,7 @@
  * Callers pass the environments that have something in their list; the module decides whether the
  * control shows at all, which pills it has and in what order, and which selection still holds.
  */
+import { heldPillEnvironmentId } from "./t3team-pillScope.ts";
 
 export interface EnvironmentFilterEnvironment {
   readonly id: string;
@@ -56,10 +57,10 @@ export function resolveEnvironmentFilter(input: {
   readonly selectedId: string | null;
 }): EnvironmentFilter {
   const environments = orderEnvironments(input.environments);
-  const selectedId =
-    input.selectedId !== null && environments.some((env) => env.id === input.selectedId)
-      ? input.selectedId
-      : null;
+  const selectedId = heldPillEnvironmentId(
+    input.selectedId,
+    new Set(environments.map((env) => env.id)),
+  );
   if (environments.length < 2) return { pills: null, selectedId };
   const labels = displayLabels(environments);
   return {

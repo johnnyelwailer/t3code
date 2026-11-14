@@ -36,6 +36,7 @@ describe("delegating into a linked repository on demand", () => {
         services: {
           fileSystem: yield* FileSystem.FileSystem,
           path: yield* Path.Path,
+          worktreesRoot: NodePath.join(harness.root, "t3-worktrees"),
           gitWorkflow: {
             createWorktree: (
               args: Parameters<GitWorkflowService["Service"]["createWorktree"]>[0],

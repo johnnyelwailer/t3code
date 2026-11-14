@@ -54,7 +54,12 @@ vi.mock("./useSettings", () => ({
   getClientSettings: () => ({}),
   useClientSettings: () => ({}),
 }));
+vi.mock("../t3team/t3team-useFeatureFlag", () => ({
+  readServerFeatureFlag: () => true,
+  useFeatureFlag: () => true,
+}));
 
+import { useT3TeamSidebarEnvironmentFilterStore } from "../t3team/t3team-sidebarEnvironmentFilterStore";
 import { useT3TeamSidebarProjectScope } from "../t3team/t3team-sidebarProjectScopeStore";
 import { useHandleNewThread } from "./useHandleNewThread";
 
@@ -87,6 +92,10 @@ describe("useHandleNewThread default project", () => {
       { id: "p3", environmentId: "env-cloud", workspaceRoot: "/p3" },
     ];
     harness.environments = [];
+    useT3TeamSidebarEnvironmentFilterStore.setState({
+      selectedEnvironmentId: null,
+      heldEnvironmentId: null,
+    });
     useT3TeamSidebarProjectScope.setState({ scopedProjectId: null, scopedProjectRefs: null });
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -110,6 +119,22 @@ describe("useHandleNewThread default project", () => {
     useT3TeamSidebarProjectScope.setState({
       scopedProjectId: "p3",
       scopedProjectRefs: [{ environmentId: "env-cloud", projectId: "p3" }] as never,
+    });
+    expect(await defaultRef()).toEqual({ environmentId: "env-local", projectId: "p1" });
+  });
+
+  it("is the first project of the environment the sidebar applies", async () => {
+    useT3TeamSidebarEnvironmentFilterStore.setState({
+      selectedEnvironmentId: "env-cloud",
+      heldEnvironmentId: "env-cloud",
+    });
+    expect(await defaultRef()).toEqual({ environmentId: "env-cloud", projectId: "p3" });
+  });
+
+  it("ignores a saved selection the sidebar reads as All (switched off or empty)", async () => {
+    useT3TeamSidebarEnvironmentFilterStore.setState({
+      selectedEnvironmentId: "env-cloud",
+      heldEnvironmentId: null,
     });
     expect(await defaultRef()).toEqual({ environmentId: "env-local", projectId: "p1" });
   });

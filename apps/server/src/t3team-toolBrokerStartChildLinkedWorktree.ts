@@ -98,7 +98,7 @@ export const resolveLinkedRepositoryWorktree = (input: {
 
     const scopedWorktreePath = buildScopedChildWorktreePath({
       path: input.services.path,
-      projectWorkspaceRoot: input.projectWorkspaceRoot,
+      worktreesRoot: input.services.worktreesRoot,
       repoFullName: input.repoFullName,
       repoRef: baseRef,
       worktreeKey: input.worktreeKey,

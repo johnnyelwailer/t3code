@@ -51,6 +51,7 @@ import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
 import { requestThreadMessageJump } from "./threadMessageJump";
 import { useThreadListSearchMatches } from "./useThreadListSearchMatches";
 import { useHomeListOptions } from "../home/home-list-options";
+import { usePillEnvironmentIds } from "../home/t3team-pillScope";
 import { buildHomeListFilterMenu } from "../home/home-list-filter-menu";
 import { buildHomeProjectScopes } from "../home/homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
@@ -182,7 +183,13 @@ function ThreadNavigationSidebarPane(
   const { confirmDeletePendingTask } = usePendingTaskListActions((params) =>
     selectDetail({ name: "Thread", params }),
   );
+  // t3team: an environment switched off in Settings leaves the filter pills (flag on), as on Home.
+  const pillEnvironmentIds = usePillEnvironmentIds();
   const environments = Object.values(savedConnectionsById)
+    .filter(
+      (connection) =>
+        pillEnvironmentIds === null || pillEnvironmentIds.has(connection.environmentId),
+    )
     .map((connection) => ({
       environmentId: connection.environmentId,
       label: connection.environmentLabel,
