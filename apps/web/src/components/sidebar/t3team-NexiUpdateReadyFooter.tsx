@@ -8,25 +8,11 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { DesktopUpdateStatusIcon } from "./DesktopUpdateStatusIcon";
 import { NexiUpdatePopoverView } from "./t3team-NexiUpdatePopoverView";
+import { readKey, writeKey } from "./t3team-updateNoticeStorage";
 import type { NexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
 
 const DISMISSED_KEY = "nexi.update.dismissedVersion";
 const NOTIFIED_KEY = "nexi.update.notifiedVersion";
-
-const readKey = (key: string) => {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-const writeKey = (key: string, value: string) => {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // best effort: the dot then simply comes back next start
-  }
-};
 
 /** One OS notification per version, on top of the footer dot. */
 function notifyOnce(version: string) {

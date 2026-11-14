@@ -15,7 +15,9 @@ export type NexiUpdateNoticeView = {
   readonly releaseUrl: string | null;
 };
 
-export type AppUpdateNotesView = Pick<NexiUpdateNoticeView, "notes" | "releaseUrl">;
+export type AppUpdateNotesView = Pick<NexiUpdateNoticeView, "version" | "notes" | "releaseUrl"> & {
+  readonly releasedAt: string | null;
+};
 
 function httpsPage(value: string | undefined): string | null {
   if (!value) return null;
@@ -44,5 +46,27 @@ export function getAppUpdateNotesView(state: DesktopUpdateState): AppUpdateNotes
   if (version === null) return null;
   const notes = plainReleaseNotes(state.releaseNotes.flatMap((note) => note.items));
   const releaseUrl = httpsPage(state.releaseUrl) ?? getDesktopUpdateReleaseUrl(version);
-  return notes.length === 0 && releaseUrl === null ? null : { notes, releaseUrl };
+  if (notes.length === 0 && releaseUrl === null) return null;
+  const releasedAt =
+    state.releaseNotes.find((note) => note.version === version)?.releasedAt ?? null;
+  return { version, notes, releaseUrl, releasedAt };
+}
+
+/**
+ * Whether the pill shows its dot and pops the notes on its own: the dot stays until the notes
+ * were opened for this version; the automatic pop happens once per version.
+ */
+export function getUpdateNotesAttention(
+  version: string | null,
+  popped: string | null,
+  seen: string | null,
+): { readonly dot: boolean; readonly pop: boolean } {
+  if (version === null) return { dot: false, pop: false };
+  return { dot: seen !== version, pop: popped !== version && seen !== version };
+}
+
+/** A table entry's own update action, naming only the running threads that entry interrupts. */
+export function updateEntryActionTitle(label: string, threads: number): string {
+  if (threads === 0) return label;
+  return `${label} · interrupts ${threads} running ${threads === 1 ? "thread" : "threads"}`;
 }

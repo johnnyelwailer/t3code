@@ -1,6 +1,11 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { getAppUpdateNotesView, getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
+import {
+  getAppUpdateNotesView,
+  getNexiUpdateNoticeView,
+  getUpdateNotesAttention,
+  updateEntryActionTitle,
+} from "./t3team-nexiUpdateNotice.logic";
 
 const base: DesktopUpdateState = {
   enabled: true,
@@ -102,16 +107,41 @@ describe("App update notes", () => {
         {
           version: "0.1.2-rc.8",
           totalItems: 2,
+          releasedAt: "2026-11-13",
           items: ["ci: shard the browser suite", "fix(web): faster sidebar by @pj"],
         },
       ],
     };
     expect(getAppUpdateNotesView(available)).toEqual({
+      version: "0.1.2-rc.8",
       notes: ["Faster sidebar"],
       releaseUrl: page,
+      releasedAt: "2026-11-13",
     });
   });
   it("has nothing to show without an update", () => {
     expect(getAppUpdateNotesView({ ...base, availableVersion: null })).toBeNull();
+  });
+});
+describe("Update notes attention", () => {
+  it.each([
+    [null, null, null, { dot: false, pop: false }],
+    ["1.1", null, null, { dot: true, pop: true }],
+    ["1.1", "1.1", null, { dot: true, pop: false }],
+    ["1.1", "1.1", "1.1", { dot: false, pop: false }],
+    ["1.2", "1.1", "1.1", { dot: true, pop: true }],
+  ] as const)("version %s, popped %s, seen %s", (version, popped, seen, expected) => {
+    expect(getUpdateNotesAttention(version, popped, seen)).toEqual(expected);
+  });
+});
+describe("Update entry action title", () => {
+  it("names only the threads that entry interrupts", () => {
+    expect(updateEntryActionTitle("Update build-box", 0)).toBe("Update build-box");
+    expect(updateEntryActionTitle("Update build-box", 1)).toBe(
+      "Update build-box · interrupts 1 running thread",
+    );
+    expect(updateEntryActionTitle("Restart this app to update", 3)).toBe(
+      "Restart this app to update · interrupts 3 running threads",
+    );
   });
 });

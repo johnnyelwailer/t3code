@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => {
     hasUpdates: false,
     appOnly: false,
     runEverything: vi.fn(),
+    confirm: vi.fn(),
+    updateServer: vi.fn(),
+    updateProviders: vi.fn(),
+    rows: [] as unknown[],
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -36,16 +40,26 @@ vi.mock("../../env", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../env")>()),
   isElectron: true,
 }));
+const BUILD_BOX_SERVER = vi.hoisted(() => ({ environmentId: "env-box", serverLabel: "build-box" }));
 vi.mock("./useUpdateEverything", () => ({
   useUpdateEverything: () => ({
     hasUpdates: mocks.hasUpdates,
     summary: "Update everything",
     version: null,
     providerCount: 0,
-    rows: [],
+    rows: mocks.rows,
     restarts: [],
+    servers: [BUILD_BOX_SERVER],
+    updateServer: mocks.updateServer,
+    providerMachines: [
+      { environmentId: "env-box", label: "build-box", candidates: [{ driver: "claudeAgent" }] },
+    ],
+    updateProviders: mocks.updateProviders,
     run: mocks.runEverything,
   }),
+}));
+vi.mock("../../localApi", () => ({
+  ensureLocalApi: () => ({ dialogs: { confirm: mocks.confirm } }),
 }));
 vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
   useFeatureFlag: (key: string) => key === "UI_UPDATE_APP_ONLY" && mocks.appOnly,
@@ -76,12 +90,45 @@ const RELEASE_NOTES: DesktopUpdateState["releaseNotes"] = [
   { version: "0.0.50-nightly.2", items: ["Faster sidebar."], totalItems: 1 },
 ];
 
-function setup(update: DesktopUpdateState | null, { hasUpdates = false, appOnly = false } = {}) {
+const APP_ROW = {
+  environmentId: null,
+  label: "This app",
+  app: "this-app",
+  providers: [],
+  skipped: null,
+};
+const BOX_ROW = {
+  environmentId: "env-box",
+  label: "build-box",
+  app: "server",
+  providers: ["Claude"],
+  skipped: null,
+};
+
+function setup(
+  update: DesktopUpdateState | null,
+  { hasUpdates = false, appOnly = false, popped = true, rows = [APP_ROW, BOX_ROW] } = {},
+) {
   mocks.update = update;
   mocks.hasUpdates = hasUpdates;
   mocks.appOnly = appOnly;
-  mocks.runEverything.mockReset();
+  mocks.rows = rows;
+  for (const fn of [
+    mocks.runEverything,
+    mocks.confirm,
+    mocks.updateServer,
+    mocks.updateProviders,
+  ]) {
+    fn.mockReset();
+  }
+  mocks.updateServer.mockResolvedValue({ status: "updated" });
+  mocks.updateProviders.mockResolvedValue([]);
+  localStorage.removeItem("update.notes.seenVersion");
+  if (popped) localStorage.setItem("update.notes.poppedVersion", "0.0.50-nightly.2");
+  else localStorage.removeItem("update.notes.poppedVersion");
 }
+
+const badge = () => document.querySelector('[data-testid="update-notes-badge"]');
 
 function publish(update: DesktopUpdateState | null) {
   return act(() => {
@@ -127,13 +174,35 @@ describe("SidebarUpdatePill release notes", () => {
 
 describe("SidebarUpdatePill plain notes", () => {
   it("shows the dialog's notes list on hover behind the flag", async () => {
-    setup(nightlyUpdate([{ ...RELEASE_NOTES[0]!, items: ["fix(web): faster sidebar"] }]), {
-      appOnly: true,
-    });
+    setup(
+      nightlyUpdate([
+        { ...RELEASE_NOTES[0]!, items: ["fix(web): faster sidebar"], releasedAt: "2026-11-13" },
+      ]),
+      {
+        appOnly: true,
+        hasUpdates: true,
+      },
+    );
     await using _screen = await render(<SidebarUpdatePill />);
     await userEvent.tab();
     const notes = page.getByRole("region", { name: "What's changed" });
     await expect.element(notes.getByText("Faster sidebar")).toBeVisible();
+    await expect.element(page.getByText(/^0\.0\.50-nightly\.2 · /)).toBeVisible();
+  });
+
+  it("opens the notes with the update action on click when only the app updates", async () => {
+    const state = nightlyUpdate(RELEASE_NOTES);
+    setup(state, { appOnly: true });
+    const downloadUpdate = vi.fn().mockResolvedValue({ accepted: true, completed: true, state });
+    using _bridge = stubGlobal("desktopBridge", { downloadUpdate });
+    await using screen = await render(<SidebarUpdatePill />);
+    await userEvent.click(screen.getByRole("button", { name: /ready to download/ }));
+    const notes = page.getByRole("region", { name: "What's changed" });
+    await expect.element(notes.getByText("Faster sidebar.")).toBeVisible();
+    expect(downloadUpdate).not.toHaveBeenCalled();
+
+    await userEvent.click(page.getByRole("button", { name: "Download now" }));
+    await vi.waitFor(() => expect(downloadUpdate).toHaveBeenCalledOnce());
   });
 });
 
@@ -162,27 +231,83 @@ describe("SidebarUpdatePill update everything", () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(button.element()));
   });
 
-  it.each([false, true])("offers the app alone only behind its flag (%s)", async (appOnly) => {
-    setup(nightlyUpdate(RELEASE_NOTES), { hasUpdates: true, appOnly });
-    const state = nightlyUpdate(RELEASE_NOTES);
-    const downloadUpdate = vi.fn().mockResolvedValue({ accepted: true, completed: true, state });
-    using _bridge = stubGlobal("desktopBridge", { downloadUpdate });
-    await using screen = await render(<SidebarUpdatePill />);
-    await userEvent.click(screen.getByRole("button", { name: "Update everything" }));
-    await expect.element(page.getByRole("button", { name: "Cancel" })).toBeVisible();
-    const appOnlyButton = page.getByRole("button", { name: "Download app only" });
-    const notes = page.getByRole("region", { name: "What's changed" });
-    if (!appOnly) {
-      await expect.element(appOnlyButton).not.toBeInTheDocument();
-      await expect.element(notes).not.toBeInTheDocument();
-      return;
-    }
-    await expect.element(notes.getByText("Faster sidebar.")).toBeVisible();
+  it.each([false, true])(
+    "updates single entries from the table only behind its flag (%s)",
+    async (enabled) => {
+      const state = nightlyUpdate(RELEASE_NOTES);
+      setup(state, { hasUpdates: true, appOnly: enabled });
+      const downloadUpdate = vi.fn().mockResolvedValue({ accepted: true, completed: true, state });
+      using _bridge = stubGlobal("desktopBridge", { downloadUpdate });
+      await using screen = await render(<SidebarUpdatePill />);
+      await userEvent.click(screen.getByRole("button", { name: /^Update everything/ }));
+      await expect.element(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+      const server = page.getByRole("button", { name: "Update build-box" });
+      if (!enabled) {
+        await expect.element(server).not.toBeInTheDocument();
+        return;
+      }
+      await userEvent.click(server);
+      await vi.waitFor(() => expect(mocks.updateServer).toHaveBeenCalledWith(BUILD_BOX_SERVER));
+      await userEvent.click(page.getByRole("button", { name: "Update Claude on build-box" }));
+      await vi.waitFor(() =>
+        expect(mocks.updateProviders).toHaveBeenCalledWith({
+          only: { environmentId: "env-box", driver: "claudeAgent" },
+        }),
+      );
+      expect(downloadUpdate).not.toHaveBeenCalled();
 
-    await userEvent.click(appOnlyButton);
-    await vi.waitFor(() => expect(downloadUpdate).toHaveBeenCalledOnce());
-    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+      await userEvent.click(page.getByRole("button", { name: "Download this app's update" }));
+      await vi.waitFor(() => expect(downloadUpdate).toHaveBeenCalledOnce());
+      expect(mocks.runEverything).not.toHaveBeenCalled();
+    },
+  );
+
+  it("restarts only this app from its row without a second confirmation", async () => {
+    const state: DesktopUpdateState = {
+      ...nightlyUpdate(RELEASE_NOTES),
+      status: "downloaded",
+      downloadedVersion: "0.0.50-nightly.2",
+    };
+    setup(state, { hasUpdates: true, appOnly: true });
+    const installUpdate = vi.fn().mockResolvedValue({ accepted: true, completed: true, state });
+    using _bridge = stubGlobal("desktopBridge", { installUpdate });
+    await using screen = await render(<SidebarUpdatePill />);
+    await userEvent.click(screen.getByRole("button", { name: /^Update everything/ }));
+    await userEvent.click(page.getByRole("button", { name: "Restart this app to update" }));
+    await vi.waitFor(() => expect(installUpdate).toHaveBeenCalledOnce());
+    expect(mocks.confirm).not.toHaveBeenCalled();
     expect(mocks.runEverything).not.toHaveBeenCalled();
+  });
+});
+
+describe("SidebarUpdatePill notes attention", () => {
+  it("pops the notes once per version and keeps the dot until they are opened", async () => {
+    setup(nightlyUpdate(RELEASE_NOTES), { hasUpdates: true, appOnly: true, popped: false });
+    {
+      await using _screen = await render(<SidebarUpdatePill />);
+      const notes = page.getByRole("region", { name: "What's changed" });
+      await expect.element(notes).toBeVisible();
+      expect(badge()).not.toBeNull();
+
+      await userEvent.click(document.body);
+      await expect.element(notes).not.toBeInTheDocument();
+      expect(badge()).not.toBeNull();
+    }
+    await using screen = await render(<SidebarUpdatePill />);
+    await expect.element(screen.getByRole("button", { name: /\(new\)$/ })).toBeVisible();
+    expect(document.querySelector('[aria-label="Update release notes"]')).toBeNull();
+
+    await userEvent.tab();
+    await expect.element(page.getByRole("region", { name: "What's changed" })).toBeVisible();
+    await vi.waitFor(() => expect(badge()).toBeNull());
+  });
+
+  it("shows neither dot nor pop without the flag", async () => {
+    setup(nightlyUpdate(RELEASE_NOTES), { hasUpdates: true, popped: false });
+    await using screen = await render(<SidebarUpdatePill />);
+    await expect.element(screen.getByRole("button", { name: "Update everything" })).toBeVisible();
+    expect(badge()).toBeNull();
+    expect(document.querySelector('[aria-label="Update release notes"]')).toBeNull();
   });
 });
 

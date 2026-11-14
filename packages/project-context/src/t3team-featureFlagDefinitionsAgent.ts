@@ -135,9 +135,9 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
   },
   UI_UPDATE_APP_ONLY: {
     group: "UI & rendering",
-    label: "Update notes and app-only update",
+    label: "Update badge and per-item updates",
     description:
-      "The update dialog lists what changed and can update only this app, leaving machines and providers for later.",
+      "The update pill shows a dot and pops what changed once per version; the update dialog updates the app, a machine or a provider on its own.",
     defaultEnabled: false,
     requiresRestart: false,
     addedOn: "2026-11-14",

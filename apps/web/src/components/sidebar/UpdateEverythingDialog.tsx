@@ -23,7 +23,7 @@ import type { RestartingMachine, UpdateEverythingRow } from "./updateEverything.
 const isRunning = (status: string) =>
   status === "preparing" || status === "starting" || status === "running";
 
-const runningThreadCountAtom = Atom.family((environmentIds: string) =>
+export const runningThreadCountAtom = Atom.family((environmentIds: string) =>
   Atom.make((get) =>
     environmentIds
       .split("\n")
@@ -55,10 +55,13 @@ interface UpdateEverythingDialogProps {
   readonly disabledReason?: string | null;
   /** The confirmed work is starting; it cannot be cancelled from here. */
   readonly busy?: boolean;
-  readonly releaseNotes?: ReactNode;
-  /** A narrower alternative to the confirm action, shown beside it. */
-  readonly secondaryAction?: { readonly label: string; readonly onClick: () => void } | null;
+  /** Renders one table entry with its own update action, in place of the plain label. */
+  readonly renderEntry?: ((row: UpdateEverythingRow, entry: UpdateEntry) => ReactNode) | null;
 }
+
+export type UpdateEntry =
+  | { readonly kind: "app"; readonly label: string }
+  | { readonly kind: "provider"; readonly label: string };
 
 type UpdateEverythingDialogContentProps = Omit<
   UpdateEverythingDialogProps,
@@ -105,8 +108,7 @@ function UpdateEverythingDialogContent({
   notes = [],
   disabledReason = null,
   busy = false,
-  releaseNotes = null,
-  secondaryAction = null,
+  renderEntry = null,
 }: UpdateEverythingDialogContentProps) {
   const stopped = useAtomValue(
     runningThreadCountAtom(
@@ -155,7 +157,6 @@ function UpdateEverythingDialogContent({
               {note}
             </p>
           ))}
-          {releaseNotes}
           {/* Machine names truncate first. Provider lists wrap between names, never inside one. */}
           <div className="grid grid-cols-[minmax(4rem,max-content)_max-content_minmax(min-content,1fr)_max-content] gap-x-4 text-sm">
             <div className="col-span-full grid grid-cols-subgrid border-b pb-1.5 text-muted-foreground text-xs">
@@ -173,7 +174,10 @@ function UpdateEverythingDialogContent({
                   <MiddleTruncate value={row.label} />
                 </span>
                 <span>
-                  {row.app !== null ? APP_LABELS[row.app] : null}
+                  {row.app !== null
+                    ? (renderEntry?.(row, { kind: "app", label: APP_LABELS[row.app] }) ??
+                      APP_LABELS[row.app])
+                    : null}
                   {row.app === null && row.skipped !== null ? (
                     <span className="text-muted-foreground">Skipped</span>
                   ) : null}
@@ -181,13 +185,19 @@ function UpdateEverythingDialogContent({
                     <span className="block text-muted-foreground text-xs">restarts last</span>
                   ) : null}
                 </span>
-                <span>
-                  {row.providers.map((provider, index) => (
-                    <Fragment key={provider}>
-                      <span className="whitespace-nowrap">{provider}</span>
-                      {index < row.providers.length - 1 ? ", " : null}
-                    </Fragment>
-                  ))}
+                <span className={renderEntry ? "flex flex-wrap items-start gap-1" : undefined}>
+                  {row.providers.map((provider, index) =>
+                    renderEntry ? (
+                      <Fragment key={provider}>
+                        {renderEntry(row, { kind: "provider", label: provider })}
+                      </Fragment>
+                    ) : (
+                      <Fragment key={provider}>
+                        <span className="whitespace-nowrap">{provider}</span>
+                        {index < row.providers.length - 1 ? ", " : null}
+                      </Fragment>
+                    ),
+                  )}
                 </span>
                 <span className="text-right">
                   {row.environmentId !== null && restarting.has(row.environmentId) ? (
@@ -236,11 +246,6 @@ function UpdateEverythingDialogContent({
         <AlertDialogClose ref={cancelRef} render={<Button variant="outline" disabled={busy} />}>
           Cancel
         </AlertDialogClose>
-        {secondaryAction ? (
-          <Button variant="outline" disabled={busy} onClick={secondaryAction.onClick}>
-            {secondaryAction.label}
-          </Button>
-        ) : null}
         <Button disabled={disabledReason !== null || busy} onClick={onConfirm}>
           {confirmLabel}
         </Button>
