@@ -12,7 +12,7 @@ import { useNexiWelcomeActions } from "./t3team-useNexiWelcomeActions";
 import { StartFooter, WelcomePageShell, WelcomeSection } from "./t3team-welcomeLayout";
 
 /**
- * Nexi Work single-page first-run setup. Replaces the multi-step WelcomeWizard when
+ * Nexi Work single-page first-run setup. Replaces the multi-step WelcomePage when
  * `NEXI_WELCOME_SETUP` is on. Start completes onboarding and lands on the normal home /
  * new-thread surface (Add project → CommandPaletteAddProject).
  */

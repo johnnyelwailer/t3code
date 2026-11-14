@@ -1,6 +1,7 @@
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 
-import type { ComposerSlashCommand, ComposerTrigger } from "~/composer-logic";
+import type { ComposerTrigger } from "~/composer-logic";
+import type { T3TeamSlashCommand } from "~/t3team/composer/t3team-composerMenuItems";
 import type {
   T3TeamComposerMenuItem,
   T3TeamRecipeSlashCommandItem,
@@ -23,7 +24,7 @@ export type T3TeamComposerMenuReplacement = {
 /** Host-state side effect a selection triggers in addition to the replacement. */
 export type T3TeamComposerMenuSelectionEffect =
   | { readonly type: "open-model-picker" }
-  | { readonly type: "built-in-slash-command"; readonly command: ComposerSlashCommand }
+  | { readonly type: "built-in-slash-command"; readonly command: T3TeamSlashCommand }
   | {
       readonly type: "select-recipe";
       readonly recipe: T3TeamRecipeSlashCommandItem["recipe"];

@@ -72,7 +72,10 @@ export function judgeStepRun(
   const messages = projection.messages.toSorted(
     (left, right) => (position.get(right.id) ?? -1) - (position.get(left.id) ?? -1),
   );
-  const result = subagentResultForRun({ messages, turnItems: projection.turnItems }, run);
+  const result = subagentResultForRun(
+    { messages, turnItems: projection.turnItems, providerTurns: [] },
+    run,
+  );
   if (run.status === "completed") {
     return result.messageId === null && result.turnItemId === null
       ? { kind: "empty" }

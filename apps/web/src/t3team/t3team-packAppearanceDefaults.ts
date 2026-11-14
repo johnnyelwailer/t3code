@@ -1,6 +1,7 @@
 /**
  * First-run application of a pack theme's `appearanceDefaults` onto the client appearance settings
- * a USER owns (`legacySidebarEnabled`, `glassOpacity`).
+ * a USER owns (`glassOpacity`, interface font size). The sidebar lens is read from the pack
+ * directly (`t3team-sidebarLens.ts`) since upstream removed its sidebar switch.
  *
  * These are preferences, not theme tokens, so the rule is NOT the one the setup profile uses
  * ("pack default outranks nothing-stored"). Applied that way, every page load would re-assert the
@@ -28,7 +29,6 @@ export type T3TeamPackAppearanceDefaults = {
 
 /** The client-settings patch to write. */
 export type T3TeamAppearanceDefaultsPatch = {
-  readonly legacySidebarEnabled?: boolean;
   readonly glassOpacity?: number;
   readonly fontSizeInterface?: number;
 };
@@ -102,15 +102,8 @@ export function resolveT3TeamAppearanceDefaults(input: {
     return {};
   }
   const defaults = input.defaults;
-  const patch: T3TeamAppearanceDefaultsPatch = {
-    // The lens is stored as upstream's sidebar switch, which is now the INVERTED
-    // `legacySidebarEnabled`. This is the single mapping on the WRITE side, mirroring
-    // `useT3TeamSidebarLens` on the read side.
-    ...(defaults.sidebarLens === undefined
-      ? {}
-      : { legacySidebarEnabled: defaults.sidebarLens !== "work" }),
-    ...(defaults.glassOpacity === undefined ? {} : { glassOpacity: defaults.glassOpacity }),
-  };
+  const patch: T3TeamAppearanceDefaultsPatch =
+    defaults.glassOpacity === undefined ? {} : { glassOpacity: defaults.glassOpacity };
   // A defaults block that declares nothing is still "handled": recording the marker stops this
   // from re-deciding on every mount.
   return Object.keys(patch).length === 0

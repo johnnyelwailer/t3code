@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 /**
  * GET /api/auth/clients as the cloud session's idle check reads it: access:read, a bare array,
  * and `connected` / `current` / `lastConnectedAt` on each entry.
@@ -5,7 +6,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
@@ -34,11 +35,11 @@ const layerRoutes = authClientsRouteLayer.pipe(
   Layer.provideMerge(layerEnvironmentAuth),
   Layer.provideMerge(
     HttpPlatform.layer.pipe(
-      Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       Layer.provideMerge(Etag.layerWeak),
     ),
   ),
-  Layer.provide(NodeServices.layer),
+  Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 const getClients = (token: string) =>
@@ -55,7 +56,7 @@ function probeLine(clients: unknown): string {
 
 it.live("lists client sessions with their live connected flag, behind access:read", () =>
   Effect.gen(function* () {
-    const crypto = yield* Crypto.Crypto;
+    const random = yield* SecureRandom.SecureRandom;
     const unusedSecretStore = ServerSecretStore.ServerSecretStore.of({
       get: () => Effect.succeedNone,
       set: () => Effect.void,
@@ -63,14 +64,16 @@ it.live("lists client sessions with their live connected flag, behind access:rea
       getOrCreateRandom: () => Effect.die("Not used by these routes."),
       remove: () => Effect.void,
     });
-    const requestContext = Context.make(Crypto.Crypto, crypto).pipe(
+    const requestContext = Context.make(SecureRandom.SecureRandom, random).pipe(
       Context.add(ServerSecretStore.ServerSecretStore, unusedSecretStore),
     );
     // One memo map: the routes and this test share the same auth and session store.
     const memoMap = Layer.makeMemoMapUnsafe();
     const scope = yield* Scope.Scope;
     const authContext = yield* Layer.buildWithMemoMap(
-      layerEnvironmentAuth.pipe(Layer.provide(NodeServices.layer)),
+      layerEnvironmentAuth.pipe(
+        Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+      ),
       memoMap,
       scope,
     );
@@ -129,5 +132,5 @@ it.live("lists client sessions with their live connected flag, behind access:rea
     yield* store.markDisconnected(desktop.sessionId);
     const after = yield* call(probe.token);
     expect(probeLine(after.body)).toMatch(/^NO_ACTIVE_CLIENTS /);
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

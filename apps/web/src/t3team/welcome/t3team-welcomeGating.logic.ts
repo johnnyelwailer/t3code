@@ -14,7 +14,7 @@ export const NEXI_WELCOME_SETUP_FLAG = "NEXI_WELCOME_SETUP" satisfies FeatureFla
  */
 export const NEXI_WELCOME_SEEN_VERSION = 1;
 
-/** Whether /welcome should render the Nexi single-page setup instead of WelcomeWizard. */
+/** Whether /welcome should render the Nexi single-page setup instead of WelcomePage. */
 export function isNexiWelcomeSetupEnabled(
   config: Pick<ServerConfig, "featureFlags"> | null | undefined,
 ): boolean {

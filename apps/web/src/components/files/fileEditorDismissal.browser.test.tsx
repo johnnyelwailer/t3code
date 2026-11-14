@@ -1,4 +1,4 @@
-import { getFiletypeFromFileName, getThemes, preloadHighlighter } from "@pierre/diffs";
+import { DEFAULT_THEMES, preloadHighlighter } from "@pierre/diffs";
 import { Editor, type EditorFactory } from "@pierre/diffs/edit";
 import { EditProvider, File } from "@pierre/diffs/react";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -13,35 +13,27 @@ describe("installFileEditorDismissal", () => {
     let editor: Editor<"file" | "file-diff", undefined, undefined> | undefined;
     const createEditor: EditorFactory<undefined, undefined> = (...args) =>
       (editor = new Editor(...args));
-    const file = { name: "server.ts", contents: "const server = 1;\n" };
-    // The editor mounts its content only once the shared highlighter holds the theme and grammar.
-    // Loading them cold takes over a second on a busy CI runner, past vi.waitFor's default.
-    await preloadHighlighter({
-      themes: getThemes(),
-      langs: ["text", getFiletypeFromFileName(file.name)],
-    });
+    // File paints nothing until the shared highlighter has loaded; once it has, mount renders synchronously.
+    await preloadHighlighter({ themes: Object.values(DEFAULT_THEMES), langs: ["typescript"] });
     await using screen = await render(
       <>
         <p>Assistant reply</p>
         <div data-testid="file-surface">
           <EditProvider createEditor={createEditor}>
-            <File file={file} edit />
+            <File file={{ name: "server.ts", contents: "const server = 1;\n" }} edit />
           </EditProvider>
         </div>
       </>,
     );
     const shadowRoot = () => screen.container.querySelector("diffs-container")?.shadowRoot;
-    const content = await vi.waitFor(() => {
-      const element = shadowRoot()?.querySelector<HTMLElement>("[data-content]");
-      expect(element).toBeTruthy();
-      return element!;
-    });
+    const content = shadowRoot()?.querySelector<HTMLElement>("[data-content]");
+    expect(content).toBeTruthy();
 
     editor!.setSelections([
       { start: { line: 0, character: 8 }, end: { line: 0, character: 8 }, direction: "none" },
     ]);
     const isMac = isMacPlatform(navigator.platform);
-    content.dispatchEvent(
+    content!.dispatchEvent(
       new KeyboardEvent("keydown", {
         key: "f",
         code: "KeyF",
@@ -52,9 +44,7 @@ describe("installFileEditorDismissal", () => {
         cancelable: true,
       }),
     );
-    await vi.waitFor(() =>
-      expect(shadowRoot()?.querySelectorAll("[data-match-range]")).toHaveLength(1),
-    );
+    await vi.waitFor(() => expect(CSS.highlights.get("diffs-search-current")?.size).toBe(1));
 
     using _dismissal = {
       [Symbol.dispose]: installFileEditorDismissal({

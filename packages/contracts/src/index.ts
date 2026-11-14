@@ -57,6 +57,7 @@ export * from "./t3team-projectMainRepository.ts";
 export * from "./t3team-widget-bridge.ts";
 export * from "./t3team-transientRecovery.ts";
 export * from "./projectClone.ts";
+export * from "./speech.ts";
 export * from "./pullRequest.ts";
 export * from "./pullRequestReviewGuide.ts";
 export * from "./orchestrationDispatch.ts";

@@ -7,6 +7,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert } from "@effect/vitest";
 import {
@@ -230,7 +231,7 @@ const scriptHost = Effect.gen(function* () {
     ),
   );
   return Context.get(host, ScriptHost.T3TeamScriptHost);
-});
+}).pipe(Effect.provide(NodeCrypto.layer));
 
 export const forRun = (toolGroups: ReadonlyArray<string>) =>
   Effect.map(scriptHost, (host) =>

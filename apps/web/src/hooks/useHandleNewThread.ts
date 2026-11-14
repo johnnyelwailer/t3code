@@ -45,10 +45,25 @@ import { getClientSettings } from "./useSettings";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { pickScopedDefaultProject } from "../t3team/t3team-scopeProjectResolution";
 import { useT3TeamSidebarProjectScope } from "../t3team/t3team-sidebarProjectScopeStore";
+import { getLocalStorageItem, useLocalStorage } from "./useLocalStorage";
+import * as Schema from "effect/Schema";
+import { useAtomValue } from "@effect/atom-react";
+import { defaultProjectFallbackReadyAtom } from "../state/projects";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
 import { readUnloadedThreadCount } from "../state/olderSettledShelf";
 import { resolveProjectDefaultProviderModelSelection } from "../providerInstances";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+
+export const LAST_USED_PROJECT_STORAGE_KEY = "t3code:last-used-project:v1";
+export const lastUsedProjectKeySchema = Schema.NullOr(Schema.String);
+
+export function readLastUsedProjectKey(): string | null {
+  try {
+    return getLocalStorageItem(LAST_USED_PROJECT_STORAGE_KEY, lastUsedProjectKeySchema);
+  } catch {
+    return null;
+  }
+}
 
 interface NewThreadWorkspaceOptions {
   branch?: string | null;
@@ -429,6 +444,8 @@ export function createNewThreadHandler(router: AnyRouter) {
 export function resolveDefaultProjectRef(
   projects: ReadonlyArray<EnvironmentProject>,
   projectOrder: readonly string[],
+  lastUsedProjectKey: string | null,
+  fallbackReady = true,
   t3team?: {
     readonly scopedProjectRefs: ReadonlyArray<ScopedProjectRef> | null;
     readonly offlineEnvironmentIds: ReadonlySet<string>;
@@ -444,18 +461,35 @@ export function resolveDefaultProjectRef(
     ],
   });
   const offline = t3team?.offlineEnvironmentIds;
+  const reachable = (project: { readonly environmentId: string }) =>
+    !offline?.has(project.environmentId);
+  const lastUsed = orderedProjects.find(
+    (project) =>
+      reachable(project) &&
+      scopedProjectKey(scopeProjectRef(project.environmentId, project.id)) === lastUsedProjectKey,
+  );
+  // t3team: the sidebar's project scope outranks the last-used and ordered defaults.
   const defaultProject = pickScopedDefaultProject({
     orderedProjects,
     scopedProjectRefs: t3team?.scopedProjectRefs ?? null,
     offlineEnvironmentIds: offline ?? new Set<string>(),
     fallback:
-      orderedProjects.find((project) => !offline?.has(project.environmentId)) ?? orderedProjects[0],
+      lastUsed ??
+      (fallbackReady ? (orderedProjects.find(reachable) ?? orderedProjects[0]) : undefined),
   });
   return defaultProject ? scopeProjectRef(defaultProject.environmentId, defaultProject.id) : null;
 }
 
 export function useHandleNewThread() {
   const projectOrder = useUiStateStore((store) => store.projectOrder);
+  const [lastUsedProjectKey] = useLocalStorage(
+    LAST_USED_PROJECT_STORAGE_KEY,
+    null,
+    lastUsedProjectKeySchema,
+  );
+  const defaultProjectFallbackReady = useAtomValue(
+    defaultProjectFallbackReadyAtom(lastUsedProjectKey),
+  );
   const routeTarget = useThreadRouteTarget();
   const routeThreadRef = routeTarget?.kind === "server" ? routeTarget.threadRef : null;
   const routeDraftId = routeTarget?.kind === "draft" ? routeTarget.draftId : null;
@@ -488,15 +522,19 @@ export function useHandleNewThread() {
       )
       .map((environment) => environment.environmentId),
   );
-  const defaultProjectRef = resolveDefaultProjectRef(projects, projectOrder, {
-    scopedProjectRefs,
-    offlineEnvironmentIds,
-  });
+  const defaultProjectRef = resolveDefaultProjectRef(
+    projects,
+    projectOrder,
+    lastUsedProjectKey,
+    defaultProjectFallbackReady,
+    { scopedProjectRefs, offlineEnvironmentIds },
+  );
 
   return {
     activeDraftThread,
     activeThread,
     defaultProjectRef,
+    defaultProjectFallbackReady,
     handleNewThread,
     routeDraftId,
     routeThreadRef,

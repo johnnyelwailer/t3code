@@ -8,7 +8,7 @@ import {
 
 /**
  * Storybook-only mockups of the Nexi Work single-page welcome / first-run experience.
- * Not wired to routes, flags, or the live WelcomeWizard.
+ * Not wired to routes, flags, or the live WelcomePage.
  */
 const meta = {
   title: "T3Team/Welcome/Page",

@@ -13,6 +13,7 @@ import type { RemoteMachineTarget } from "./t3team-remoteMachineScan.ts";
 
 const REASONS: Record<PullRequestProviderError["reason"], string> = {
   "rate-limited": "Remote discovery is paused by the provider's rate limit.",
+  forbidden: "Your sign-in is not allowed to read this repository.",
   unauthenticated: "You are not signed in to this repository's host.",
   "not-found": "The repository was not found, or your sign-in cannot read it.",
   "missing-tool": "The host's command-line tool is not installed.",

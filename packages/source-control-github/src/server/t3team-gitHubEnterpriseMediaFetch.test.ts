@@ -6,6 +6,7 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 
 import * as GitHubCredentials from "./GitHubCredentials.ts";
 import * as GitHubEnterpriseMediaFetch from "./t3team-gitHubEnterpriseMediaFetch.ts";
+import * as GitHubRest from "./GitHubRest.ts";
 
 const SIGNED =
   "https://objects-origin.nexplore.ghe.com/user-asset/16605232-3952be71.png?X-Amz-Signature=s&amp;X-Amz-Date=d";
@@ -53,8 +54,13 @@ function harness(signedIn: ReadonlySet<string>, respond: (url: URL) => Response)
       const fetchMedia = yield* GitHubEnterpriseMediaFetch.make;
       return yield* fetchMedia({ url, headers: {} });
     }).pipe(
-      Effect.provide(credentials),
-      Effect.provideService(HttpClient.HttpClient, client),
+      Effect.provide(
+        Layer.mergeAll(
+          credentials,
+          Layer.mock(GitHubRest.GitHubRest)({}),
+          Layer.succeed(HttpClient.HttpClient, client),
+        ),
+      ),
       Effect.scoped,
     );
   return { sent, looked, run };

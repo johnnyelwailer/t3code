@@ -3,11 +3,13 @@ import {
   applyShellEnvironment,
   buildEnvironmentCaptureCommand,
   listLoginShellCandidates,
+  readUserLoginShell,
   setWindowsPath,
 } from "@t3tools/shared/shell";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Deferred from "effect/Deferred";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
@@ -21,7 +23,7 @@ import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
-import { unixCandidates } from "../app/DesktopCliCommand.ts";
+import { knownLocations } from "../app/DesktopCliCommand.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 
 type EnvironmentPatch = Record<string, string>;
@@ -80,6 +82,8 @@ export class DesktopShellEnvironment extends Context.Service<
     // Desktop owns discovery, including on cache misses; the backend receives updates over fd4.
     readonly installIntoProcess: Effect.Effect<boolean>;
     readonly awaitDiscovery: Effect.Effect<boolean>;
+    /** Whether the user's own login shell, not a fallback, gave the PATH a new terminal gets. */
+    readonly awaitUserShellDiscovery: Effect.Effect<boolean>;
     readonly updates: Stream.Stream<DesktopShellEnvironmentSnapshot>;
   }
 >()("@t3tools/desktop/shell/DesktopShellEnvironment") {}
@@ -261,7 +265,7 @@ const runCommandOutput = Effect.fn("desktop.shellEnvironment.runCommandOutput")(
   readonly shell?: boolean;
 }): Effect.fn.Return<string, never, ChildProcessSpawner.ChildProcessSpawner> {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const output = yield* Effect.scoped(
+  const fiber = yield* Effect.scoped(
     Effect.gen(function* () {
       const child = yield* spawner.spawn(
         ChildProcess.make(input.command, input.args, {
@@ -304,7 +308,12 @@ const runCommandOutput = Effect.fn("desktop.shellEnvironment.runCommandOutput")(
       DesktopShellEnvironmentCommandError: (error) =>
         logShellEnvironmentCommandError(error).pipe(Effect.as("")),
     }),
+    Effect.forkDetach,
+  );
+  const output = yield* Fiber.join(fiber).pipe(
     Effect.timeoutOption(input.timeout),
+    // Interrupting awaits the child's exit, which a shell stuck in the kernel never reaches.
+    Effect.ensuring(Fiber.interrupt(fiber).pipe(Effect.forkDetach)),
   );
   if (Option.isSome(output)) {
     return output.value;
@@ -413,19 +422,24 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
   function* (
     config: ShellEnvironmentConfig,
   ): Effect.fn.Return<
-    boolean,
+    ShellDiscovery,
     never,
     ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
   > {
     const fileSystem = yield* FileSystem.FileSystem;
     const shellEnvironment: EnvironmentPatch = {};
+    const userShells = [config.env.SHELL?.trim(), readUserLoginShell()];
 
+    let answeredBy: string | undefined;
     for (const shell of listLoginShellCandidates(config.platform, config.env.SHELL)) {
       Object.assign(
         shellEnvironment,
         yield* readLoginShellEnvironment(shell, LOGIN_SHELL_ENV_NAMES, config.env),
       );
-      if (shellEnvironment.PATH) break;
+      if (shellEnvironment.PATH) {
+        answeredBy = shell;
+        break;
+      }
     }
 
     const launchctlPath =
@@ -438,7 +452,7 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
     // Homebrew's gh, codex and claude are still found.
     const fallbackDirs =
       config.platform === "darwin" && Option.isNone(probedPath)
-        ? yield* Effect.filter(unixCandidates(config.homeDirectory, config.platform), (dir) =>
+        ? yield* Effect.filter(knownLocations(config.homeDirectory, config.platform), (dir) =>
             fileSystem.exists(dir).pipe(Effect.orElseSucceed(() => false)),
           )
         : [];
@@ -525,24 +539,33 @@ const installPosixEnvironment = Effect.fn("desktop.shellEnvironment.installPosix
       }
     }
 
-    return Option.isSome(trimNonEmpty(shellEnvironment.PATH));
+    const prepared = Option.isSome(trimNonEmpty(shellEnvironment.PATH));
+    return { prepared, fromUserShell: prepared && userShells.includes(answeredBy) };
   },
 );
+
+/** `fromUserShell` is false when only a fallback shell answered, whose PATH can miss folders. */
+interface ShellDiscovery {
+  readonly prepared: boolean;
+  readonly fromUserShell: boolean;
+}
 
 const installShellEnvironment = (
   config: ShellEnvironmentConfig,
 ): Effect.Effect<
-  boolean,
+  ShellDiscovery,
   never,
   ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
 > => {
   if (config.platform === "win32") {
-    return installWindowsEnvironment(config);
+    return installWindowsEnvironment(config).pipe(
+      Effect.map((prepared) => ({ prepared, fromUserShell: prepared })),
+    );
   }
   if (config.platform === "darwin" || config.platform === "linux") {
     return installPosixEnvironment(config);
   }
-  return Effect.succeed(false);
+  return Effect.succeed({ prepared: false, fromUserShell: false });
 };
 
 const ShellEnvironmentCache = Schema.fromJsonString(
@@ -585,7 +608,7 @@ export const make = Effect.gen(function* () {
   const cachePath = path.join(environment.stateDir, "shell-environment-cache.json");
   const changes = yield* PubSub.unbounded<DesktopShellEnvironmentSnapshot>();
   const latest = yield* Ref.make<Option.Option<DesktopShellEnvironmentSnapshot>>(Option.none());
-  const discovered = yield* Deferred.make<boolean>();
+  const discovered = yield* Deferred.make<ShellDiscovery>();
   const publish = Effect.fn("desktop.shellEnvironment.publish")(function* (
     patch: ShellEnvironmentPatch,
     discovered = false,
@@ -604,11 +627,12 @@ export const make = Effect.gen(function* () {
   const refresh = Effect.gen(function* () {
     // Refresh from the inherited baseline so removed cached paths and values do not survive.
     const fresh = { ...inherited };
-    const prepared = yield* installShellEnvironment({
+    const discovery = yield* installShellEnvironment({
       env: fresh,
       platform: environment.platform,
       homeDirectory: environment.homeDirectory,
     });
+    const { prepared } = discovery;
     const patch = Object.fromEntries(
       Object.keys(ShellEnvironmentPatch.fields).map((name) => [name, fresh[name] ?? null]),
     );
@@ -627,7 +651,7 @@ export const make = Effect.gen(function* () {
         Effect.catch(() => Effect.logWarning("Could not cache shell environment")),
       );
     }
-    return prepared;
+    return discovery;
   }).pipe(
     Effect.provideService(FileSystem.FileSystem, fileSystem),
     Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
@@ -680,7 +704,14 @@ export const make = Effect.gen(function* () {
   );
   return DesktopShellEnvironment.of({
     installIntoProcess,
-    awaitDiscovery: installIntoProcess.pipe(Effect.andThen(Deferred.await(discovered))),
+    awaitDiscovery: installIntoProcess.pipe(
+      Effect.andThen(Deferred.await(discovered)),
+      Effect.map(({ prepared }) => prepared),
+    ),
+    awaitUserShellDiscovery: installIntoProcess.pipe(
+      Effect.andThen(Deferred.await(discovered)),
+      Effect.map(({ fromUserShell }) => fromUserShell),
+    ),
     updates,
   });
 });

@@ -5,7 +5,15 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const sessionState = vi.hoisted(() => ({ data: undefined as unknown }));
-vi.mock("~/environments/primary", () => ({ usePrimarySessionState: () => sessionState }));
+vi.mock("~/state/environments", () => ({ usePrimaryEnvironmentId: () => "environment-primary" }));
+vi.mock("~/state/session", () => ({
+  useEnvironmentScope: (_environmentId: unknown, scope: string) => {
+    const data = sessionState.data as
+      | { authenticated?: boolean; scopes?: readonly string[] }
+      | undefined;
+    return data?.authenticated ? (data.scopes?.includes(scope) ?? false) : false;
+  },
+}));
 
 import { useCanManageRelay } from "./t3team-useCanManageRelay";
 

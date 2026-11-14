@@ -163,7 +163,11 @@ it.layer(NodeServices.layer)("t3team desktop distribution packaging", (it) => {
             mockUpdates: false,
           });
           assert.isTrue(NodePath.isAbsolute(String(config.afterPack)));
-          assert.isTrue(String(config.afterPack).endsWith("prepare-server-compile-cache.cjs"));
+          assert.isTrue(
+            String(config.afterPack).endsWith(
+              platform === "linux" ? "linux-after-pack.ts" : "prepare-server-compile-cache.cjs",
+            ),
+          );
         }
       }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );

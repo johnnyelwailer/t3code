@@ -11,6 +11,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
@@ -191,12 +192,15 @@ describe("thread resume cursor identity", () => {
     }),
   );
 
-  it.effect("replays the delta when background compaction deleted the cursor's event", () =>
+  it.effect("resyncs from a snapshot when background pruning deleted the cursor's event", () =>
     Effect.gen(function* () {
       const sink = yield* EventSink.EventSinkV2;
       const stored = yield* sink.write({ events });
       const maintenance = yield* ProjectionMaintenance.ProjectionMaintenanceV2;
-      const summary = yield* maintenance.compactEventStore();
+      // The first pass only marks the head; pruning starts once that mark is a day old.
+      yield* maintenance.pruneEventStore();
+      yield* TestClock.adjust("1 day");
+      const summary = yield* maintenance.pruneEventStore();
       // Title 1 and 2 are superseded by title 3, so the client's cursor event is gone.
       assert.equal(summary.deletedEventCount, 2);
       const items = yield* Stream.unwrap(
@@ -210,9 +214,11 @@ describe("thread resume cursor identity", () => {
         Stream.takeUntil((item: OrchestrationV2ThreadStreamItem) => item.kind === "synchronized"),
         Stream.runCollect,
       );
-      assert.deepStrictEqual(kinds(Array.from(items)), ["event", "synchronized"]);
+      // Pruning publishes its boundary, so a cursor behind it never gets a partial replay.
+      assert.deepStrictEqual(kinds(Array.from(items)), ["snapshot", "synchronized"]);
       const [first] = Array.from(items);
-      assert.equal(first?.kind === "event" && first.sequence, stored[3]!.sequence);
+      assert.equal(first?.kind === "snapshot" && first.snapshotSequence, stored[3]!.sequence);
+      assert.equal(first?.kind === "snapshot" && first.projection.thread.title, "Title 3");
     }).pipe(Effect.provide(layerServicesWithMaintenance)),
   );
 });

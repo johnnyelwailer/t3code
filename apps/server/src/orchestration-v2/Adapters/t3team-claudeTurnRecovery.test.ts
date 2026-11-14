@@ -3,6 +3,7 @@
  * and a transient gateway failure re-drives the same turn behind a provider-retry item.
  */
 import type { SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   ClaudeSettings,
@@ -17,7 +18,7 @@ import {
 } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -156,7 +157,7 @@ const makeHarness = Effect.gen(function* () {
     attachmentsDir,
     fileSystem,
     path: yield* Path.Path,
-    crypto: yield* Crypto.Crypto,
+    random: yield* SecureRandom.SecureRandom,
     idAllocator: yield* IdAllocator.IdAllocatorV2,
     continuationRequests: { offer: () => Effect.void },
     queryRunner: {
@@ -259,7 +260,12 @@ const awaitUntil = (predicate: () => boolean, label: string) =>
     return yield* Effect.die(`Timed out waiting for ${label}.`);
   });
 
-const testLayer = Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer);
+const testLayer = Layer.mergeAll(
+  IdAllocator.layer,
+  McpProviderSessions.layer,
+  NodeServices.layer,
+  NodeCrypto.layer,
+);
 
 describe("ClaudeAdapterV2 t3team recovery", () => {
   it.effect("re-drives a transient gateway failure inside the same turn", () =>

@@ -12,6 +12,7 @@ import type * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import type * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import type * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import type * as SessionStore from "./auth/SessionStore.ts";
+import type * as AssetSigner from "./assets/AssetSigner.ts";
 import type * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import type * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import type * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
@@ -58,6 +59,7 @@ import type * as AntigravityInstallation from "./provider/AntigravityInstallatio
 import type * as CodexInstallation from "./provider/CodexInstallation.ts";
 import type * as DocumentText from "./provider/DocumentText.ts";
 import type * as ModelManifest from "./provider/ModelManifest.ts";
+import type * as ProviderInstallation from "./provider/providerInstallation.ts";
 import type * as ProviderAuthService from "./provider/ProviderAuthService.ts";
 import type * as ProviderInstanceRegistry from "./provider/ProviderInstanceRegistry.ts";
 import type * as ProviderRegistry from "./provider/ProviderRegistry.ts";
@@ -77,6 +79,7 @@ import type * as SourceControlDiscovery from "./sourceControl/SourceControlDisco
 import type * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import type * as SourceControlSignIn from "./sourceControl/SourceControlSignIn.ts";
 import type * as StorageCleanup from "./storageCleanup.ts";
+import type * as TextGenerators from "./textGeneration/TextGenerators.ts";
 import type * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import type * as TriageService from "./triage/TriageService.ts";
 import type * as TerminalManager from "./terminal/Manager.ts";
@@ -96,7 +99,9 @@ import type * as RelayClient from "@t3tools/shared/relayClient";
 import type * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import type * as NpmRelease from "./cloud/npmRelease.ts";
 import type * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
-import type * as Crypto from "effect/Crypto";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
+import type * as Signature from "effect/crypto/Signature";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 import type * as SqlClient from "effect/sql/SqlClient";
@@ -113,13 +118,16 @@ export type WsRpcHandlerServices =
   | AgentSessionScanner.AgentSessionScanner
   | AnalyticsService.AnalyticsService
   | AntigravityInstallation.AntigravityInstallation
+  | AssetSigner.AssetSigner
   | BackgroundPolicy.BackgroundPolicy
   | CheckpointDiffQuery.CheckpointDiffQuery
   | ChildProcessSpawner.ChildProcessSpawner
   | CloudSessionService
   | CodexInstallation.CodexInstallation
   | CommandOutputHub.CommandOutputHub
-  | Crypto.Crypto
+  | Digest.Digest
+  | SecureRandom.SecureRandom
+  | Signature.Signature
   | DatabaseStorage.DatabaseStorage
   | DeviceService.DeviceService
   | DocumentText.DocumentText
@@ -158,6 +166,7 @@ export type WsRpcHandlerServices =
   | ProjectSetupScriptRunner.ProjectSetupScriptRunner
   | ProjectStore.ProjectStoreV2
   | ProviderAuthService.ProviderAuthService
+  | ProviderInstallation.ProviderInstallation
   | ProviderInstanceRegistry.ProviderInstanceRegistry
   | ProviderLatestVersions.ProviderLatestVersions
   | ProviderMaintenanceRunner.ProviderMaintenanceRunner
@@ -190,6 +199,7 @@ export type WsRpcHandlerServices =
   | SqlClient.SqlClient
   | StorageCleanup.StorageCleanup
   | TerminalManager.TerminalManager
+  | TextGenerators.TextGenerators
   | ThreadLaunchService.ThreadLaunchService
   | ThreadManagementService.ThreadManagementService
   | ThreadSearch.ThreadSearch

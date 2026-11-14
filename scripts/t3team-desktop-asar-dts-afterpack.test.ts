@@ -138,6 +138,9 @@ const runAfterPackHook = Effect.fn("runAfterPackHook")(function* (inputAsar: str
     path.join(hookDir, "desktop-asar-dts-afterpack-utils.cjs"),
   );
   yield* fs.copyFile(inputAsar, path.join(resourcesDir, "app.asar"));
+  // Electron's Linux zips ship world-writable binaries; upstream's Linux hook strips that.
+  yield* fs.writeFileString(path.join(appOutDir, "t3code"), "");
+  yield* fs.chmod(path.join(appOutDir, "t3code"), 0o777);
   const inputUnpacked = `${inputAsar}.unpacked`;
   if (NodeFS.existsSync(inputUnpacked)) {
     yield* fs.copy(inputUnpacked, `${path.join(resourcesDir, "app.asar")}.unpacked`, {
@@ -231,21 +234,25 @@ it.layer(NodeServices.layer)("desktop-asar-dts-afterpack", (it) => {
       }),
   );
 
-  it.effect("runs upstream's server compile cache hook after the re-injection", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "desktop-asar-dts-chain-" });
-      const inputAsar = path.join(scratch, "input.asar");
-      yield* Effect.promise(() => buildInputAsar(inputAsar));
-      const log = vi.spyOn(console, "log").mockImplementation(() => {});
-      yield* Effect.addFinalizer(() => Effect.sync(() => log.mockRestore()));
-      yield* runAfterPackHook(inputAsar);
-      const lines = log.mock.calls.map((call) => String(call[0]));
-      const reinjected = lines.findIndex((line) => line.startsWith("[desktop-asar-dts]"));
-      const cached = lines.findIndex((line) => line.startsWith("[server-compile-cache]"));
-      assert.isAtLeast(reinjected, 0);
-      assert.isAbove(cached, reinjected);
-    }),
+  it.effect(
+    "runs upstream's Linux afterPack hook (compile cache, write bits) after the re-injection",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "desktop-asar-dts-chain-" });
+        const inputAsar = path.join(scratch, "input.asar");
+        yield* Effect.promise(() => buildInputAsar(inputAsar));
+        const log = vi.spyOn(console, "log").mockImplementation(() => {});
+        yield* Effect.addFinalizer(() => Effect.sync(() => log.mockRestore()));
+        const outputAsar = yield* runAfterPackHook(inputAsar);
+        const lines = log.mock.calls.map((call) => String(call[0]));
+        const reinjected = lines.findIndex((line) => line.startsWith("[desktop-asar-dts]"));
+        const cached = lines.findIndex((line) => line.startsWith("[server-compile-cache]"));
+        assert.isAtLeast(reinjected, 0);
+        assert.isAbove(cached, reinjected);
+        const binary = path.join(path.dirname(path.dirname(outputAsar)), "t3code");
+        assert.strictEqual((yield* fs.stat(binary)).mode & 0o777, 0o755);
+      }),
   );
 });

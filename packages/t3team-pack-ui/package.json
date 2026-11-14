@@ -15,14 +15,13 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "effect-tsgo tsrs --noEmit"
   },
   "dependencies": {
     "@t3tools/contracts": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@types/react": "~19.3.0",
-    "typescript": "catalog:"
+    "@types/react": "~19.3.0"
   }
 }

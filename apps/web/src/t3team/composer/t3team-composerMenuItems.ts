@@ -17,8 +17,13 @@ import { searchSlashCommandItems } from "~/components/chat/composerSlashCommandS
 import { basenameOfPath } from "~/pierre-icons";
 import { searchProviderSkills } from "~/providerSkillSearch";
 
+/** Kickoff-composer commands that map onto its plan/build toggle; the chat composer has none. */
+export type T3TeamKickoffSlashCommand = "plan" | "default";
+
+export type T3TeamSlashCommand = ComposerSlashCommand | T3TeamKickoffSlashCommand;
+
 export type T3TeamComposerBuiltInSlashCommand = {
-  readonly command: ComposerSlashCommand;
+  readonly command: T3TeamSlashCommand;
   readonly description: string;
 };
 

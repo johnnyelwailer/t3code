@@ -1,4 +1,6 @@
 import "vite-plus/test/config";
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- tsdown needs the asset path when it reads this config.
+import * as NodePath from "node:path";
 import { defineConfig, mergeConfig } from "vite-plus";
 
 import baseConfig from "../../vite.config.ts";
@@ -32,10 +34,14 @@ if (!TELEMETRY_CHANNELS.includes(telemetryChannel)) {
 }
 
 // tsdown SEA needs one chunk (sourcemaps count) and Node >=25.7, so package separately.
+// "bundle" emits the embedded CLI. "1" builds dist-exe/t3 from the bootstrap.
 // TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
-// "1" builds dist-exe/t3 here; "bundle" stops at bin.mjs for scripts/cli.ts to inject (linux-arm64).
+// "bootstrap" stops at bin.mjs for scripts/cli.ts to inject (linux-arm64).
 const packMode = process.env.T3CODE_PACK_EXE;
-const packExecutable = packMode === "1" || packMode === "bundle";
+const packBootstrap = packMode === "1" || packMode === "bootstrap";
+const packExecutable = packBootstrap || packMode === "bundle";
+const cliAssetDir = process.env.T3CODE_CLI_ASSET_DIR ?? "";
+if (packExecutable && !cliAssetDir) throw new Error("Build the executable with build:exe.");
 // TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
 // No linux-arm64: --build-sea output cannot load on 16/64 KiB page kernels, so it builds natively.
 const SEA_TARGETS = {
@@ -85,19 +91,20 @@ export default mergeConfig(
       },
     },
     pack: {
-      // The executable embeds one entry; the history worker becomes a hidden
-      // subcommand there instead of a sibling script.
+      // SEA embeds one entry; expose the history worker as a hidden subcommand.
       // The two host-module entries are what the recipe-module resolver falls back to when
       // `effect` and `@t3team/sdk` are inlined and not installed (a published bundle in a session).
-      entry: packExecutable
+      entry: packBootstrap
         ? ["src/bin.ts"]
-        : [
-            "src/bin.ts",
-            "src/t3team-bin.ts",
-            "src/claude-history-worker.ts",
-            "src/t3team-hostEffect.ts",
-            "src/t3team-hostSdk.ts",
-          ],
+        : packExecutable
+          ? ["src/binMain.ts"]
+          : [
+              "src/bin.ts",
+              "src/t3team-bin.ts",
+              "src/claude-history-worker.ts",
+              "src/t3team-hostEffect.ts",
+              "src/t3team-hostSdk.ts",
+            ],
       // `?raw` is a vite feature; pack is tsdown/rolldown and has no asset pipeline of its own.
       // Without this, source that ships as TEXT could not be authored as a typechecked module.
       // The distribution plugin inlines the compiled-in distribution (see
@@ -107,7 +114,7 @@ export default mergeConfig(
         t3teamDistributionPackPlugin(),
         t3teamTypescriptLibPackPlugin(),
       ],
-      outDir: packExecutable ? "dist-exe" : "dist",
+      outDir: packBootstrap ? "dist-exe" : packExecutable ? cliAssetDir : "dist",
       sourcemap: !packExecutable,
       clean: true,
       // The inlined TypeScript compiler (packages/runbook-ts/src/typescript.ts
@@ -115,8 +122,7 @@ export default mergeConfig(
       // Without the CJS shims the emitted chunk crashes before any orchestration
       // code runs — which is exactly the packaged-app failure this inlining fixes.
       shims: true,
-      // TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
-      // SEA can only resolve built-ins; keep dynamic imports inside its one module.
+      // SEA can only resolve built-ins; keep dynamic imports inside each emitted module.
       ...(packExecutable ? { outputOptions: { codeSplitting: false } } : {}),
       ...(packMode === "1"
         ? {
@@ -125,14 +131,20 @@ export default mergeConfig(
               outDir: "dist-exe",
               ...(packExecutableTargets ? { targets: packExecutableTargets } : {}),
               // Node SEA useCodeCache breaks import(), which the server needs.
-              seaConfig: { useCodeCache: false },
+              seaConfig: {
+                useCodeCache: false,
+                // The bootstrap loads the embedded CLI with require(esm).
+                execArgv: ["--require-module"],
+                assets: { "binMain.mjs": NodePath.join(cliAssetDir, "binMain.mjs") },
+              },
             },
           }
         : {}),
       deps: {
         // alwaysBundle=false has no opinion; neverBundle must retain transitive native acceleration.
         alwaysBundle: shouldBundleCliDependency,
-        neverBundle: (id: string) => isExternalCliDependency(id),
+        neverBundle: (id: string) =>
+          (packBootstrap && id === "./binMain.ts") || isExternalCliDependency(id),
         onlyBundle: false,
       },
       banner: {

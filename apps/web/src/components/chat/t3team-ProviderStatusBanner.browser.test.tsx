@@ -1,4 +1,9 @@
-import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -40,7 +45,15 @@ afterEach(async () => {
 });
 
 async function renderBanner(status: ServerProvider) {
-  await act(() => root.render(<ProviderStatusBanner status={status} onDismiss={() => {}} />));
+  await act(() =>
+    root.render(
+      <ProviderStatusBanner
+        environmentId={EnvironmentId.make("environment-local")}
+        status={status}
+        onDismiss={() => {}}
+      />,
+    ),
+  );
 }
 
 describe("ProviderStatusBanner dismiss control", () => {

@@ -19,7 +19,7 @@
           "globalErrorInEffectFailure": "error",
           "unknownInEffectCatch": "error",
           "strictBooleanExpressions": "off",
-          "preferSchemaOverJson": "error",
+          "globalJsonInEffect": "error",
           "schemaSyncInEffect": "error",
           // Promise-based Jira/OAuth HTTP client, not Effect code (same scoping as apps/web).
           "globalFetch": "off",

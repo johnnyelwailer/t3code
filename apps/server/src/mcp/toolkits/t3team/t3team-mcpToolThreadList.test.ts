@@ -101,19 +101,18 @@ const listedTools = (input: {
           ),
         ),
       ).layer;
+      const registrationServices = Layer.mergeAll(
+        Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+        Layer.mock(T3TeamAskUserWriter)({}),
+      );
       const transport = McpServer.layerHttp({
         name: "opt-in list test",
         version: "1.0.0",
         path: "/mcp",
         protocols: [T3_MCP_PROTOCOL],
+        registrations: T3TeamToolkitRegistrationLive.pipe(Layer.provide(registrationServices)),
       }).pipe(Layer.provide(AuthLive));
-      const registrationServices = Layer.mergeAll(
-        Layer.mock(ThreadManagementService.ThreadManagementService)({}),
-        Layer.mock(T3TeamAskUserWriter)({}),
-      );
-      const serverLayer = T3TeamToolkitRegistrationLive.pipe(
-        Layer.provide(registrationServices),
-        Layer.provideMerge(transport),
+      const serverLayer = transport.pipe(
         Layer.provideMerge(
           input.broker === "absent"
             ? // The registration only needs the broker at call time; the list handler looks it up

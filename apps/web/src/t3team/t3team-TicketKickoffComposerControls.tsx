@@ -31,7 +31,6 @@ export function TicketKickoffComposerControls({
   providerPickerDisabled,
   providerStatusMessage,
   showInteractionModeToggle,
-  text,
   canSend,
   selectModel,
   setInteractionMode,
@@ -52,7 +51,6 @@ export function TicketKickoffComposerControls({
   providerPickerDisabled: boolean;
   providerStatusMessage: string | null;
   showInteractionModeToggle: boolean;
-  text: string;
   canSend: boolean;
   selectModel: (instanceId: ProviderInstanceId, model: string) => void;
   setInteractionMode: (updater: (mode: ProviderInteractionMode) => ProviderInteractionMode) => void;
@@ -143,8 +141,6 @@ export function TicketKickoffComposerControls({
             // once the kickoff creates one.
             canOperateThread
             canInterrupt={false}
-            showPlanFollowUpPrompt={false}
-            promptHasText={text.trim().length > 0}
             isSendBusy={false}
             isEnvironmentUnavailable={providerStatusMessage !== null}
             // Upstream (2026-08) made the send-disabled reason explicit so the button can explain
@@ -154,7 +150,6 @@ export function TicketKickoffComposerControls({
             hasSendableContent={canSend}
             onPreviousPendingQuestion={() => {}}
             onInterrupt={() => {}}
-            onImplementPlanInNewThread={() => {}}
           />
         </div>
       </div>

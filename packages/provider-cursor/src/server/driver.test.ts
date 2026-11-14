@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import type { AgentOptions, SDKModel } from "@cursor/sdk";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import {
@@ -33,7 +34,6 @@ import * as TestProviderHost from "@t3tools/provider-testing/TestProviderHost";
 import { CursorDriver } from "./driver.ts";
 import * as CursorAgentSdk from "./CursorAgentSdk.ts";
 import * as CursorSdk from "./CursorSdk.ts";
-import * as CursorKeychain from "./CursorKeychain.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -42,18 +42,13 @@ import { loadCursorSdk } from "./sdk.ts";
 const { Cursor } = loadCursorSdk();
 
 const layerTest = TestProviderHost.layer({ runBackgroundWork: false }).pipe(
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   Layer.provideMerge(IdAllocator.layer),
   Layer.provideMerge(McpProviderSessions.layer),
   Layer.provideMerge(CursorSdk.layer),
   Layer.provideMerge(
     Layer.mock(CursorAgentSdk.CursorAgentSdkRunner)({
       open: () => Effect.die("Maintenance resolution must not open a Cursor session"),
-    }),
-  ),
-  Layer.provideMerge(
-    Layer.succeed(CursorKeychain.CursorKeychain, {
-      accessToken: Effect.die("The driver test must not read the Keychain"),
     }),
   ),
   Layer.provideMerge(
@@ -114,12 +109,7 @@ it.layer(layerTest)("CursorDriver", (it) => {
           instanceId: ProviderInstanceId.make("cursor-browser-persisted"),
           displayName: "Personal Cursor",
           enabled: true,
-          environment: [
-            { name: "CURSOR_API_KEY", value: "", sensitive: true },
-            // Makes the usage reader's credential lookup platform-independent.
-            { name: "AGENT_CLI_CREDENTIAL_STORE", value: "memory", sensitive: false },
-            { name: "CURSOR_AUTH_TOKEN", value: "", sensitive: true },
-          ],
+          environment: [{ name: "CURSOR_API_KEY", value: "", sensitive: true }],
           config: CursorDriver.defaultConfig(),
         };
         const openedKeys: Array<string | undefined> = [];
@@ -162,13 +152,6 @@ it.layer(layerTest)("CursorDriver", (it) => {
             email: "cursor@example.com",
           },
           setup: { canAuthenticate: true, canInstall: false },
-          // The sign-in key does not stand in for a CLI login, so Limits still look for one.
-          usageLimits: {
-            unavailable: {
-              reason: "unsupported",
-              message: "Cursor usage requires a CLI login or CURSOR_AUTH_TOKEN.",
-            },
-          },
         });
         const threadId = ThreadId.make("cursor-browser-thread");
         const modelSelection = { instanceId: input.instanceId, model: "auto" };
@@ -201,41 +184,6 @@ it.layer(layerTest)("CursorDriver", (it) => {
         expect(openedKeys).toEqual(["instance-browser-key"]);
         expect(closed).toBe(1);
       }).pipe(Effect.scoped),
-  );
-
-  it.effect("keeps an explicit API key's account out of the CLI login's Limits", () =>
-    Effect.gen(function* () {
-      const client = HttpClient.make((request) =>
-        Effect.succeed(
-          HttpClientResponse.fromWeb(
-            request,
-            Response.json(
-              request.url.endsWith("/v1/me")
-                ? {
-                    apiKeyName: "Configured",
-                    createdAt: "2026-01-01T00:00:00.000Z",
-                    userEmail: "cursor@example.com",
-                  }
-                : { items: [{ id: "auto", displayName: "Auto" }] },
-            ),
-          ),
-        ),
-      );
-      const instance = yield* CursorDriver.create({
-        instanceId: ProviderInstanceId.make("cursor-explicit-key"),
-        displayName: "Cursor key",
-        enabled: true,
-        environment: [
-          { name: "CURSOR_API_KEY", value: "configured-key", sensitive: true },
-          { name: "AGENT_CLI_CREDENTIAL_STORE", value: "memory", sensitive: false },
-          { name: "CURSOR_AUTH_TOKEN", value: "", sensitive: true },
-        ],
-        config: CursorDriver.defaultConfig(),
-      }).pipe(Effect.provideService(HttpClient.HttpClient, client));
-      const snapshot = yield* instance.snapshot.refresh;
-      expect(snapshot.auth).toMatchObject({ status: "authenticated", type: "api-key" });
-      expect(snapshot.usageLimits?.unavailable).toEqual({ reason: "unsupported" });
-    }).pipe(Effect.scoped),
   );
 
   it.effect("budgets handoffs for the SDK model across catalog refreshes and option changes", () =>

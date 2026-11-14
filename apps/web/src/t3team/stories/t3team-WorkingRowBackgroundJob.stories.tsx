@@ -55,6 +55,7 @@ function Row({
         onOpenAgents: () => {},
         threadActivityState: isWorking ? "thinking" : null,
         backgroundWorktreeSetup: null,
+        liveAnswerPreview: null,
       }}
     >
       <WorkingTimelineRow

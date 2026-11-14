@@ -42,6 +42,7 @@ function makeHarness(reply: (requestNumber: number) => Response) {
     authorizeBearer: () => Effect.die("unexpected"),
     authorizeDpop: () => Effect.die("unexpected"),
     renewDpopBeforeExpiry: () => Effect.die("unexpected"),
+    rememberCheckedDescriptor: () => Effect.void,
     authorizeDpopHttp: (input) =>
       Effect.succeed({
         environmentId: TARGET.environmentId,

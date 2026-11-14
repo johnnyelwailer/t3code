@@ -6,6 +6,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -63,7 +64,7 @@ describe("delegating into a linked repository on demand", () => {
       Effect.provide(
         GitVcsDriver.layer.pipe(
           Layer.provideMerge(ServerConfig.layerTest(harness.root, { prefix: "t3-linked-od-" })),
-          Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         ),
       ),
       Effect.scoped,

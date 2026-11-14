@@ -1,4 +1,5 @@
 import { readConnectAuthorizeRequest } from "@t3tools/shared/connectAuth";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
@@ -112,6 +113,8 @@ const buildStateDirLayer = (prefix: string) =>
     (config) => Layer.succeed(ServerConfig.ServerConfig, config),
   ).pipe(Effect.orDie);
 
+const nodePlatform = Layer.mergeAll(NodeServices.layer, NodeCrypto.layer);
+
 const makeMinterLayer = (
   requests: Array<RecordedTokenRequest>,
   launchBrowser: (url: string) => Effect.Effect<void, unknown>,
@@ -121,14 +124,14 @@ const makeMinterLayer = (
   const http = makeTokenEndpointLayer(requests);
   const secretsLayer = ServerSecretStore.layer.pipe(
     Layer.provide(configLayer),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(nodePlatform),
   );
   const launcherMock = Layer.succeed(ExternalLauncher.ExternalLauncher, { launchBrowser } as never);
   const cliLayer = CliTokenManager.layer.pipe(
     Layer.provide(secretsLayer),
     Layer.provide(http),
     Layer.provide(launcherMock),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(nodePlatform),
     Layer.provide(config),
   );
   const minterLayer = Layer.effect(
@@ -137,7 +140,7 @@ const makeMinterLayer = (
   ).pipe(
     Layer.provide(cliLayer),
     Layer.provide(launcherMock),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(nodePlatform),
     Layer.provide(http),
     Layer.provide(config),
   );
@@ -145,7 +148,7 @@ const makeMinterLayer = (
   // provide), so the merge is a plain service union exposing the minter,
   // the CLI manager, the secret store, the state dir, and the disk —
   // everything the assertions inspect directly.
-  return Layer.mergeAll(minterLayer, cliLayer, secretsLayer, configLayer, NodeServices.layer);
+  return Layer.mergeAll(minterLayer, cliLayer, secretsLayer, configLayer, nodePlatform);
 };
 
 /** Simulates the hosted /connect page: it redirects the code to the loopback listener. */
@@ -214,7 +217,7 @@ describe("ConnectCredentialMinter", () => {
       // 0600 permissions, the full refresh-capable credential.
       const serverConfig = yield* ServerConfig.ServerConfig.pipe(Effect.provide(configLayer));
       const secretPath = `${serverConfig.secretsDir}/cloud-cli-oauth-token.bin`;
-      const fs = yield* FileSystem.FileSystem.pipe(Effect.provide(NodeServices.layer));
+      const fs = yield* FileSystem.FileSystem.pipe(Effect.provide(nodePlatform));
       const stat = yield* fs.stat(secretPath);
       // stat.mode carries the file-type bits too; mask to the permission bits.
       assert.equal(stat.mode & 0o777, 0o600);
@@ -390,10 +393,7 @@ describe("ConnectCredentialMinter", () => {
           ),
         ),
         Effect.provide(
-          ServerSecretStore.layer.pipe(
-            Layer.provide(configLayer),
-            Layer.provide(NodeServices.layer),
-          ),
+          ServerSecretStore.layer.pipe(Layer.provide(configLayer), Layer.provide(nodePlatform)),
         ),
       );
 

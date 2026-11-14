@@ -8,7 +8,7 @@
  * adds them through a NUL-separated pathspec FILE (argv has a length limit),
  * and skips the unindexable paths instead of failing the whole capture.
  */
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -106,15 +106,17 @@ export const indexCheckpointPaths = (deps: {
   readonly execute: ExecuteGit;
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
+  readonly random: SecureRandom.SecureRandom["Service"];
   /** Deadline for the whole-worktree `git add` / `ls-files` enumeration steps. */
   readonly timeoutMs?: number;
   /** `-c key=value` config pairs the caller wants in front of every `git add` (upstream index/fsync config). */
   readonly addPrefixArgs?: readonly string[];
   /** Extra `git add` flags placed before `-A` (upstream passes `--sparse` for sparse checkouts). */
   readonly addFlags?: readonly string[];
-}): Effect.Effect<void, VcsError, Crypto.Crypto> =>
+}): Effect.Effect<void, VcsError> =>
   Effect.gen(function* () {
-    const { operation, cwd, gitCommonDir, env, execute, fileSystem, path, timeoutMs } = deps;
+    const { operation, cwd, gitCommonDir, env, execute, fileSystem, path, random, timeoutMs } =
+      deps;
     const addPrefixArgs = deps.addPrefixArgs ?? [];
     const addFlags = deps.addFlags ?? [];
     const run = (args: readonly string[]) =>
@@ -164,8 +166,7 @@ export const indexCheckpointPaths = (deps: {
       );
     }
 
-    const crypto = yield* Crypto.Crypto;
-    const pathspecUuid = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
+    const pathspecUuid = yield* random.uuidV4();
     const pathspecPath = path.join(gitCommonDir, `t3-checkpoint-pathspec-${pathspecUuid}`);
     const cleanupPathspec = fileSystem.remove(pathspecPath, { force: true }).pipe(Effect.ignore);
 

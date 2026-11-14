@@ -742,6 +742,15 @@ export class DesktopBuildDistDirectoryMissingError extends Schema.TaggedError<De
   }
 }
 
+export class DesktopBuildArtifactCopyError extends Schema.TaggedError<DesktopBuildArtifactCopyError>()(
+  "DesktopBuildArtifactCopyError",
+  { from: Schema.String, to: Schema.String, cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return `Failed to copy build artifact ${this.from} to ${this.to}.`;
+  }
+}
+
 export class DesktopBuildNoArtifactsProducedError extends Schema.TaggedError<DesktopBuildNoArtifactsProducedError>()(
   "DesktopBuildNoArtifactsProducedError",
   {
@@ -1211,14 +1220,15 @@ export const LINUX_FILE_EXCLUSIONS = [
   "!**/node_modules/node-pty/prebuilds/darwin-*/**/*",
 ] as const;
 
-// node-pty bundles both Darwin architectures; only universal apps need both.
+// Native packages (node-pty, objc-js) ship prebuilds for both Darwin architectures; only universal
+// apps need both. macOS 27 warns that an arm64 app holding x64-only code won't open on macOS 28.
 export function resolveMacFileExclusions(arch?: typeof BuildArch.Type) {
   if (arch === undefined || arch === "universal") {
     return [...MAC_FILE_EXCLUSIONS];
   }
 
   const unusedArch = arch === "arm64" ? "x64" : "arm64";
-  return [...MAC_FILE_EXCLUSIONS, `!**/node_modules/node-pty/prebuilds/darwin-${unusedArch}/**/*`];
+  return [...MAC_FILE_EXCLUSIONS, `!**/node_modules/**/prebuilds/darwin-${unusedArch}/**/*`];
 }
 // Large ASAR sidecars avoid NSIS extracting thousands of loose files during installs and updates.
 export const WINDOWS_SERVER_ASAR_RESOURCE = "server.asar";
@@ -2496,7 +2506,7 @@ const NativeMarkerManifest = Schema.Struct({
   dependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   optionalDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
-const decodeNativeMarkerManifest = Schema.decodeUnknownSync(
+const decodeNativeMarkerManifest = Schema.decodeUnknownOption(
   Schema.fromJsonString(NativeMarkerManifest),
 );
 
@@ -2536,13 +2546,12 @@ const hasNativeLoaderMarkers = Effect.fn("hasNativeLoaderMarkers")(function* (pa
   if (!(yield* exists(manifestPath))) return false;
   const source = yield* fs.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""));
   if (source === "") return false;
-  const manifest = yield* Effect.try(() => decodeNativeMarkerManifest(source)).pipe(
-    Effect.orElseSucceed(() => null),
-  );
-  if (manifest === null) return false;
-  return Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies }).some(
-    (dependency) => dependency.startsWith("node-gyp-build"),
-  );
+  const manifest = decodeNativeMarkerManifest(source);
+  if (Option.isNone(manifest)) return false;
+  return Object.keys({
+    ...manifest.value.dependencies,
+    ...manifest.value.optionalDependencies,
+  }).some((dependency) => dependency.startsWith("node-gyp-build"));
 });
 
 export const copyDirectoryPreservingSymlinks = Effect.fn("copyDirectoryPreservingSymlinks")(
@@ -3359,7 +3368,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // Disable smart unpack so native packages' JS/metadata stay archived and avoid slowing NSIS with loose files.
     ...(platform === "win"
       ? { asar: { smartUnpack: false }, asarUnpack: [WINDOWS_NATIVE_ASAR_UNPACK_GLOB] }
-      : {}),
+      : { asarUnpack: ["**/node_modules/@transcribe-cpp/**/*.{dylib,so,so.*}"] }),
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),
@@ -3434,6 +3443,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac: true,
         NSLocalNetworkUsageDescription:
           "T3 Code connects to devices on your local network for remote environments and commands run by terminals and coding agents.",
+        NSCalendarsUsageDescription:
+          "Commands you run in T3 Code may need access to your calendars.",
+        NSCalendarsFullAccessUsageDescription:
+          "Commands you run in T3 Code may need to read and write your calendar events.",
+        NSCalendarsWriteOnlyAccessUsageDescription:
+          "Commands you run in T3 Code may need to add events to your calendars.",
         NSScreenCaptureUsageDescription:
           "T3 Code captures the active window when you use the window capture shortcut.",
         NSCameraUsageDescription:
@@ -3496,6 +3511,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.toolsets = { appimage: "1.0.3" };
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    buildConfig.afterPack = path.join(repoRoot, "scripts/linux-after-pack.ts");
     const linuxIdentity = resolveLinuxPackagingIdentity({
       appId,
       productNameOverride,
@@ -4484,7 +4500,9 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const distributionWebIcons = yield* applyDistributionWebIcons({
     repoRoot,
     targetDirectory: "apps/server/dist/client",
+    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
     iconPng: options.iconPng ?? process.env.T3CODE_DESKTOP_ICON_PNG,
+    // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
     iconIco: process.env.T3CODE_DESKTOP_ICON_ICO,
   });
   if (distributionWebIcons > 0) {
@@ -4570,7 +4588,8 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const packagedEnvSourceDirs =
     options.packsDir !== undefined
       ? [path.join(options.packsDir, "..", "vendor", "t3code"), repoRoot]
-      : process.env.T3CODE_DISTRIBUTION?.trim()
+      : // @effect-diagnostics-next-line processEnvInEffect:off -- t3team fork build step, predates the rule
+        process.env.T3CODE_DISTRIBUTION?.trim()
         ? [repoRoot]
         : [];
   let includePackagedEnvFiles = false;
@@ -4626,6 +4645,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
     };
     yield* fs.writeFileString(
       path.join(stageProdResourcesDir, "desktop-branding.json"),
+      // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
       `${JSON.stringify(brandingResource, null, 2)}\n`,
     );
   }
@@ -4701,6 +4721,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   const packApiManifestRaw = yield* fs.readFileString(
     path.join(repoRoot, "packages", "t3team-pack-api", "package.json"),
   );
+  // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
   const packApiVersion = (JSON.parse(packApiManifestRaw) as { readonly version: string }).version;
   const stageDependencies =
     options.platform === "win"
@@ -4823,6 +4844,7 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   // can leave a cmd-shim that does `exec node <target>` after esbuild's
   // postinstall swapped in a native Mach-O — spawning that shim throws
   // SyntaxError during this step. See resolveRepoEsbuildBinary.
+  // @effect-diagnostics-next-line effectTryWithoutCatch:off -- t3team fork build step, predates the rule
   const repoEsbuild = yield* Effect.tryPromise(() => resolveRepoEsbuildBinary(repoRoot)).pipe(
     Effect.catch((cause) => Effect.die(cause instanceof Error ? cause : new Error(String(cause)))),
   );
@@ -4849,8 +4871,10 @@ const buildDesktopArtifactUnlocked = Effect.fn("buildDesktopArtifactUnlocked")(f
   );
   // Patch package.json to export the compiled .mjs
   const pkgJsonPath = path.join(packApiDir, "package.json");
+  // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
   const pkgJson = JSON.parse(yield* fs.readFileString(pkgJsonPath));
   pkgJson.exports = { ".": { import: "./index.mjs" } };
+  // @effect-diagnostics-next-line globalJsonInEffect:off -- t3team fork build step, predates the rule
   yield* fs.writeFileString(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + "\n");
 
   // macOS and Linux run the server from the asar, so the asar's node_modules
@@ -5130,13 +5154,15 @@ export const copyDesktopBuildArtifacts = Effect.fn("copyDesktopBuildArtifacts")(
     // overwrite a directory with a file or a file with a directory, and only merges into
     // an existing directory, so a stale entry of either type must go first.
     yield* fs.remove(to, { recursive: true, force: true });
-    yield* Effect.tryPromise(() =>
-      NodeFSP.cp(from, to, {
-        recursive: true,
-        force: true,
-        verbatimSymlinks: true,
-      }),
-    );
+    yield* Effect.tryPromise({
+      try: () =>
+        NodeFSP.cp(from, to, {
+          recursive: true,
+          force: true,
+          verbatimSymlinks: true,
+        }),
+      catch: (cause) => new DesktopBuildArtifactCopyError({ from, to, cause }),
+    });
     copiedArtifacts.push(to);
   }
 

@@ -38,7 +38,10 @@ vi.mock("../state/environments", () => ({
 }));
 vi.mock("../state/olderSettledShelf", () => ({ readUnloadedThreadCount: () => 0 }));
 vi.mock("../state/presentation", () => ({ environmentSummaries: {} }));
-vi.mock("../state/server", () => ({ environmentServerConfigsAtom: {} }));
+vi.mock("../state/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../state/server")>()),
+  environmentServerConfigsAtom: {},
+}));
 vi.mock("../uiStateStore", () => ({
   legacyProjectCwdPreferenceKey: (root: string) => root,
   useUiStateStore: (selector: (state: unknown) => unknown) => selector({ projectOrder: [] }),

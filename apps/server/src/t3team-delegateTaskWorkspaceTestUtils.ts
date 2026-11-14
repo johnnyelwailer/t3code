@@ -7,6 +7,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { ProjectMainRepository } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -95,7 +96,7 @@ const resolve = (input: ResolveInput) =>
         Layer.provideMerge(
           ServerConfig.layerTest(process.cwd(), { prefix: "t3-delegate-ws-git-" }),
         ),
-        Layer.provideMerge(NodeServices.layer),
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       ),
     ),
     Effect.scoped,

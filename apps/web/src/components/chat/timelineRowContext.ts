@@ -144,6 +144,7 @@ export interface TimelineRowActivityState {
   threadActivityState?: ActivityState | null;
   /** GHE #40: the thread's live LLM activity label (flag-gated by the caller). */
   threadActivityLabel?: string | null;
+  liveAnswerPreview: string | null;
 }
 
 export const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);

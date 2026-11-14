@@ -1,5 +1,6 @@
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -67,7 +68,8 @@ export const make = Effect.gen(function* () {
   // its own ambient context; capture them here so the mint effect itself
   // stays requirement-free and its surface type carries no hidden services.
   const configProvider = yield* ConfigProvider.ConfigProvider;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
+  const digester = yield* Digest.Digest;
   const httpClient = yield* HttpClient.HttpClient;
   // Round-trips run in the minter's own (server-lifetime) scope, not the
   // caller's, so a caller that stops waiting does not tear the listener down.
@@ -130,7 +132,8 @@ export const make = Effect.gen(function* () {
         store: cloudCli.store,
       }).pipe(
         Effect.provideService(ConfigProvider.ConfigProvider, configProvider),
-        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(SecureRandom.SecureRandom, random),
+        Effect.provideService(Digest.Digest, digester),
         Effect.provideService(HttpClient.HttpClient, httpClient),
         // Anything that is not already a structured mint failure is an
         // environment problem (no OAuth config on this build, a socket bind
