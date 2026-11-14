@@ -7,10 +7,7 @@
 import { ClockIcon } from "lucide-react";
 
 import { ComposerBanner } from "~/components/chat/ComposerBanner";
-import {
-  threadHasPendingSend,
-  usePendingSendsVersion,
-} from "~/t3team/chat/t3team-sendConfirmationStore";
+import { useThreadHasPendingSend } from "~/t3team/chat/t3team-sendConfirmationStore";
 import { useEnvironment } from "~/state/environments";
 import {
   isUnconfirmedTurnStart,
@@ -71,7 +68,7 @@ function OutboxEntryRow(props: {
 }) {
   const environment = useEnvironment(props.entry.environmentId as never);
   const environmentLabel = environment?.label ?? "the environment";
-  usePendingSendsVersion();
+  const afterPendingSend = useThreadHasPendingSend(props.entry.threadId);
   const online = environment?.connection.phase === "connected";
   const unconfirmed = isUnconfirmedTurnStart(props.entry);
   const statusLabel = props.dispatching
@@ -82,7 +79,7 @@ function OutboxEntryRow(props: {
         ? online
           ? "Not confirmed. Sending again"
           : `Not confirmed. Sends again when ${environmentLabel} reconnects`
-        : online && threadHasPendingSend(props.entry.threadId)
+        : online && afterPendingSend
           ? "Sends after your last message"
           : `Sends when ${environmentLabel} reconnects`;
   return (

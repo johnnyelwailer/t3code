@@ -103,6 +103,15 @@ export function useSendConfirmation(messageId: string): PendingSend | undefined 
   );
 }
 
+/** Whether `threadId` has a pending send; re-renders only when that answer flips. */
+export function useThreadHasPendingSend(threadId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => threadHasPendingSend(threadId),
+    () => false,
+  );
+}
+
 /** Changes whenever any send starts, settles or changes, so a waiting drain re-checks its head. */
 export function usePendingSendsVersion(): number {
   return useSyncExternalStore(
