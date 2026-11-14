@@ -980,28 +980,30 @@ describe("CloudSessionService.create over the Nexi broker", () => {
     }),
   );
 
-  it.effect("plain: true takes the offered plain session without consulting the machine", () =>
-    Effect.gen(function* () {
-      const { calls, rest, graphql } = makeGithubMock();
-      const machines = failingMachines(() =>
-        Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
-      );
-      yield* runPastDiscoveryPoll(
-        create(
-          providersWith(
-            rest,
-            graphql,
-            brokerMock(() => Effect.succeed("g")),
-            machines,
+  it.effect(
+    "plain: true starts a plain session in the project without consulting the machine",
+    () =>
+      Effect.gen(function* () {
+        const { calls, rest, graphql } = makeGithubMock();
+        const machines = failingMachines(() =>
+          Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
+        );
+        yield* runPastDiscoveryPoll(
+          create(
+            providersWith(
+              rest,
+              graphql,
+              brokerMock(() => Effect.succeed("g")),
+              machines,
+            ),
+            ProjectId.make("p1"),
+            { plain: true },
           ),
-          ProjectId.make("p1"),
-          { plain: true },
-        ),
-      );
-      const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
-      assert.include(dispatch, '"project_name":"IES NG-781a8188"');
-      assert.notInclude(dispatch, "machine_");
-    }),
+        );
+        const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
+        assert.include(dispatch, '"project_name":"IES NG-781a8188"');
+        assert.notInclude(dispatch, "machine_");
+      }),
   );
 
   it.effect("a warm standby of the project is claimed instead of dispatching a session", () =>
