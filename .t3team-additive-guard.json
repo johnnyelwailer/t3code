@@ -837,7 +837,6 @@
     "apps/web/src/components/sidebar/SidebarUpdatePill.browser.test.tsx",
     "apps/web/src/components/sidebar/UpdateEverythingDialog.tsx",
     "apps/web/src/components/sidebar/useUpdateEverything.ts",
-    "apps/web/src/components/sidebar/SidebarUpdateReleaseNotes.tsx",
     "apps/web/src/components/sidebar/DesktopUpdateStatusIcon.tsx",
     "apps/web/src/components/pullRequest/PullRequestsPage.tsx",
     "apps/mobile/src/features/home/HomeRouteScreen.tsx",
