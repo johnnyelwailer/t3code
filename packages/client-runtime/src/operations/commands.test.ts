@@ -20,11 +20,15 @@ import {
   type ProjectMutation,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import { RpcClientError } from "effect/rpc";
 
 import {
   AVAILABLE_CONNECTION_STATE,
@@ -65,12 +69,19 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
   readonly projection?: OrchestrationV2ThreadProjection;
   readonly projectionRequests?: ThreadId[];
   readonly advertiseThreadStop?: boolean;
+  readonly lostReplies?: Array<Cause.Cause<RpcClientError.RpcClientError>>;
+  readonly replyLost?: Deferred.Deferred<void>;
 }) {
   const client = {
     [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command: OrchestrationV2Command) =>
-      Effect.sync(() => {
+      Effect.suspend(() => {
         input.commands.push(command);
-        return { sequence: input.commands.length };
+        const lost = input.lostReplies?.shift();
+        if (lost === undefined) return Effect.succeed({ sequence: input.commands.length });
+        return Effect.andThen(
+          input.replyLost ? Deferred.succeed(input.replyLost, undefined) : Effect.void,
+          Effect.failCause(lost),
+        );
       }),
     [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: (requestInput: {
       readonly threadId: ThreadId;
@@ -293,6 +304,84 @@ describe("V2 environment commands", () => {
         });
       }
       expect(projectionRequests).toEqual([]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect.each([
+    [
+      "the socket closed",
+      Cause.fail(
+        new RpcClientError.RpcClientError({
+          reason: new RpcClientError.RpcClientDefect({ message: "socket closed", cause: null }),
+        }),
+      ),
+    ],
+    ["the session ended", Cause.interrupt()],
+  ] as const)("sends a turn again with the same command id when %s before the reply", ([, lost]) =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const replyLost = yield* Deferred.make<void>();
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [lost],
+        replyLost,
+      });
+      const sending = yield* startThreadTurn({
+        commandId: CommandId.make("command-lost-reply"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-lost-reply"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.forkChild,
+      );
+      yield* Deferred.await(replyLost);
+      const session = yield* SubscriptionRef.get(supervisor.session);
+      yield* SubscriptionRef.set(
+        supervisor.session,
+        Option.map(session, (value) => ({ ...value })),
+      );
+
+      expect(yield* Fiber.join(sending)).toEqual({ sequence: 2 });
+      expect(commands.map((command) => command.commandId)).toEqual([
+        "command-lost-reply",
+        "command-lost-reply",
+      ]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect("does not send a turn again when the server rejected it", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [Cause.die(new Error("rejected"))],
+      });
+      const exit = yield* startThreadTurn({
+        commandId: CommandId.make("command-rejected"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-rejected"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.exit,
+      );
+      expect(exit._tag).toBe("Failure");
+      expect(commands).toHaveLength(1);
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 

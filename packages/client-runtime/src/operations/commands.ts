@@ -35,6 +35,7 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 
 import { getInitialServerConfig, request } from "../rpc/client.ts";
+import { resendAfterReconnect } from "./t3team-resendAfterReconnect.ts";
 
 interface CommandMetadata {
   readonly commandId?: CommandId;
@@ -723,76 +724,84 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
                 ? {}
                 : { branch: bootstrap.branch }),
             };
-    return yield* request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
-      commandId,
-      creationSource: input.creationSource ?? "web",
-      threadId: input.threadId,
-      ...(bootstrap === undefined ? { reuseExistingThread: true } : {}),
-      projectId: thread.projectId,
-      title: input.titleSeed ?? thread.title,
-      generateTitle: input.titleSeed !== undefined,
-      modelSelection: input.modelSelection ?? thread.modelSelection,
-      runtimeMode: input.runtimeMode,
-      interactionMode: input.interactionMode,
-      workspaceStrategy,
-      initialMessage: {
-        messageId: input.message.messageId,
-        text: input.message.text,
-        ...(context ? { context } : {}),
-        attachments,
-      },
-    });
+    return yield* resendAfterReconnect(
+      request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
+        commandId,
+        creationSource: input.creationSource ?? "web",
+        threadId: input.threadId,
+        ...(bootstrap === undefined ? { reuseExistingThread: true } : {}),
+        projectId: thread.projectId,
+        title: input.titleSeed ?? thread.title,
+        generateTitle: input.titleSeed !== undefined,
+        modelSelection: input.modelSelection ?? thread.modelSelection,
+        runtimeMode: input.runtimeMode,
+        interactionMode: input.interactionMode,
+        workspaceStrategy,
+        initialMessage: {
+          messageId: input.message.messageId,
+          text: input.message.text,
+          ...(context ? { context } : {}),
+          attachments,
+        },
+      }),
+    );
   }
 
   const requestedMode = input.dispatchMode ?? "auto";
   if (requestedMode === "start") {
-    return yield* dispatch({
-      type: "message.dispatch",
-      commandId,
-      createdBy: "user",
-      creationSource: input.creationSource ?? "web",
-      threadId: input.threadId,
-      messageId: input.message.messageId,
-      ...(input.manualContinuationOfRunId === undefined
-        ? {}
-        : { manualContinuationOfRunId: input.manualContinuationOfRunId }),
-      text: input.message.text,
-      ...(context ? { context } : {}),
-      ...(input.message.idleCompaction === undefined
-        ? {}
-        : { idleCompaction: input.message.idleCompaction }),
-      attachments,
-      ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
-      ...(input.sourceProposedPlan === undefined
-        ? {}
-        : { sourcePlanRef: input.sourceProposedPlan }),
-      dispatchMode: { type: "start_immediately" },
-    });
+    return yield* resendAfterReconnect(
+      dispatch({
+        type: "message.dispatch",
+        commandId,
+        createdBy: "user",
+        creationSource: input.creationSource ?? "web",
+        threadId: input.threadId,
+        messageId: input.message.messageId,
+        ...(input.manualContinuationOfRunId === undefined
+          ? {}
+          : { manualContinuationOfRunId: input.manualContinuationOfRunId }),
+        text: input.message.text,
+        ...(context ? { context } : {}),
+        ...(input.message.idleCompaction === undefined
+          ? {}
+          : { idleCompaction: input.message.idleCompaction }),
+        attachments,
+        ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+        ...(input.sourceProposedPlan === undefined
+          ? {}
+          : { sourcePlanRef: input.sourceProposedPlan }),
+        dispatchMode: { type: "start_immediately" },
+      }),
+    );
   }
 
   const dispatchMode =
     requestedMode === "queue"
       ? ({ type: "queue_after_active" } as const)
       : ({ type: "start_immediately" } as const);
-  return yield* dispatch({
-    type: "message.dispatch",
-    commandId,
-    createdBy: "user",
-    creationSource: input.creationSource ?? "web",
-    threadId: input.threadId,
-    messageId: input.message.messageId,
-    text: input.message.text,
-    ...(context ? { context } : {}),
-    ...(input.message.idleCompaction === undefined
-      ? {}
-      : { idleCompaction: input.message.idleCompaction }),
-    attachments,
-    ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
-    ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
-    ...(input.sourceProposedPlan === undefined ? {} : { sourcePlanRef: input.sourceProposedPlan }),
-    ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),
-    dispatchMode,
-  });
+  return yield* resendAfterReconnect(
+    dispatch({
+      type: "message.dispatch",
+      commandId,
+      createdBy: "user",
+      creationSource: input.creationSource ?? "web",
+      threadId: input.threadId,
+      messageId: input.message.messageId,
+      text: input.message.text,
+      ...(context ? { context } : {}),
+      ...(input.message.idleCompaction === undefined
+        ? {}
+        : { idleCompaction: input.message.idleCompaction }),
+      attachments,
+      ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
+      ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+      ...(input.sourceProposedPlan === undefined
+        ? {}
+        : { sourcePlanRef: input.sourceProposedPlan }),
+      ...(requestedMode !== "queue" ? { deliveryIntent: requestedMode } : {}),
+      dispatchMode,
+    }),
+  );
 });
 
 export const interruptThreadTurn = Effect.fn("EnvironmentCommands.interruptThreadTurn")(function* (
