@@ -31,3 +31,40 @@ export function getNexiUpdateNoticeView(
     releaseUrl: httpsPage(state.releaseUrl),
   };
 }
+
+/**
+ * Whether the pill shows its dot and pops the notes on its own: the dot stays until the notes
+ * were opened for this version; the automatic pop happens once per version.
+ */
+export function getUpdateNotesAttention(
+  version: string | null,
+  popped: string | null,
+  seen: string | null,
+): { readonly dot: boolean; readonly pop: boolean } {
+  if (version === null) return { dot: false, pop: false };
+  return { dot: seen !== version, pop: popped !== version && seen !== version };
+}
+
+/** A table entry's own update action, naming every running thread that action interrupts. */
+export function updateEntryActionTitle(label: string, threads: number): string {
+  if (threads === 0) return label;
+  return `${label} · interrupts ${threads} running ${threads === 1 ? "thread" : "threads"}`;
+}
+
+/**
+ * This app may host several machines, each its own table row. Its update action shows once, on
+ * the first of them, and a restart interrupts the threads of all of them.
+ */
+export function appRestartScope<
+  Row extends { readonly app: string | null; readonly environmentId: string | null },
+>(
+  rows: ReadonlyArray<Row>,
+): { readonly actionRow: Row | null; readonly environmentIds: ReadonlyArray<string> } {
+  const appRows = rows.filter((row) => row.app === "this-app");
+  return {
+    actionRow: appRows[0] ?? null,
+    environmentIds: appRows.flatMap((row) =>
+      row.environmentId === null ? [] : [row.environmentId],
+    ),
+  };
+}

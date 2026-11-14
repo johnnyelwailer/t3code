@@ -8,25 +8,14 @@ import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { DesktopUpdateStatusIcon } from "./DesktopUpdateStatusIcon";
 import { NexiUpdatePopoverView } from "./t3team-NexiUpdatePopoverView";
+import { readKey, writeKey } from "./t3team-updateNoticeStorage";
+import { UpdateNotesAutoPop } from "./t3team-UpdateNotesAutoPop";
+import { useUpdateNotesAttention } from "./t3team-useUpdateNotesAttention";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import type { NexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
 
 const DISMISSED_KEY = "nexi.update.dismissedVersion";
 const NOTIFIED_KEY = "nexi.update.notifiedVersion";
-
-const readKey = (key: string) => {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-const writeKey = (key: string, value: string) => {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // best effort: the dot then simply comes back next start
-  }
-};
 
 /** One OS notification per version, on top of the footer dot. */
 function notifyOnce(version: string) {
@@ -61,6 +50,13 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const pending = dismissed !== view.version;
+  const attention = useUpdateNotesAttention(
+    useFeatureFlag("UI_UPDATE_BADGE_ROW_ACTIONS") ? view.version : null,
+  );
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) attention.markSeen();
+  };
 
   const announce = pending ? view.version : null;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- raises the OS notification, outside React, once per version
@@ -88,7 +84,7 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
   const label = `Nexi Work ${view.version} is ready to install`;
   return (
     <SidebarMenuItem className="ml-auto shrink-0">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={onOpenChange}>
         <Tooltip disabled={open}>
           <TooltipTrigger
             render={
@@ -126,6 +122,14 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
           />
         </PopoverPopup>
       </Popover>
+      {attention.pop ? (
+        <UpdateNotesAutoPop
+          onPop={() => {
+            attention.markPopped();
+            setOpen(true);
+          }}
+        />
+      ) : null}
     </SidebarMenuItem>
   );
 }

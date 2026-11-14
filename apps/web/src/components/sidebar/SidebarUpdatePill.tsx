@@ -42,6 +42,8 @@ import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
 import { SidebarUpdateCapsule } from "./SidebarUpdateCapsule";
 import { NexiUpdateReadyFooter } from "./t3team-NexiUpdateReadyFooter";
 import { getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
+import { UpdateNotesBadge } from "./t3team-UpdateNotesBadge";
+import { useUpdatePillAdditions } from "./t3team-useUpdatePillAdditions";
 import { UpdateEverythingDialog } from "./UpdateEverythingDialog";
 import type { UpdateEverythingRun, UpdateRunLocalState } from "./updateEverything.logic";
 import {
@@ -280,6 +282,14 @@ function SidebarUpdateControl() {
     setReleaseNotesShownBefore(showReleaseNotesPopover);
     setReleaseNotesOpen(showReleaseNotesPopover && releaseNotesTriggerFocusVisible);
   }
+  const t3team = useUpdatePillAdditions({
+    state,
+    action,
+    everything,
+    showsNotesPopover: showReleaseNotesPopover,
+    openNotes: () => releaseNotesPopoverHandle.open(releaseNotesTriggerId),
+    closeDialog: () => setIsConfirmingEverything(false),
+  });
 
   const handleAction = async () => {
     const bridge = window.desktopBridge;
@@ -416,6 +426,7 @@ function SidebarUpdateControl() {
       rows={everything.rows}
       restarts={everything.restarts}
       onConfirm={() => void runEverything()}
+      renderEntry={t3team.renderEntry}
     />
   );
 
@@ -460,10 +471,10 @@ function SidebarUpdateControl() {
   const updateButton = (
     <button
       type="button"
-      aria-label={idleTooltip?.detail ? `${tooltip}: ${idleTooltip.detail}` : tooltip}
+      aria-label={`${idleTooltip?.detail ? `${tooltip}: ${idleTooltip.detail}` : tooltip}${t3team.dot ? " (new)" : ""}`}
       aria-disabled={isInteractionDisabled || undefined}
       className={cn(
-        "inline-flex size-8 items-center justify-center rounded-full outline-hidden ring-ring transition-colors focus-visible:ring-2 focus-visible:ring-inset",
+        "relative inline-flex size-8 items-center justify-center rounded-full outline-hidden ring-ring transition-colors focus-visible:ring-2 focus-visible:ring-inset",
         isInteractionDisabled ? "cursor-not-allowed" : "cursor-pointer",
         showUpdateIconState
           ? cn(
@@ -501,6 +512,7 @@ function SidebarUpdateControl() {
       }}
     >
       {statusIcon}
+      {t3team.dot ? <UpdateNotesBadge /> : null}
     </button>
   );
 
@@ -517,6 +529,7 @@ function SidebarUpdateControl() {
           }
           handleSidebarUpdateReleaseNotesPopoverOpenChange(open, details);
           if (!details.isCanceled) setReleaseNotesOpen(open);
+          if (open && !details.isCanceled) t3team.markSeen();
         }}
       >
         <Tooltip disabled={showReleaseNotesPopover}>
@@ -582,6 +595,7 @@ function SidebarUpdateControl() {
         ) : null}
       </Popover>
       {confirmDialog}
+      {t3team.autoPop}
     </SidebarMenuItem>
   );
 }

@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { ChevronRightIcon } from "lucide-react";
-import { Fragment, type RefObject, useRef } from "react";
+import { Fragment, type ReactNode, type RefObject, useRef } from "react";
 
 import { environmentThreadShells } from "~/state/threads";
 import {
@@ -18,12 +18,13 @@ import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { ScrollArea } from "../ui/scroll-area";
+import type { UpdateEntryCell } from "./t3team-updateEntryCell";
 import type { RestartingMachine, UpdateEverythingRow } from "./updateEverything.logic";
 
 const isRunning = (status: string) =>
   status === "preparing" || status === "starting" || status === "running";
 
-const runningThreadCountAtom = Atom.family((environmentIds: string) =>
+export const runningThreadCountAtom = Atom.family((environmentIds: string) =>
   Atom.make((get) =>
     environmentIds
       .split("\n")
@@ -55,6 +56,7 @@ interface UpdateEverythingDialogProps {
   readonly disabledReason?: string | null;
   /** The confirmed work is starting; it cannot be cancelled from here. */
   readonly busy?: boolean;
+  readonly renderEntry?: ((row: UpdateEverythingRow, cell: UpdateEntryCell) => ReactNode) | null;
 }
 
 type UpdateEverythingDialogContentProps = Omit<
@@ -102,6 +104,7 @@ function UpdateEverythingDialogContent({
   notes = [],
   disabledReason = null,
   busy = false,
+  renderEntry = null,
 }: UpdateEverythingDialogContentProps) {
   const stopped = useAtomValue(
     runningThreadCountAtom(
@@ -167,7 +170,10 @@ function UpdateEverythingDialogContent({
                   <MiddleTruncate value={row.label} />
                 </span>
                 <span>
-                  {row.app !== null ? APP_LABELS[row.app] : null}
+                  {row.app !== null
+                    ? (renderEntry?.(row, { kind: "app", label: APP_LABELS[row.app] }) ??
+                      APP_LABELS[row.app])
+                    : null}
                   {row.app === null && row.skipped !== null ? (
                     <span className="text-muted-foreground">Skipped</span>
                   ) : null}
@@ -176,12 +182,15 @@ function UpdateEverythingDialogContent({
                   ) : null}
                 </span>
                 <span>
-                  {row.providers.map((provider, index) => (
-                    <Fragment key={provider}>
-                      <span className="whitespace-nowrap">{provider}</span>
-                      {index < row.providers.length - 1 ? ", " : null}
-                    </Fragment>
-                  ))}
+                  {renderEntry?.(row, { kind: "providers" })}
+                  {renderEntry
+                    ? null
+                    : row.providers.map((provider, index) => (
+                        <Fragment key={provider}>
+                          <span className="whitespace-nowrap">{provider}</span>
+                          {index < row.providers.length - 1 ? ", " : null}
+                        </Fragment>
+                      ))}
                 </span>
                 <span className="text-right">
                   {row.environmentId !== null && restarting.has(row.environmentId) ? (

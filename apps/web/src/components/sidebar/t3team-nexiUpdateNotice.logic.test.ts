@@ -1,6 +1,11 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
+import {
+  appRestartScope,
+  getNexiUpdateNoticeView,
+  getUpdateNotesAttention,
+  updateEntryActionTitle,
+} from "./t3team-nexiUpdateNotice.logic";
 
 const base: DesktopUpdateState = {
   enabled: true,
@@ -89,5 +94,42 @@ describe("Nexi update notice", () => {
         downloadedVersion: "0.1.2-rc.8",
       }),
     ).toBeNull();
+  });
+});
+describe("Update notes attention", () => {
+  it.each([
+    [null, null, null, { dot: false, pop: false }],
+    ["1.1", null, null, { dot: true, pop: true }],
+    ["1.1", "1.1", null, { dot: true, pop: false }],
+    ["1.1", "1.1", "1.1", { dot: false, pop: false }],
+    ["1.2", "1.1", "1.1", { dot: true, pop: true }],
+  ] as const)("version %s, popped %s, seen %s", (version, popped, seen, expected) => {
+    expect(getUpdateNotesAttention(version, popped, seen)).toEqual(expected);
+  });
+});
+describe("Update entry action title", () => {
+  it("names the threads the action interrupts", () => {
+    expect(updateEntryActionTitle("Update build-box", 0)).toBe("Update build-box");
+    expect(updateEntryActionTitle("Update build-box", 1)).toBe(
+      "Update build-box · interrupts 1 running thread",
+    );
+    expect(updateEntryActionTitle("Restart this app to update", 3)).toBe(
+      "Restart this app to update · interrupts 3 running threads",
+    );
+  });
+});
+describe("App restart scope", () => {
+  it("puts the app action on one row and restarts every machine this app hosts", () => {
+    const rows = [
+      { environmentId: "primary", app: "this-app" },
+      { environmentId: "desktop-local", app: "this-app" },
+      { environmentId: "build-box", app: "server" },
+    ];
+    expect(appRestartScope(rows)).toEqual({
+      actionRow: rows[0],
+      environmentIds: ["primary", "desktop-local"],
+    });
+    const hostsNone = [{ environmentId: null, app: "this-app" }];
+    expect(appRestartScope(hostsNone)).toEqual({ actionRow: hostsNone[0], environmentIds: [] });
   });
 });
