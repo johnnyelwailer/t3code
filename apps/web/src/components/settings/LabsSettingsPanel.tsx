@@ -10,10 +10,7 @@ import { ScopedSwitch } from "./ScopedSwitch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { LegacyFeaturesSection } from "./SettingsPanels";
-import {
-  T3TeamNexiFeatureSections,
-  T3TeamUpstreamFeaturesHeading,
-} from "./t3team-FeatureOriginSections";
+import { t3teamSettingsRows } from "~/t3team/settings/t3team-settingsRegistry";
 import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings";
 import { useOptionalSettingsScope } from "./SettingsScopeContext";
 import { firstManagedDenial, usePrimaryManagedPolicy } from "~/state/managedPolicy";
@@ -22,8 +19,7 @@ import { firstManagedDenial, usePrimaryManagedPolicy } from "~/state/managedPoli
 export function LabsSettingsPanel() {
   return (
     <SettingsPageContainer>
-      <T3TeamNexiFeatureSections />
-      <T3TeamUpstreamFeaturesHeading />
+      {t3teamSettingsRows("labs")}
       <SettingsSection id="beta" title="Beta">
         <BoringSidebarRow />
         <BoringSidebarMultilineRow />
