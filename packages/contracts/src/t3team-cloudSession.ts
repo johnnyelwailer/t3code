@@ -151,10 +151,7 @@ export const CloudSessionCreateInputSchema = Schema.Struct({
    * session, exactly as without a project. A definition in a linked repository is never used.
    */
   projectId: Schema.optional(ProjectId),
-  /**
-   * Start a plain session in the project even though it has a machine: the retry a create offers
-   * (`CloudSessionFailedError.plainAvailable`) when the machine cannot be used.
-   */
+  /** Start a plain session in the project even though it has a machine. */
   plain: Schema.optional(Schema.Boolean),
   /**
    * Start a host checkout of the project so an agent can write its machine definition.

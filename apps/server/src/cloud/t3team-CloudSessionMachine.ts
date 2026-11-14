@@ -101,7 +101,7 @@ const make = Effect.gen(function* () {
     } = yield* discovery
       .resolveDefault(projectId)
       .pipe(Effect.mapError((error) => unavailable(error.message)));
-    // The user chose where the machine comes from: a plain session must not stand in for it.
+    // A source the user chose that cannot be used fails here; the create falls back to plain.
     if (sourceFailure !== undefined) {
       yield* logMachineOutcome(projectId, { outcome: "unusable", reason: sourceFailure });
       return yield* unavailable(sourceFailure);

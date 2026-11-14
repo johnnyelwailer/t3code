@@ -976,38 +976,8 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         ).pipe(Effect.flip),
       );
       assert.strictEqual(error.reason, "machine_unavailable");
-      assert.isUndefined(error.plainAvailable);
       assert.strictEqual(error.message, machineFailure.message);
     }),
-  );
-
-  it.effect(
-    "without the broker no plain session is offered: a plain project session needs it",
-    () =>
-      Effect.gen(function* () {
-        const { rest, graphql } = makeGithubMock();
-        const machines = failingMachines(() => Effect.die("plain needs the broker"));
-        const brokerless = Layer.succeed(NexiBrokerService.NexiBrokerService, {
-          enabled: false,
-          status: { enabled: false, accountId: null },
-          requestGrant: () => Effect.die("unused"),
-          attach: () => Effect.die("unused"),
-          pair: () => Effect.die("unused"),
-          claimStandby: () => Effect.succeed(null),
-          sessions: Effect.succeed([]),
-          reportInterest: () => Effect.void,
-        });
-        const error = asMachineFailure(
-          yield* runPastDiscoveryPoll(
-            create(
-              providersWith(rest, graphql, brokerless as ReturnType<typeof brokerMock>, machines),
-              ProjectId.make("p1"),
-            ),
-          ).pipe(Effect.flip),
-        );
-        assert.strictEqual(error.reason, "machine_unavailable");
-        assert.isUndefined(error.plainAvailable);
-      }),
   );
 
   it.effect("plain: true takes the offered plain session without consulting the machine", () =>

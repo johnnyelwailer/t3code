@@ -82,11 +82,7 @@ export function useCloudSessionCreate(input: {
           } else {
             const skipToast = options?.onFailed?.(result) === true;
             if (!skipToast) {
-              reportCloudSessionCreateFailure(
-                result,
-                () => latestRef.current(projectId, options),
-                () => latestRef.current(projectId, { ...options, plain: true }),
-              );
+              reportCloudSessionCreateFailure(result, () => latestRef.current(projectId, options));
             }
           }
         })
