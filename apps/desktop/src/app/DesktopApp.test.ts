@@ -78,6 +78,11 @@ vi.mock("./t3team-DesktopStorageFlush.ts", () => ({
 vi.mock("./t3team-atlassianAssetBearer.ts", () => ({
   registerAtlassianAssetBearer: () => Effect.void,
 }));
+vi.mock("../backend/t3team-oldAppGuardBoot.ts", () => ({
+  pickGuardEnvironment: () => ({}),
+  runDesktopHomeGuard: () => Promise.resolve({ started: true, waitedForOldApp: false }),
+  wrapGuardBrowserWindow: () => ({}),
+}));
 
 it.effect.each([false, true])(
   "stops backends together before flushing history and cancels Linux registration, stop defect=%s",
@@ -239,7 +244,7 @@ it.effect.each([false, true])(
             Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor, {}),
             Layer.mock(ElectronMenu.ElectronMenu, {}),
             Layer.mock(ElectronShell.ElectronShell, {}),
-            Layer.mock(ElectronTheme.ElectronTheme, {}),
+            Layer.mock(ElectronTheme.ElectronTheme, { shouldUseDarkColors: Effect.succeed(false) }),
             Layer.mock(ElectronWindow.ElectronWindow, {}),
             Layer.mock(MacPermissions.MacPermissions, {}),
             Layer.mock(PreviewManager.PreviewManager, {
