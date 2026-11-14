@@ -31,6 +31,7 @@ import { HomeHeader } from "./HomeHeader";
 import { useHomeListOptions } from "./home-list-options";
 import { useAtomValueWhileVisible, useHomeRouteVisible } from "./home-route-visibility";
 import { buildHomeProjectScopes } from "./homeThreadList";
+import { usePillEnvironmentIds } from "./t3team-pillScope";
 import { usePendingTaskListActions } from "./usePendingTaskListActions";
 import { useThreadListActions } from "./useThreadListActions";
 import { getConnectionAwareBrandHeaderOptions } from "./WorkspaceConnectionTitle";
@@ -111,12 +112,17 @@ export function HomeRouteScreen() {
       (environment) => [environment.environmentId, environment.connectionState] as const,
     ),
   );
+  // t3team: an environment switched off in Settings leaves the filter pills and menu.
+  const pillEnvironmentIds = usePillEnvironmentIds();
   const environments = Arr.sort(
-    Object.values(savedConnectionsById).map((connection) => ({
-      environmentId: connection.environmentId,
-      label: connection.environmentLabel,
-      connectionState: connectionStateByEnvironmentId.get(connection.environmentId) ?? "available",
-    })),
+    Object.values(savedConnectionsById)
+      .filter((connection) => pillEnvironmentIds.has(connection.environmentId))
+      .map((connection) => ({
+        environmentId: connection.environmentId,
+        label: connection.environmentLabel,
+        connectionState:
+          connectionStateByEnvironmentId.get(connection.environmentId) ?? "available",
+      })),
     Order.mapInput(Order.String, (environment: { readonly label: string }) => environment.label),
   );
   const availableEnvironmentIds = useMemo(

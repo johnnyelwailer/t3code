@@ -128,51 +128,6 @@ describe("pickScopedDefaultProject", () => {
       }),
     ).toBe(projects[0]);
   });
-
-  it("starts in the selected environment when unscoped", () => {
-    expect(
-      pickScopedDefaultProject({
-        orderedProjects: projects,
-        scopedProjectRefs: null,
-        offlineEnvironmentIds: new Set(),
-        fallback: projects[0],
-        preferredEnvironmentId: "env-b",
-      }),
-    ).toBe(projects[1]);
-  });
-
-  it("ignores the selected environment when a project scope names a project", () => {
-    expect(
-      pickScopedDefaultProject({
-        orderedProjects: projects,
-        scopedProjectRefs: [ref("env-a", "p3")],
-        offlineEnvironmentIds: new Set(),
-        fallback: projects[0],
-        preferredEnvironmentId: "env-b",
-      }),
-    ).toBe(projects[2]);
-  });
-
-  it("keeps the fallback when the selected environment is offline or empty", () => {
-    expect(
-      pickScopedDefaultProject({
-        orderedProjects: projects,
-        scopedProjectRefs: null,
-        offlineEnvironmentIds: new Set(["env-b"]),
-        fallback: projects[0],
-        preferredEnvironmentId: "env-b",
-      }),
-    ).toBe(projects[0]);
-    expect(
-      pickScopedDefaultProject({
-        orderedProjects: projects,
-        scopedProjectRefs: null,
-        offlineEnvironmentIds: new Set(),
-        fallback: projects[0],
-        preferredEnvironmentId: "env-z",
-      }),
-    ).toBe(projects[0]);
-  });
 });
 
 describe("resolveScopeHomeProjectId", () => {

@@ -174,8 +174,10 @@ describe("newTaskDestination", () => {
     readonly projects: ReadonlyArray<EnvironmentProject>;
     readonly current?: EnvironmentProject;
     readonly last?: { readonly environmentId: string; readonly projectId: string };
+    readonly scoped?: { readonly environmentId: string; readonly projectId: string };
   }) {
     return newTaskDestination({
+      scopedProject: options.scoped,
       projects: options.projects,
       requestId: "request",
       useLastProject: options.useLastProject,
@@ -199,6 +201,28 @@ describe("newTaskDestination", () => {
     ).toEqual({
       draft: { requestId: "request", environmentId: "other-environment", projectId: "current" },
     });
+  });
+
+  it("starts in the Home pills' project after the current one, even without the remembered one", () => {
+    const projects = [
+      makeProject("remembered"),
+      makeProject("scoped", "cloud"),
+      makeProject("open"),
+    ];
+    const scoped = { environmentId: "cloud", projectId: "scoped" };
+    const last = { environmentId: "environment", projectId: "remembered" };
+    const draft = (environmentId: string, projectId: string) => ({
+      draft: { requestId: "request", environmentId, projectId },
+    });
+    expect(destination({ useLastProject: true, projects, scoped, last })).toEqual(
+      draft("cloud", "scoped"),
+    );
+    expect(destination({ useLastProject: false, projects, scoped })).toEqual(
+      draft("cloud", "scoped"),
+    );
+    expect(destination({ useLastProject: true, projects, scoped, current: projects[2] })).toEqual(
+      draft("environment", "open"),
+    );
   });
 
   it("opens the picker for an archived last project, but keeps an archived current one", () => {

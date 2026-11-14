@@ -3,17 +3,18 @@ import type { ScopedProjectRef } from "@t3tools/contracts";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "../state/presentation";
 import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
-import { useT3TeamSidebarProjectScope } from "./t3team-sidebarProjectScopeStore";
+import { readT3TeamPillScope } from "./t3team-pillScope";
 
 /**
- * Event-time twin of what `useHandleNewThread` computes during render: the sidebar's project scope
- * and the environments that cannot take a new thread right now. Keyboard commands run outside
+ * Event-time twin of what `useHandleNewThread` computes during render: the pill scope (project and
+ * environment) and the environments that cannot take a new thread right now. Keyboard commands run outside
  * React, so they read the stores instead of subscribing. This computer always counts as
  * reachable, even while it is still connecting at startup.
  */
 export function readT3TeamDefaultProjectScope(): {
   readonly scopedProjectRefs: ReadonlyArray<ScopedProjectRef> | null;
   readonly offlineEnvironmentIds: ReadonlySet<string>;
+  readonly preferredEnvironmentId: string | null;
 } {
   const primaryEnvironmentId = appAtomRegistry.get(primaryEnvironmentIdAtom);
   const offlineEnvironmentIds = new Set<string>();
@@ -24,8 +25,10 @@ export function readT3TeamDefaultProjectScope(): {
       offlineEnvironmentIds.add(environmentId);
     }
   }
+  const scope = readT3TeamPillScope();
   return {
-    scopedProjectRefs: useT3TeamSidebarProjectScope.getState().scopedProjectRefs,
+    scopedProjectRefs: scope.projectRefs,
     offlineEnvironmentIds,
+    preferredEnvironmentId: scope.environmentId,
   };
 }

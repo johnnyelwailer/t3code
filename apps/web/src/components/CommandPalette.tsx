@@ -77,6 +77,7 @@ import {
   UserPlusIcon,
 } from "lucide-react";
 import { buildT3TeamAddProjectJiraSource } from "~/t3team/t3team-addProjectJiraSource";
+import { useT3TeamPillScopeFilter } from "~/t3team/t3team-pillScope";
 import { openThreadFind } from "./chat/threadFindStore";
 import {
   useDeferredValue,
@@ -531,8 +532,12 @@ function OpenCommandPaletteDialog(props: {
     defaultProjectRef,
     handleNewThread,
   });
+  // t3team: the sidebar pills scope the "New thread in" projects too.
+  const inPillScope = useT3TeamPillScopeFilter();
   const projectPickerEntries = buildSidebarProjectPickerEntries({
-    groups: pickableProjectGroups(projectGroups),
+    groups: pickableProjectGroups(projectGroups).filter((group) =>
+      group.memberProjectRefs.some(inPillScope),
+    ),
     preferredProjectRef: contextualProjectRef,
   });
   const pickerProjects = projectPickerEntries.map(({ group, targetProject }) => ({

@@ -44,8 +44,7 @@ import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore"
 import { getClientSettings } from "./useSettings";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { pickScopedDefaultProject } from "../t3team/t3team-scopeProjectResolution";
-import { useT3TeamSidebarProjectScope } from "../t3team/t3team-sidebarProjectScopeStore";
-import { useT3TeamSidebarEnvironmentFilterStore } from "../t3team/t3team-sidebarEnvironmentFilterStore";
+import { useT3TeamPillScope } from "../t3team/t3team-pillScope";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
 import { readUnloadedThreadCount } from "../state/olderSettledShelf";
 import { resolveProjectDefaultProviderModelSelection } from "../providerInstances";
@@ -478,15 +477,10 @@ export function useHandleNewThread() {
   // This computer always counts as reachable, even while it is still connecting at startup.
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  // t3team: the sidebar's project scope outranks project order for the default — "new thread"
-  // starts in the project the user is looking at. An open thread or draft still wins (see
-  // resolveThreadActionProjectRef), and an unscoped sidebar behaves as before.
-  const scopedProjectRefs = useT3TeamSidebarProjectScope((state) => state.scopedProjectRefs);
-  // t3team: the sidebar's selected environment is the default for a new thread with no project
-  // scope: "new thread" starts on the machine the user has filtered the list to.
-  const preferredEnvironmentId = useT3TeamSidebarEnvironmentFilterStore(
-    (state) => state.selectedEnvironmentId,
-  );
+  // t3team: the pill scope (project and environment) outranks project order for the default —
+  // "new thread" starts where the user is looking. An open thread or draft still wins (see
+  // resolveThreadActionProjectRef), and unscoped pills behave as before.
+  const pillScope = useT3TeamPillScope();
   const offlineEnvironmentIds = new Set<string>(
     environments
       .filter(
@@ -497,9 +491,9 @@ export function useHandleNewThread() {
       .map((environment) => environment.environmentId),
   );
   const defaultProjectRef = resolveDefaultProjectRef(projects, projectOrder, {
-    scopedProjectRefs,
+    scopedProjectRefs: pillScope.projectRefs,
     offlineEnvironmentIds,
-    preferredEnvironmentId,
+    preferredEnvironmentId: pillScope.environmentId,
   });
 
   return {

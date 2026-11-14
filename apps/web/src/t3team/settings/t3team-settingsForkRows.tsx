@@ -85,7 +85,7 @@ export function ProjectScopePillsRow({ settings, updateSettings }: T3TeamSetting
   return (
     <SettingsRow
       {...searchableSetting("project-scope-pills")}
-      description="Replace the sidebar's project dropdown with one-click pills for your recent projects. The pull request list follows the selected project, including a work-source project's linked repositories."
+      description="Replace the sidebar's project dropdown with one-click pills for your recent projects. The selected project and environment pills scope New thread, the command palette and the pull request list."
       resetAction={
         settings.t3team.projectScopePills !== defaultOn ? (
           <SettingResetButton

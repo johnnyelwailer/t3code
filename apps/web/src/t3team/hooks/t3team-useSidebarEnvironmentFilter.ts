@@ -1,3 +1,4 @@
+import { usePrimarySettings } from "~/hooks/useSettings";
 import {
   narrowEnvironmentIds,
   narrowGroupsToEnvironment,
@@ -7,9 +8,18 @@ import {
   sidebarEnvironmentFilterCandidates,
 } from "~/components/sidebar/t3team-sidebarEnvironmentFilter.logic";
 import { useEnvironmentIdentities, usePrimaryEnvironmentId } from "~/state/environments";
+import { useT3TeamEnabledEnvironmentIds } from "../t3team-pillScope";
 import { useT3TeamSidebarEnvironmentFilterStore } from "../t3team-sidebarEnvironmentFilterStore";
 
 type Candidates = Parameters<typeof sidebarEnvironmentFilterCandidates>[0];
+
+/** The environments that get a pill: switched off in Settings, an environment has none. */
+function usePillEnvironmentIdentities() {
+  const identities = useEnvironmentIdentities();
+  const flagOn = usePrimarySettings((settings) => settings.t3team.projectScopePills);
+  const enabled = useT3TeamEnabledEnvironmentIds();
+  return flagOn ? identities.filter((identity) => enabled.has(identity.environmentId)) : identities;
+}
 
 /**
  * The sidebar's environment filter: the pills (null while there is nothing to choose) and the
@@ -20,7 +30,7 @@ export function useT3TeamSidebarEnvironmentFilter(input: {
   readonly threads: Candidates["threads"];
   readonly pickableGroups: Candidates["pickableGroups"];
 }) {
-  const identities = useEnvironmentIdentities();
+  const identities = usePillEnvironmentIdentities();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const stored = useT3TeamSidebarEnvironmentFilterStore((state) => state.selectedEnvironmentId);
   const select = useT3TeamSidebarEnvironmentFilterStore((state) => state.select);
