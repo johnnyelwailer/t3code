@@ -12,6 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import { T3TeamDesktopRouteCard } from "./t3team-DesktopRouteCard";
+import { DESKTOP_ROUTE_EXPIRED_MESSAGE } from "./t3team-desktopRouteRequestExpired";
 
 const card = (proposal: { target: string; internal: boolean }, reason = "npm ci times out.") => {
   const built = desktopRouteCardFrom({
@@ -28,9 +29,18 @@ const card = (proposal: { target: string; internal: boolean }, reason = "npm ci 
   if (built === null) throw new Error("not a card");
   return built;
 };
-const render = (c: ReturnType<typeof card>, sessionLabel: string | null = "acme-api (#4242)") =>
+const render = (
+  c: ReturnType<typeof card>,
+  sessionLabel: string | null = "acme-api (#4242)",
+  expired = false,
+) =>
   renderToStaticMarkup(
-    <T3TeamDesktopRouteCard card={c} sessionLabel={sessionLabel} onAnswer={() => {}} />,
+    <T3TeamDesktopRouteCard
+      card={c}
+      sessionLabel={sessionLabel}
+      expired={expired}
+      onAnswer={() => {}}
+    />,
   );
 
 describe("T3TeamDesktopRouteCard", () => {
@@ -78,5 +88,20 @@ describe("T3TeamDesktopRouteCard", () => {
     expect(html).toContain("<strong>this</strong>");
     expect(html).not.toContain("`npm ci`");
     expect(html).not.toContain("**this**");
+  });
+
+  it("replaces Approve and Deny with a plain expired reason when the session has ended", () => {
+    const html = render(
+      card({ target: "registry.npmjs.org", internal: false }),
+      "acme-api (#4242)",
+      true,
+    );
+    expect(html).toContain(DESKTOP_ROUTE_EXPIRED_MESSAGE);
+    expect(html).toContain("data-desktop-route-expired");
+    expect(html).toContain("registry.npmjs.org");
+    expect(html).toContain("acme-api (#4242)");
+    expect(html).not.toContain(">Approve<");
+    expect(html).not.toContain("More ways to approve");
+    expect(html).not.toContain(">Deny<");
   });
 });
