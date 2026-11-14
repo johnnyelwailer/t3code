@@ -8,6 +8,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 import { AppRoot } from "~/AppRoot";
 // The thread route loads ChatView lazily; its first transform would eat the test's timeout.
 import "~/components/ChatView";
+import "~/routes/t3team.projects.$projectId.threads.$threadId";
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { getRouter } from "~/router";
@@ -55,18 +56,16 @@ it("leaves thread shortcuts and their hints to the preview when their rules excl
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
   });
   await page.viewport(1400, 900);
-  const router = getRouter(
-    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${first.id}`] }),
-  );
+  // Start on the team route. Upstream's `/$environmentId/$threadId` redirects to /t3team until
+  // shells sync, and that remount does not finish inside the test budget on CI.
+  const threadPath = (id: string) => `/t3team/projects/${PROJECT_ID}/threads/${id}`;
+  const router = getRouter(createMemoryHistory({ initialEntries: [threadPath(first.id)] }));
   await router.load();
   await using _app = await render(<AppRoot router={router} />, {
     // AppRoot brings its own router.
     router: false,
   });
   await expect.element(page.getByText(`Thread ${second.id}`).first()).toBeVisible();
-  // t3team: the Team shell owns primary-environment threads; the cold-load redirect fires before the shells sync.
-  const threadPath = (id: string) => `/t3team/projects/${PROJECT_ID}/threads/${id}`;
-  await act(() => router.navigate({ to: threadPath(first.id) }));
 
   const previewChrome = document.createElement("div");
   previewChrome.dataset.previewPanelMode = "browser";
