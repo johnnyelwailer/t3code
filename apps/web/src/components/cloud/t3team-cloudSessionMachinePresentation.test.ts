@@ -42,7 +42,8 @@ describe("presentProjectMachine", () => {
     });
     expect(hint).toEqual({
       label: "Machine needs fixing",
-      detail: ".agents/nexi/machine.json: is not valid. A new session starts plain until it is fixed.",
+      detail:
+        ".agents/nexi/machine.json: is not valid. A new session starts plain until it is fixed.",
       tone: "warning",
     });
   });
