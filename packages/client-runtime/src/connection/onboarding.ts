@@ -39,6 +39,8 @@ export interface PairingConnectionInput {
   readonly host?: string;
   readonly pairingCode?: string;
   readonly expectedEnvironmentId?: EnvironmentId;
+  /** t3team: the name to save it under (a cloud session's); the server's own label otherwise. */
+  readonly label?: string;
 }
 
 export interface SshConnectionInput {
@@ -114,16 +116,17 @@ export const preparePairingRegistration = Effect.fn(
     return yield* differentMachineError(descriptor.label);
   }
   const connectionId = bearerConnectionId(descriptor.environmentId, target.httpBaseUrl);
+  const label = input.label?.trim() || descriptor.label;
   const route = {
     target: new BearerConnectionTarget({
       environmentId: descriptor.environmentId,
-      label: descriptor.label,
+      label,
       connectionId,
     }),
     profile: new BearerConnectionProfile({
       connectionId,
       environmentId: descriptor.environmentId,
-      label: descriptor.label,
+      label,
       httpBaseUrl: target.httpBaseUrl,
       wsBaseUrl: target.wsBaseUrl,
     }),

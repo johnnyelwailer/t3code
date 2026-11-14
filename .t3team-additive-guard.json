@@ -584,6 +584,8 @@
     "packages/agent-runner/test/contract.test.ts",
     "packages/client-runtime/package.json",
     "packages/client-runtime/src/connection/catalog.ts",
+    "packages/client-runtime/src/connection/onboarding.ts",
+    "packages/client-runtime/src/connection/onboarding.test.ts",
     "packages/client-runtime/src/connection/index.ts",
     "packages/client-runtime/src/connection/model.ts",
     "packages/client-runtime/src/connection/presentation.ts",

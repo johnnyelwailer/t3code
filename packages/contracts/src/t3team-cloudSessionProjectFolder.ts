@@ -21,6 +21,15 @@ const shortHash = (value: string) => {
   return hash.toString(16).padStart(8, "0");
 };
 
+/**
+ * The title a plain session's folder was made from: `plainProjectFolderName` without its id suffix
+ * (the project's title, not its folder). Null for a name that is not `<title>-<8 hex>`.
+ */
+export function plainProjectTitleFromFolder(folder: string): string | null {
+  const title = /^(.+)-[0-9a-f]{8}$/.exec(folder)?.[1]?.trimEnd();
+  return title ? title : null;
+}
+
 export function plainProjectFolderName(title: string, projectId: string): string {
   const cleaned = title
     .replace(/[^A-Za-z0-9 ._-]+/g, "-")
