@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "../ui/button";
-import { formatReleaseAge } from "./SidebarUpdateReleaseNotes";
+import { formatReleaseAge } from "./t3team-releaseAge";
 import type { AppUpdateNotesView } from "./t3team-nexiUpdateNotice.logic";
 
 /** The pill's notes popover while the flag is on: the dialog's notes list under the version. */

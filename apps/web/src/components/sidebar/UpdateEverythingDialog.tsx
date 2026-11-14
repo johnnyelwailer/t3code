@@ -18,6 +18,7 @@ import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { ScrollArea } from "../ui/scroll-area";
+import type { UpdateEntryCell } from "./t3team-updateEntryCell";
 import type { RestartingMachine, UpdateEverythingRow } from "./updateEverything.logic";
 
 const isRunning = (status: string) =>
@@ -55,13 +56,8 @@ interface UpdateEverythingDialogProps {
   readonly disabledReason?: string | null;
   /** The confirmed work is starting; it cannot be cancelled from here. */
   readonly busy?: boolean;
-  /** Renders one table entry with its own update action, in place of the plain label. */
-  readonly renderEntry?: ((row: UpdateEverythingRow, entry: UpdateEntry) => ReactNode) | null;
+  readonly renderEntry?: ((row: UpdateEverythingRow, cell: UpdateEntryCell) => ReactNode) | null;
 }
-
-export type UpdateEntry =
-  | { readonly kind: "app"; readonly label: string }
-  | { readonly kind: "provider"; readonly label: string };
 
 type UpdateEverythingDialogContentProps = Omit<
   UpdateEverythingDialogProps,
@@ -185,19 +181,16 @@ function UpdateEverythingDialogContent({
                     <span className="block text-muted-foreground text-xs">restarts last</span>
                   ) : null}
                 </span>
-                <span className={renderEntry ? "flex flex-wrap items-start gap-1" : undefined}>
-                  {row.providers.map((provider, index) =>
-                    renderEntry ? (
-                      <Fragment key={provider}>
-                        {renderEntry(row, { kind: "provider", label: provider })}
-                      </Fragment>
-                    ) : (
-                      <Fragment key={provider}>
-                        <span className="whitespace-nowrap">{provider}</span>
-                        {index < row.providers.length - 1 ? ", " : null}
-                      </Fragment>
-                    ),
-                  )}
+                <span>
+                  {renderEntry?.(row, { kind: "providers" })}
+                  {renderEntry
+                    ? null
+                    : row.providers.map((provider, index) => (
+                        <Fragment key={provider}>
+                          <span className="whitespace-nowrap">{provider}</span>
+                          {index < row.providers.length - 1 ? ", " : null}
+                        </Fragment>
+                      ))}
                 </span>
                 <span className="text-right">
                   {row.environmentId !== null && restarting.has(row.environmentId) ? (

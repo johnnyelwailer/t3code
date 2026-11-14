@@ -95,10 +95,6 @@ export function useUpdateEverything(
     hasUpdates: servers.length > 0 || providers.machines.length > 0,
     ...view,
     restarts,
-    servers,
-    updateServer,
-    providerMachines: providers.machines,
-    updateProviders: providers.updateAll,
     run: async ({
       downloadLocal,
       installLocal,

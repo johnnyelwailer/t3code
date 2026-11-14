@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
     runEverything: vi.fn(),
     confirm: vi.fn(),
     updateServer: vi.fn(),
-    updateProviders: vi.fn(),
+    updateProvider: vi.fn(),
     rows: [] as unknown[],
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -49,13 +49,22 @@ vi.mock("./useUpdateEverything", () => ({
     providerCount: 0,
     rows: mocks.rows,
     restarts: [],
-    servers: [BUILD_BOX_SERVER],
-    updateServer: mocks.updateServer,
-    providerMachines: [
-      { environmentId: "env-box", label: "build-box", candidates: [{ driver: "claudeAgent" }] },
-    ],
-    updateProviders: mocks.updateProviders,
     run: mocks.runEverything,
+  }),
+  isHostedByThisApp: () => false,
+}));
+vi.mock("./t3team-useUpdateEntryTargets", () => ({
+  useUpdateEntryTargets: () => [BUILD_BOX_SERVER],
+}));
+vi.mock("../ServerUpdateAction", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../ServerUpdateAction")>()),
+  useServerUpdate: () => mocks.updateServer,
+}));
+const CLAUDE = vi.hoisted(() => ({ driver: "claudeAgent" }));
+vi.mock("./t3team-useProviderEntryUpdate", () => ({
+  useProviderEntryUpdate: () => ({
+    machines: [{ environmentId: "env-box", label: "build-box", candidates: [CLAUDE] }],
+    update: mocks.updateProvider,
   }),
 }));
 vi.mock("../../localApi", () => ({
@@ -113,16 +122,11 @@ function setup(
   mocks.hasUpdates = hasUpdates;
   mocks.appOnly = appOnly;
   mocks.rows = rows;
-  for (const fn of [
-    mocks.runEverything,
-    mocks.confirm,
-    mocks.updateServer,
-    mocks.updateProviders,
-  ]) {
+  for (const fn of [mocks.runEverything, mocks.confirm, mocks.updateServer, mocks.updateProvider]) {
     fn.mockReset();
   }
   mocks.updateServer.mockResolvedValue({ status: "updated" });
-  mocks.updateProviders.mockResolvedValue([]);
+  mocks.updateProvider.mockResolvedValue(undefined);
   localStorage.removeItem("update.notes.seenVersion");
   if (popped) localStorage.setItem("update.notes.poppedVersion", "0.0.50-nightly.2");
   else localStorage.removeItem("update.notes.poppedVersion");
@@ -250,9 +254,7 @@ describe("SidebarUpdatePill update everything", () => {
       await vi.waitFor(() => expect(mocks.updateServer).toHaveBeenCalledWith(BUILD_BOX_SERVER));
       await userEvent.click(page.getByRole("button", { name: "Update Claude on build-box" }));
       await vi.waitFor(() =>
-        expect(mocks.updateProviders).toHaveBeenCalledWith({
-          only: { environmentId: "env-box", driver: "claudeAgent" },
-        }),
+        expect(mocks.updateProvider).toHaveBeenCalledWith("env-box", "build-box", CLAUDE),
       );
       expect(downloadUpdate).not.toHaveBeenCalled();
 

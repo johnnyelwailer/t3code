@@ -1,17 +1,14 @@
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import type { DesktopUpdateButtonAction } from "../desktopUpdate.logic";
+import { useServerUpdate } from "../ServerUpdateAction";
 import { UpdateEntryChip } from "./t3team-UpdateEntryChip";
-import type { UpdateEntry } from "./UpdateEverythingDialog";
+import { useProviderEntryUpdate } from "./t3team-useProviderEntryUpdate";
+import { useUpdateEntryTargets } from "./t3team-useUpdateEntryTargets";
+import type { UpdateEntryCell } from "./t3team-updateEntryCell";
 import type { UpdateEverythingRow } from "./updateEverything.logic";
-import type { useUpdateEverything } from "./useUpdateEverything";
-
-type RowUpdates = Pick<
-  ReturnType<typeof useUpdateEverything>,
-  "servers" | "updateServer" | "providerMachines" | "updateProviders"
->;
 
 const APP_ACTIONS = {
   download: { label: "Download this app's update", icon: "download" },
@@ -20,11 +17,14 @@ const APP_ACTIONS = {
 
 /** Update-dialog entries that update on their own: this app, one server, or one provider. */
 export function useUpdateRowActions(
-  updates: RowUpdates,
+  localUpdateVersion: string | null,
   action: DesktopUpdateButtonAction,
   onUpdateApp: () => void,
 ) {
   const enabled = useFeatureFlag("UI_UPDATE_APP_ONLY");
+  const servers = useUpdateEntryTargets(localUpdateVersion);
+  const updateServer = useServerUpdate();
+  const providers = useProviderEntryUpdate();
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
   if (!enabled) return null;
 
@@ -53,7 +53,7 @@ export function useUpdateRowActions(
         />
       );
     }
-    const server = updates.servers.find((target) => target.environmentId === row.environmentId);
+    const server = servers.find((target) => target.environmentId === row.environmentId);
     if (server === undefined) return null;
     const key = `${server.environmentId}:server`;
     return (
@@ -64,7 +64,7 @@ export function useUpdateRowActions(
           icon: "update",
           restartEnvironmentId: server.environmentId,
           pending: pending.has(key),
-          onClick: () => run(key, () => updates.updateServer(server)),
+          onClick: () => run(key, () => updateServer(server)),
         }}
       />
     );
@@ -72,7 +72,7 @@ export function useUpdateRowActions(
 
   const providerEntry = (row: UpdateEverythingRow, label: string) => {
     const environmentId = row.environmentId;
-    const candidate = updates.providerMachines
+    const candidate = providers.machines
       .find((machine) => machine.environmentId === environmentId)
       ?.candidates.find(
         (option) => (PROVIDER_DISPLAY_NAMES[option.driver] ?? option.driver) === label,
@@ -80,7 +80,6 @@ export function useUpdateRowActions(
     if (environmentId === null || candidate === undefined) {
       return <UpdateEntryChip label={label} action={null} />;
     }
-    const only = { environmentId, driver: candidate.driver };
     const key = `${environmentId}:provider:${candidate.driver}`;
     return (
       <UpdateEntryChip
@@ -90,12 +89,20 @@ export function useUpdateRowActions(
           icon: "update",
           restartEnvironmentId: null,
           pending: pending.has(key),
-          onClick: () => run(key, () => updates.updateProviders({ only })),
+          onClick: () => run(key, () => providers.update(environmentId, row.label, candidate)),
         }}
       />
     );
   };
 
-  return (row: UpdateEverythingRow, entry: UpdateEntry) =>
-    entry.kind === "app" ? appEntry(row, entry.label) : providerEntry(row, entry.label);
+  return (row: UpdateEverythingRow, cell: UpdateEntryCell) =>
+    cell.kind === "app" ? (
+      appEntry(row, cell.label)
+    ) : (
+      <span className="flex flex-wrap items-start gap-1">
+        {row.providers.map((provider) => (
+          <Fragment key={provider}>{providerEntry(row, provider)}</Fragment>
+        ))}
+      </span>
+    );
 }

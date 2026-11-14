@@ -6,10 +6,8 @@ import { UpdateEntryChip } from "~/components/sidebar/t3team-UpdateEntryChip";
 import { UpdateNotesBadge } from "~/components/sidebar/t3team-UpdateNotesBadge";
 import { UpdatePopoverNotes } from "~/components/sidebar/t3team-UpdatePopoverNotes";
 import { UpdateReleaseNotesList } from "~/components/sidebar/t3team-UpdateReleaseNotesList";
-import {
-  type UpdateEntry,
-  UpdateEverythingDialog,
-} from "~/components/sidebar/UpdateEverythingDialog";
+import type { UpdateEntryCell } from "~/components/sidebar/t3team-updateEntryCell";
+import { UpdateEverythingDialog } from "~/components/sidebar/UpdateEverythingDialog";
 import type { UpdateEverythingRow } from "~/components/sidebar/updateEverything.logic";
 
 const ROWS: ReadonlyArray<UpdateEverythingRow> = [
@@ -40,24 +38,34 @@ const VIEW = {
   ],
 };
 
-const renderEntry = (row: UpdateEverythingRow, entry: UpdateEntry) => (
+const chip = (label: string, actionLabel: string, icon: "download" | "update", pending = false) => (
   <UpdateEntryChip
-    label={entry.label}
+    key={label}
+    label={label}
     action={{
-      label:
-        entry.kind === "app"
-          ? row.app === "this-app"
-            ? "Download this app's update"
-            : `Update ${row.label}`
-          : `Update ${entry.label} on ${row.label}`,
-      icon: entry.kind === "app" && row.app === "this-app" ? "download" : "update",
-      restartEnvironmentId:
-        entry.kind === "app" && row.app !== "this-app" ? row.environmentId : null,
-      pending: entry.kind === "provider" && row.label === "build-box",
+      label: actionLabel,
+      icon,
+      restartEnvironmentId: null,
+      pending,
       onClick: () => undefined,
     }}
   />
 );
+
+const renderEntry = (row: UpdateEverythingRow, cell: UpdateEntryCell) =>
+  cell.kind === "app" ? (
+    row.app === "this-app" ? (
+      chip(cell.label, "Download this app's update", "download")
+    ) : (
+      chip(cell.label, `Update ${row.label}`, "update")
+    )
+  ) : (
+    <span className="flex flex-wrap items-start gap-1">
+      {row.providers.map((provider) =>
+        chip(provider, `Update ${provider} on ${row.label}`, "update", row.label === "build-box"),
+      )}
+    </span>
+  );
 
 function UpdateStory({ view }: { readonly view: "today" | "rows" | "popover" | "badge" }) {
   if (view === "popover") {
