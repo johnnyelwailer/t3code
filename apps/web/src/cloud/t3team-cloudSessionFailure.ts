@@ -1,4 +1,8 @@
-import type { CloudSessionFailedError, CloudSessionFailureReason } from "@t3tools/contracts";
+import type {
+  CloudSession,
+  CloudSessionFailedError,
+  CloudSessionFailureReason,
+} from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type * as Cause from "effect/Cause";
 
@@ -102,24 +106,8 @@ export function isCloudSessionSignInFailure(reason: string | null | undefined): 
 export function reportCloudSessionCreateFailure(
   result: { readonly cause: Cause.Cause<unknown> },
   retry: () => void,
-  /** Repeats the create as a plain session in the project, which the failure may offer. */
-  retryPlain?: () => void,
 ) {
   const failure = squashAtomCommandFailure(result);
-  if (isCloudSessionFailed(failure) && failure.plainAvailable === true && retryPlain) {
-    const id = toastManager.add({
-      type: "error",
-      ...cloudSessionCreateFailureToast(result),
-      actionProps: {
-        children: "Start a plain session",
-        onClick: () => {
-          toastManager.close(id);
-          retryPlain();
-        },
-      },
-    });
-    return;
-  }
   if (
     isCloudSessionFailed(failure) &&
     (failure.reason === "unauthorized" || failure.reason === "repository_sign_in_required")
@@ -127,4 +115,14 @@ export function reportCloudSessionCreateFailure(
     if (offerCloudSessionSignIn(retry, failure.host)) return;
   }
   toastManager.add({ type: "error", ...cloudSessionCreateFailureToast(result) });
+}
+
+/** One line when a create went on as a plain session because the project's machine could not be used. */
+export function reportCloudSessionMachineFallback(session: Pick<CloudSession, "machineFallback">) {
+  if (session.machineFallback === undefined) return;
+  toastManager.add({
+    type: "info",
+    title: "Started without the project's machine",
+    description: session.machineFallback,
+  });
 }

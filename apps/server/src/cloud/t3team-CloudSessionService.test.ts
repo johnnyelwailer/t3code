@@ -924,31 +924,37 @@ describe("CloudSessionService.create over the Nexi broker", () => {
     });
 
   it.effect(
-    "a machine that cannot be used fails with a plain session offered, dispatching nothing",
+    "a machine definition that cannot be used (an untracked machine.json) starts a plain session, saying why",
     () =>
       Effect.gen(function* () {
         const { calls, rest, graphql } = makeGithubMock();
-        const machines = failingMachines(() =>
-          Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
-        );
-        const error = asMachineFailure(
-          yield* runPastDiscoveryPoll(
-            create(
-              providersWith(
-                rest,
-                graphql,
-                brokerMock(() => Effect.succeed("g")),
-                machines,
-              ),
-              ProjectId.make("p1"),
+        const untracked = new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message:
+            "Commit and push the machine definition in the project first (.agents/nexi/machine.json, .devcontainer/devcontainer.json).",
+        });
+        const machines = Layer.mock(CloudSessionMachines)({
+          resolve: () => Effect.fail(untracked),
+          resolveSetup: () => Effect.die("not a setup"),
+          poolKeyOf: () => Effect.succeed(null),
+          resolvePlain: () =>
+            Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
+        });
+        const session = yield* runPastDiscoveryPoll(
+          create(
+            providersWith(
+              rest,
+              graphql,
+              brokerMock(() => Effect.succeed("g")),
+              machines,
             ),
-          ).pipe(Effect.flip),
+            ProjectId.make("p1"),
+          ),
         );
-        assert.strictEqual(error.reason, "machine_unavailable");
-        assert.strictEqual(error.plainAvailable, true);
-        assert.include(error.message, "Push this project's branch");
-        assert.include(error.message, "plain session");
-        assert.isFalse(calls.some((call) => joinedOf(call).includes("/dispatches")));
+        const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
+        assert.include(dispatch, '"project_name":"IES NG-781a8188"');
+        assert.notInclude(dispatch, "machine_");
+        assert.strictEqual(session.machineFallback, untracked.message);
       }),
   );
 
@@ -970,62 +976,34 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         ).pipe(Effect.flip),
       );
       assert.strictEqual(error.reason, "machine_unavailable");
-      assert.isUndefined(error.plainAvailable);
       assert.strictEqual(error.message, machineFailure.message);
     }),
   );
 
   it.effect(
-    "without the broker no plain session is offered: a plain project session needs it",
+    "plain: true starts a plain session in the project without consulting the machine",
     () =>
       Effect.gen(function* () {
-        const { rest, graphql } = makeGithubMock();
-        const machines = failingMachines(() => Effect.die("plain needs the broker"));
-        const brokerless = Layer.succeed(NexiBrokerService.NexiBrokerService, {
-          enabled: false,
-          status: { enabled: false, accountId: null },
-          requestGrant: () => Effect.die("unused"),
-          attach: () => Effect.die("unused"),
-          pair: () => Effect.die("unused"),
-          claimStandby: () => Effect.succeed(null),
-          sessions: Effect.succeed([]),
-          reportInterest: () => Effect.void,
-        });
-        const error = asMachineFailure(
-          yield* runPastDiscoveryPoll(
-            create(
-              providersWith(rest, graphql, brokerless as ReturnType<typeof brokerMock>, machines),
-              ProjectId.make("p1"),
-            ),
-          ).pipe(Effect.flip),
+        const { calls, rest, graphql } = makeGithubMock();
+        const machines = failingMachines(() =>
+          Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
         );
-        assert.strictEqual(error.reason, "machine_unavailable");
-        assert.isUndefined(error.plainAvailable);
-      }),
-  );
-
-  it.effect("plain: true takes the offered plain session without consulting the machine", () =>
-    Effect.gen(function* () {
-      const { calls, rest, graphql } = makeGithubMock();
-      const machines = failingMachines(() =>
-        Effect.succeed({ kind: "workspace", folder: "IES NG-781a8188", title: "IES NG" }),
-      );
-      yield* runPastDiscoveryPoll(
-        create(
-          providersWith(
-            rest,
-            graphql,
-            brokerMock(() => Effect.succeed("g")),
-            machines,
+        yield* runPastDiscoveryPoll(
+          create(
+            providersWith(
+              rest,
+              graphql,
+              brokerMock(() => Effect.succeed("g")),
+              machines,
+            ),
+            ProjectId.make("p1"),
+            { plain: true },
           ),
-          ProjectId.make("p1"),
-          { plain: true },
-        ),
-      );
-      const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
-      assert.include(dispatch, '"project_name":"IES NG-781a8188"');
-      assert.notInclude(dispatch, "machine_");
-    }),
+        );
+        const dispatch = calls.find((call) => joinedOf(call).includes("/dispatches"))?.stdin ?? "";
+        assert.include(dispatch, '"project_name":"IES NG-781a8188"');
+        assert.notInclude(dispatch, "machine_");
+      }),
   );
 
   it.effect("a warm standby of the project is claimed instead of dispatching a session", () =>

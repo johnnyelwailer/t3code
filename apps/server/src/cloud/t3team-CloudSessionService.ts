@@ -30,7 +30,11 @@ import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { isAppStartedSessionRun, makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
-import { offerPlainOnMachineFailure } from "./t3team-cloudSessionMachineOffer.ts";
+import {
+  fallBackToPlainOnMachineFailure,
+  machineNeedsBroker,
+  type ResolvedCloudSessionMachine,
+} from "./t3team-cloudSessionMachineFallback.ts";
 import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
 import { machineRepositoryAccessFor } from "./t3team-cloudMachineRepository.ts";
 import {
@@ -222,13 +226,14 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           message: "Set up a machine from a project.",
         });
       }
-      // A machine that cannot be used fails with a plain session offered (`plain: true` takes it).
-      const machine =
+      // A machine that cannot be used never fails the create: it goes on as plain, saying why.
+      const resolved: ResolvedCloudSessionMachine =
         wantsSetup || input.plain === true || input.projectId === undefined
-          ? null
+          ? { machine: null }
           : yield* machines
               .resolve(input.projectId)
-              .pipe(offerPlainOnMachineFailure(machines, input.projectId, broker.enabled));
+              .pipe(fallBackToPlainOnMachineFailure(machines, input.projectId, broker.enabled));
+      const machine = resolved.machine;
       const setup =
         wantsSetup && input.projectId !== undefined
           ? yield* machines.resolveSetup(input.projectId)
@@ -236,9 +241,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // A plain session still runs in its project: the repository checked out on the host, or an
       // empty workspace when the project has none. Its token, like a machine's, needs the broker.
       const plain =
-        machine === null && setup === null && input.projectId !== undefined && broker.enabled
-          ? yield* machines.resolvePlain(input.projectId)
-          : null;
+        "plain" in resolved
+          ? resolved.plain
+          : machine === null && setup === null && input.projectId !== undefined && broker.enabled
+            ? yield* machines.resolvePlain(input.projectId)
+            : null;
       const plainCheckout = plain?.kind === "checkout" ? plain.checkout : null;
       // The caller's name for it, else its repository's (t3team-cloudSessionName.ts).
       const sessionTag = yield* makeSessionTag(
@@ -248,13 +255,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           plainCheckout?.repository.name ??
           (plain?.kind === "workspace" ? plain.title : null),
       );
-      if ((machine !== null || setup !== null) && !broker.enabled) {
-        return yield* new CloudSessionFailedError({
-          reason: "machine_unavailable",
-          message:
-            "Project machines need the cloud-session broker and its account sign-in, which this build does not have.",
-        });
-      }
+      if (setup !== null && !broker.enabled) return yield* machineNeedsBroker();
 
       // A warm standby of the project, when the broker has one idle: seconds instead of minutes.
       const workspace = sessionWorkspaceName(
@@ -350,7 +351,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         setup,
         plain,
         workspace,
-      });
+      }).pipe(
+        Effect.map((session) =>
+          "fallback" in resolved ? { ...session, machineFallback: resolved.fallback } : session,
+        ),
+      );
     });
 
   const cancel: CloudSessionService["Service"]["cancel"] = (input) =>

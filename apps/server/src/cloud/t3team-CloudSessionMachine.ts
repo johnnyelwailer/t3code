@@ -1,9 +1,7 @@
 /**
- * Resolves a project's own machine (never a linked repository's) at a fetchable commit with the
- * user's credentials.
- * Local definitions must be committed and pushed; remote definitions retain the exact scanned
- * default-branch commit. Invalid definitions block launch, while unavailable remote discovery
- * falls back to a plain session. Standby and plain resolution only consult the remote cache.
+ * Resolves a project's own machine (never a linked repository's) at a fetchable, pushed commit with
+ * the user's credentials. One that cannot be used fails here; the create falls back to plain
+ * (t3team-cloudSessionMachineFallback.ts). Standby and plain resolution read only the remote cache.
  * CLOUD_PROJECT_MACHINE gates machine selection and remote work.
  *
  * @module t3team-CloudSessionMachine
@@ -100,7 +98,7 @@ const make = Effect.gen(function* () {
     } = yield* discovery
       .resolveDefault(projectId)
       .pipe(Effect.mapError((error) => unavailable(error.message)));
-    // The user chose where the machine comes from: a plain session must not stand in for it.
+    // A source the user chose that cannot be used fails here; the create falls back to plain.
     if (sourceFailure !== undefined) {
       yield* logMachineOutcome(projectId, { outcome: "unusable", reason: sourceFailure });
       return yield* unavailable(sourceFailure);

@@ -93,7 +93,6 @@ apps/server/src/cloud/t3team-cloudSessionEnvironmentStep.ts
 apps/server/src/cloud/t3team-cloudSessionFailureReason.ts
 apps/server/src/cloud/t3team-cloudSessionMachineLog.ts
 apps/server/src/cloud/t3team-cloudSessionMachineNames.ts
-apps/server/src/cloud/t3team-cloudSessionMachineOffer.ts
 apps/server/src/cloud/t3team-cloudSessionName.ts
 apps/server/src/cloud/t3team-cloudSessionPhase.test.ts
 apps/server/src/cloud/t3team-cloudSessionPhase.ts
