@@ -1,6 +1,6 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
+import { getAppUpdateNotesView, getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
 
 const base: DesktopUpdateState = {
   enabled: true,
@@ -89,5 +89,29 @@ describe("Nexi update notice", () => {
         downloadedVersion: "0.1.2-rc.8",
       }),
     ).toBeNull();
+  });
+});
+describe("App update notes", () => {
+  it("describes an update that is still to download", () => {
+    const page = "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.8";
+    const available = {
+      ...base,
+      status: "available" as const,
+      releaseUrl: page,
+      releaseNotes: [
+        {
+          version: "0.1.2-rc.8",
+          totalItems: 2,
+          items: ["ci: shard the browser suite", "fix(web): faster sidebar by @pj"],
+        },
+      ],
+    };
+    expect(getAppUpdateNotesView(available)).toEqual({
+      notes: ["Faster sidebar"],
+      releaseUrl: page,
+    });
+  });
+  it("has nothing to show without an update", () => {
+    expect(getAppUpdateNotesView({ ...base, availableVersion: null })).toBeNull();
   });
 });

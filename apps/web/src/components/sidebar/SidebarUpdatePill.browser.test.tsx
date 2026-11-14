@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
   return {
     update: null as DesktopUpdateState | null,
     hasUpdates: false,
+    appOnly: false,
+    runEverything: vi.fn(),
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -42,7 +44,11 @@ vi.mock("./useUpdateEverything", () => ({
     providerCount: 0,
     rows: [],
     restarts: [],
+    run: mocks.runEverything,
   }),
+}));
+vi.mock("~/t3team/t3team-useFeatureFlag", () => ({
+  useFeatureFlag: (key: string) => key === "UI_UPDATE_APP_ONLY" && mocks.appOnly,
 }));
 
 function nightlyUpdate(releaseNotes: DesktopUpdateState["releaseNotes"]): DesktopUpdateState {
@@ -70,9 +76,11 @@ const RELEASE_NOTES: DesktopUpdateState["releaseNotes"] = [
   { version: "0.0.50-nightly.2", items: ["Faster sidebar."], totalItems: 1 },
 ];
 
-function setup(update: DesktopUpdateState | null, { hasUpdates = false } = {}) {
+function setup(update: DesktopUpdateState | null, { hasUpdates = false, appOnly = false } = {}) {
   mocks.update = update;
   mocks.hasUpdates = hasUpdates;
+  mocks.appOnly = appOnly;
+  mocks.runEverything.mockReset();
 }
 
 function publish(update: DesktopUpdateState | null) {
@@ -140,6 +148,29 @@ describe("SidebarUpdatePill update everything", () => {
 
     await userEvent.keyboard("{Escape}");
     await vi.waitFor(() => expect(document.activeElement).toBe(button.element()));
+  });
+
+  it.each([false, true])("offers the app alone only behind its flag (%s)", async (appOnly) => {
+    setup(nightlyUpdate(RELEASE_NOTES), { hasUpdates: true, appOnly });
+    const state = nightlyUpdate(RELEASE_NOTES);
+    const downloadUpdate = vi.fn().mockResolvedValue({ accepted: true, completed: true, state });
+    using _bridge = stubGlobal("desktopBridge", { downloadUpdate });
+    await using screen = await render(<SidebarUpdatePill />);
+    await userEvent.click(screen.getByRole("button", { name: "Update everything" }));
+    await expect.element(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+    const appOnlyButton = page.getByRole("button", { name: "Download app only" });
+    const notes = page.getByRole("region", { name: "What's changed" });
+    if (!appOnly) {
+      await expect.element(appOnlyButton).not.toBeInTheDocument();
+      await expect.element(notes).not.toBeInTheDocument();
+      return;
+    }
+    await expect.element(notes.getByText("Faster sidebar.")).toBeVisible();
+
+    await userEvent.click(appOnlyButton);
+    await vi.waitFor(() => expect(downloadUpdate).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+    expect(mocks.runEverything).not.toHaveBeenCalled();
   });
 });
 

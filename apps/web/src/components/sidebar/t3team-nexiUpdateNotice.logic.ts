@@ -1,5 +1,9 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
 
+import {
+  getDesktopUpdateDownloadedVersion,
+  getDesktopUpdateReleaseUrl,
+} from "../desktopUpdate.logic";
 import { plainReleaseNotes } from "./t3team-nexiUpdateNotes.logic";
 
 export type NexiUpdateNoticeView = {
@@ -10,6 +14,8 @@ export type NexiUpdateNoticeView = {
   /** The feed's release page for this version; only an https page is ever offered as a link. */
   readonly releaseUrl: string | null;
 };
+
+export type AppUpdateNotesView = Pick<NexiUpdateNoticeView, "notes" | "releaseUrl">;
 
 function httpsPage(value: string | undefined): string | null {
   if (!value) return null;
@@ -30,4 +36,13 @@ export function getNexiUpdateNoticeView(
     actionLabel: "Install now",
     releaseUrl: httpsPage(state.releaseUrl),
   };
+}
+
+/** What changed in the app update on offer, downloaded or not; null when nothing can be shown. */
+export function getAppUpdateNotesView(state: DesktopUpdateState): AppUpdateNotesView | null {
+  const version = getDesktopUpdateDownloadedVersion(state);
+  if (version === null) return null;
+  const notes = plainReleaseNotes(state.releaseNotes.flatMap((note) => note.items));
+  const releaseUrl = httpsPage(state.releaseUrl) ?? getDesktopUpdateReleaseUrl(version);
+  return notes.length === 0 && releaseUrl === null ? null : { notes, releaseUrl };
 }

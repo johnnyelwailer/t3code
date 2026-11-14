@@ -133,6 +133,15 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: false,
     addedOn: "2026-11-03",
   },
+  UI_UPDATE_APP_ONLY: {
+    group: "UI & rendering",
+    label: "Update notes and app-only update",
+    description:
+      "The update dialog lists what changed and can update only this app, leaving machines and providers for later.",
+    defaultEnabled: false,
+    requiresRestart: false,
+    addedOn: "2026-11-14",
+  },
   UI_VOICE_INPUT: {
     group: "UI & rendering",
     label: "Voice input",

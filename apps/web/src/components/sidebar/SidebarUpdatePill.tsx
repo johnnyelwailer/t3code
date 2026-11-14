@@ -42,6 +42,7 @@ import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
 import { SidebarUpdateCapsule } from "./SidebarUpdateCapsule";
 import { NexiUpdateReadyFooter } from "./t3team-NexiUpdateReadyFooter";
 import { getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
+import { useUpdateDialogAppOnly } from "./t3team-useUpdateDialogAppOnly";
 import { UpdateEverythingDialog } from "./UpdateEverythingDialog";
 import type { UpdateEverythingRun, UpdateRunLocalState } from "./updateEverything.logic";
 import {
@@ -282,7 +283,6 @@ function SidebarUpdateControl() {
   }
 
   const handleAction = async () => {
-    const bridge = window.desktopBridge;
     if (isInteractionDisabled) return;
 
     if (runsEverything) {
@@ -290,6 +290,11 @@ function SidebarUpdateControl() {
       return;
     }
 
+    await runLocalAction();
+  };
+
+  const runLocalAction = async () => {
+    const bridge = window.desktopBridge;
     if (!bridge || !state) return;
     setIsActionPending(true);
 
@@ -357,6 +362,11 @@ function SidebarUpdateControl() {
       .finally(() => setIsActionPending(false));
   };
 
+  const appOnly = useUpdateDialogAppOnly(state, action, () => {
+    setIsConfirmingEverything(false);
+    void runLocalAction();
+  });
+
   const runEverything = async () => {
     const bridge = window.desktopBridge;
     setIsConfirmingEverything(false);
@@ -416,6 +426,7 @@ function SidebarUpdateControl() {
       rows={everything.rows}
       restarts={everything.restarts}
       onConfirm={() => void runEverything()}
+      {...appOnly}
     />
   );
 
