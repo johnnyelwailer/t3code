@@ -96,6 +96,7 @@ import {
   resolvePreviewAnnotationImage,
   userMessageFileLabel,
 } from "./TimelineUserMessageRow.logic";
+import { T3TeamSendConfirmationLine } from "~/t3team/chat/t3team-SendConfirmationLine";
 
 // Drawn inside the media so dark screenshots keep an edge on the dark background.
 const MEDIA_EDGE_CLASS_NAME =
@@ -262,6 +263,7 @@ export function UserMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mes
         <ModelSwitchRow environmentId={ctx.activeThreadEnvironmentId} modelSwitch={modelSwitch} />
       ) : null}
       <UserMessageContent row={row} />
+      <T3TeamSendConfirmationLine messageId={row.message.id} />
     </>
   );
 }

@@ -6,6 +6,7 @@ import {
   EnvironmentId,
   MessageId,
   NodeId,
+  OrchestrationV2DispatchCommandError,
   ORCHESTRATION_V2_WS_METHODS,
   ProjectId,
   ProviderInstanceId,
@@ -20,11 +21,17 @@ import {
   type ProjectMutation,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import { RpcClientError } from "effect/rpc";
+import * as Socket from "effect/socket/Socket";
 
 import {
   AVAILABLE_CONNECTION_STATE,
@@ -33,6 +40,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as RpcSession from "../rpc/session.ts";
+import { EnvironmentRpcUnavailableError } from "../rpc/client.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import { v2Now, v2Projection, v2ThreadId } from "../state/orchestrationV2TestFixtures.ts";
 import {
@@ -65,12 +73,25 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
   readonly projection?: OrchestrationV2ThreadProjection;
   readonly projectionRequests?: ThreadId[];
   readonly advertiseThreadStop?: boolean;
+  readonly lostReplies?: Array<
+    Cause.Cause<
+      | RpcClientError.RpcClientError
+      | OrchestrationV2DispatchCommandError
+      | EnvironmentRpcUnavailableError
+    >
+  >;
+  readonly replyLost?: Deferred.Deferred<void>;
 }) {
   const client = {
     [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command: OrchestrationV2Command) =>
-      Effect.sync(() => {
+      Effect.suspend(() => {
         input.commands.push(command);
-        return { sequence: input.commands.length };
+        const lost = input.lostReplies?.shift();
+        if (lost === undefined) return Effect.succeed({ sequence: input.commands.length });
+        return Effect.andThen(
+          input.replyLost ? Deferred.succeed(input.replyLost, undefined) : Effect.void,
+          Effect.failCause(lost),
+        );
       }),
     [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: (requestInput: {
       readonly threadId: ThreadId;
@@ -293,6 +314,176 @@ describe("V2 environment commands", () => {
         });
       }
       expect(projectionRequests).toEqual([]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect.each([
+    [
+      "the socket closed",
+      Cause.fail(
+        new RpcClientError.RpcClientError({
+          reason: new Socket.SocketCloseError({ code: 1006 }),
+        }),
+      ),
+    ],
+    ["the session ended", Cause.interrupt()],
+    [
+      "there was no connection",
+      Cause.fail(
+        new EnvironmentRpcUnavailableError({
+          environmentId: "environment-1",
+          message: "Test environment is not connected.",
+        }),
+      ),
+    ],
+  ] as const)("sends a turn again with the same command id when %s before the reply", ([, lost]) =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const replyLost = yield* Deferred.make<void>();
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [lost],
+        replyLost,
+      });
+      const sending = yield* startThreadTurn({
+        commandId: CommandId.make("command-lost-reply"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-lost-reply"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.forkChild,
+      );
+      yield* Deferred.await(replyLost);
+      const session = yield* SubscriptionRef.get(supervisor.session);
+      yield* SubscriptionRef.set(
+        supervisor.session,
+        Option.map(session, (value) => ({ ...value })),
+      );
+
+      expect(yield* Fiber.join(sending)).toEqual({ sequence: 2 });
+      expect(commands.map((command) => command.commandId)).toEqual([
+        "command-lost-reply",
+        "command-lost-reply",
+      ]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect("hands back the original loss, unchanged, when the connection never comes back", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const replyLost = yield* Deferred.make<void>();
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [Cause.interrupt()],
+        replyLost,
+      });
+      const sending = yield* startThreadTurn({
+        commandId: CommandId.make("command-never-confirmed"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-never-confirmed"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.forkChild,
+      );
+      yield* Deferred.await(replyLost);
+      yield* TestClock.adjust("2 minutes");
+      const exit = yield* Fiber.await(sending);
+      expect(exit._tag).toBe("Failure");
+      if (exit._tag === "Failure") {
+        expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
+      }
+      expect(commands).toHaveLength(1);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect("fails at once on a client defect while the connection stays up", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [
+          Cause.fail(
+            new RpcClientError.RpcClientError({
+              reason: new RpcClientError.RpcClientDefect({ message: "bad reply", cause: null }),
+            }),
+          ),
+        ],
+      });
+      const exit = yield* startThreadTurn({
+        commandId: CommandId.make("command-defect"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-defect"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.exit,
+      );
+      expect(exit._tag).toBe("Failure");
+      expect(commands).toHaveLength(1);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect("does not send a turn again when the server rejected it", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [
+          Cause.fail(
+            new OrchestrationV2DispatchCommandError({
+              commandId: CommandId.make("command-rejected"),
+              commandType: "message.dispatch",
+              message: "Previously rejected.",
+            }),
+          ),
+        ],
+      });
+      const exit = yield* startThreadTurn({
+        commandId: CommandId.make("command-rejected"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-rejected"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.exit,
+      );
+      expect(exit._tag).toBe("Failure");
+      if (exit._tag === "Failure") {
+        expect(Option.getOrNull(Cause.findErrorOption(exit.cause))?._tag).toBe(
+          "OrchestrationV2DispatchCommandError",
+        );
+      }
+      expect(commands).toHaveLength(1);
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 

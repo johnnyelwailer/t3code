@@ -14,7 +14,12 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import { buildKickoffQueueKey } from "~/t3team/t3team-addToChatStore";
 import { isStagedComposerActionLaunchable } from "~/t3team/t3team-stagedComposerActionLaunch";
 import { useT3TeamStagedComposerActionStore } from "~/t3team/t3team-stagedComposerActionStore";
-import { makeT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxModel";
+import {
+  makeT3TeamOutboxEntry,
+  type T3TeamOutboxSendIdentity,
+} from "~/t3team/outbox/t3team-outboxModel";
+import { atSendTime } from "~/t3team/outbox/t3team-outboxSendOrder";
+import { setOutboxAttempt } from "~/t3team/outbox/t3team-outboxStorage";
 import { enqueueT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxStore";
 import {
   useT3TeamWorkflowOutboxActions,
@@ -32,6 +37,7 @@ export type EnqueueOfflineTurnStart = (turnStart: {
   readonly interactionMode: ProviderInteractionMode;
   readonly createdAt: string;
   readonly hasAttachments: boolean;
+  readonly sendIdentity?: T3TeamOutboxSendIdentity;
 }) => boolean | Promise<boolean>;
 
 export function useT3TeamOutboxSend(input: {
@@ -109,11 +115,16 @@ export function useT3TeamOutboxSend(input: {
               runtimeMode: turnStart.runtimeMode,
               interactionMode: turnStart.interactionMode,
               createdAt: turnStart.createdAt,
+              ...(turnStart.sendIdentity ? { sendIdentity: turnStart.sendIdentity } : {}),
             },
             input.environmentId,
             turnStart.threadId,
           );
-      return enqueueT3TeamOutboxEntry(payload);
+      const entry = atSendTime(payload, turnStart.sendIdentity, turnStart.createdAt);
+      if (!enqueueT3TeamOutboxEntry(entry)) return false;
+      // An unconfirmed send already went out once: keep the at-most-once shield up.
+      if (turnStart.sendIdentity?.unconfirmed) setOutboxAttempt(entry.entryId);
+      return true;
     },
     [
       outboxEnabled,

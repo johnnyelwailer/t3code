@@ -40,6 +40,10 @@ import {
   releaseT3TeamOutboxDispatch,
   useT3TeamOutboxStore,
 } from "~/t3team/outbox/t3team-outboxStore";
+import {
+  threadHasPendingSend,
+  usePendingSendsVersion,
+} from "~/t3team/chat/t3team-sendConfirmationStore";
 
 type HeadThreadMessages = ReadonlyArray<{ readonly id: string; readonly role: string }> | null;
 
@@ -51,6 +55,7 @@ export function useT3TeamOutboxDrain(input: {
   const phase = environment?.connection.phase ?? "available";
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const snapshot = useT3TeamOutboxStore();
+  const pendingSends = usePendingSendsVersion();
 
   const headEntry = getT3TeamOutboxEntriesForEnvironment(input.environmentId)[0] ?? null;
   // Subscribe to the head thread's read model so the idempotency check can
@@ -75,6 +80,8 @@ export function useT3TeamOutboxDrain(input: {
     if (phase !== "connected") return;
     const entry = headEntry;
     if (!entry || snapshot.dispatchingEntryId !== null) return;
+    // A composer send of this thread still waits for its reply: queued messages go out after it.
+    if (threadHasPendingSend(entry.threadId)) return;
     // A permanent failure parks the entry until the user hits Resend; without
     // this the drain would re-dispatch it in a tight loop.
     if (snapshot.failures[entry.entryId] !== undefined) return;
@@ -158,5 +165,6 @@ export function useT3TeamOutboxDrain(input: {
     snapshot.retryNotBefore,
     snapshot.failures,
     headThread,
+    pendingSends,
   ]);
 }

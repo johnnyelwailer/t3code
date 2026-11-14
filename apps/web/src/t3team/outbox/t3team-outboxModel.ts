@@ -21,7 +21,14 @@ export type T3TeamOutboxEntryKind =
   | "recipe-card-action"
   | "staged-action";
 
+/** A composer send whose outcome is unknown: re-sent with its own command id and dispatch mode. */
+export interface T3TeamOutboxSendIdentity {
+  readonly commandId: string;
+  readonly dispatchMode?: "auto" | "queue" | "steer" | "restart" | "start";
+  readonly unconfirmed?: boolean;
+}
 export interface T3TeamOutboxTurnStartPayload {
+  readonly sendIdentity?: T3TeamOutboxSendIdentity;
   readonly messageId: string;
   readonly messageText: string;
   readonly modelSelection: ModelSelection | null;
@@ -65,6 +72,10 @@ export interface T3TeamOutboxEntry {
     | T3TeamOutboxStagedActionPayload;
 }
 
+/** A composer send handed over after its reply never came: it may already have run. */
+export function isUnconfirmedTurnStart(entry: T3TeamOutboxEntry): boolean {
+  return "sendIdentity" in entry.payload && entry.payload.sendIdentity?.unconfirmed === true;
+}
 export function newT3TeamOutboxEntryId(): string {
   return randomUUID();
 }

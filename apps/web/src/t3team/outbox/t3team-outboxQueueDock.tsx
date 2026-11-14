@@ -7,8 +7,10 @@
 import { ClockIcon } from "lucide-react";
 
 import { ComposerBanner } from "~/components/chat/ComposerBanner";
+import { useThreadHasPendingSend } from "~/t3team/chat/t3team-sendConfirmationStore";
 import { useEnvironment } from "~/state/environments";
 import {
+  isUnconfirmedTurnStart,
   t3TeamOutboxEntryPreview,
   type T3TeamOutboxEntry,
 } from "~/t3team/outbox/t3team-outboxModel";
@@ -66,11 +68,20 @@ function OutboxEntryRow(props: {
 }) {
   const environment = useEnvironment(props.entry.environmentId as never);
   const environmentLabel = environment?.label ?? "the environment";
+  const afterPendingSend = useThreadHasPendingSend(props.entry.threadId);
+  const online = environment?.connection.phase === "connected";
+  const unconfirmed = isUnconfirmedTurnStart(props.entry);
   const statusLabel = props.dispatching
     ? "Sending"
     : props.failure !== null
       ? `Failed: ${props.failure}`
-      : `Sends when ${environmentLabel} reconnects`;
+      : unconfirmed
+        ? online
+          ? "Not confirmed. Sending again"
+          : `Not confirmed. Sends again when ${environmentLabel} reconnects`
+        : online && afterPendingSend
+          ? "Sends after your last message"
+          : `Sends when ${environmentLabel} reconnects`;
   return (
     <ComposerBanner.Row render={<li />} data-queued-outbox-entry={props.entry.entryId}>
       <ComposerBanner.Icon>
@@ -87,13 +98,13 @@ function OutboxEntryRow(props: {
         </span>
       </ComposerBanner.Content>
       <ComposerBanner.Actions>
-        {props.failure !== null ? (
+        {props.failure !== null || (unconfirmed && online && !props.dispatching) ? (
           <button
             type="button"
             onClick={() => retryT3TeamOutboxEntry(props.entry.entryId)}
             className="underline underline-offset-2 hover:text-destructive/80"
           >
-            Resend
+            {props.failure !== null ? "Resend" : "Retry"}
           </button>
         ) : null}
         <ComposerBanner.Dismiss

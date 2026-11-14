@@ -154,6 +154,13 @@ import type { useQueuedRunEdit } from "./useQueuedRunEdit";
 import type { useTimelineFollow } from "./useTimelineFollow";
 import type { useUsageLimitsPanel } from "./useUsageLimitsPanel";
 import type { useWorktreeSetup } from "./useWorktreeSetup";
+import { beginSend, confirmSend, newSendCommandId } from "~/t3team/chat/t3team-confirmSend";
+import {
+  threadHasPendingSend,
+  threadHasUnconfirmedSend,
+  trackSendInFlight,
+} from "~/t3team/chat/t3team-sendConfirmationStore";
+import type { T3TeamOutboxSendIdentity } from "~/t3team/outbox/t3team-outboxModel";
 
 const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
 
@@ -430,7 +437,10 @@ export function useComposerSend(input: ComposerSendInput) {
     anchorNewTurn,
     persistThreadSettingsForNextTurn,
   });
-  const { sendInFlight: sendInFlightRef } = draftSendState(routeThreadKey);
+  const sendInFlightRef = trackSendInFlight(
+    draftSendState(routeThreadKey).sendInFlight,
+    activeThread?.id ?? null,
+  );
   const composerSendGenerationRef = useRef(0);
   const environmentUnavailableSendToastSlotRef = useRef(0);
   // A send awaits uploads before it declines, so it reads the approvals pending by then.
@@ -470,6 +480,54 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
 
+    // t3team offline outbox: a text-only send is queued and drains FIFO once it can go out.
+    const enqueuePromptToOutbox = async (
+      threadId: string,
+      sendIdentity?: T3TeamOutboxSendIdentity,
+    ): Promise<boolean> => {
+      if (
+        !enqueueOfflineTurnStart ||
+        directAnnotation ||
+        draftHasNonPromptContent(composerDraftTarget) ||
+        promptRef.current.trim().length === 0
+      ) {
+        return false;
+      }
+      const offlineSendCtx = composerRef.current?.getSendContext();
+      const queued = await enqueueOfflineTurnStart({
+        threadId,
+        messageId: newMessageId(),
+        messageText: promptRef.current,
+        modelSelection: offlineSendCtx?.selectedModelSelection ?? null,
+        titleSeed: truncate(promptRef.current.trim()),
+        runtimeMode,
+        interactionMode,
+        createdAt: new Date().toISOString(),
+        hasAttachments: false,
+        ...(sendIdentity ? { sendIdentity } : {}),
+      });
+      if (!queued) return false;
+      promptRef.current = "";
+      setComposerDraftPrompt(composerDraftTarget, "");
+      composerRef.current?.resetCursorState();
+      return true;
+    };
+    // An earlier message is in flight or unconfirmed: this one queues behind it, in order,
+    // keeping the Steer or Queue the user chose.
+    const queueBehindPendingSend = async (threadId: string, mode: ComposerDispatchMode) => {
+      const identity = { commandId: newSendCommandId(), dispatchMode: mode };
+      if (await enqueuePromptToOutbox(threadId, identity)) return;
+      if (directAnnotation) return notifyDirectAnnotationAttached();
+      toastManager.add(
+        stackedThreadToast({
+          type: "info",
+          title: threadHasUnconfirmedSend(threadId)
+            ? "Your last message is not confirmed yet"
+            : "Your last message is still sending",
+          description: "This one stays in the composer. Send it once the last one is confirmed.",
+        }),
+      );
+    };
     const notifyDirectAnnotationAttached = () => {
       if (!directAnnotation) return;
       toastManager.add(
@@ -483,15 +541,21 @@ export function useComposerSend(input: ComposerSendInput) {
     if (
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
       !activeThread ||
-      (isSendBusy && !sendQueuesBehindSetup) ||
       isRevertingCheckpoint ||
       !clientSettingsHydrated ||
       threadDetailLoading ||
       readPendingEnvironmentChange() !== null ||
-      sendInFlightRef.current ||
       feedbackUploadsInFlightRef.current.has(routeThreadKey)
     ) {
       notifyDirectAnnotationAttached();
+      return;
+    }
+    if (
+      (isSendBusy && !sendQueuesBehindSetup) ||
+      sendInFlightRef.current ||
+      threadHasPendingSend(activeThread.id)
+    ) {
+      await queueBehindPendingSend(activeThread.id, dispatchMode);
       return;
     }
     if (needsLoadBalancing) {
@@ -550,31 +614,7 @@ export function useComposerSend(input: ComposerSendInput) {
       // t3team offline outbox: instead of erroring, hand the would-be run start to the
       // host's queue; it drains FIFO when the environment reconnects. Text-only —
       // attachments need a live connection to upload, so they keep the stock toast.
-      if (
-        enqueueOfflineTurnStart &&
-        !directAnnotation &&
-        !draftHasNonPromptContent(composerDraftTarget) &&
-        promptRef.current.trim().length > 0
-      ) {
-        const offlineSendCtx = composerRef.current?.getSendContext();
-        const queued = await enqueueOfflineTurnStart({
-          threadId: activeThread.id,
-          messageId: newMessageId(),
-          messageText: promptRef.current,
-          modelSelection: offlineSendCtx?.selectedModelSelection ?? null,
-          titleSeed: truncate(promptRef.current.trim()),
-          runtimeMode,
-          interactionMode,
-          createdAt: new Date().toISOString(),
-          hasAttachments: false,
-        });
-        if (queued) {
-          promptRef.current = "";
-          setComposerDraftPrompt(composerDraftTarget, "");
-          composerRef.current?.resetCursorState();
-          return;
-        }
-      }
+      if (await enqueuePromptToOutbox(activeThread.id)) return;
       const toastSlot = environmentUnavailableSendToastSlotRef.current;
       environmentUnavailableSendToastSlotRef.current =
         (toastSlot + 1) % ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE;
@@ -1432,6 +1472,27 @@ export function useComposerSend(input: ComposerSendInput) {
     );
 
     let failure: AtomCommandResult<unknown, unknown> | null = null;
+    // A send the server refused did not run: its prompt goes back to the composer.
+    const putPromptBack = () => {
+      setOptimisticUserMessages((existing) => {
+        const next = existing.filter((message) => message.id !== messageIdForSend);
+        return next.length === existing.length ? existing : next;
+      });
+      // The restored draft clones its images, so the sent copies are no longer used.
+      optimisticBlobPreviews.release(optimisticMessage);
+      const retryComposerImages = restoreComposerDraft(composerDraftTarget, sendSnapshot);
+      if (currentRouteThreadKeyRef.current === routeThreadKey) {
+        promptRef.current = messageTextForSend;
+        composerImagesRef.current = retryComposerImages;
+        composerFilesRef.current = composerFilesSnapshot;
+        composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
+        composerRef.current?.resetCursorState({
+          cursor: collapseExpandedComposerCursor(messageTextForSend, messageTextForSend.length),
+          prompt: messageTextForSend,
+          detectTrigger: true,
+        });
+      }
+    };
 
     if (failure === null && isServerThread) {
       const settingsResult = await persistThreadSettingsForNextTurn({
@@ -1544,9 +1605,10 @@ export function useComposerSend(input: ComposerSendInput) {
           ? scopeThreadRef(environmentId, threadIdForSend)
           : null;
       if (backgroundThreadRef) beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
-      const startPromise = startThreadTurn({
+      const turnStart: Parameters<typeof startThreadTurn>[0] = {
         environmentId,
         input: {
+          commandId: newSendCommandId(),
           threadId: threadIdForSend,
           message: {
             messageId: messageIdForSend,
@@ -1567,7 +1629,9 @@ export function useComposerSend(input: ComposerSendInput) {
           ...(bootstrap ? { bootstrap } : {}),
           createdAt: messageCreatedAt,
         },
-      });
+      };
+      beginSend(messageIdForSend, { threadId: threadIdForSend, environmentId });
+      const startPromise = startThreadTurn(turnStart);
       if (backgroundThreadRef) {
         try {
           backgroundDraftOpened = Boolean(
@@ -1592,9 +1656,57 @@ export function useComposerSend(input: ComposerSendInput) {
         }
       }
       const startResult = await startPromise;
-      if (startResult._tag === "Failure") {
+      const outcome = await confirmSend({
+        messageId: messageIdForSend,
+        result: startResult,
+        resend: () => startThreadTurn(turnStart),
+        handOff: async () => {
+          const hasAttachments =
+            turnAttachmentsResult.value.length > 0 || contextAttachmentsResult.value.length > 0;
+          if (isLocalDraftThread || hasAttachments || !enqueueOfflineTurnStart) return false;
+          const handed = await enqueueOfflineTurnStart({
+            threadId: threadIdForSend,
+            messageId: messageIdForSend,
+            messageText: outgoingMessageText,
+            modelSelection: ctxSelectedModelSelection ?? null,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode: sendInteractionMode,
+            createdAt: messageCreatedAt,
+            hasAttachments: false,
+            sendIdentity: {
+              commandId: turnStart.input.commandId ?? newSendCommandId(),
+              dispatchMode: turnDispatchMode,
+              unconfirmed: true,
+            },
+          });
+          // The outbox row now shows it, durably; the in-memory bubble would duplicate it.
+          if (handed) {
+            setOptimisticUserMessages((existing) =>
+              existing.filter((message) => message.id !== messageIdForSend),
+            );
+          }
+          return handed;
+        },
+        onRejectedRetry: (rejected) => {
+          if (rejected._tag !== "Failure") return;
+          if (
+            !composerDraftHasUserContent(
+              useComposerDraftStore.getState().getComposerDraft(composerDraftTarget),
+            )
+          ) {
+            putPromptBack();
+          }
+          const error = squashAtomCommandFailure(rejected);
+          setThreadError(
+            threadIdForSend,
+            error instanceof Error ? error.message : "Failed to send message.",
+          );
+        },
+      });
+      if (outcome === "rejected" && startResult._tag === "Failure") {
         failure = startResult;
-      } else {
+      } else if (outcome === "confirmed") {
         turnStartSucceeded = true;
         setKeepFullHistory(routeThreadKey, false);
         clearUsageLimitsFor(routeThreadKey);
@@ -1655,24 +1767,7 @@ export function useComposerSend(input: ComposerSendInput) {
           useComposerDraftStore.getState().getComposerDraft(composerDraftTarget),
         )
       ) {
-        setOptimisticUserMessages((existing) => {
-          const next = existing.filter((message) => message.id !== messageIdForSend);
-          return next.length === existing.length ? existing : next;
-        });
-        // The restored draft clones its images, so the sent copies are no longer used.
-        optimisticBlobPreviews.release(optimisticMessage);
-        const retryComposerImages = restoreComposerDraft(composerDraftTarget, sendSnapshot);
-        if (currentRouteThreadKeyRef.current === routeThreadKey) {
-          promptRef.current = messageTextForSend;
-          composerImagesRef.current = retryComposerImages;
-          composerFilesRef.current = composerFilesSnapshot;
-          composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
-          composerRef.current?.resetCursorState({
-            cursor: collapseExpandedComposerCursor(messageTextForSend, messageTextForSend.length),
-            prompt: messageTextForSend,
-            detectTrigger: true,
-          });
-        }
+        putPromptBack();
       }
       if (!isAtomCommandInterrupted(failure)) {
         const error = squashAtomCommandFailure(failure);
