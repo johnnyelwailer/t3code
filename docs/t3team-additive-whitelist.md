@@ -705,7 +705,6 @@ The pill dot, one-time notes pop and per-entry update buttons live in `t3team-*`
 
 - `apps/web/src/components/sidebar/UpdateEverythingDialog.tsx` — new entry: optional `renderEntry` slot per table cell, and `runningThreadCountAtom` exported so an entry names only its own running threads.
 - `apps/web/src/components/sidebar/useUpdateEverything.ts` — new entry: returns the `servers` targets it already computes, so a row updates one server without a copy of the machine list.
-- `apps/web/src/components/sidebar/SidebarUpdateReleaseNotes.tsx` — new entry: `export` on `formatReleaseAge`, so the notes popover reuses the version-age reading instead of a copy.
 - `apps/web/src/components/sidebar/SidebarUpdatePill.tsx` — already listed; one `useUpdatePillAdditions` hook call plus popover gating.
 
 ## Show usage limits by default (Nexi Work)

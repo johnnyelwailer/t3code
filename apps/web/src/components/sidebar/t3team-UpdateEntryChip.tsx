@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { CircleArrowUpIcon, DownloadIcon, RotateCwIcon } from "lucide-react";
 
-import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -13,13 +12,13 @@ const ICONS = { download: DownloadIcon, restart: RotateCwIcon, update: CircleArr
 export interface UpdateEntryAction {
   readonly label: string;
   readonly icon: keyof typeof ICONS;
-  /** The machine this action restarts; its running threads are named in the action's label. */
-  readonly restartEnvironmentId: string | null;
+  /** Every machine this action restarts; all their running threads are named in its label. */
+  readonly restartEnvironmentIds: ReadonlyArray<string>;
   readonly pending: boolean;
   readonly onClick: () => void;
 }
 
-/** One update-dialog table entry: its name and, when it can be updated on its own, that action. */
+/** One update-dialog table entry: a plain name, or a bordered chip when it updates on its own. */
 export function UpdateEntryChip({
   label,
   action,
@@ -27,35 +26,31 @@ export function UpdateEntryChip({
   readonly label: string;
   readonly action: UpdateEntryAction | null;
 }) {
-  const threads = useAtomValue(runningThreadCountAtom(action?.restartEnvironmentId ?? ""));
-  const Icon = action ? ICONS[action.icon] : null;
-  const title = action ? updateEntryActionTitle(action.label, threads) : null;
+  const threads = useAtomValue(
+    runningThreadCountAtom((action?.restartEnvironmentIds ?? []).join("\n")),
+  );
+  if (action === null) return <span className="whitespace-nowrap">{label}</span>;
+  const Icon = ICONS[action.icon];
+  const title = updateEntryActionTitle(action.label, threads);
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-0.5 whitespace-nowrap rounded-md border border-border/70 bg-muted/40 py-0.5 ps-2",
-        action ? "pe-0.5" : "pe-2",
-      )}
-    >
+    <span className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-md border border-border/70 bg-muted/40 py-0.5 ps-2 pe-0.5">
       {label}
-      {action && Icon && title ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                aria-label={title}
-                disabled={action.pending}
-                onClick={action.onClick}
-              >
-                {action.pending ? <Spinner size="xs" /> : <Icon />}
-              </Button>
-            }
-          />
-          <TooltipPopup side="top">{title}</TooltipPopup>
-        </Tooltip>
-      ) : null}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label={title}
+              disabled={action.pending}
+              onClick={action.onClick}
+            >
+              {action.pending ? <Spinner size="xs" /> : <Icon className="text-foreground" />}
+            </Button>
+          }
+        />
+        <TooltipPopup side="top">{title}</TooltipPopup>
+      </Tooltip>
     </span>
   );
 }

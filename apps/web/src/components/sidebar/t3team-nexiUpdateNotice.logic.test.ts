@@ -1,7 +1,7 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
-  getAppUpdateNotesView,
+  appRestartScope,
   getNexiUpdateNoticeView,
   getUpdateNotesAttention,
   updateEntryActionTitle,
@@ -96,33 +96,6 @@ describe("Nexi update notice", () => {
     ).toBeNull();
   });
 });
-describe("App update notes", () => {
-  it("describes an update that is still to download", () => {
-    const page = "https://nexplore.ghe.com/hive/nx-nexi/releases/tag/desktop-v0.1.2-rc.8";
-    const available = {
-      ...base,
-      status: "available" as const,
-      releaseUrl: page,
-      releaseNotes: [
-        {
-          version: "0.1.2-rc.8",
-          totalItems: 2,
-          releasedAt: "2026-11-13",
-          items: ["ci: shard the browser suite", "fix(web): faster sidebar by @pj"],
-        },
-      ],
-    };
-    expect(getAppUpdateNotesView(available)).toEqual({
-      version: "0.1.2-rc.8",
-      notes: ["Faster sidebar"],
-      releaseUrl: page,
-      releasedAt: "2026-11-13",
-    });
-  });
-  it("has nothing to show without an update", () => {
-    expect(getAppUpdateNotesView({ ...base, availableVersion: null })).toBeNull();
-  });
-});
 describe("Update notes attention", () => {
   it.each([
     [null, null, null, { dot: false, pop: false }],
@@ -135,7 +108,7 @@ describe("Update notes attention", () => {
   });
 });
 describe("Update entry action title", () => {
-  it("names only the threads that entry interrupts", () => {
+  it("names the threads the action interrupts", () => {
     expect(updateEntryActionTitle("Update build-box", 0)).toBe("Update build-box");
     expect(updateEntryActionTitle("Update build-box", 1)).toBe(
       "Update build-box · interrupts 1 running thread",
@@ -143,5 +116,20 @@ describe("Update entry action title", () => {
     expect(updateEntryActionTitle("Restart this app to update", 3)).toBe(
       "Restart this app to update · interrupts 3 running threads",
     );
+  });
+});
+describe("App restart scope", () => {
+  it("puts the app action on one row and restarts every machine this app hosts", () => {
+    const rows = [
+      { environmentId: "primary", app: "this-app" },
+      { environmentId: "desktop-local", app: "this-app" },
+      { environmentId: "build-box", app: "server" },
+    ];
+    expect(appRestartScope(rows)).toEqual({
+      actionRow: rows[0],
+      environmentIds: ["primary", "desktop-local"],
+    });
+    const hostsNone = [{ environmentId: null, app: "this-app" }];
+    expect(appRestartScope(hostsNone)).toEqual({ actionRow: hostsNone[0], environmentIds: [] });
   });
 });

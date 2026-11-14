@@ -38,6 +38,7 @@ import {
   shouldContinueDesktopUpdateCheckAnimation,
   shouldShowDesktopUpdateCheckIcon,
 } from "./DesktopUpdateStatusIcon";
+import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
 import { SidebarUpdateCapsule } from "./SidebarUpdateCapsule";
 import { NexiUpdateReadyFooter } from "./t3team-NexiUpdateReadyFooter";
 import { getNexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
@@ -284,17 +285,16 @@ function SidebarUpdateControl() {
   const t3team = useUpdatePillAdditions({
     state,
     action,
-    servers: everything.servers,
+    everything,
     runsEverything,
     showsNotesPopover: showReleaseNotesPopover,
-    title: tooltip,
     setNotesOpen: setReleaseNotesOpen,
     closeDialog: () => setIsConfirmingEverything(false),
   });
 
   const handleAction = async () => {
     const bridge = window.desktopBridge;
-    if (isInteractionDisabled || t3team.clickOpensNotes) return;
+    if (isInteractionDisabled) return;
 
     if (runsEverything) {
       setIsConfirmingEverything(true);
@@ -496,7 +496,7 @@ function SidebarUpdateControl() {
       onFocus={(event) => {
         const focusVisible = event.currentTarget.matches(":focus-visible");
         setReleaseNotesTriggerFocusVisible(focusVisible);
-        if (!showReleaseNotesPopover || t3team.clickOpensNotes || !focusVisible) return;
+        if (!showReleaseNotesPopover || !focusVisible) return;
         if (suppressReleaseNotesFocusOpen.current) {
           suppressReleaseNotesFocusOpen.current = false;
           return;
@@ -504,7 +504,7 @@ function SidebarUpdateControl() {
         flushSync(() => releaseNotesPopoverHandle.open(releaseNotesTriggerId));
       }}
       onKeyDown={(event) => {
-        if (!showReleaseNotesPopover || t3team.clickOpensNotes) return;
+        if (!showReleaseNotesPopover) return;
         openSidebarUpdateReleaseNotesPopoverOnForwardTab(
           event,
           releaseNotesPopoverHandle,
@@ -528,8 +528,7 @@ function SidebarUpdateControl() {
             details.cancel();
             return;
           }
-          if (!t3team.clickOpensNotes)
-            handleSidebarUpdateReleaseNotesPopoverOpenChange(open, details);
+          handleSidebarUpdateReleaseNotesPopoverOpenChange(open, details);
           if (!details.isCanceled) setReleaseNotesOpen(open);
           if (open && !details.isCanceled) t3team.markSeen();
         }}
@@ -549,7 +548,7 @@ function SidebarUpdateControl() {
                 closeDelay={150}
                 handle={releaseNotesPopoverHandle}
                 id={releaseNotesTriggerId}
-                openOnHover={showReleaseNotesPopover && !t3team.clickOpensNotes}
+                openOnHover={showReleaseNotesPopover}
                 render={updateButton}
               />
             }
@@ -575,7 +574,7 @@ function SidebarUpdateControl() {
           <PopoverPopup
             align="center"
             aria-label="Update release notes"
-            initialFocus={t3team.clickOpensNotes}
+            initialFocus={false}
             onKeyDownCapture={(event) => {
               if (
                 event.key === "Escape" &&
@@ -588,7 +587,11 @@ function SidebarUpdateControl() {
             side="top"
             tooltipStyle
           >
-            {t3team.popoverContent}
+            <SidebarUpdateReleaseNotes
+              shell={window.desktopBridge}
+              state={state}
+              tooltip={tooltip}
+            />
           </PopoverPopup>
         ) : null}
       </Popover>

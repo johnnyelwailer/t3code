@@ -133,11 +133,11 @@ export const AGENT_FEATURE_FLAG_DEFINITIONS = {
     requiresRestart: false,
     addedOn: "2026-11-03",
   },
-  UI_UPDATE_APP_ONLY: {
+  UI_UPDATE_BADGE_ROW_ACTIONS: {
     group: "UI & rendering",
-    label: "Update badge and per-item updates",
+    label: "Update badge and per-row updates",
     description:
-      "The update pill shows a dot and pops what changed once per version; the update dialog updates the app, a machine or a provider on its own.",
+      "The update pill shows a dot until its release notes are opened, and opens them once per version. The update dialog gives the app, each server and each provider its own update button.",
     defaultEnabled: false,
     requiresRestart: false,
     addedOn: "2026-11-14",

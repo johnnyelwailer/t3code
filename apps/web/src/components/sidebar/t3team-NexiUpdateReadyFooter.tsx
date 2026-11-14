@@ -9,6 +9,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { DesktopUpdateStatusIcon } from "./DesktopUpdateStatusIcon";
 import { NexiUpdatePopoverView } from "./t3team-NexiUpdatePopoverView";
 import { readKey, writeKey } from "./t3team-updateNoticeStorage";
+import { useUpdateNotesAttention } from "./t3team-useUpdateNotesAttention";
+import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import type { NexiUpdateNoticeView } from "./t3team-nexiUpdateNotice.logic";
 
 const DISMISSED_KEY = "nexi.update.dismissedVersion";
@@ -47,6 +49,17 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const pending = dismissed !== view.version;
+  const attention = useUpdateNotesAttention(
+    useFeatureFlag("UI_UPDATE_BADGE_ROW_ACTIONS") ? view.version : null,
+  );
+  if (attention.pop) {
+    attention.markPopped();
+    setOpen(true);
+  }
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) attention.markSeen();
+  };
 
   const announce = pending ? view.version : null;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- raises the OS notification, outside React, once per version
@@ -74,7 +87,7 @@ export function NexiUpdateReadyFooter({ view }: { readonly view: NexiUpdateNotic
   const label = `Nexi Work ${view.version} is ready to install`;
   return (
     <SidebarMenuItem className="ml-auto shrink-0">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={onOpenChange}>
         <Tooltip disabled={open}>
           <TooltipTrigger
             render={

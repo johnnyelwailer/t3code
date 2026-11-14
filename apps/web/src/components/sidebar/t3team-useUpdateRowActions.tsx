@@ -3,11 +3,11 @@ import { Fragment, useState } from "react";
 
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import type { DesktopUpdateButtonAction } from "../desktopUpdate.logic";
-import { useServerUpdate } from "../ServerUpdateAction";
+import { type ServerUpdateTarget, useServerUpdate } from "../ServerUpdateAction";
 import { UpdateEntryChip } from "./t3team-UpdateEntryChip";
-import { useProviderEntryUpdate } from "./t3team-useProviderEntryUpdate";
+import { appRestartScope } from "./t3team-nexiUpdateNotice.logic";
 import type { UpdateEntryCell } from "./t3team-updateEntryCell";
-import type { ServerUpdateTarget } from "../ServerUpdateAction";
+import { useProviderEntryUpdate } from "./t3team-useProviderEntryUpdate";
 import type { UpdateEverythingRow } from "./updateEverything.logic";
 
 const APP_ACTIONS = {
@@ -17,15 +17,17 @@ const APP_ACTIONS = {
 
 /** Update-dialog entries that update on their own: this app, one server, or one provider. */
 export function useUpdateRowActions(
+  rows: ReadonlyArray<UpdateEverythingRow>,
   servers: ReadonlyArray<ServerUpdateTarget>,
   action: DesktopUpdateButtonAction,
   onUpdateApp: () => void,
 ) {
-  const enabled = useFeatureFlag("UI_UPDATE_APP_ONLY");
+  const enabled = useFeatureFlag("UI_UPDATE_BADGE_ROW_ACTIONS");
   const updateServer = useServerUpdate();
   const providers = useProviderEntryUpdate();
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
   if (!enabled) return null;
+  const appScope = appRestartScope(rows);
 
   const run = (key: string, work: () => Promise<unknown>) => {
     setPending((keys) => new Set(keys).add(key));
@@ -36,16 +38,15 @@ export function useUpdateRowActions(
 
   const appEntry = (row: UpdateEverythingRow, label: string) => {
     if (row.app === "this-app") {
-      if (action === "none") return null;
+      if (action === "none" || row !== appScope.actionRow) return null;
       const { label: actionLabel, icon } = APP_ACTIONS[action];
-      const restartEnvironmentId = action === "install" ? row.environmentId : null;
       return (
         <UpdateEntryChip
           label={label}
           action={{
             label: actionLabel,
             icon,
-            restartEnvironmentId,
+            restartEnvironmentIds: action === "install" ? appScope.environmentIds : [],
             pending: false,
             onClick: onUpdateApp,
           }}
@@ -61,7 +62,7 @@ export function useUpdateRowActions(
         action={{
           label: `Update ${row.label}`,
           icon: "update",
-          restartEnvironmentId: server.environmentId,
+          restartEnvironmentIds: [server.environmentId],
           pending: pending.has(key),
           onClick: () => run(key, () => updateServer(server)),
         }}
@@ -86,7 +87,7 @@ export function useUpdateRowActions(
         action={{
           label: `Update ${label} on ${row.label}`,
           icon: "update",
-          restartEnvironmentId: null,
+          restartEnvironmentIds: [],
           pending: pending.has(key),
           onClick: () => run(key, () => providers.update(environmentId, row.label, candidate)),
         }}
