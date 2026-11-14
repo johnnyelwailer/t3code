@@ -44,7 +44,7 @@ import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore"
 import { getClientSettings } from "./useSettings";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { pickScopedDefaultProject } from "../t3team/t3team-scopeProjectResolution";
-import { useT3TeamSidebarProjectScope } from "../t3team/t3team-sidebarProjectScopeStore";
+import { useT3TeamPillScope } from "../t3team/t3team-pillScope";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
 import { readUnloadedThreadCount } from "../state/olderSettledShelf";
 import { resolveProjectDefaultProviderModelSelection } from "../providerInstances";
@@ -432,6 +432,7 @@ export function resolveDefaultProjectRef(
   t3team?: {
     readonly scopedProjectRefs: ReadonlyArray<ScopedProjectRef> | null;
     readonly offlineEnvironmentIds: ReadonlySet<string>;
+    readonly preferredEnvironmentId?: string | null;
   },
 ): ScopedProjectRef | null {
   const orderedProjects = orderItemsByPreferredIds({
@@ -450,6 +451,7 @@ export function resolveDefaultProjectRef(
     offlineEnvironmentIds: offline ?? new Set<string>(),
     fallback:
       orderedProjects.find((project) => !offline?.has(project.environmentId)) ?? orderedProjects[0],
+    preferredEnvironmentId: t3team?.preferredEnvironmentId ?? null,
   });
   return defaultProject ? scopeProjectRef(defaultProject.environmentId, defaultProject.id) : null;
 }
@@ -475,10 +477,10 @@ export function useHandleNewThread() {
   // This computer always counts as reachable, even while it is still connecting at startup.
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  // t3team: the sidebar's project scope outranks project order for the default — "new thread"
-  // starts in the project the user is looking at. An open thread or draft still wins (see
-  // resolveThreadActionProjectRef), and an unscoped sidebar behaves as before.
-  const scopedProjectRefs = useT3TeamSidebarProjectScope((state) => state.scopedProjectRefs);
+  // t3team: the pill scope (project and environment) outranks project order for the default —
+  // "new thread" starts where the user is looking. An open thread or draft still wins (see
+  // resolveThreadActionProjectRef), and unscoped pills behave as before.
+  const pillScope = useT3TeamPillScope();
   const offlineEnvironmentIds = new Set<string>(
     environments
       .filter(
@@ -489,8 +491,9 @@ export function useHandleNewThread() {
       .map((environment) => environment.environmentId),
   );
   const defaultProjectRef = resolveDefaultProjectRef(projects, projectOrder, {
-    scopedProjectRefs,
+    scopedProjectRefs: pillScope.projectRefs,
     offlineEnvironmentIds,
+    preferredEnvironmentId: pillScope.environmentId,
   });
 
   return {

@@ -250,6 +250,7 @@ vi.mock("../uiStateStore", () => ({
   useUiStateStore: () => [],
 }));
 vi.mock("./useSettings", () => ({ getClientSettings: () => ({}) }));
+vi.mock("../t3team/t3team-useFeatureFlag", () => ({ useFeatureFlag: () => true }));
 
 import { useNewThreadHandler } from "./useHandleNewThread";
 

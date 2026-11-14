@@ -80,6 +80,7 @@ import { startOpeningDetail } from "../workspace/useSelectWorkspaceDetail";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { HomeListOptionsProvider } from "../home/home-list-options";
 import { newTaskDestination } from "../threads/new-task-project-selection";
+import { readPillScopedNewTaskProject } from "../home/t3team-pillScope";
 import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
 import { ThreadNavigationSidebar } from "../threads/ThreadNavigationSidebar";
 import { useOpenThreadPullRequests } from "../threads/use-open-thread-pull-requests";
@@ -626,6 +627,11 @@ function AdaptiveWorkspaceLayoutContent(
         requestId: uuidv4(),
         useLastProject: saved?.useLastProjectForNewThreads,
         currentProject: environmentId && projectId ? { environmentId, projectId } : undefined,
+        scopedProject: readPillScopedNewTaskProject({
+          projects,
+          filters: saved?.threadListFilters,
+          projectGroupingMode,
+        }),
         lastProject: saved?.lastThreadProject,
       }),
     );

@@ -24,6 +24,7 @@ import {
   type ProviderInstanceEntry,
 } from "../providerInstances";
 import { useVisibleThreadShells } from "../state/entities";
+import { useT3TeamPillScopeFilter } from "../t3team/t3team-pillScope";
 import {
   useEnvironmentProviders,
   useEnvironments,
@@ -99,7 +100,9 @@ export function useCommandPaletteThreadItems(input: {
 }) {
   const { activeThread, threadSearchQuery } = input;
   const navigate = useNavigate();
-  const threads = useVisibleThreadShells();
+  // t3team: the sidebar pills scope the palette's threads, message matches included.
+  const inPillScope = useT3TeamPillScopeFilter();
+  const threads = useVisibleThreadShells().filter((thread) => inPillScope(thread));
   const { projectEnvironmentLocationById } = useEnvironmentLookups();
   const providerEntryByEnvironmentAndInstanceId = useProviderEntryByEnvironmentAndInstanceId();
   const messageSearch = useConnectedThreadSearch(threadSearchQuery);
