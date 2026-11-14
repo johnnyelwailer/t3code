@@ -324,7 +324,7 @@ jobs:
               const hotNumstat = execFileSync(
                 "git",
                 [...diffArgs],
-                { encoding: "utf8" },
+                { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
               );
               const hotHits = new Map();
               for (const line of hotNumstat.split("\n")) {
