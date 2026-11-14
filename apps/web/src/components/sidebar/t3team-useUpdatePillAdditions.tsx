@@ -1,4 +1,5 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
+import { useRef } from "react";
 
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";
 import {
@@ -21,14 +22,15 @@ export function useUpdatePillAdditions({
   action,
   everything,
   showsNotesPopover,
-  setNotesOpen,
+  openNotes,
   closeDialog,
 }: {
   readonly state: DesktopUpdateState | null;
   readonly action: DesktopUpdateButtonAction;
   readonly everything: Pick<ReturnType<typeof useUpdateEverything>, "rows" | "servers">;
   readonly showsNotesPopover: boolean;
-  readonly setNotesOpen: (open: boolean) => void;
+  /** Opens the popover as a click would, so click-away closes it. */
+  readonly openNotes: () => void;
   readonly closeDialog: () => void;
 }) {
   const enabled = useFeatureFlag("UI_UPDATE_BADGE_ROW_ACTIONS");
@@ -37,20 +39,24 @@ export function useUpdatePillAdditions({
       ? getDesktopUpdateDownloadedVersion(state)
       : null;
   const attention = useUpdateNotesAttention(version);
+  const autoOpening = useRef(false);
   const renderEntry = useUpdateRowActions(everything.rows, everything.servers, action, () => {
     closeDialog();
-    if (state !== null && action !== "none")
-      void updateLocalApp(action, state, { confirmed: true });
+    if (action !== "none") void updateLocalApp(action);
   });
   return {
     renderEntry,
     dot: attention.dot,
-    markSeen: attention.markSeen,
+    markSeen: () => {
+      if (!autoOpening.current) attention.markSeen();
+    },
     autoPop: attention.pop ? (
       <UpdateNotesAutoPop
         onPop={() => {
           attention.markPopped();
-          setNotesOpen(true);
+          autoOpening.current = true;
+          openNotes();
+          autoOpening.current = false;
         }}
       />
     ) : null,

@@ -287,7 +287,7 @@ function SidebarUpdateControl() {
     action,
     everything,
     showsNotesPopover: showReleaseNotesPopover,
-    setNotesOpen: setReleaseNotesOpen,
+    openNotes: () => releaseNotesPopoverHandle.open(releaseNotesTriggerId),
     closeDialog: () => setIsConfirmingEverything(false),
   });
 
