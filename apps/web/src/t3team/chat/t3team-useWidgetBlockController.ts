@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScopedThreadRef, T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
 
+import { buildT3TeamWidgetPromptTransport } from "@t3tools/shared/t3team-widgetPromptTransport";
+
 import { useThemeSnapshot } from "~/hooks/useTheme";
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { useThreadShell } from "~/state/entities";
@@ -33,27 +35,9 @@ export {
   T3TEAM_WIDGET_MIN_HEIGHT,
 } from "~/t3team/chat/t3team-widgetBridgeClient";
 
-function humanizeWidgetTitle(title: string): string {
-  return title.replaceAll(/[_-]+/g, " ").replaceAll(/\s+/g, " ").trim();
-}
-
-/** Build the hidden, agent-visible envelope for an explicit user action inside a widget. */
-export function buildT3TeamWidgetPromptTransport(input: {
-  readonly widgetId: string;
-  readonly widgetTitle: string;
-  readonly text: string;
-}) {
-  const widgetTitle = humanizeWidgetTitle(input.widgetTitle) || "Widget";
-  return {
-    text: `Widget “${widgetTitle}” action: ${input.text.trim()}`,
-    t3teamExt: {
-      displayText: input.text.trim(),
-      visibleToUser: false,
-      visibleToAgent: true,
-      widgetReply: { widgetId: input.widgetId, widgetTitle },
-    },
-  } as const;
-}
+// One builder for every client (`@t3tools/shared/t3team-widgetPromptTransport`): web and mobile
+// send the identical hidden widget action message.
+export { buildT3TeamWidgetPromptTransport };
 
 export function useT3TeamWidgetBlockController(input: {
   readonly widget: T3TeamMessageWidgetAttachment["widget"];
