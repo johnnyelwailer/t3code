@@ -882,7 +882,9 @@
     "apps/server/src/serverOwnership.ts",
     "packages/project-context/src/t3teamProjectStateDir.ts",
     "packages/project-context/src/t3teamProjectStateDir.test.ts",
-    ".github/workflows/pr-size.yml"
+    ".github/workflows/pr-size.yml",
+    "apps/web/src/components/chat/threadDetailsItems.ts",
+    "apps/web/src/components/chat/threadDetailsItems.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     "apps/mobile/modules/t3-native-controls/android/src/main/res/drawable/t3_extra_tab.xml",

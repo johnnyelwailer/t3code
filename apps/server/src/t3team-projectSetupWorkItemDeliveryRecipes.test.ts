@@ -292,7 +292,14 @@ describe("launch arguments", () => {
 });
 
 describe("work-item delivery scaffolding", () => {
-  beforeAll(() => replaceFeatureFlagPresetValues(new Map([["WORKITEM_DELIVERY_RECIPES", true]])));
+  beforeAll(() =>
+    replaceFeatureFlagPresetValues(
+      new Map([
+        ["WORKITEM_DELIVERY_RECIPES", true],
+        ["BUNDLED_RECIPE_EXAMPLES", true],
+      ]),
+    ),
+  );
   afterAll(() => replaceFeatureFlagPresetValues(new Map()));
 
   it("embeds each body as source text under a real node process, the dev backend's loader", () => {

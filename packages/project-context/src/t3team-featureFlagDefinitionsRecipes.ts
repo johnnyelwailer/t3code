@@ -35,7 +35,16 @@ export const RECIPE_FEATURE_FLAG_DEFINITIONS = {
     subgroup: "Recipes",
     label: "Work-item recipes",
     description:
-      "The fix-this-bug and implement-this recipes: added to each project and offered on work items. Off: not added and not listed.",
+      "The fix-this-bug and implement-this recipes: added to each project and offered on work items. They are bundled examples, so Bundled recipe examples must be on as well. Off: not added and not listed.",
+    defaultEnabled: false,
+    requiresRestart: false,
+  },
+  BUNDLED_RECIPE_EXAMPLES: {
+    group: "Orchestration",
+    subgroup: "Recipes",
+    label: "Bundled recipe examples",
+    description:
+      "The example recipes compiled into the app, offered as quick starts and slash commands and added to new projects. Off: only Create or edit a recipe is offered; recipes from packs and projects are unaffected.",
     defaultEnabled: false,
     requiresRestart: false,
   },

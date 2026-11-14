@@ -13,11 +13,7 @@ import * as Layer from "effect/Layer";
 import { isMainRepositoryEnabled, MAIN_REPOSITORY_FLAG_ENV } from "./t3team-mainRepositoryFlag.ts";
 import { detectMainRepository } from "./t3team-project-repository-services.ts";
 import { mergeLinkedRepositoryEntries } from "./t3team-project-repository-routesBootstrap.ts";
-import {
-  GITIGNORE_ENTRY,
-  HIDDEN_T3TEAM_DIR,
-  MAIN_REPOSITORY_GITIGNORE_ENTRIES,
-} from "./t3team-project-repository-utils.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import {
   detectMainRepositoryCandidates,
   migrateProjectStateDir,
@@ -185,8 +181,6 @@ it.layer(TestLayer)("project main repository", (it) => {
         localPath: alpha,
       });
       expect(elapsedMs).toBeLessThan(500);
-      const gitignore = NodeFS.readFileSync(NodePath.join(alpha, ".gitignore"), "utf8");
-      expect(gitignore).toContain(`${HIDDEN_T3TEAM_DIR}/context/_blobs/`);
     }),
   );
 
@@ -300,7 +294,7 @@ it.layer(TestLayer)("project main repository", (it) => {
     }),
   );
 
-  it.effect("ignores the machine-local state subpaths in a linked main checkout", () =>
+  it.effect("never writes .gitignore into a linked main checkout", () =>
     Effect.gen(function* () {
       const { home, alpha } = makeProject();
       yield* switchProjectMainRepository({
@@ -308,9 +302,7 @@ it.layer(TestLayer)("project main repository", (it) => {
         url: "https://github.com/acme/alpha",
         selection: "user",
       });
-      const gitignore = NodeFS.readFileSync(NodePath.join(alpha, ".gitignore"), "utf8");
-      for (const entry of MAIN_REPOSITORY_GITIGNORE_ENTRIES) expect(gitignore).toContain(entry);
-      expect(gitignore.split(/\r?\n/)).not.toContain(GITIGNORE_ENTRY);
+      expect(NodeFS.existsSync(NodePath.join(alpha, ".gitignore"))).toBe(false);
     }),
   );
 

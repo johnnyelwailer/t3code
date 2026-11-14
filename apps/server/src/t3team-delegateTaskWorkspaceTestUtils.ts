@@ -63,6 +63,7 @@ const resolve = (input: ResolveInput) =>
     const services = {
       fileSystem: yield* FileSystem.FileSystem,
       path: yield* Path.Path,
+      worktreesRoot: NodePath.join(NodePath.dirname(input.workspaceRoot), "t3-worktrees"),
       gitWorkflow: {
         createWorktree: (args: Parameters<GitWorkflowService["Service"]["createWorktree"]>[0]) =>
           driver.createWorktree(args),

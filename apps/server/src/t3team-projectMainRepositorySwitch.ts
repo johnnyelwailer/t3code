@@ -22,14 +22,10 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
-import {
-  ensureWorkspaceGitignore,
-  writeReferenceManifest,
-} from "./t3team-project-repository-services.ts";
+import { writeReferenceManifest } from "./t3team-project-repository-services.ts";
 import { readPreservedReferenceManifest } from "./t3team-project-repository-routesBootstrap.ts";
 import {
   HIDDEN_T3TEAM_DIR,
-  MAIN_REPOSITORY_GITIGNORE_ENTRIES,
   MANIFEST_FILE_NAME,
   isLinkedRepositoryReady,
   REFERENCES_DIR_NAME,
@@ -98,12 +94,6 @@ export const switchProjectMainRepository = Effect.fn("switchProjectMainRepositor
       projectRoot,
       selection: input.selection,
     };
-    // A linked checkout is a real repository: like an adopted one, only the machine-local state
-    // subpaths are ignored, so committed team state stays committable.
-    if (input.url !== null) {
-      yield* ensureWorkspaceGitignore(checkoutPath, MAIN_REPOSITORY_GITIGNORE_ENTRIES);
-    }
-
     // The target's manifest knows every linked clone, and names the checkout as the main
     // repository so worktree isolation defaults to it before the next bootstrap.
     const target = yield* readPreservedReferenceManifest(manifestPath(checkoutPath));

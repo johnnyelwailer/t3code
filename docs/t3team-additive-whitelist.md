@@ -698,3 +698,10 @@ rc.20 takes over `nexi-work` as the upgrade, but must not run the home or profil
 - `apps/desktop/src/app/DesktopApp.ts` — before `primaryBackend.start`, run `runDesktopHomeGuard`: if the daily app is detected, show the inline quit-and-retry screen and wait for Retry to see it gone; then continue the normal boot. A few lines, already on the whitelist.
 - `apps/desktop/src/app/DesktopUserData.ts` — skip `migrateNexiProfile` when `detectOldAppSync` reports the daily app on the adjacent Nexi home, so the Chromium-profile copy does not run against a live profile. Already on the whitelist.
 - `apps/desktop/src/backend/DesktopBackendConfiguration.ts` — if the daily app still holds the home, do not call `migrateLegacyHomeIfNeeded` and do not write the identity marker. Defense in depth; bootstrap already waits for the home to be free. Already on the whitelist.
+
+## Show usage limits by default (Nexi Work)
+
+- `apps/web/src/components/chat/threadDetailsItems.ts`
+  - Usage limits is visible by default in the thread details card. People who already toggled that row keep their choice. Context window stays hidden. The retired Labs flag can still show both.
+- `apps/web/src/components/chat/threadDetailsItems.test.ts`
+  - Asserts the new default and that an explicit hide is kept.

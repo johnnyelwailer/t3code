@@ -9,7 +9,6 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import { it as effectIt } from "@effect/vitest";
-import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -60,7 +59,7 @@ describe("resolveDelegatedWorkspace", () => {
     const resolved = await ok({ workspaceRoot: linkedWorkspace, repository: LINKED, key: "a" });
     expect(resolved.repository).toBe(LINKED);
     expect(resolved.baseRef).toBe("main");
-    expect(resolved.worktreePath).toContain("child-session-worktrees");
+    expect(resolved.worktreePath.startsWith(linkedRepo)).toBe(false);
     expect(commonDir(resolved.worktreePath)).toBe(
       NodePath.join(NodeFS.realpathSync(linkedRepo), ".git"),
     );
@@ -71,13 +70,12 @@ describe("resolveDelegatedWorkspace", () => {
     expect(await fails({ workspaceRoot: linkedWorkspace })).toContain("pass workspace.repository");
   });
 
-  it("isolates a plain local repository and gitignores the worktree area", async () => {
+  it("isolates a plain local repository outside it and leaves the checkout clean", async () => {
     const resolved = await ok({ workspaceRoot: localWorkspace, key: "b" });
     expect(resolved.repository).toBeNull();
-    expect(resolved.worktreePath.startsWith(localWorkspace)).toBe(true);
-    expect(NodeFS.readFileSync(NodePath.join(localWorkspace, ".gitignore"), "utf8")).toContain(
-      `${PROJECT_STATE_DIR}/`,
-    );
+    expect(resolved.worktreePath.startsWith(localWorkspace)).toBe(false);
+    expect(NodeFS.existsSync(NodePath.join(localWorkspace, ".gitignore"))).toBe(false);
+    expect(git(localWorkspace, ["status", "--porcelain"])).toBe("");
   });
 
   it("rejects a repository in a project that links none", async () => {

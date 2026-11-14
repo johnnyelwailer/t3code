@@ -1,7 +1,7 @@
 /**
- * Which recipes the UI offers: none while `ORCHESTRATION_RECIPES` is off, and no work-item delivery
- * recipe while `WORKITEM_DELIVERY_RECIPES` is off. Both are live server flags, so the lists follow a
- * Settings → Features change without a reload.
+ * Which recipes the UI offers: none while `ORCHESTRATION_RECIPES` is off, no delivery recipe while
+ * `WORKITEM_DELIVERY_RECIPES` is off (live server flags). Bundled examples are gated earlier, in
+ * `t3team-sidecarRecipes.ts` (`BUNDLED_RECIPE_EXAMPLES`), so a delivery recipe needs both flags.
  */
 import { WORK_ITEM_DELIVERY_RECIPE_IDS } from "~/t3team/t3team-bundledRecipeWorkflowIds";
 import { useFeatureFlag } from "~/t3team/t3team-useFeatureFlag";

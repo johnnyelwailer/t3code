@@ -1,9 +1,9 @@
 /**
  * Keeps a linked reference checkout on the branch the project chose for it, instead of whatever the
  * remote's default branch was when it was cloned. Never destroys work: the only things it deletes
- * or reverts are T3's own scaffold files (`AGENTS.md`, `CLAUDE.md`, the `.nexi/` and `.t3team/`
- * state, and its entries in `.gitignore`), and only when git says they block the switch. Anything
- * else that blocks it is reported and left alone.
+ * are T3's own untracked scaffold files (`AGENTS.md`, `CLAUDE.md`, the `.nexi/` and `.t3team/`
+ * state), and only when git says they block the switch. Anything else that blocks it, including
+ * `.gitignore`, is reported and left alone.
  *
  * @module t3team-linkedCheckoutBranch
  */
@@ -12,18 +12,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import { INSPECT_TIMEOUT_MS, linkedCheckoutGit as git } from "./t3team-linkedCheckoutGit.ts";
-import {
-  GITIGNORE_ENTRY,
-  MAIN_REPOSITORY_GITIGNORE_ENTRIES,
-} from "./t3team-project-repository-utils.ts";
 
 const SWITCH_TIMEOUT_MS = 5 * 60_000;
-
-/** Every line T3 writes into a workspace `.gitignore`. */
-const T3_GITIGNORE_LINES: ReadonlySet<string> = new Set([
-  GITIGNORE_ENTRY,
-  ...MAIN_REPOSITORY_GITIGNORE_ENTRIES,
-]);
 
 const isScaffoldPath = (relativePath: string): boolean =>
   relativePath === "AGENTS.md" ||
@@ -52,34 +42,6 @@ const firstMessageLine = (stderr: string): string =>
     .map((line) => line.replace(/^(error|fatal):\s*/i, "").trim())
     .find((line) => line.length > 0) ?? "git failed";
 
-/** Reverts `.gitignore` when T3's own entries are all that was added to it. */
-const revertScaffoldOnlyGitignore = Effect.fn("revertScaffoldOnlyGitignore")(function* (
-  directory: string,
-) {
-  const diff = yield* git(
-    "gitignoreDiff",
-    directory,
-    ["diff", "-U0", "--", ".gitignore"],
-    INSPECT_TIMEOUT_MS,
-  );
-  if (diff.exitCode !== 0 || diff.stdout.trim().length === 0) return false;
-  const changed = diff.stdout
-    .split(/\r?\n/)
-    .filter((line) => /^[+-]/.test(line) && !/^(\+\+\+|---)/.test(line));
-  const ours = new Set<string>(MAIN_REPOSITORY_GITIGNORE_ENTRIES);
-  const onlyOurAdditions = changed.every(
-    (line) => line.startsWith("+") && ours.has(line.slice(1).trim()),
-  );
-  if (!onlyOurAdditions) return false;
-  const reverted = yield* git(
-    "gitignoreRevert",
-    directory,
-    ["checkout", "--", ".gitignore"],
-    INSPECT_TIMEOUT_MS,
-  );
-  return reverted.exitCode === 0;
-});
-
 /** One remedy for what blocked a switch, when the blocker is T3's own scaffold; false otherwise. */
 const clearScaffoldBlocker = Effect.fn("clearScaffoldBlocker")(function* (
   directory: string,
@@ -88,36 +50,15 @@ const clearScaffoldBlocker = Effect.fn("clearScaffoldBlocker")(function* (
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const blockers = untrackedBlockers(stderr);
-  const scaffold = yield* Effect.forEach(blockers, (relative) =>
-    isScaffoldPath(relative)
-      ? Effect.succeed(true)
-      : relative === ".gitignore"
-        ? fileSystem.readFileString(path.join(directory, relative)).pipe(
-            Effect.map((contents) =>
-              contents
-                .split(/\r?\n/)
-                .map((line) => line.trim())
-                .filter((line) => line.length > 0)
-                .every((line) => T3_GITIGNORE_LINES.has(line)),
-            ),
-            Effect.orElseSucceed(() => false),
-          )
-        : Effect.succeed(false),
-  );
-  if (blockers.length > 0 && scaffold.every(Boolean)) {
-    for (const relative of blockers) {
-      yield* fileSystem.remove(path.join(directory, relative), { force: true }).pipe(Effect.ignore);
-    }
-    return true;
+  if (blockers.length === 0 || !blockers.every(isScaffoldPath)) return false;
+  for (const relative of blockers) {
+    yield* fileSystem.remove(path.join(directory, relative), { force: true }).pipe(Effect.ignore);
   }
-  if (/local changes to the following files would be overwritten/i.test(stderr)) {
-    return yield* revertScaffoldOnlyGitignore(directory);
-  }
-  return false;
+  return true;
 });
 
-/** At most one attempt per kind of scaffold blocker (untracked files, then `.gitignore`). */
-const MAX_SWITCH_ATTEMPTS = 3;
+/** The first attempt, then one retry after clearing T3's own untracked scaffold. */
+const MAX_SWITCH_ATTEMPTS = 2;
 
 const switchBranch = Effect.fn("switchLinkedCheckoutBranch")(function* (
   directory: string,

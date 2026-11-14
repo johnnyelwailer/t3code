@@ -42,17 +42,20 @@ describe("buildT3TeamSidecarRecipeQuickStarts for composer launches", () => {
     expect(quickStarts).toEqual([]);
   });
 
-  it("includes local recipePath and workflowPath for the bundled describe-rewrite quick start", () => {
-    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
-      surface: "workitem.detail.sidepanel",
-      project: createProject("engineering-copilot", "/tmp/project-alpha"),
-      profileId: "engineering-copilot",
-      selectedWorkLabel: "PROJ-123",
-      selectedWorkTitle: "Stabilize search",
-      resourceKind: "ticket",
-      jiraIssueType: "Bug",
-      availableContextKeys: ["project.summary", "ticket.summary"],
-    });
+  it("includes local recipePath and workflowPath for the bundled describe-rewrite example", () => {
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts(
+      {
+        surface: "workitem.detail.sidepanel",
+        project: createProject("engineering-copilot", "/tmp/project-alpha"),
+        profileId: "engineering-copilot",
+        selectedWorkLabel: "PROJ-123",
+        selectedWorkTitle: "Stabilize search",
+        resourceKind: "ticket",
+        jiraIssueType: "Bug",
+        availableContextKeys: ["project.summary", "ticket.summary"],
+      },
+      true,
+    );
 
     expect(quickStarts.find((recipe) => recipe.id === "describe-rewrite")).toMatchObject({
       workflow: {
@@ -63,25 +66,28 @@ describe("buildT3TeamSidecarRecipeQuickStarts for composer launches", () => {
     });
   });
 
-  it("does not attach workflow launch metadata to prompt-only bundled recipes", () => {
-    const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
-      surface: "workitem.detail.sidepanel",
-      project: createProject("product-partner", "/tmp/project-alpha"),
-      profileId: "product-partner",
-      selectedWorkLabel: "PROJ-100",
-      selectedWorkTitle: "Platform epic",
-      resourceKind: "ticket",
-      jiraIssueType: "Epic",
-      ticketContext: {
-        relationships: {
-          childKeys: [],
-          referenceKeys: [],
-          blockedByKeys: [],
-          blockingKeys: [],
+  it("does not attach workflow launch metadata to prompt-only bundled examples", () => {
+    const quickStarts = buildT3TeamSidecarRecipeQuickStarts(
+      {
+        surface: "workitem.detail.sidepanel",
+        project: createProject("product-partner", "/tmp/project-alpha"),
+        profileId: "product-partner",
+        selectedWorkLabel: "PROJ-100",
+        selectedWorkTitle: "Platform epic",
+        resourceKind: "ticket",
+        jiraIssueType: "Epic",
+        ticketContext: {
+          relationships: {
+            childKeys: [],
+            referenceKeys: [],
+            blockedByKeys: [],
+            blockingKeys: [],
+          },
         },
+        availableContextKeys: ["project.summary", "ticket.summary"],
       },
-      availableContextKeys: ["project.summary", "ticket.summary"],
-    });
+      true,
+    );
 
     const recipe = quickStarts.find((quickStart) => quickStart.id === "tshirt-size-epic");
     expect(recipe).toBeDefined();

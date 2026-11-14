@@ -7,7 +7,6 @@ import { toAtlassianError } from "./t3team-atlassian-http.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import {
   formatReferenceManifestJson,
-  GITIGNORE_ENTRY,
   MANIFEST_FILE_NAME,
 } from "./t3team-project-repository-utils.ts";
 import type {
@@ -32,28 +31,6 @@ export const ensureWorkspaceGitRepository = Effect.fn("ensureWorkspaceGitReposit
     .initRepository({ cwd: workspaceRoot, kind: "git" })
     .pipe(Effect.mapError(toAtlassianError("Failed to initialize project git repository.")));
   return true;
-});
-
-export const ensureWorkspaceGitignore = Effect.fn("ensureWorkspaceGitignore")(function* (
-  workspaceRoot: string,
-  entries: ReadonlyArray<string> = [GITIGNORE_ENTRY],
-) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const gitignorePath = path.join(workspaceRoot, ".gitignore");
-  const exists = yield* fileSystem.exists(gitignorePath).pipe(Effect.orElseSucceed(() => false));
-  const current = exists
-    ? yield* fileSystem.readFileString(gitignorePath).pipe(Effect.orElseSucceed(() => ""))
-    : "";
-  const lines = current.split(/\r?\n/);
-  if (entries.every((entry) => lines.some((line) => line.trim() === entry))) return;
-  const missing = entries
-    .filter((entry) => !lines.some((line) => line.trim() === entry))
-    .join("\n");
-  const next = `${current}${current.length > 0 && !current.endsWith("\n") ? "\n" : ""}${missing}\n`;
-  yield* fileSystem
-    .writeFileString(gitignorePath, next)
-    .pipe(Effect.mapError(toAtlassianError("Failed to update workspace .gitignore.")));
 });
 
 /** Detects whether the workspace root is itself a git repository (a monorepo or wrapper repo)

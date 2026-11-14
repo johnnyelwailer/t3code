@@ -1,5 +1,5 @@
 import { replaceFeatureFlagPresetValues } from "@t3tools/project-context/t3teamFeatureFlags";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { renderBundledRecipeSetupFiles } from "./t3team-projectSetupRecipes.ts";
 import { offeredRecipes } from "./t3team-workItemDeliveryRecipesFlag.ts";
@@ -12,6 +12,8 @@ const scaffoldedDeliveryFiles = () =>
     .filter((path) => DELIVERY_RECIPE_DIRS.some((dir) => path.includes(dir)));
 
 describe("work-item delivery recipes behind WORKITEM_DELIVERY_RECIPES", () => {
+  // The delivery recipes are bundled examples too, so the examples flag is on for both cases.
+  beforeEach(() => replaceFeatureFlagPresetValues(new Map([["BUNDLED_RECIPE_EXAMPLES", true]])));
   afterEach(() => replaceFeatureFlagPresetValues(new Map()));
 
   it("are neither scaffolded nor listed while the flag is off (the default)", () => {
@@ -26,7 +28,12 @@ describe("work-item delivery recipes behind WORKITEM_DELIVERY_RECIPES", () => {
   });
 
   it("are scaffolded and listed once the flag is on", () => {
-    replaceFeatureFlagPresetValues(new Map([["WORKITEM_DELIVERY_RECIPES", true]]));
+    replaceFeatureFlagPresetValues(
+      new Map([
+        ["BUNDLED_RECIPE_EXAMPLES", true],
+        ["WORKITEM_DELIVERY_RECIPES", true],
+      ]),
+    );
     expect(scaffoldedDeliveryFiles()).toEqual(
       expect.arrayContaining([
         expect.stringContaining("fix-this-bug/recipe.ts"),
