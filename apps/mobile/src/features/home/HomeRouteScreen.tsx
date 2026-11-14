@@ -112,11 +112,14 @@ export function HomeRouteScreen() {
       (environment) => [environment.environmentId, environment.connectionState] as const,
     ),
   );
-  // t3team: an environment switched off in Settings leaves the filter pills and menu.
+  // t3team: an environment switched off in Settings leaves the filter pills and menu (flag on).
   const pillEnvironmentIds = usePillEnvironmentIds();
   const environments = Arr.sort(
     Object.values(savedConnectionsById)
-      .filter((connection) => pillEnvironmentIds.has(connection.environmentId))
+      .filter(
+        (connection) =>
+          pillEnvironmentIds === null || pillEnvironmentIds.has(connection.environmentId),
+      )
       .map((connection) => ({
         environmentId: connection.environmentId,
         label: connection.environmentLabel,

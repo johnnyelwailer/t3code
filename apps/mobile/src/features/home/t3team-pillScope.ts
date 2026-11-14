@@ -1,18 +1,15 @@
 import { useAtomValue } from "@effect/atom-react";
-import {
-  type EnvironmentCatalogState,
-  enabledEnvironmentIds,
-} from "@t3tools/client-runtime/state/connections";
+import { enabledEnvironmentIds } from "@t3tools/client-runtime/state/connections";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
   createPillScopeFilter,
-  enabledPillEnvironmentId,
+  heldPillEnvironmentId,
   pickPillScopedProject,
   pillScopeFlagOn,
   type PillScope,
 } from "@t3tools/client-runtime/t3team-pillScope";
 import type { EnvironmentId, SidebarProjectGroupingMode } from "@t3tools/contracts";
-import { AsyncResult } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useMemo } from "react";
 
 import { environmentCatalog } from "../../connection/catalog";
@@ -24,21 +21,40 @@ import {
   DEFAULT_MOBILE_PROJECT_GROUPING_SETTINGS,
   resolveMobileProjectGroupingSettings,
 } from "../../state/project-grouping.logic";
+import {
+  environmentConnectedAtom,
+  savedConnectionsByIdAtom,
+} from "../../state/use-remote-environment-registry";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { buildHomeProjectScopes } from "./homeThreadList";
 
-/** Environments switched off in Settings get no pill; every environment does with the flag off. */
-export function pillEnvironmentIds(
-  catalog: EnvironmentCatalogState,
-  flagOn: boolean,
-): ReadonlySet<EnvironmentId> {
-  return new Set(flagOn ? enabledEnvironmentIds(catalog) : catalog.entries.keys());
+/**
+ * The environments the Home pills offer: saved connections switched on in Settings. `null` while
+ * the flag is off, so Home keeps every saved connection exactly as before.
+ */
+export function pillEnvironmentIds(input: {
+  readonly savedEnvironmentIds: Iterable<EnvironmentId>;
+  readonly enabledEnvironmentIds: Iterable<EnvironmentId>;
+  readonly flagOn: boolean;
+}): ReadonlySet<EnvironmentId> | null {
+  if (!input.flagOn) return null;
+  const enabled = new Set(input.enabledEnvironmentIds);
+  return new Set([...input.savedEnvironmentIds].filter((id) => enabled.has(id)));
 }
 
-export function usePillEnvironmentIds(): ReadonlySet<EnvironmentId> {
-  const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
-  const flagOn = pillScopeFlagOn(useAtomValue(environmentServerConfigsAtom).values());
-  return useMemo(() => pillEnvironmentIds(catalog, flagOn), [catalog, flagOn]);
+const pillEnvironmentIdsAtom = Atom.make((get) =>
+  pillEnvironmentIds({
+    savedEnvironmentIds: Object.values(get(savedConnectionsByIdAtom)).map(
+      (connection) => connection.environmentId,
+    ),
+    enabledEnvironmentIds: enabledEnvironmentIds(get(environmentCatalog.catalogValueAtom)),
+    flagOn: pillScopeFlagOn(get(environmentServerConfigsAtom).values()),
+  }),
+).pipe(Atom.withLabel("mobile:t3team-pill-environment-ids"));
+
+/** One set for Home, the tablet sidebar and the scope; `null` means the flag is off. */
+export function usePillEnvironmentIds(): ReadonlySet<EnvironmentId> | null {
+  return useAtomValue(pillEnvironmentIdsAtom);
 }
 
 type HomePillScopeInput = {
@@ -48,7 +64,7 @@ type HomePillScopeInput = {
   readonly pillEnvironmentIds: ReadonlySet<string>;
 };
 
-/** The saved Home pills as a scope; a switched-off environment reads as "All". */
+/** The saved Home pills as a scope; a selection the pills no longer offer reads as "All". */
 export function homePillScope(input: HomePillScopeInput): PillScope {
   const projectKey = input.filters?.projectKey ?? null;
   const group =
@@ -60,7 +76,7 @@ export function homePillScope(input: HomePillScopeInput): PillScope {
           projectGroupingMode: input.projectGroupingMode,
         }).find((candidate) => candidate.key === projectKey);
   return {
-    environmentId: enabledPillEnvironmentId(
+    environmentId: heldPillEnvironmentId(
       input.filters?.environmentId ?? null,
       input.pillEnvironmentIds,
     ),
@@ -68,15 +84,18 @@ export function homePillScope(input: HomePillScopeInput): PillScope {
   };
 }
 
-/** The project New task preselects from the saved Home pills, or undefined to keep the default. */
+/**
+ * The project New task preselects from the saved Home pills, skipping disconnected environments
+ * as desktop does; undefined keeps the default (current or remembered project, else the picker).
+ */
 export function pillScopedNewTaskProject(
-  input: HomePillScopeInput,
+  input: HomePillScopeInput & { readonly disconnectedEnvironmentIds: ReadonlySet<string> },
 ): { readonly environmentId: string; readonly projectId: string } | undefined {
   const projects = input.projects.filter((project) => project.archivedAt == null);
   const project = pickPillScopedProject({
     orderedProjects: projects,
     scope: homePillScope({ ...input, projects }),
-    offlineEnvironmentIds: new Set(),
+    offlineEnvironmentIds: input.disconnectedEnvironmentIds,
     fallback: undefined,
   });
   return project ? { environmentId: project.environmentId, projectId: project.id } : undefined;
@@ -86,14 +105,17 @@ export function pillScopedNewTaskProject(
 export function readPillScopedNewTaskProject(
   input: Omit<HomePillScopeInput, "pillEnvironmentIds">,
 ) {
-  const flagOn = pillScopeFlagOn(appAtomRegistry.get(environmentServerConfigsAtom).values());
-  if (!flagOn) return undefined;
+  const offered = appAtomRegistry.get(pillEnvironmentIdsAtom);
+  if (offered === null) return undefined;
+  const disconnected = new Set(
+    input.projects
+      .map((project) => project.environmentId)
+      .filter((environmentId) => !appAtomRegistry.get(environmentConnectedAtom(environmentId))),
+  );
   return pillScopedNewTaskProject({
     ...input,
-    pillEnvironmentIds: pillEnvironmentIds(
-      appAtomRegistry.get(environmentCatalog.catalogValueAtom),
-      flagOn,
-    ),
+    pillEnvironmentIds: offered,
+    disconnectedEnvironmentIds: disconnected,
   });
 }
 
@@ -105,8 +127,7 @@ export function useHomePillScopeFilter(): (item: {
   readonly environmentId: string;
   readonly projectId: string;
 }) => boolean {
-  const flagOn = pillScopeFlagOn(useAtomValue(environmentServerConfigsAtom).values());
-  const ids = usePillEnvironmentIds();
+  const offered = usePillEnvironmentIds();
   const preferences = useAtomValue(mobilePreferencesAtom);
   const saved = AsyncResult.isSuccess(preferences) ? preferences.value : undefined;
   const filters = saved?.threadListFilters;
@@ -116,12 +137,12 @@ export function useHomePillScopeFilter(): (item: {
   const projects = useProjects();
   return useMemo(
     () =>
-      flagOn
-        ? createPillScopeFilter(
-            homePillScope({ projects, filters, projectGroupingMode, pillEnvironmentIds: ids }),
+      offered === null
+        ? () => true
+        : createPillScopeFilter(
+            homePillScope({ projects, filters, projectGroupingMode, pillEnvironmentIds: offered }),
             projects,
-          )
-        : () => true,
-    [flagOn, ids, filters, projectGroupingMode, projects],
+          ),
+    [offered, filters, projectGroupingMode, projects],
   );
 }

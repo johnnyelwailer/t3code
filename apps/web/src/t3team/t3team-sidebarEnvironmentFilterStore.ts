@@ -10,13 +10,21 @@ import { resolveStorage } from "~/lib/storage";
  */
 interface SidebarEnvironmentFilterState {
   readonly selectedEnvironmentId: string | null;
+  /** The selection the sidebar applies (`resolveEnvironmentFilter`), mirrored for the pill scope. */
+  readonly heldEnvironmentId: string | null;
   readonly select: (environmentId: string | null) => void;
+  readonly hold: (environmentId: string | null) => void;
 }
 
 export const useT3TeamSidebarEnvironmentFilterStore = create<SidebarEnvironmentFilterState>()(
   persist(
     (set) => ({
       selectedEnvironmentId: null,
+      heldEnvironmentId: null,
+      hold: (heldEnvironmentId) =>
+        set((state) =>
+          state.heldEnvironmentId === heldEnvironmentId ? state : { heldEnvironmentId },
+        ),
       select: (selectedEnvironmentId) =>
         set((state) =>
           state.selectedEnvironmentId === selectedEnvironmentId ? state : { selectedEnvironmentId },

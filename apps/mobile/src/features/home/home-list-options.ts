@@ -1,6 +1,7 @@
 import type { EnvironmentId, SidebarProjectGroupingMode } from "@t3tools/contracts";
 import { DEFAULT_SIDEBAR_PROJECT_SORT_ORDER } from "@t3tools/contracts";
 import { RegistryContext, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { heldPillEnvironmentId } from "@t3tools/client-runtime/t3team-pillScope";
 import { Atom } from "effect/reactivity";
 import { createContext, createElement, useContext, useState, type PropsWithChildren } from "react";
 
@@ -78,11 +79,11 @@ export function useHomeListOptions(availableEnvironmentIds: ReadonlySet<Environm
   const updateOptions =
     shared?.updateOptions ??
     ((patch: Partial<HomeListOptions>) => setLocalOptions((current) => ({ ...current, ...patch })));
-  const selectedEnvironmentId =
-    options.selectedEnvironmentId !== null &&
-    availableEnvironmentIds.has(options.selectedEnvironmentId)
-      ? options.selectedEnvironmentId
-      : null;
+  // t3team: the same rule the pill scope and the web sidebar apply to a saved selection.
+  const selectedEnvironmentId = heldPillEnvironmentId(
+    options.selectedEnvironmentId,
+    availableEnvironmentIds,
+  );
   const availableOptions =
     selectedEnvironmentId === options.selectedEnvironmentId
       ? options

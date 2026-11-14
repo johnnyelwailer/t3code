@@ -2,7 +2,6 @@ import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentConnectionSummary } from "@t3tools/client-runtime/state/presentation";
 import {
   createPillScopeFilter,
-  enabledPillEnvironmentId,
   PILL_SCOPE_FLAG,
   UNSCOPED_PILL_SCOPE,
   type PillScope,
@@ -29,23 +28,17 @@ export function useT3TeamEnabledEnvironmentIds(): ReadonlySet<string> {
 }
 
 /**
- * The sidebar pills as the global scope, behind `UI_PILL_GLOBAL_SCOPE`. Off, only the project
- * scope reaches New thread, as before.
+ * The sidebar pills as the global scope, behind `UI_PILL_GLOBAL_SCOPE`. The environment is the
+ * one the sidebar applies (`heldEnvironmentId`), so a stale saved selection never scopes anything
+ * the sidebar shows as "All". Off, only the project scope reaches New thread, as before.
  */
 function resolvePillScope(input: {
   readonly flagOn: boolean;
-  readonly environments: ReadonlyArray<EnvironmentConnectionSummary>;
-  readonly storedEnvironmentId: string | null;
+  readonly heldEnvironmentId: string | null;
   readonly projectRefs: ReadonlyArray<ScopedProjectRef> | null;
 }): PillScope<ScopedProjectRef> {
-  if (!input.flagOn) {
-    return { ...UNSCOPED_PILL_SCOPE, projectRefs: input.projectRefs };
-  }
   return {
-    environmentId: enabledPillEnvironmentId(
-      input.storedEnvironmentId,
-      enabledIdsOf(input.environments),
-    ),
+    environmentId: input.flagOn ? input.heldEnvironmentId : UNSCOPED_PILL_SCOPE.environmentId,
     projectRefs: input.projectRefs,
   };
 }
@@ -53,10 +46,7 @@ function resolvePillScope(input: {
 export function useT3TeamPillScope(): PillScope<ScopedProjectRef> {
   return resolvePillScope({
     flagOn: useFeatureFlag(PILL_SCOPE_FLAG),
-    environments: useAtomValue(environmentSummaries.environmentsAtom),
-    storedEnvironmentId: useT3TeamSidebarEnvironmentFilterStore(
-      (state) => state.selectedEnvironmentId,
-    ),
+    heldEnvironmentId: useT3TeamSidebarEnvironmentFilterStore((state) => state.heldEnvironmentId),
     projectRefs: useT3TeamSidebarProjectScope((state) => state.scopedProjectRefs),
   });
 }
@@ -65,8 +55,7 @@ export function useT3TeamPillScope(): PillScope<ScopedProjectRef> {
 export function readT3TeamPillScope(): PillScope<ScopedProjectRef> {
   return resolvePillScope({
     flagOn: readServerFeatureFlag(appAtomRegistry.get(primaryServerConfigAtom), PILL_SCOPE_FLAG),
-    environments: appAtomRegistry.get(environmentSummaries.environmentsAtom),
-    storedEnvironmentId: useT3TeamSidebarEnvironmentFilterStore.getState().selectedEnvironmentId,
+    heldEnvironmentId: useT3TeamSidebarEnvironmentFilterStore.getState().heldEnvironmentId,
     projectRefs: useT3TeamSidebarProjectScope.getState().scopedProjectRefs,
   });
 }

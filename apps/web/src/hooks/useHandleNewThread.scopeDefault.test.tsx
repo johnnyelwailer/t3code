@@ -11,15 +11,9 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 const harness = vi.hoisted(() => ({
   projects: [] as Array<{ id: string; environmentId: string; workspaceRoot: string }>,
   environments: [] as Array<{ environmentId: string; connection: { phase: string } }>,
-  enabledEnvironmentIds: ["env-local", "env-cloud"],
 }));
 
-vi.mock("@effect/atom-react", () => ({
-  useAtomValue: (atom: unknown) =>
-    atom === "summaries"
-      ? harness.enabledEnvironmentIds.map((environmentId) => ({ environmentId, isEnabled: true }))
-      : new Map(),
-}));
+vi.mock("@effect/atom-react", () => ({ useAtomValue: () => new Map() }));
 vi.mock("@tanstack/react-router", () => ({
   useParams: () => null,
   useRouter: () => ({ state: { location: { href: "/" }, matches: [] }, navigate: vi.fn() }),
@@ -43,9 +37,7 @@ vi.mock("../state/environments", () => ({
   usePrimaryEnvironmentId: () => "env-local",
 }));
 vi.mock("../state/olderSettledShelf", () => ({ readUnloadedThreadCount: () => 0 }));
-vi.mock("../state/presentation", () => ({
-  environmentSummaries: { environmentsAtom: "summaries" },
-}));
+vi.mock("../state/presentation", () => ({ environmentSummaries: {} }));
 vi.mock("../state/server", () => ({ environmentServerConfigsAtom: {} }));
 vi.mock("../uiStateStore", () => ({
   legacyProjectCwdPreferenceKey: (root: string) => root,
@@ -100,8 +92,10 @@ describe("useHandleNewThread default project", () => {
       { id: "p3", environmentId: "env-cloud", workspaceRoot: "/p3" },
     ];
     harness.environments = [];
-    harness.enabledEnvironmentIds = ["env-local", "env-cloud"];
-    useT3TeamSidebarEnvironmentFilterStore.setState({ selectedEnvironmentId: null });
+    useT3TeamSidebarEnvironmentFilterStore.setState({
+      selectedEnvironmentId: null,
+      heldEnvironmentId: null,
+    });
     useT3TeamSidebarProjectScope.setState({ scopedProjectId: null, scopedProjectRefs: null });
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -129,14 +123,19 @@ describe("useHandleNewThread default project", () => {
     expect(await defaultRef()).toEqual({ environmentId: "env-local", projectId: "p1" });
   });
 
-  it("is the selected environment's first project", async () => {
-    useT3TeamSidebarEnvironmentFilterStore.setState({ selectedEnvironmentId: "env-cloud" });
+  it("is the first project of the environment the sidebar applies", async () => {
+    useT3TeamSidebarEnvironmentFilterStore.setState({
+      selectedEnvironmentId: "env-cloud",
+      heldEnvironmentId: "env-cloud",
+    });
     expect(await defaultRef()).toEqual({ environmentId: "env-cloud", projectId: "p3" });
   });
 
-  it("ignores a selected environment switched off in Settings", async () => {
-    harness.enabledEnvironmentIds = ["env-local"];
-    useT3TeamSidebarEnvironmentFilterStore.setState({ selectedEnvironmentId: "env-cloud" });
+  it("ignores a saved selection the sidebar reads as All (switched off or empty)", async () => {
+    useT3TeamSidebarEnvironmentFilterStore.setState({
+      selectedEnvironmentId: "env-cloud",
+      heldEnvironmentId: null,
+    });
     expect(await defaultRef()).toEqual({ environmentId: "env-local", projectId: "p1" });
   });
 });

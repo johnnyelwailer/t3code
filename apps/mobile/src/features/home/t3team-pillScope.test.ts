@@ -7,9 +7,13 @@ vi.mock("../../state/atom-registry", () => ({ appAtomRegistry: {} }));
 vi.mock("../../state/entities", () => ({ useProjects: () => [] }));
 vi.mock("../../state/preferences", () => ({ mobilePreferencesAtom: {} }));
 vi.mock("../../state/server", () => ({ environmentServerConfigsAtom: {} }));
+vi.mock("../../state/use-remote-environment-registry", () => ({
+  environmentConnectedAtom: () => ({}),
+  savedConnectionsByIdAtom: {},
+}));
 
 import { buildHomeProjectScopes } from "./homeThreadList";
-import { pillScopedNewTaskProject } from "./t3team-pillScope";
+import { pillEnvironmentIds, pillScopedNewTaskProject } from "./t3team-pillScope";
 
 function makeProject(id: string, environmentId: string, repository: string): EnvironmentProject {
   return {
@@ -46,6 +50,7 @@ const appKey = buildHomeProjectScopes({
 const preselect = (
   filters: { environmentId: string | null; projectKey: string | null },
   enabled = ["local", "cloud"],
+  disconnected: string[] = [],
 ) =>
   pillScopedNewTaskProject({
     projects,
@@ -56,6 +61,7 @@ const preselect = (
     },
     projectGroupingMode: "repository",
     pillEnvironmentIds: new Set(enabled),
+    disconnectedEnvironmentIds: new Set(disconnected),
   });
 
 describe("pillScopedNewTaskProject", () => {
@@ -71,5 +77,41 @@ describe("pillScopedNewTaskProject", () => {
   it("keeps the default with no pill, and drops an environment switched off in Settings", () => {
     expect(preselect({ environmentId: null, projectKey: null })).toBeUndefined();
     expect(preselect({ environmentId: "cloud", projectKey: null }, ["local"])).toBeUndefined();
+  });
+});
+
+describe("pillScopedNewTaskProject offline", () => {
+  it("skips a disconnected environment, as desktop does", () => {
+    expect(preselect({ environmentId: null, projectKey: appKey }, undefined, ["local"])).toEqual({
+      environmentId: "cloud",
+      projectId: "app-cloud",
+    });
+    expect(
+      preselect({ environmentId: "cloud", projectKey: null }, undefined, ["cloud"]),
+    ).toBeUndefined();
+  });
+});
+
+describe("pillEnvironmentIds", () => {
+  const local = EnvironmentId.make("local");
+  const cloud = EnvironmentId.make("cloud");
+  it("is no filter with the flag off, even before the catalog loads", () => {
+    expect(
+      pillEnvironmentIds({
+        savedEnvironmentIds: [local, cloud],
+        enabledEnvironmentIds: [],
+        flagOn: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("offers saved connections switched on in Settings with the flag on", () => {
+    expect(
+      pillEnvironmentIds({
+        savedEnvironmentIds: [local, cloud],
+        enabledEnvironmentIds: [local],
+        flagOn: true,
+      }),
+    ).toEqual(new Set([local]));
   });
 });

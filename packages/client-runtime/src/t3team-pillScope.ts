@@ -90,12 +90,15 @@ export function pickPillScopedProject<
   );
 }
 
-/** The stored environment selection while its environment is still switched on; else "All". */
-export function enabledPillEnvironmentId(
-  storedEnvironmentId: string | null,
-  enabledEnvironmentIds: ReadonlySet<string>,
-): string | null {
-  return storedEnvironmentId !== null && enabledEnvironmentIds.has(storedEnvironmentId)
+/**
+ * The one rule for whether a saved environment selection still applies: it holds while the pills
+ * offer its environment, else it reads as "All". The stored id is kept, so it returns with its pill.
+ */
+export function heldPillEnvironmentId<TId extends string>(
+  storedEnvironmentId: TId | null,
+  offeredEnvironmentIds: ReadonlySet<string>,
+): TId | null {
+  return storedEnvironmentId !== null && offeredEnvironmentIds.has(storedEnvironmentId)
     ? storedEnvironmentId
     : null;
 }

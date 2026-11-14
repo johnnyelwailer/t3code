@@ -2,12 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   createPillScopeFilter,
-  enabledPillEnvironmentId,
+  heldPillEnvironmentId,
   pickPillScopedProject,
   pillScopeFlagOn,
   UNSCOPED_PILL_SCOPE,
   type PillScope,
 } from "./t3team-pillScope.ts";
+import { resolveEnvironmentFilter } from "./t3team-environmentFilter.ts";
 
 const projects = [
   { environmentId: "local", id: "app" },
@@ -83,10 +84,22 @@ describe("pillScopeFlagOn", () => {
   });
 });
 
-describe("enabledPillEnvironmentId", () => {
-  it("reads a switched-off environment as All", () => {
-    expect(enabledPillEnvironmentId("cloud", new Set(["local", "cloud"]))).toBe("cloud");
-    expect(enabledPillEnvironmentId("cloud", new Set(["local"]))).toBeNull();
-    expect(enabledPillEnvironmentId(null, new Set(["local"]))).toBeNull();
+describe("heldPillEnvironmentId", () => {
+  it("holds while the pills offer the environment, else reads as All", () => {
+    expect(heldPillEnvironmentId("cloud", new Set(["local", "cloud"]))).toBe("cloud");
+    expect(heldPillEnvironmentId("cloud", new Set(["local"]))).toBeNull();
+    expect(heldPillEnvironmentId(null, new Set(["local"]))).toBeNull();
+  });
+
+  it("is the rule the sidebar pills apply, so both read a stale selection as All", () => {
+    const offered = [
+      { id: "local", label: "This computer", isPrimary: true },
+      { id: "other", label: "Other" },
+    ];
+    const filter = resolveEnvironmentFilter({ environments: offered, selectedId: "cloud" });
+    expect(filter.selectedId).toBe(
+      heldPillEnvironmentId("cloud", new Set(offered.map((env) => env.id))),
+    );
+    expect(filter.selectedId).toBeNull();
   });
 });

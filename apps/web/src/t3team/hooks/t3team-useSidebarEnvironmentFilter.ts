@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import {
   narrowEnvironmentIds,
   narrowGroupsToEnvironment,
@@ -46,6 +48,11 @@ export function useT3TeamSidebarEnvironmentFilter(input: {
     stored,
   );
   const selectedId = filter.selectedId;
+  const hold = useT3TeamSidebarEnvironmentFilterStore((state) => state.hold);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mirrors the applied selection into the store the pill scope reads outside the sidebar
+  useEffect(() => {
+    hold(selectedId);
+  }, [hold, selectedId]);
   return {
     pills: filter.pills,
     selectedEnvironmentId: selectedId,
