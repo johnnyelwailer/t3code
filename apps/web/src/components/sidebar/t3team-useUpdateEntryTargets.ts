@@ -9,7 +9,11 @@ import { canUpdateServer } from "../ServerUpdateAction";
 import { collectServerUpdateTargets } from "./updateEverything.logic";
 import { isHostedByThisApp } from "./useUpdateEverything";
 
-/** The servers the update dialog lists, as targets one entry button can update on its own. */
+/**
+ * The servers the update dialog lists, as targets one entry button can update on its own.
+ * Repeats the machine list `useUpdateEverything` builds, which it does not expose and the additive
+ * guard allows no upstream edit to; check it on every upstream sync.
+ */
 export function useUpdateEntryTargets(localUpdateVersion: string | null) {
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));

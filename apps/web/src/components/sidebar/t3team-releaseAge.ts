@@ -2,7 +2,8 @@ import { formatRelativeTimeLabel } from "../../timestampFormat";
 
 /**
  * Feed times read "3h ago"; build days from a prerelease version read "today" or "2d ago".
- * Same reading as the upstream release-notes popover, which keeps its copy private.
+ * Copy of the private `formatReleaseAge` in `SidebarUpdateReleaseNotes.tsx`, kept because the
+ * additive guard allows no upstream edit there; check it on every upstream sync.
  */
 export function formatReleaseAge(releasedAt: string): string {
   const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(releasedAt);
