@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLatest } from "~/t3team/hooks/t3team-useLatest";
 
 import type { AtlassianChildIssueType } from "~/t3team/backend/t3team-types";
 
@@ -12,6 +13,7 @@ export function useChildIssueTypeOptions(input: {
   readonly fetch: () => Promise<ReadonlyArray<AtlassianChildIssueType>>;
 }) {
   const { enabled, fetch } = input;
+  const fetchRef = useLatest(fetch);
   const [options, setOptions] = useState<ReadonlyArray<AtlassianChildIssueType>>([]);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<unknown>(null);
@@ -27,7 +29,8 @@ export function useChildIssueTypeOptions(input: {
     setLoading(true);
     setError(null);
 
-    fetch()
+    fetchRef
+      .current()
       .then((types) => {
         if (!cancelled) setOptions(types);
       })
@@ -41,7 +44,7 @@ export function useChildIssueTypeOptions(input: {
     return () => {
       cancelled = true;
     };
-  }, [enabled, fetch]);
+  }, [enabled, fetchRef]);
 
   return { options, loading, error };
 }

@@ -942,6 +942,8 @@
     "docs/t3team-mvp/**",
     "oxlint-plugin-t3code/rules/no-raw-mcp-registration.test.ts",
     "oxlint-plugin-t3code/rules/no-raw-mcp-registration.ts",
+    "oxlint-plugin-t3code/rules/no-effect-setstate-callback-dep.ts",
+    "oxlint-plugin-t3code/rules/no-effect-setstate-callback-dep.test.ts",
     "packages/agent-runner/**",
     "packages/client-runtime/src/state/threadDetail.test.ts",
     "packages/client-runtime/src/work-log/backgroundJobs.test.ts",

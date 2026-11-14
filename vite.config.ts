@@ -31,6 +31,14 @@ const T3TEAM_SYNC_20261029_PENDING_FILES = NodeFS.readFileSync(
   .split("\n")
   .filter((line) => line.length > 0 && !line.startsWith("#"));
 
+// t3team: pre-existing exhaustive-deps violations; the list may only shrink.
+const T3TEAM_EXHAUSTIVE_DEPS_PENDING_FILES = NodeFS.readFileSync(
+  NodeURL.fileURLToPath(new URL("./t3team-exhaustive-deps-pending.txt", import.meta.url)),
+  "utf8",
+)
+  .split("\n")
+  .filter((line) => line.length > 0 && !line.startsWith("#"));
+
 const TEST_EXCLUDE = [
   "**/.repos/**",
   "**/.t3/**",
@@ -763,6 +771,49 @@ export default defineConfig({
         ],
         rules: {
           "t3code/no-mobile-uniwind-theme-escape-hatches": ["error", { allowUniwindTheme: true }],
+        },
+      },
+      {
+        // t3team render-loop guards. Must stay after the compiler-pending exemption
+        // (that turns exhaustive-effect-dependencies off). Callbacks in a setState
+        // effect belong in a useLatest ref, not in the dependency list.
+        files: [
+          "apps/web/src/t3team/**/*.{ts,tsx}",
+          "apps/*/src/**/t3team-*.{ts,tsx}",
+          "packages/*/src/**/t3team-*.{ts,tsx}",
+        ],
+        excludeFiles: [
+          "**/*.{test,spec}.{ts,tsx}",
+          "**/*.stories.{ts,tsx}",
+          "**/stories/**",
+          "**/storybook/**",
+        ],
+        rules: {
+          "t3code/no-effect-setstate-callback-dep": "error",
+          "react/exhaustive-effect-dependencies": "error",
+          "react-hooks/exhaustive-deps": "error",
+        },
+      },
+      {
+        // t3team: pre-existing exhaustive-deps debt (see t3team-exhaustive-deps-pending.txt).
+        // "warn", not "off", so existing suppressions stay meaningful. Must stay after the
+        // block that turns these rules on. The list may only shrink.
+        files: [...T3TEAM_EXHAUSTIVE_DEPS_PENDING_FILES],
+        rules: {
+          "react/exhaustive-effect-dependencies": "warn",
+          "react-hooks/exhaustive-deps": "warn",
+        },
+      },
+      {
+        // Tests may deliberately reproduce a loop (e.g. the pre-fix auth-probe host).
+        files: [
+          "apps/web/src/t3team/**/*.{test,spec}.{ts,tsx}",
+          "apps/*/src/**/t3team-*.{test,spec}.{ts,tsx}",
+          "packages/*/src/**/t3team-*.{test,spec}.{ts,tsx}",
+        ],
+        rules: {
+          "react/exhaustive-effect-dependencies": "off",
+          "react-hooks/exhaustive-deps": "off",
         },
       },
     ],

@@ -11,6 +11,8 @@ import {
 import { type CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useLatest } from "~/t3team/hooks/t3team-useLatest";
+
 import {
   resolveCloudSessionEnvironment,
   type RelayEnvironmentCandidate,
@@ -69,6 +71,7 @@ export function useCloudSessionConnect(input: {
   readonly requestConnect: (sessionId: string) => void;
 } {
   const { sessions, relayCandidates, primaryEnvironmentId, environmentIdsBefore, register } = input;
+  const registerRef = useLatest(register);
   const [connectRequestId, setConnectRequestId] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [connectFailure, setConnectFailure] = useState<CloudSessionConnectFailure | null>(null);
@@ -124,15 +127,16 @@ export function useCloudSessionConnect(input: {
     }
     firedForRef.current = connectRequestId;
     setRegistering(true);
-    void register(
-      broker ??
-        new RelayConnectionRegistration({
-          target: new RelayConnectionTarget({
-            environmentId: target.environmentId,
-            label: target.label,
+    void registerRef
+      .current(
+        broker ??
+          new RelayConnectionRegistration({
+            target: new RelayConnectionTarget({
+              environmentId: target.environmentId,
+              label: target.label,
+            }),
           }),
-        }),
-    )
+      )
       .then((result) => {
         if (result._tag === "Success") {
           toastManager.add({ type: "success", title: `Connected to ${target.label}.` });
@@ -158,7 +162,7 @@ export function useCloudSessionConnect(input: {
     sessions,
     primaryEnvironmentId,
     environmentIdsBefore,
-    register,
+    registerRef,
   ]);
 
   const requestConnect = useCallback((sessionId: string) => {
