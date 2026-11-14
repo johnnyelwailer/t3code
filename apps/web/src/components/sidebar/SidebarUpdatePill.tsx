@@ -284,7 +284,7 @@ function SidebarUpdateControl() {
   const t3team = useUpdatePillAdditions({
     state,
     action,
-    localUpdateVersion,
+    servers: everything.servers,
     runsEverything,
     showsNotesPopover: showReleaseNotesPopover,
     title: tooltip,

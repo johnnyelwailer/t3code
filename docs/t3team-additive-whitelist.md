@@ -699,6 +699,15 @@ rc.20 takes over `nexi-work` as the upgrade, but must not run the home or profil
 - `apps/desktop/src/app/DesktopUserData.ts` — skip `migrateNexiProfile` when `detectOldAppSync` reports the daily app on the adjacent Nexi home, so the Chromium-profile copy does not run against a live profile. Already on the whitelist.
 - `apps/desktop/src/backend/DesktopBackendConfiguration.ts` — if the daily app still holds the home, do not call `migrateLegacyHomeIfNeeded` and do not write the identity marker. Defense in depth; bootstrap already waits for the home to be free. Already on the whitelist.
 
+## Update badge and per-item updates (2026-11-14, hive/nx-nexi#1477)
+
+The pill dot, one-time notes pop and per-entry update buttons live in `t3team-*` modules behind `UI_UPDATE_APP_ONLY`. These upstream files carry only the seams.
+
+- `apps/web/src/components/sidebar/UpdateEverythingDialog.tsx` — new entry: optional `renderEntry` slot per table cell, and `runningThreadCountAtom` exported so an entry names only its own running threads.
+- `apps/web/src/components/sidebar/useUpdateEverything.ts` — new entry: returns the `servers` targets it already computes, so a row updates one server without a copy of the machine list.
+- `apps/web/src/components/sidebar/SidebarUpdateReleaseNotes.tsx` — new entry: `export` on `formatReleaseAge`, so the notes popover reuses the version-age reading instead of a copy.
+- `apps/web/src/components/sidebar/SidebarUpdatePill.tsx` — already listed; one `useUpdatePillAdditions` hook call plus popover gating.
+
 ## Show usage limits by default (Nexi Work)
 
 - `apps/web/src/components/chat/threadDetailsItems.ts`

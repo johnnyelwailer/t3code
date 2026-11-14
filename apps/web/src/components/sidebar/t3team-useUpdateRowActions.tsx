@@ -6,8 +6,8 @@ import type { DesktopUpdateButtonAction } from "../desktopUpdate.logic";
 import { useServerUpdate } from "../ServerUpdateAction";
 import { UpdateEntryChip } from "./t3team-UpdateEntryChip";
 import { useProviderEntryUpdate } from "./t3team-useProviderEntryUpdate";
-import { useUpdateEntryTargets } from "./t3team-useUpdateEntryTargets";
 import type { UpdateEntryCell } from "./t3team-updateEntryCell";
+import type { ServerUpdateTarget } from "../ServerUpdateAction";
 import type { UpdateEverythingRow } from "./updateEverything.logic";
 
 const APP_ACTIONS = {
@@ -17,12 +17,11 @@ const APP_ACTIONS = {
 
 /** Update-dialog entries that update on their own: this app, one server, or one provider. */
 export function useUpdateRowActions(
-  localUpdateVersion: string | null,
+  servers: ReadonlyArray<ServerUpdateTarget>,
   action: DesktopUpdateButtonAction,
   onUpdateApp: () => void,
 ) {
   const enabled = useFeatureFlag("UI_UPDATE_APP_ONLY");
-  const servers = useUpdateEntryTargets(localUpdateVersion);
   const updateServer = useServerUpdate();
   const providers = useProviderEntryUpdate();
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());

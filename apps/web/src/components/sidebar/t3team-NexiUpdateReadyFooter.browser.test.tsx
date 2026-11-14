@@ -26,7 +26,6 @@ vi.mock("./useUpdateEverything", () => ({
     rows: [],
     restarts: [],
   }),
-  isHostedByThisApp: () => false,
 }));
 
 const GHE = "https://nexplore.ghe.com/hive/nx-nexi/pull";

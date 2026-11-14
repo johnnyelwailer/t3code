@@ -2,6 +2,7 @@ import type { DesktopUpdateState } from "@t3tools/contracts";
 import { useState } from "react";
 
 import type { DesktopUpdateButtonAction } from "../desktopUpdate.logic";
+import type { ServerUpdateTarget } from "../ServerUpdateAction";
 import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
 import { UpdatePopoverNotes } from "./t3team-UpdatePopoverNotes";
 import { updateLocalApp } from "./t3team-updateLocalApp";
@@ -16,7 +17,7 @@ import { useUpdateRowActions } from "./t3team-useUpdateRowActions";
 export function useUpdatePillAdditions({
   state,
   action,
-  localUpdateVersion,
+  servers,
   runsEverything,
   showsNotesPopover,
   title,
@@ -25,7 +26,7 @@ export function useUpdatePillAdditions({
 }: {
   readonly state: DesktopUpdateState | null;
   readonly action: DesktopUpdateButtonAction;
-  readonly localUpdateVersion: string | null;
+  readonly servers: ReadonlyArray<ServerUpdateTarget>;
   readonly runsEverything: boolean;
   readonly showsNotesPopover: boolean;
   readonly title: string;
@@ -42,7 +43,7 @@ export function useUpdatePillAdditions({
     setAppPending(true);
     void updateLocalApp(action, state, { confirmed }).finally(() => setAppPending(false));
   };
-  const renderEntry = useUpdateRowActions(localUpdateVersion, action, () => {
+  const renderEntry = useUpdateRowActions(servers, action, () => {
     closeDialog();
     updateApp(true);
   });

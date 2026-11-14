@@ -49,12 +49,9 @@ vi.mock("./useUpdateEverything", () => ({
     providerCount: 0,
     rows: mocks.rows,
     restarts: [],
+    servers: [BUILD_BOX_SERVER],
     run: mocks.runEverything,
   }),
-  isHostedByThisApp: () => false,
-}));
-vi.mock("./t3team-useUpdateEntryTargets", () => ({
-  useUpdateEntryTargets: () => [BUILD_BOX_SERVER],
 }));
 vi.mock("../ServerUpdateAction", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../ServerUpdateAction")>()),
