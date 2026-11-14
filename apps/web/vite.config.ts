@@ -471,6 +471,9 @@ export default defineConfig(() => {
     },
     worker: { format: "es" },
     test: {
+      ...(process.env.GITHUB_ACTIONS
+        ? { reporters: ["default", "github-actions", "./test/t3team-teardownDiagnostics.ts"] }
+        : {}),
       projects: [
         defineProject(unitTestProject),
         defineProject(browserTestProject),

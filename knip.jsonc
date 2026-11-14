@@ -35,6 +35,7 @@
     "apps/server/src/t3team-recipeWorkflowHarnessStub.ts",
     "apps/server/src/t3team-workflowReportComposerLive.ts",
     "apps/web/scripts/t3team-storybook.mjs",
+    "apps/web/test/t3team-teardownDiagnostics.ts",
     "apps/web/src/components/t3team-ProjectBacklogController.browser.tsx",
     "apps/web/src/components/t3team-projectDashboardKanbanMatrix.browser.tsx",
     "apps/web/src/components/t3team-ProjectSidebarDashboardNav.browser.tsx",
