@@ -1,0 +1,152 @@
+{
+  "tables": [
+    {
+      "name": "projection_projects",
+      "rows": [
+        {
+          "project_id": "launch-check-project",
+          "title": "Launch Check",
+          "workspace_root": "/tmp/t3-launch-check-workspace",
+          "scripts_json": "[]",
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:01:00.000Z",
+          "default_model_selection_json": "{\"instanceId\":\"codex\",\"model\":\"gpt-5.4\"}",
+          "auto_pull": 0
+        }
+      ]
+    },
+    {
+      "name": "projection_threads",
+      "rows": [
+        {
+          "thread_id": "launch-check-thread",
+          "project_id": "launch-check-project",
+          "title": "Release launch check",
+          "latest_turn_id": "launch-check-turn",
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:01:00.000Z",
+          "runtime_mode": "full-access",
+          "interaction_mode": "default",
+          "model_selection_json": "{\"instanceId\":\"codex\",\"model\":\"gpt-5.4\"}",
+          "latest_user_message_at": "2026-10-27T10:00:00.000Z",
+          "pending_approval_count": 0,
+          "pending_user_input_count": 0,
+          "has_actionable_proposed_plan": 0,
+          "auto_settle_disabled_at": "2026-10-27T10:00:00.000Z"
+        },
+        {
+          "thread_id": "launch-check-other",
+          "project_id": "launch-check-project",
+          "title": "Second thread",
+          "latest_turn_id": "launch-check-other-turn",
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:00:00.000Z",
+          "runtime_mode": "full-access",
+          "interaction_mode": "default",
+          "model_selection_json": "{\"instanceId\":\"codex\",\"model\":\"gpt-5.4\"}",
+          "latest_user_message_at": "2026-10-27T10:00:00.000Z",
+          "pending_approval_count": 0,
+          "pending_user_input_count": 0,
+          "has_actionable_proposed_plan": 0,
+          "auto_settle_disabled_at": "2026-10-27T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "projection_thread_messages",
+      "rows": [
+        {
+          "message_id": "launch-check-user",
+          "thread_id": "launch-check-thread",
+          "turn_id": "launch-check-turn",
+          "role": "user",
+          "text": "Does the release open?",
+          "is_streaming": 0,
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:00:00.000Z"
+        },
+        {
+          "message_id": "launch-check-assistant",
+          "thread_id": "launch-check-thread",
+          "turn_id": "launch-check-turn",
+          "role": "assistant",
+          "text": "The release opens and shows this thread.",
+          "is_streaming": 0,
+          "created_at": "2026-10-27T10:01:00.000Z",
+          "updated_at": "2026-10-27T10:01:00.000Z"
+        },
+        {
+          "message_id": "launch-check-other-user",
+          "thread_id": "launch-check-other",
+          "turn_id": "launch-check-other-turn",
+          "role": "user",
+          "text": "A second thread so the sidebar has a list.",
+          "is_streaming": 0,
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "name": "orchestration_v2_projection_threads",
+      "rows": [
+        {
+          "thread_id": "launch-check-other",
+          "project_id": "launch-check-project",
+          "title": "Second thread",
+          "default_provider": "codex",
+          "runtime_mode": "full-access",
+          "interaction_mode": "default",
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:00:00.000Z",
+          "provider_instance_id": "codex",
+          "payload_json": "{\"createdBy\":\"system\",\"creationSource\":\"server\",\"id\":\"launch-check-other\",\"projectId\":\"launch-check-project\",\"title\":\"Second thread\",\"providerInstanceId\":\"codex\",\"modelSelection\":{\"instanceId\":\"codex\",\"model\":\"gpt-5.4\"},\"runtimeMode\":\"full-access\",\"interactionMode\":\"default\",\"branch\":null,\"worktreePath\":null,\"linkedPullRequest\":null,\"pullRequests\":[],\"branchPullRequest\":null,\"activeProviderThreadId\":null,\"historyOrigin\":\"v1_import\",\"lineage\":{\"parentThreadId\":null,\"relationshipToParent\":null,\"rootThreadId\":\"launch-check-other\"},\"forkedFrom\":null,\"createdAt\":\"2026-10-27T10:00:00.000Z\",\"updatedAt\":\"2026-10-27T10:00:00.000Z\",\"archivedAt\":null,\"settledOverride\":null,\"settledAt\":null,\"unsettledAt\":null,\"snoozedUntil\":null,\"snoozedAt\":null,\"pinnedAt\":null,\"autoSettleDisabledAt\":\"2026-10-27T10:00:00.000Z\",\"pinOrderKey\":null,\"activeOrderKey\":null,\"lastVisitedAt\":null,\"deletedAt\":null}"
+        },
+        {
+          "thread_id": "launch-check-thread",
+          "project_id": "launch-check-project",
+          "title": "Release launch check",
+          "default_provider": "codex",
+          "runtime_mode": "full-access",
+          "interaction_mode": "default",
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:01:00.000Z",
+          "provider_instance_id": "codex",
+          "payload_json": "{\"createdBy\":\"system\",\"creationSource\":\"server\",\"id\":\"launch-check-thread\",\"projectId\":\"launch-check-project\",\"title\":\"Release launch check\",\"providerInstanceId\":\"codex\",\"modelSelection\":{\"instanceId\":\"codex\",\"model\":\"gpt-5.4\"},\"runtimeMode\":\"full-access\",\"interactionMode\":\"default\",\"branch\":null,\"worktreePath\":null,\"linkedPullRequest\":null,\"pullRequests\":[],\"branchPullRequest\":null,\"activeProviderThreadId\":null,\"historyOrigin\":\"v1_import\",\"lineage\":{\"parentThreadId\":null,\"relationshipToParent\":null,\"rootThreadId\":\"launch-check-thread\"},\"forkedFrom\":null,\"createdAt\":\"2026-10-27T10:00:00.000Z\",\"updatedAt\":\"2026-10-27T10:01:00.000Z\",\"archivedAt\":null,\"settledOverride\":null,\"settledAt\":null,\"unsettledAt\":null,\"snoozedUntil\":null,\"snoozedAt\":null,\"pinnedAt\":null,\"autoSettleDisabledAt\":\"2026-10-27T10:00:00.000Z\",\"pinOrderKey\":null,\"activeOrderKey\":null,\"lastVisitedAt\":null,\"deletedAt\":null}"
+        }
+      ]
+    },
+    {
+      "name": "orchestration_v2_projection_messages",
+      "rows": [
+        {
+          "message_id": "launch-check-other-user",
+          "thread_id": "launch-check-other",
+          "role": "user",
+          "streaming": 0,
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:00:00.000Z",
+          "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"server\",\"id\":\"launch-check-other-user\",\"threadId\":\"launch-check-other\",\"runId\":null,\"nodeId\":null,\"role\":\"user\",\"text\":\"A second thread so the sidebar has a list.\",\"attachments\":[],\"streaming\":false,\"createdAt\":\"2026-10-27T10:00:00.000Z\",\"updatedAt\":\"2026-10-27T10:00:00.000Z\"}"
+        },
+        {
+          "message_id": "launch-check-user",
+          "thread_id": "launch-check-thread",
+          "role": "user",
+          "streaming": 0,
+          "created_at": "2026-10-27T10:00:00.000Z",
+          "updated_at": "2026-10-27T10:00:00.000Z",
+          "payload_json": "{\"createdBy\":\"user\",\"creationSource\":\"server\",\"id\":\"launch-check-user\",\"threadId\":\"launch-check-thread\",\"runId\":null,\"nodeId\":null,\"role\":\"user\",\"text\":\"Does the release open?\",\"attachments\":[],\"streaming\":false,\"createdAt\":\"2026-10-27T10:00:00.000Z\",\"updatedAt\":\"2026-10-27T10:00:00.000Z\"}"
+        },
+        {
+          "message_id": "launch-check-assistant",
+          "thread_id": "launch-check-thread",
+          "role": "assistant",
+          "streaming": 0,
+          "created_at": "2026-10-27T10:01:00.000Z",
+          "updated_at": "2026-10-27T10:01:00.000Z",
+          "payload_json": "{\"createdBy\":\"agent\",\"creationSource\":\"server\",\"id\":\"launch-check-assistant\",\"threadId\":\"launch-check-thread\",\"runId\":null,\"nodeId\":null,\"role\":\"assistant\",\"text\":\"The release opens and shows this thread.\",\"attachments\":[],\"streaming\":false,\"createdAt\":\"2026-10-27T10:01:00.000Z\",\"updatedAt\":\"2026-10-27T10:01:00.000Z\"}"
+        }
+      ]
+    }
+  ]
+}

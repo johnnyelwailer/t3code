@@ -32,6 +32,7 @@
     "record:grok-replay": "node scripts/record-grok-acp-replay-fixture.ts",
     "record:fx-replay": "node scripts/record-fx-acp-replay-fixture.ts",
     "record:kiro-replay": "node scripts/record-kiro-acp-replay-fixture.ts",
+    "build:desktop-launch-fixture": "node --experimental-strip-types --import ./scripts/t3team-distribution-devLoader.ts ./scripts/t3team-build-desktop-launch-fixture.ts",
     "record:muse-replay": "node scripts/record-muse-msp-replay-fixture.ts",
     "generate": "graphqlgen",
     "generate:expo-schema": "node scripts/fetch-expo-schema.ts",
