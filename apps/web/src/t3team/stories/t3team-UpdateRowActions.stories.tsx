@@ -1,30 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { type DesktopUpdateState, EnvironmentId } from "@t3tools/contracts";
+import type { DesktopUpdateState } from "@t3tools/contracts";
 
 import { DesktopUpdateStatusIcon } from "~/components/sidebar/DesktopUpdateStatusIcon";
-import { UpdateEntryChip } from "~/components/sidebar/t3team-UpdateEntryChip";
-import { UpdateNotesBadge } from "~/components/sidebar/t3team-UpdateNotesBadge";
 import { SidebarUpdateReleaseNotes } from "~/components/sidebar/SidebarUpdateReleaseNotes";
-import type { UpdateEntryCell } from "~/components/sidebar/t3team-updateEntryCell";
+import { UpdateNotesBadge } from "~/components/sidebar/t3team-UpdateNotesBadge";
+import { useUpdateRowActions } from "~/components/sidebar/t3team-useUpdateRowActions";
 import { UpdateEverythingDialog } from "~/components/sidebar/UpdateEverythingDialog";
-import type { UpdateEverythingRow } from "~/components/sidebar/updateEverything.logic";
-
-const ROWS: ReadonlyArray<UpdateEverythingRow> = [
-  {
-    environmentId: EnvironmentId.make("env-this-mac"),
-    label: "This Mac",
-    app: "this-app",
-    providers: ["Claude", "Codex"],
-    skipped: null,
-  },
-  {
-    environmentId: EnvironmentId.make("env-build-box"),
-    label: "build-box",
-    app: "server",
-    providers: ["Claude"],
-    skipped: null,
-  },
-];
+import {
+  STORY_ROWS,
+  STORY_SERVERS,
+  STORY_VERSION,
+} from "~/t3team/stories/t3team-updateRowActions.storyFixtures";
 
 const UPDATE: DesktopUpdateState = {
   enabled: true,
@@ -34,11 +20,11 @@ const UPDATE: DesktopUpdateState = {
   hostArch: "arm64",
   appArch: "arm64",
   runningUnderArm64Translation: false,
-  availableVersion: "0.1.2-rc.25",
+  availableVersion: STORY_VERSION,
   downloadedVersion: null,
   releaseNotes: [
     {
-      version: "0.1.2-rc.25",
+      version: STORY_VERSION,
       releasedAt: "2026-11-14",
       totalItems: 3,
       items: [
@@ -56,43 +42,39 @@ const UPDATE: DesktopUpdateState = {
   canRetry: false,
 };
 
-const chip = (label: string, actionLabel: string, icon: "download" | "update", pending = false) => (
-  <UpdateEntryChip
-    key={label}
-    label={label}
-    action={{
-      label: actionLabel,
-      icon,
-      restartEnvironmentIds: [],
-      pending,
-      onClick: () => undefined,
-    }}
-  />
-);
-
-const renderEntry = (row: UpdateEverythingRow, cell: UpdateEntryCell) =>
-  cell.kind === "app" ? (
-    row.app === "this-app" ? (
-      chip(cell.label, "Download this app's update", "download")
-    ) : (
-      chip(cell.label, `Update ${row.label}`, "update")
-    )
-  ) : (
-    <span className="flex flex-wrap items-start gap-1">
-      {row.providers.map((provider) =>
-        chip(provider, `Update ${provider} on ${row.label}`, "update", row.label === "build-box"),
-      )}
-    </span>
+function UpdateDialog({ action }: { readonly action: "download" | "install" | null }) {
+  const renderEntry = useUpdateRowActions(
+    STORY_ROWS,
+    STORY_SERVERS,
+    action ?? "download",
+    () => undefined,
   );
+  return (
+    <UpdateEverythingDialog
+      open
+      onOpenChange={() => undefined}
+      version={STORY_VERSION}
+      providerCount={8}
+      rows={STORY_ROWS}
+      restarts={[]}
+      onConfirm={() => undefined}
+      renderEntry={action === null ? null : renderEntry}
+    />
+  );
+}
 
-function UpdateStory({ view }: { readonly view: "today" | "rows" | "popover" | "badge" }) {
+function UpdateStory({
+  view,
+}: {
+  readonly view: "today" | "download" | "restart" | "popover" | "badge";
+}) {
   if (view === "popover") {
     return (
       <div className="w-fit rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg">
         <SidebarUpdateReleaseNotes
           shell={undefined}
           state={UPDATE}
-          tooltip="Update this app, 1 server and 3 providers"
+          tooltip="Update this app, 2 servers and 8 providers"
         />
       </div>
     );
@@ -112,18 +94,8 @@ function UpdateStory({ view }: { readonly view: "today" | "rows" | "popover" | "
       </div>
     );
   }
-  return (
-    <UpdateEverythingDialog
-      open
-      onOpenChange={() => undefined}
-      version="0.1.2-rc.25"
-      providerCount={3}
-      rows={ROWS}
-      restarts={[]}
-      onConfirm={() => undefined}
-      renderEntry={view === "rows" ? renderEntry : null}
-    />
-  );
+  const action = view === "today" ? null : view === "restart" ? "install" : "download";
+  return <UpdateDialog action={action} />;
 }
 
 const meta = {
@@ -133,6 +105,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Today: Story = { args: { view: "today" } };
-export const RowActions: Story = { args: { view: "rows" } };
+export const RowActions: Story = { args: { view: "download" } };
+export const RowActionsRestart: Story = { args: { view: "restart" } };
 export const NotesPopover: Story = { args: { view: "popover" } };
 export const PillBadge: Story = { args: { view: "badge" } };

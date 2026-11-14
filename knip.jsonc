@@ -234,7 +234,13 @@
       // src/t3team/storybook, which knip cannot read `stories` from, so every story file (and
       // everything only stories import) reads as unused. Keep the stories as explicit entries
       // so the gate measures real reachability again.
-      "entry": ["scripts/warm-dep-cache.ts", "src/**/*.stories.tsx", "test/fixtures/**/*.mjs"],
+      // Storybook-only stand-ins load through aliases in t3team-storybook-main.ts, which knip skips.
+      "entry": [
+        "scripts/warm-dep-cache.ts",
+        "src/**/*.stories.tsx",
+        "src/**/*.storyMock.ts",
+        "test/fixtures/**/*.mjs",
+      ],
       // UI component modules are copied and adapted as cohesive sets. Keep their
       // named subcomponents even before they have callers; the file audit still
       // reports an entire component module when nothing imports it.

@@ -169,6 +169,14 @@ const config: StorybookConfig = {
             find: /^~\/t3team\/t3team-useKanbanSemanticZoomFlag$/,
             replacement: `${srcDir}/t3team/t3team-useKanbanSemanticZoomFlag.storyMock.ts`,
           },
+          {
+            find: /^~\/t3team\/t3team-useFeatureFlag$/,
+            replacement: `${srcDir}/t3team/t3team-useFeatureFlag.storyMock.ts`,
+          },
+          {
+            find: /^\.\/t3team-useProviderEntryUpdate$/,
+            replacement: `${srcDir}/components/sidebar/t3team-useProviderEntryUpdate.storyMock.ts`,
+          },
           { find: "~", replacement: srcDir },
         ],
       },
