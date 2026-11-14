@@ -1,10 +1,7 @@
 /**
- * Resolves a project's own machine (never a linked repository's) at a fetchable commit with the
- * user's credentials.
- * Local definitions must be committed and pushed; remote definitions retain the exact scanned
- * default-branch commit. A definition that cannot be used fails here, and the create falls back to
- * a plain session (t3team-cloudSessionMachineFallback.ts). Standby and plain resolution only
- * consult the remote cache.
+ * Resolves a project's own machine (never a linked repository's) at a fetchable, pushed commit with
+ * the user's credentials. One that cannot be used fails here; the create falls back to plain
+ * (t3team-cloudSessionMachineFallback.ts). Standby and plain resolution read only the remote cache.
  * CLOUD_PROJECT_MACHINE gates machine selection and remote work.
  *
  * @module t3team-CloudSessionMachine
