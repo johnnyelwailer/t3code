@@ -263,10 +263,7 @@ export function UserMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mes
         <ModelSwitchRow environmentId={ctx.activeThreadEnvironmentId} modelSwitch={modelSwitch} />
       ) : null}
       <UserMessageContent row={row} />
-      <T3TeamSendConfirmationLine
-        messageId={row.message.id}
-        environmentId={ctx.activeThreadEnvironmentId}
-      />
+      <T3TeamSendConfirmationLine messageId={row.message.id} />
     </>
   );
 }

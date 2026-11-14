@@ -31,6 +31,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { RpcClientError } from "effect/rpc";
+import * as Socket from "effect/socket/Socket";
 
 import {
   AVAILABLE_CONNECTION_STATE,
@@ -321,7 +322,7 @@ describe("V2 environment commands", () => {
       "the socket closed",
       Cause.fail(
         new RpcClientError.RpcClientError({
-          reason: new RpcClientError.RpcClientDefect({ message: "socket closed", cause: null }),
+          reason: new Socket.SocketCloseError({ code: 1006 }),
         }),
       ),
     ],
@@ -375,7 +376,7 @@ describe("V2 environment commands", () => {
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 
-  it.effect("fails with the command id when the connection never comes back", () =>
+  it.effect("hands back the original loss, unchanged, when the connection never comes back", () =>
     Effect.gen(function* () {
       const commands: OrchestrationV2Command[] = [];
       const replyLost = yield* Deferred.make<void>();
@@ -405,11 +406,42 @@ describe("V2 environment commands", () => {
       const exit = yield* Fiber.await(sending);
       expect(exit._tag).toBe("Failure");
       if (exit._tag === "Failure") {
-        expect(Option.getOrNull(Cause.findErrorOption(exit.cause))).toMatchObject({
-          _tag: "SendNotConfirmedError",
-          commandId: "command-never-confirmed",
-        });
+        expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
       }
+      expect(commands).toHaveLength(1);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect("fails at once on a client defect while the connection stays up", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [
+          Cause.fail(
+            new RpcClientError.RpcClientError({
+              reason: new RpcClientError.RpcClientDefect({ message: "bad reply", cause: null }),
+            }),
+          ),
+        ],
+      });
+      const exit = yield* startThreadTurn({
+        commandId: CommandId.make("command-defect"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-defect"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.exit,
+      );
+      expect(exit._tag).toBe("Failure");
       expect(commands).toHaveLength(1);
     }).pipe(Effect.provide(layerTestCrypto)),
   );

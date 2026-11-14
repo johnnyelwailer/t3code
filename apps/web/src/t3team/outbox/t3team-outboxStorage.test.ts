@@ -81,6 +81,28 @@ describe("outbox storage", () => {
     expect(loaded).toEqual([first, second]);
   });
 
+  it("NeverSwallowed: a Not confirmed send survives a reload with its command id", () => {
+    const base = entry("unconfirmed");
+    const unconfirmed = makeT3TeamOutboxEntry(
+      "turn-start",
+      {
+        ...base.payload,
+        messageId: "m-unconfirmed",
+        messageText: "unconfirmed",
+        titleSeed: "unconfirmed",
+        modelSelection: null,
+        runtimeMode: DEFAULT_RUNTIME_MODE,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        createdAt: "2026-09-13T00:00:00.000Z",
+        sendIdentity: { commandId: "command-1", dispatchMode: "queue", unconfirmed: true },
+      },
+      "env-a",
+      "thread-a",
+    );
+    expect(persistOutboxEntry(unconfirmed)).toBe(true);
+    expect(loadStoredOutboxEntries()).toEqual([unconfirmed]);
+  });
+
   it("removes a persisted entry", () => {
     const first = entry("one");
     persistOutboxEntry(first);

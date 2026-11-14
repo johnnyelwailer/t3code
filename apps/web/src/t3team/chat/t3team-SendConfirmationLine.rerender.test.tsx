@@ -15,7 +15,7 @@ import { markSendNotConfirmed, markSendPending, settleSend } from "./t3team-send
 
 const counter = renderCounter();
 
-// The line reads its environment once per render; counting there counts the line's renders.
+// A pending line reads its environment once per render; counting there counts those renders.
 vi.mock("~/state/environments", () => ({
   useEnvironment: (environmentId: string) => {
     counter.count(environmentId);
@@ -26,14 +26,8 @@ vi.mock("~/state/environments", () => ({
 function Lines() {
   return (
     <>
-      <T3TeamSendConfirmationLine
-        messageId="message-a"
-        environmentId={EnvironmentId.make("line-a")}
-      />
-      <T3TeamSendConfirmationLine
-        messageId="message-b"
-        environmentId={EnvironmentId.make("line-b")}
-      />
+      <T3TeamSendConfirmationLine messageId="message-a" />
+      <T3TeamSendConfirmationLine messageId="message-b" />
     </>
   );
 }
@@ -56,20 +50,22 @@ describe("T3TeamSendConfirmationLine re-renders", () => {
     settleSend("message-b");
   });
 
-  it("mounts each line once", async () => {
+  it("rows with nothing pending never read the connection", async () => {
     await act(async () => {
       root.render(<Lines />);
     });
-    counter.expectRerendered({ "line-a": 1, "line-b": 1 });
+    counter.expectRerendered({});
   });
 
   it("a change to one send re-renders only its own line", async () => {
     await act(async () => {
       root.render(<Lines />);
     });
-    counter.reset();
     await act(async () => {
-      markSendPending("message-a", { threadId: "thread-1", environmentId: "line-a" });
+      markSendPending("message-a", {
+        threadId: "thread-1",
+        environmentId: EnvironmentId.make("line-a"),
+      });
     });
     await act(async () => {
       markSendNotConfirmed("message-a", () => {});

@@ -20,7 +20,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
-import type { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
+import { CommandId, type EnvironmentId, type MessageId, type ThreadId } from "@t3tools/contracts";
 
 import {
   isTransientT3TeamOutboxError,
@@ -115,6 +115,7 @@ async function dispatchTurnStart(
       runtimeMode: payload.runtimeMode,
       interactionMode: payload.interactionMode,
       createdAt: payload.createdAt,
+      ...sendIdentityInput(payload),
     },
   });
   if (result._tag === "Success") return { outcome: "delivered" };
@@ -206,4 +207,14 @@ export async function dispatchT3TeamOutboxEntry(
     case "staged-action":
       return dispatchStagedAction(entry, deps);
   }
+}
+
+/** The same command id (and dispatch mode) as the composer send this entry continues. */
+function sendIdentityInput(payload: T3TeamOutboxTurnStartPayload) {
+  const identity = payload.sendIdentity;
+  if (identity === undefined) return {};
+  return {
+    commandId: CommandId.make(identity.commandId),
+    ...(identity.dispatchMode === undefined ? {} : { dispatchMode: identity.dispatchMode }),
+  };
 }

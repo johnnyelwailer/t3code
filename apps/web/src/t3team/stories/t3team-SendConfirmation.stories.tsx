@@ -14,9 +14,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-function SentMessage(props: { readonly text: string; readonly children: React.ReactNode }) {
+function SentMessage(props: {
+  readonly text: string;
+  readonly children: React.ReactNode;
+  readonly width?: string;
+}) {
   return (
-    <div className="flex w-[36rem] flex-col items-end gap-1">
+    <div className={`flex ${props.width ?? "w-[36rem]"} flex-col items-end gap-1`}>
       <div className="max-w-[80%] rounded-2xl bg-message px-3 py-2 text-sm text-message-foreground">
         {props.text}
       </div>
@@ -45,6 +49,25 @@ export const SendingWhileOnlineShowsNothing: Story = {
   render: () => (
     <SentMessage text="Reply with one word: pong.">
       <T3TeamSendConfirmationNotice status="sending" online onRetry={() => {}} />
+    </SentMessage>
+  ),
+};
+
+export const NotConfirmedWhileOnline: Story = {
+  render: () => (
+    <SentMessage text="Erstelle den Branch qa/slugify, committe und eröffne einen Pull Request.">
+      <T3TeamSendConfirmationNotice status="not-confirmed" online onRetry={() => {}} />
+    </SentMessage>
+  ),
+};
+
+export const NotConfirmedPhoneWidth: Story = {
+  render: () => (
+    <SentMessage
+      width="w-[375px]"
+      text="Bitte installiere die Abhängigkeiten und führe Build und Tests aus."
+    >
+      <T3TeamSendConfirmationNotice status="not-confirmed" online={false} onRetry={() => {}} />
     </SentMessage>
   ),
 };

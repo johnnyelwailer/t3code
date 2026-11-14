@@ -63,6 +63,10 @@
       "types": "./src/t3team-runPromptCopy.ts",
       "default": "./src/t3team-runPromptCopy.ts"
     },
+    "./t3team-lostReply": {
+      "types": "./src/t3team-lostReply.ts",
+      "default": "./src/t3team-lostReply.ts"
+    },
     "./t3team-turnReports": {
       "types": "./src/t3team-turnReports.ts",
       "default": "./src/t3team-turnReports.ts"

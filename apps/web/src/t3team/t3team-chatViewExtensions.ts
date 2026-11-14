@@ -2,6 +2,7 @@ import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3to
 import type { HTMLAttributes, ReactNode } from "react";
 
 import type { ChatMessage } from "~/types";
+import type { EnqueueOfflineTurnStart } from "~/t3team/outbox/t3team-useOutboxSend";
 
 export type TurnStartOverrideResult = boolean | "resolved-input";
 
@@ -37,17 +38,7 @@ export type ChatViewT3TeamExtensionProps = {
    * erroring, hand the would-be turn start to the host. Returns true when the
    * send was queued (the composer clears it); false to keep the stock toast.
    */
-  readonly enqueueOfflineTurnStart?: (turnStart: {
-    readonly threadId: string;
-    readonly messageId: string;
-    readonly messageText: string;
-    readonly modelSelection: ModelSelection | null;
-    readonly titleSeed: string;
-    readonly runtimeMode: RuntimeMode;
-    readonly interactionMode: ProviderInteractionMode;
-    readonly createdAt: string;
-    readonly hasAttachments: boolean;
-  }) => boolean | Promise<boolean>;
+  readonly enqueueOfflineTurnStart?: EnqueueOfflineTurnStart;
   /**
    * Host banner in the composer's leading dock, after the active-workflow dock and next to the
    * native server queue (`QueuedRunsControl`). The t3team offline outbox lists its waiting sends

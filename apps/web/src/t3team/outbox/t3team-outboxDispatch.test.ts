@@ -156,6 +156,32 @@ describe("turn-start dispatch", () => {
     });
   });
 
+  it("NeverTwice: re-sends an unconfirmed composer send with its own command id and mode", async () => {
+    const base = turnStartEntry("m-7");
+    const entry = makeT3TeamOutboxEntry(
+      "turn-start",
+      {
+        messageId: "m-7",
+        messageText: "hello",
+        modelSelection: null,
+        titleSeed: "hello",
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt: "2026-09-13T00:00:00.000Z",
+        sendIdentity: { commandId: "command-7", dispatchMode: "steer", unconfirmed: true },
+      },
+      base.environmentId,
+      base.threadId,
+    );
+    const fake = fakeDeps({ seen: false });
+    expect(await run(entry, fake)).toEqual({ outcome: "delivered" });
+    expect(fake.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ commandId: "command-7", dispatchMode: "steer" }),
+      }),
+    );
+  });
+
   it("retries on transport-level socket failures", async () => {
     const fake = fakeDeps({
       seen: false,

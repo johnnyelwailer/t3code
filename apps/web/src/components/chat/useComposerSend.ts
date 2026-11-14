@@ -155,7 +155,12 @@ import type { useTimelineFollow } from "./useTimelineFollow";
 import type { useUsageLimitsPanel } from "./useUsageLimitsPanel";
 import type { useWorktreeSetup } from "./useWorktreeSetup";
 import { beginSend, confirmSend, newSendCommandId } from "~/t3team/chat/t3team-confirmSend";
-import { threadHasPendingSend } from "~/t3team/chat/t3team-sendConfirmationStore";
+import {
+  threadHasPendingSend,
+  threadHasUnconfirmedSend,
+  trackSendInFlight,
+} from "~/t3team/chat/t3team-sendConfirmationStore";
+import type { T3TeamOutboxSendIdentity } from "~/t3team/outbox/t3team-outboxModel";
 
 const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
 
@@ -432,7 +437,10 @@ export function useComposerSend(input: ComposerSendInput) {
     anchorNewTurn,
     persistThreadSettingsForNextTurn,
   });
-  const { sendInFlight: sendInFlightRef } = draftSendState(routeThreadKey);
+  const sendInFlightRef = trackSendInFlight(
+    draftSendState(routeThreadKey).sendInFlight,
+    activeThread?.id ?? null,
+  );
   const composerSendGenerationRef = useRef(0);
   const environmentUnavailableSendToastSlotRef = useRef(0);
   // A send awaits uploads before it declines, so it reads the approvals pending by then.
@@ -473,7 +481,10 @@ export function useComposerSend(input: ComposerSendInput) {
     }
 
     // t3team offline outbox: a text-only send is queued and drains FIFO once it can go out.
-    const enqueuePromptToOutbox = async (threadId: string): Promise<boolean> => {
+    const enqueuePromptToOutbox = async (
+      threadId: string,
+      sendIdentity?: T3TeamOutboxSendIdentity,
+    ): Promise<boolean> => {
       if (
         !enqueueOfflineTurnStart ||
         directAnnotation ||
@@ -493,6 +504,7 @@ export function useComposerSend(input: ComposerSendInput) {
         interactionMode,
         createdAt: new Date().toISOString(),
         hasAttachments: false,
+        ...(sendIdentity ? { sendIdentity } : {}),
       });
       if (!queued) return false;
       promptRef.current = "";
@@ -500,13 +512,18 @@ export function useComposerSend(input: ComposerSendInput) {
       composerRef.current?.resetCursorState();
       return true;
     };
-    // An earlier message still waits for its reply: this one queues behind it, in order.
-    const queueBehindPendingSend = async (threadId: string) => {
-      if (await enqueuePromptToOutbox(threadId)) return;
+    // An earlier message is in flight or unconfirmed: this one queues behind it, in order,
+    // keeping the Steer or Queue the user chose.
+    const queueBehindPendingSend = async (threadId: string, mode: ComposerDispatchMode) => {
+      const identity = { commandId: newSendCommandId(), dispatchMode: mode };
+      if (await enqueuePromptToOutbox(threadId, identity)) return;
+      if (directAnnotation) return notifyDirectAnnotationAttached();
       toastManager.add(
         stackedThreadToast({
           type: "info",
-          title: "Your last message is still sending",
+          title: threadHasUnconfirmedSend(threadId)
+            ? "Your last message is not confirmed yet"
+            : "Your last message is still sending",
           description: "This one stays in the composer. Send it once the last one is confirmed.",
         }),
       );
@@ -521,22 +538,24 @@ export function useComposerSend(input: ComposerSendInput) {
         }),
       );
     };
-    if (activeThread && (sendInFlightRef.current || threadHasPendingSend(activeThread.id))) {
-      await queueBehindPendingSend(activeThread.id);
-      return;
-    }
     if (
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
       !activeThread ||
-      (isSendBusy && !sendQueuesBehindSetup) ||
       isRevertingCheckpoint ||
       !clientSettingsHydrated ||
       threadDetailLoading ||
       readPendingEnvironmentChange() !== null ||
-      sendInFlightRef.current ||
       feedbackUploadsInFlightRef.current.has(routeThreadKey)
     ) {
       notifyDirectAnnotationAttached();
+      return;
+    }
+    if (
+      (isSendBusy && !sendQueuesBehindSetup) ||
+      sendInFlightRef.current ||
+      threadHasPendingSend(activeThread.id)
+    ) {
+      await queueBehindPendingSend(activeThread.id, dispatchMode);
       return;
     }
     if (needsLoadBalancing) {
@@ -1453,6 +1472,27 @@ export function useComposerSend(input: ComposerSendInput) {
     );
 
     let failure: AtomCommandResult<unknown, unknown> | null = null;
+    // A send the server refused did not run: its prompt goes back to the composer.
+    const putPromptBack = () => {
+      setOptimisticUserMessages((existing) => {
+        const next = existing.filter((message) => message.id !== messageIdForSend);
+        return next.length === existing.length ? existing : next;
+      });
+      // The restored draft clones its images, so the sent copies are no longer used.
+      optimisticBlobPreviews.release(optimisticMessage);
+      const retryComposerImages = restoreComposerDraft(composerDraftTarget, sendSnapshot);
+      if (currentRouteThreadKeyRef.current === routeThreadKey) {
+        promptRef.current = messageTextForSend;
+        composerImagesRef.current = retryComposerImages;
+        composerFilesRef.current = composerFilesSnapshot;
+        composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
+        composerRef.current?.resetCursorState({
+          cursor: collapseExpandedComposerCursor(messageTextForSend, messageTextForSend.length),
+          prompt: messageTextForSend,
+          detectTrigger: true,
+        });
+      }
+    };
 
     if (failure === null && isServerThread) {
       const settingsResult = await persistThreadSettingsForNextTurn({
@@ -1616,17 +1656,57 @@ export function useComposerSend(input: ComposerSendInput) {
         }
       }
       const startResult = await startPromise;
-      const keptUntilConfirmed = confirmSend({
+      const outcome = await confirmSend({
         messageId: messageIdForSend,
         result: startResult,
         resend: () => startThreadTurn(turnStart),
-        onRejected: (message) => setThreadError(threadIdForSend, message),
+        handOff: async () => {
+          const hasAttachments =
+            turnAttachmentsResult.value.length > 0 || contextAttachmentsResult.value.length > 0;
+          if (isLocalDraftThread || hasAttachments || !enqueueOfflineTurnStart) return false;
+          const handed = await enqueueOfflineTurnStart({
+            threadId: threadIdForSend,
+            messageId: messageIdForSend,
+            messageText: outgoingMessageText,
+            modelSelection: ctxSelectedModelSelection ?? null,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode: sendInteractionMode,
+            createdAt: messageCreatedAt,
+            hasAttachments: false,
+            sendIdentity: {
+              commandId: turnStart.input.commandId ?? newSendCommandId(),
+              dispatchMode: turnDispatchMode,
+              unconfirmed: true,
+            },
+          });
+          // The outbox row now shows it, durably; the in-memory bubble would duplicate it.
+          if (handed) {
+            setOptimisticUserMessages((existing) =>
+              existing.filter((message) => message.id !== messageIdForSend),
+            );
+          }
+          return handed;
+        },
+        onRejectedRetry: (rejected) => {
+          if (rejected._tag !== "Failure") return;
+          if (
+            !composerDraftHasUserContent(
+              useComposerDraftStore.getState().getComposerDraft(composerDraftTarget),
+            )
+          ) {
+            putPromptBack();
+          }
+          const error = squashAtomCommandFailure(rejected);
+          setThreadError(
+            threadIdForSend,
+            error instanceof Error ? error.message : "Failed to send message.",
+          );
+        },
       });
-      if (keptUntilConfirmed) {
-        // The message stays on screen as "Not confirmed" with Retry; the prompt is not put back.
-      } else if (startResult._tag === "Failure") {
+      if (outcome === "rejected" && startResult._tag === "Failure") {
         failure = startResult;
-      } else {
+      } else if (outcome === "confirmed") {
         turnStartSucceeded = true;
         setKeepFullHistory(routeThreadKey, false);
         clearUsageLimitsFor(routeThreadKey);
@@ -1687,24 +1767,7 @@ export function useComposerSend(input: ComposerSendInput) {
           useComposerDraftStore.getState().getComposerDraft(composerDraftTarget),
         )
       ) {
-        setOptimisticUserMessages((existing) => {
-          const next = existing.filter((message) => message.id !== messageIdForSend);
-          return next.length === existing.length ? existing : next;
-        });
-        // The restored draft clones its images, so the sent copies are no longer used.
-        optimisticBlobPreviews.release(optimisticMessage);
-        const retryComposerImages = restoreComposerDraft(composerDraftTarget, sendSnapshot);
-        if (currentRouteThreadKeyRef.current === routeThreadKey) {
-          promptRef.current = messageTextForSend;
-          composerImagesRef.current = retryComposerImages;
-          composerFilesRef.current = composerFilesSnapshot;
-          composerTerminalContextsRef.current = composerTerminalContextsSnapshot;
-          composerRef.current?.resetCursorState({
-            cursor: collapseExpandedComposerCursor(messageTextForSend, messageTextForSend.length),
-            prompt: messageTextForSend,
-            detectTrigger: true,
-          });
-        }
+        putPromptBack();
       }
       if (!isAtomCommandInterrupted(failure)) {
         const error = squashAtomCommandFailure(failure);
