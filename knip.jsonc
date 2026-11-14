@@ -196,6 +196,9 @@
         // Same: imported by nexi-work/pack/nexplore-global/pi-mcp*.ts and pi-skills-exec.ts, which the pack
         // compiles in. Upstream deleted the unused declaration; the pack's import check needs it.
         "@modelcontextprotocol/sdk",
+        // Same: nexi-work/broker/agent (hostClient.ts, pairingIdentity.ts) imports jose. Upstream moved
+        // to effect/jose and dropped it; without it the packaged Nexi build fails to resolve the import.
+        "jose",
         "ffi-rs",
         "transcribe-cpp",
       ],
