@@ -44,7 +44,10 @@ export const bridgePackTextGeneration = (
   const service = packInstance.textGeneration;
   if (!service) return unsupportedTextGeneration(driver);
 
-  const attempt = <A>(operation: string, run: () => Promise<A>) =>
+  // Interrupting the effect aborts `signal`. generateStructured callers that interrupt: a
+  // superseded child status, cold local compaction's Effect.timeout. Workflow repair runs
+  // in its own Effect.runPromise and is never interrupted.
+  const attempt = <A>(operation: string, run: (signal: AbortSignal) => Promise<A>) =>
     Effect.tryPromise({
       try: run,
       catch: (cause) =>
@@ -74,11 +77,12 @@ export const bridgePackTextGeneration = (
     ...(service.generateStructured
       ? {
           generateStructured: (input) =>
-            attempt("generateStructured", () =>
+            attempt("generateStructured", (signal) =>
               service.generateStructured!({
                 cwd: input.cwd,
                 prompt: input.prompt,
                 modelSelection: input.modelSelection,
+                signal,
               }),
             ).pipe(
               Effect.flatMap((value) =>
