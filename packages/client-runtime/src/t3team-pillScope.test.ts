@@ -4,6 +4,7 @@ import {
   createPillScopeFilter,
   enabledPillEnvironmentId,
   pickPillScopedProject,
+  pillScopeFlagOn,
   UNSCOPED_PILL_SCOPE,
   type PillScope,
 } from "./t3team-pillScope.ts";
@@ -72,6 +73,13 @@ describe("pickPillScopedProject", () => {
     expect(pick(scope({ environmentId: "cloud" }), ["cloud"])).toBe(projects[0]);
     expect(pick(scope({ environmentId: "gone" }))).toBe(projects[0]);
     expect(pick(scope({}))).toBe(projects[0]);
+  });
+});
+
+describe("pillScopeFlagOn", () => {
+  it("is off once any server advertises the flag off; servers without it keep it on", () => {
+    expect(pillScopeFlagOn([{}, { featureFlags: { UI_PILL_GLOBAL_SCOPE: true } }])).toBe(true);
+    expect(pillScopeFlagOn([{}, { featureFlags: { UI_PILL_GLOBAL_SCOPE: false } }])).toBe(false);
   });
 });
 

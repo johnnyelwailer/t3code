@@ -3,16 +3,17 @@ import type { EnvironmentConnectionSummary } from "@t3tools/client-runtime/state
 import {
   createPillScopeFilter,
   enabledPillEnvironmentId,
+  PILL_SCOPE_FLAG,
   UNSCOPED_PILL_SCOPE,
   type PillScope,
 } from "@t3tools/client-runtime/t3team-pillScope";
 import type { ScopedProjectRef } from "@t3tools/contracts";
 
-import { usePrimarySettings } from "../hooks/useSettings";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useProjects } from "../state/entities";
 import { environmentSummaries } from "../state/presentation";
-import { primaryServerSettingsAtom } from "../state/server";
+import { primaryServerConfigAtom } from "../state/server";
+import { readServerFeatureFlag, useFeatureFlag } from "./t3team-useFeatureFlag";
 import { useT3TeamSidebarEnvironmentFilterStore } from "./t3team-sidebarEnvironmentFilterStore";
 import { useT3TeamSidebarProjectScope } from "./t3team-sidebarProjectScopeStore";
 
@@ -28,8 +29,8 @@ export function useT3TeamEnabledEnvironmentIds(): ReadonlySet<string> {
 }
 
 /**
- * The sidebar pills as the global scope. Off with `t3team.projectScopePills`, the runtime flag:
- * then only the project scope reaches New thread, as before.
+ * The sidebar pills as the global scope, behind `UI_PILL_GLOBAL_SCOPE`. Off, only the project
+ * scope reaches New thread, as before.
  */
 function resolvePillScope(input: {
   readonly flagOn: boolean;
@@ -51,7 +52,7 @@ function resolvePillScope(input: {
 
 export function useT3TeamPillScope(): PillScope<ScopedProjectRef> {
   return resolvePillScope({
-    flagOn: usePrimarySettings((settings) => settings.t3team.projectScopePills),
+    flagOn: useFeatureFlag(PILL_SCOPE_FLAG),
     environments: useAtomValue(environmentSummaries.environmentsAtom),
     storedEnvironmentId: useT3TeamSidebarEnvironmentFilterStore(
       (state) => state.selectedEnvironmentId,
@@ -63,7 +64,7 @@ export function useT3TeamPillScope(): PillScope<ScopedProjectRef> {
 /** Event-time twin of `useT3TeamPillScope`, for keyboard commands that run outside React. */
 export function readT3TeamPillScope(): PillScope<ScopedProjectRef> {
   return resolvePillScope({
-    flagOn: appAtomRegistry.get(primaryServerSettingsAtom).t3team.projectScopePills,
+    flagOn: readServerFeatureFlag(appAtomRegistry.get(primaryServerConfigAtom), PILL_SCOPE_FLAG),
     environments: appAtomRegistry.get(environmentSummaries.environmentsAtom),
     storedEnvironmentId: useT3TeamSidebarEnvironmentFilterStore.getState().selectedEnvironmentId,
     projectRefs: useT3TeamSidebarProjectScope.getState().scopedProjectRefs,
@@ -79,7 +80,7 @@ export function useT3TeamPillScopeFilter(): (item: {
   readonly projectId: string;
 }) => boolean {
   const scope = useT3TeamPillScope();
-  const flagOn = usePrimarySettings((settings) => settings.t3team.projectScopePills);
+  const flagOn = useFeatureFlag(PILL_SCOPE_FLAG);
   const projects = useProjects();
   return flagOn ? createPillScopeFilter(scope, projects) : () => true;
 }

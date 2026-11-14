@@ -17,6 +17,22 @@ export interface PillScope<TRef extends PillScopeProjectRef = PillScopeProjectRe
 
 export const UNSCOPED_PILL_SCOPE: PillScope = { environmentId: null, projectRefs: null };
 
+/** The runtime flag, `FEATURE_FLAG_DEFINITIONS.UI_PILL_GLOBAL_SCOPE` (on by default). */
+export const PILL_SCOPE_FLAG = "UI_PILL_GLOBAL_SCOPE";
+
+/**
+ * On unless a server advertises the flag off, for a client with no primary server (the phone):
+ * a server that predates the flag keeps the default.
+ */
+export function pillScopeFlagOn(
+  configs: Iterable<{ readonly featureFlags?: Readonly<Record<string, boolean>> }>,
+): boolean {
+  for (const config of configs) {
+    if (config.featureFlags?.[PILL_SCOPE_FLAG] === false) return false;
+  }
+  return true;
+}
+
 export function isPillScoped(scope: PillScope): boolean {
   return scope.environmentId !== null || (scope.projectRefs?.length ?? 0) > 0;
 }

@@ -61,8 +61,10 @@ vi.mock("../lib/t3ProjectFileDefaults", () => ({ readT3ProjectFile: async () => 
 vi.mock("./useSettings", () => ({
   getClientSettings: () => ({}),
   useClientSettings: () => ({}),
-  usePrimarySettings: (select: (settings: unknown) => unknown) =>
-    select({ t3team: { projectScopePills: true } }),
+}));
+vi.mock("../t3team/t3team-useFeatureFlag", () => ({
+  readServerFeatureFlag: () => true,
+  useFeatureFlag: () => true,
 }));
 
 import { useT3TeamSidebarEnvironmentFilterStore } from "../t3team/t3team-sidebarEnvironmentFilterStore";

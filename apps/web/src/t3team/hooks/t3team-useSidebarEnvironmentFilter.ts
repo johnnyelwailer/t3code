@@ -1,4 +1,3 @@
-import { usePrimarySettings } from "~/hooks/useSettings";
 import {
   narrowEnvironmentIds,
   narrowGroupsToEnvironment,
@@ -8,7 +7,10 @@ import {
   sidebarEnvironmentFilterCandidates,
 } from "~/components/sidebar/t3team-sidebarEnvironmentFilter.logic";
 import { useEnvironmentIdentities, usePrimaryEnvironmentId } from "~/state/environments";
+import { PILL_SCOPE_FLAG } from "@t3tools/client-runtime/t3team-pillScope";
+
 import { useT3TeamEnabledEnvironmentIds } from "../t3team-pillScope";
+import { useFeatureFlag } from "../t3team-useFeatureFlag";
 import { useT3TeamSidebarEnvironmentFilterStore } from "../t3team-sidebarEnvironmentFilterStore";
 
 type Candidates = Parameters<typeof sidebarEnvironmentFilterCandidates>[0];
@@ -16,7 +18,7 @@ type Candidates = Parameters<typeof sidebarEnvironmentFilterCandidates>[0];
 /** The environments that get a pill: switched off in Settings, an environment has none. */
 function usePillEnvironmentIdentities() {
   const identities = useEnvironmentIdentities();
-  const flagOn = usePrimarySettings((settings) => settings.t3team.projectScopePills);
+  const flagOn = useFeatureFlag(PILL_SCOPE_FLAG);
   const enabled = useT3TeamEnabledEnvironmentIds();
   return flagOn ? identities.filter((identity) => enabled.has(identity.environmentId)) : identities;
 }

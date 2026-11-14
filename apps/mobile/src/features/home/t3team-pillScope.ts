@@ -8,6 +8,7 @@ import {
   createPillScopeFilter,
   enabledPillEnvironmentId,
   pickPillScopedProject,
+  pillScopeFlagOn,
   type PillScope,
 } from "@t3tools/client-runtime/t3team-pillScope";
 import type { EnvironmentId, SidebarProjectGroupingMode } from "@t3tools/contracts";
@@ -25,21 +26,6 @@ import {
 } from "../../state/project-grouping.logic";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { buildHomeProjectScopes } from "./homeThreadList";
-
-/**
- * The Home pills as the global scope on the phone. `t3team.projectScopePills` is the runtime flag;
- * a phone has no primary server, so any connected server that switched it off turns it off.
- */
-export function pillScopeFlagOn(
-  configs: Iterable<{
-    readonly settings: { readonly t3team: { readonly projectScopePills: boolean } };
-  }>,
-): boolean {
-  for (const config of configs) {
-    if (config.settings.t3team.projectScopePills === false) return false;
-  }
-  return true;
-}
 
 /** Environments switched off in Settings get no pill; every environment does with the flag off. */
 export function pillEnvironmentIds(

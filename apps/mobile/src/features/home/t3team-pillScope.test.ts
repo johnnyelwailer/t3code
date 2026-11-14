@@ -9,7 +9,7 @@ vi.mock("../../state/preferences", () => ({ mobilePreferencesAtom: {} }));
 vi.mock("../../state/server", () => ({ environmentServerConfigsAtom: {} }));
 
 import { buildHomeProjectScopes } from "./homeThreadList";
-import { pillScopedNewTaskProject, pillScopeFlagOn } from "./t3team-pillScope";
+import { pillScopedNewTaskProject } from "./t3team-pillScope";
 
 function makeProject(id: string, environmentId: string, repository: string): EnvironmentProject {
   return {
@@ -71,15 +71,5 @@ describe("pillScopedNewTaskProject", () => {
   it("keeps the default with no pill, and drops an environment switched off in Settings", () => {
     expect(preselect({ environmentId: null, projectKey: null })).toBeUndefined();
     expect(preselect({ environmentId: "cloud", projectKey: null }, ["local"])).toBeUndefined();
-  });
-});
-
-describe("pillScopeFlagOn", () => {
-  it("is off once any server switches project scope pills off", () => {
-    const config = (projectScopePills: boolean) => ({
-      settings: { t3team: { projectScopePills } },
-    });
-    expect(pillScopeFlagOn([config(true), config(true)])).toBe(true);
-    expect(pillScopeFlagOn([config(true), config(false)])).toBe(false);
   });
 });
