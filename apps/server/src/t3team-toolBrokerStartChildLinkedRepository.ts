@@ -4,6 +4,7 @@ import { t3teamRandomHex } from "./t3team-random.ts";
 import type * as Path from "effect/Path";
 
 import {
+  CHILD_WORKTREES_DIR_NAME,
   deriveReferenceDirectoryName,
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
@@ -38,8 +39,10 @@ function sanitizeScopedPathSegment(value: string): string {
     .slice(0, 80);
 }
 
-/** A child's worktree lives in the server's worktrees directory, laid out like upstream's
- * `<repository>/<branch>` worktrees: the host writes nothing into a user's checkout. */
+/** A child's worktree lives in the server's worktrees directory, never in a user's checkout.
+ * The extra `child-session-worktrees` segment keeps it out of upstream's managed
+ * `<repository>/<branch>` set: upstream recreates a missing managed worktree from the project
+ * root, which is the wrong repository for a linked-repository child. */
 export function buildScopedChildWorktreePath(input: {
   readonly path: Path.Path;
   readonly worktreesRoot: string;
@@ -51,7 +54,12 @@ export function buildScopedChildWorktreePath(input: {
   const refDirectory = sanitizeScopedPathSegment(input.repoRef) || "default";
   const childDirectory = input.worktreeKey.slice(0, 8).toLowerCase();
 
-  return input.path.join(input.worktreesRoot, repoDirectory, `${refDirectory}-${childDirectory}`);
+  return input.path.join(
+    input.worktreesRoot,
+    CHILD_WORKTREES_DIR_NAME,
+    repoDirectory,
+    `${refDirectory}-${childDirectory}`,
+  );
 }
 
 export function readLinkedRepositories(
