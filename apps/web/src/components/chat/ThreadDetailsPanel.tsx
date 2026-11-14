@@ -23,6 +23,7 @@ import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadOrchestrationPanel } from "../../t3team/components/t3team-ThreadOrchestrationPanel";
+import { useThreadActiveRoots } from "../../t3team/t3team-useThreadActiveRoots";
 import type { T3TeamActiveWorkflowDockItem } from "../../t3team/chat/t3team-activeWorkflowDock";
 import type { ChatViewT3TeamExtensionProps } from "../../t3team/t3team-chatViewExtensions";
 import type { ChatMessage } from "../../types";
@@ -107,6 +108,8 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
     props.activeProjectScripts && visible.scripts ? props.gitCwd : null,
   );
   const activeThreadRef = { environmentId: props.environmentId, threadId: props.threadId };
+  // t3team: a thread whose work lives in exactly one other worktree opens that one.
+  const { followRoot } = useThreadActiveRoots(activeThreadRef, props.gitCwd);
   const branchToolbarProps = {
     showGitControls: props.isGitRepo,
     environmentId: props.environmentId,
@@ -203,7 +206,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                         keybindings={props.keybindings}
                         environmentId={props.environmentId}
                         availableEditors={props.availableEditors}
-                        openInCwd={props.gitCwd}
+                        openInCwd={followRoot ?? props.gitCwd}
                         enableShortcut={props.openInShortcutEnabled}
                         displayMode="panel"
                       />
