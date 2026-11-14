@@ -725,6 +725,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
                 : { branch: bootstrap.branch }),
             };
     return yield* resendAfterReconnect(
+      commandId,
       request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
         commandId,
         creationSource: input.creationSource ?? "web",
@@ -750,6 +751,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
   const requestedMode = input.dispatchMode ?? "auto";
   if (requestedMode === "start") {
     return yield* resendAfterReconnect(
+      commandId,
       dispatch({
         type: "message.dispatch",
         commandId,
@@ -780,6 +782,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       ? ({ type: "queue_after_active" } as const)
       : ({ type: "start_immediately" } as const);
   return yield* resendAfterReconnect(
+    commandId,
     dispatch({
       type: "message.dispatch",
       commandId,

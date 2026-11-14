@@ -26,6 +26,7 @@ import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
@@ -38,6 +39,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as RpcSession from "../rpc/session.ts";
+import { EnvironmentRpcUnavailableError } from "../rpc/client.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import { v2Now, v2Projection, v2ThreadId } from "../state/orchestrationV2TestFixtures.ts";
 import {
@@ -71,7 +73,11 @@ const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(funct
   readonly projectionRequests?: ThreadId[];
   readonly advertiseThreadStop?: boolean;
   readonly lostReplies?: Array<
-    Cause.Cause<RpcClientError.RpcClientError | OrchestrationV2DispatchCommandError>
+    Cause.Cause<
+      | RpcClientError.RpcClientError
+      | OrchestrationV2DispatchCommandError
+      | EnvironmentRpcUnavailableError
+    >
   >;
   readonly replyLost?: Deferred.Deferred<void>;
 }) {
@@ -320,6 +326,15 @@ describe("V2 environment commands", () => {
       ),
     ],
     ["the session ended", Cause.interrupt()],
+    [
+      "there was no connection",
+      Cause.fail(
+        new EnvironmentRpcUnavailableError({
+          environmentId: "environment-1",
+          message: "Test environment is not connected.",
+        }),
+      ),
+    ],
   ] as const)("sends a turn again with the same command id when %s before the reply", ([, lost]) =>
     Effect.gen(function* () {
       const commands: OrchestrationV2Command[] = [];
@@ -357,6 +372,45 @@ describe("V2 environment commands", () => {
         "command-lost-reply",
         "command-lost-reply",
       ]);
+    }).pipe(Effect.provide(layerTestCrypto)),
+  );
+
+  it.effect("fails with the command id when the connection never comes back", () =>
+    Effect.gen(function* () {
+      const commands: OrchestrationV2Command[] = [];
+      const replyLost = yield* Deferred.make<void>();
+      const supervisor = yield* makeSupervisor({
+        commands,
+        projects: [],
+        lostReplies: [Cause.interrupt()],
+        replyLost,
+      });
+      const sending = yield* startThreadTurn({
+        commandId: CommandId.make("command-never-confirmed"),
+        threadId: v2ThreadId,
+        message: {
+          messageId: MessageId.make("message-never-confirmed"),
+          role: "user",
+          text: "hi",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.forkChild,
+      );
+      yield* Deferred.await(replyLost);
+      yield* TestClock.adjust("2 minutes");
+      const exit = yield* Fiber.await(sending);
+      expect(exit._tag).toBe("Failure");
+      if (exit._tag === "Failure") {
+        expect(Option.getOrNull(Cause.findErrorOption(exit.cause))).toMatchObject({
+          _tag: "SendNotConfirmedError",
+          commandId: "command-never-confirmed",
+        });
+      }
+      expect(commands).toHaveLength(1);
     }).pipe(Effect.provide(layerTestCrypto)),
   );
 

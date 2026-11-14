@@ -70,7 +70,9 @@ function OutboxEntryRow(props: {
     ? "Sending"
     : props.failure !== null
       ? `Failed: ${props.failure}`
-      : `Sends when ${environmentLabel} reconnects`;
+      : environment?.connection.phase === "connected"
+        ? "Sends after the message above"
+        : `Sends when ${environmentLabel} reconnects`;
   return (
     <ComposerBanner.Row render={<li />} data-queued-outbox-entry={props.entry.entryId}>
       <ComposerBanner.Icon>

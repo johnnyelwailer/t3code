@@ -154,6 +154,8 @@ import type { useQueuedRunEdit } from "./useQueuedRunEdit";
 import type { useTimelineFollow } from "./useTimelineFollow";
 import type { useUsageLimitsPanel } from "./useUsageLimitsPanel";
 import type { useWorktreeSetup } from "./useWorktreeSetup";
+import { beginSend, confirmSend, newSendCommandId } from "~/t3team/chat/t3team-confirmSend";
+import { threadHasPendingSend } from "~/t3team/chat/t3team-sendConfirmationStore";
 
 const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
 
@@ -470,6 +472,45 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
 
+    // t3team offline outbox: a text-only send is queued and drains FIFO once it can go out.
+    const enqueuePromptToOutbox = async (threadId: string): Promise<boolean> => {
+      if (
+        !enqueueOfflineTurnStart ||
+        directAnnotation ||
+        draftHasNonPromptContent(composerDraftTarget) ||
+        promptRef.current.trim().length === 0
+      ) {
+        return false;
+      }
+      const offlineSendCtx = composerRef.current?.getSendContext();
+      const queued = await enqueueOfflineTurnStart({
+        threadId,
+        messageId: newMessageId(),
+        messageText: promptRef.current,
+        modelSelection: offlineSendCtx?.selectedModelSelection ?? null,
+        titleSeed: truncate(promptRef.current.trim()),
+        runtimeMode,
+        interactionMode,
+        createdAt: new Date().toISOString(),
+        hasAttachments: false,
+      });
+      if (!queued) return false;
+      promptRef.current = "";
+      setComposerDraftPrompt(composerDraftTarget, "");
+      composerRef.current?.resetCursorState();
+      return true;
+    };
+    // An earlier message still waits for its reply: this one queues behind it, in order.
+    const queueBehindPendingSend = async (threadId: string) => {
+      if (await enqueuePromptToOutbox(threadId)) return;
+      toastManager.add(
+        stackedThreadToast({
+          type: "info",
+          title: "Your last message is still sending",
+          description: "This one stays in the composer. Send it once the last one is confirmed.",
+        }),
+      );
+    };
     const notifyDirectAnnotationAttached = () => {
       if (!directAnnotation) return;
       toastManager.add(
@@ -480,6 +521,10 @@ export function useComposerSend(input: ComposerSendInput) {
         }),
       );
     };
+    if (activeThread && (sendInFlightRef.current || threadHasPendingSend(activeThread.id))) {
+      await queueBehindPendingSend(activeThread.id);
+      return;
+    }
     if (
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
       !activeThread ||
@@ -550,31 +595,7 @@ export function useComposerSend(input: ComposerSendInput) {
       // t3team offline outbox: instead of erroring, hand the would-be run start to the
       // host's queue; it drains FIFO when the environment reconnects. Text-only —
       // attachments need a live connection to upload, so they keep the stock toast.
-      if (
-        enqueueOfflineTurnStart &&
-        !directAnnotation &&
-        !draftHasNonPromptContent(composerDraftTarget) &&
-        promptRef.current.trim().length > 0
-      ) {
-        const offlineSendCtx = composerRef.current?.getSendContext();
-        const queued = await enqueueOfflineTurnStart({
-          threadId: activeThread.id,
-          messageId: newMessageId(),
-          messageText: promptRef.current,
-          modelSelection: offlineSendCtx?.selectedModelSelection ?? null,
-          titleSeed: truncate(promptRef.current.trim()),
-          runtimeMode,
-          interactionMode,
-          createdAt: new Date().toISOString(),
-          hasAttachments: false,
-        });
-        if (queued) {
-          promptRef.current = "";
-          setComposerDraftPrompt(composerDraftTarget, "");
-          composerRef.current?.resetCursorState();
-          return;
-        }
-      }
+      if (await enqueuePromptToOutbox(activeThread.id)) return;
       const toastSlot = environmentUnavailableSendToastSlotRef.current;
       environmentUnavailableSendToastSlotRef.current =
         (toastSlot + 1) % ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE;
@@ -1544,9 +1565,10 @@ export function useComposerSend(input: ComposerSendInput) {
           ? scopeThreadRef(environmentId, threadIdForSend)
           : null;
       if (backgroundThreadRef) beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
-      const startPromise = startThreadTurn({
+      const turnStart: Parameters<typeof startThreadTurn>[0] = {
         environmentId,
         input: {
+          commandId: newSendCommandId(),
           threadId: threadIdForSend,
           message: {
             messageId: messageIdForSend,
@@ -1567,7 +1589,9 @@ export function useComposerSend(input: ComposerSendInput) {
           ...(bootstrap ? { bootstrap } : {}),
           createdAt: messageCreatedAt,
         },
-      });
+      };
+      beginSend(messageIdForSend, { threadId: threadIdForSend, environmentId });
+      const startPromise = startThreadTurn(turnStart);
       if (backgroundThreadRef) {
         try {
           backgroundDraftOpened = Boolean(
@@ -1592,7 +1616,15 @@ export function useComposerSend(input: ComposerSendInput) {
         }
       }
       const startResult = await startPromise;
-      if (startResult._tag === "Failure") {
+      const keptUntilConfirmed = confirmSend({
+        messageId: messageIdForSend,
+        result: startResult,
+        resend: () => startThreadTurn(turnStart),
+        onRejected: (message) => setThreadError(threadIdForSend, message),
+      });
+      if (keptUntilConfirmed) {
+        // The message stays on screen as "Not confirmed" with Retry; the prompt is not put back.
+      } else if (startResult._tag === "Failure") {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
