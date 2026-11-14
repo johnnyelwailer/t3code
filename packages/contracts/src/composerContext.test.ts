@@ -129,6 +129,14 @@ const knownRecords: Record<(typeof COMPOSER_CONTEXT_KINDS)[number], Record<strin
     label: "vps",
     environmentId: "environment-vps",
   },
+  "message-quote": {
+    ...base,
+    kind: "message-quote",
+    label: "T3 Code: fix the login bug",
+    messageId: "msg_1",
+    author: "T3 Code",
+    quotedText: "The login page 500s",
+  },
 };
 
 describe("ComposerContextRecord", () => {

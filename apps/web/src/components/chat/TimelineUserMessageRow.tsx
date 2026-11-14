@@ -19,7 +19,7 @@ import { useQuietThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
-import { memo, use, useState, type ReactNode } from "react";
+import { memo, use, useRef, useState, type ReactNode } from "react";
 import {
   createMessageAttachmentPreviewProjector,
   selectMessageImageResources,
@@ -59,6 +59,7 @@ import {
 } from "./SnapShotAttachmentDetails";
 import { GuestMessageName, guestBubbleClassName } from "./guestMessageStyle";
 import { MessageCopyButton } from "./MessageCopyButton";
+import { MessageReplyButton } from "./MessageReplyButton";
 import { promptLinkFor } from "../promptLinks/copyPromptLink";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { formatBytes } from "../../lib/formatBytes";
@@ -467,6 +468,12 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   );
   const initiatingPrompt = resolveRunInitiatingPrompt(row.message);
   const senderLabel = senderShell?.title.trim() || "Agent";
+  const quoteBodyRef = useRef<HTMLDivElement | null>(null);
+  const quoteAuthor = folded
+    ? senderLabel
+    : userMessage.guestName === undefined
+      ? "You"
+      : userMessage.guestName;
   // t3team: a send with appended work-item context shows the person's own words (ext displayText).
   const displayedMessage = t3teamDisplayedUserMessage(row.message);
   const resolvedContext = resolveUserMessageContext({
@@ -812,6 +819,12 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         {typeof revertTurnCount === "number" && (
           <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
         )}
+        <MessageReplyButton
+          messageId={row.message.id}
+          author={quoteAuthor}
+          text={plainText}
+          bodyRef={quoteBodyRef}
+        />
         {copyButtonText !== null && (
           <MessageCopyButton
             text={copyButtonText}
@@ -1021,7 +1034,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             <T3TeamRecipeKickoffBadge message={row.message} />
             <T3TeamUserMessageAttachments message={row.message} />
             {fileCardsOnly || audioOnly ? null : (
-              <div onCopyCapture={onBodyCopyCapture}>
+              <div onCopyCapture={onBodyCopyCapture} ref={quoteBodyRef}>
                 <CollapsibleUserMessageBody
                   text={resolvedContext.text}
                   renderContextReference={renderContextReference}

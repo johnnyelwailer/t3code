@@ -213,6 +213,7 @@ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { toastManager } from "./ui/toast";
 import { projectScriptIdFromCommand } from "~/projectScripts";
 import { newMessageId } from "~/lib/utils";
+import { messageQuoteContextRecord } from "~/lib/composerContextRecords";
 import { isInSideChatPane, type SideChatParentPanel } from "~/lib/sideChatPane";
 import {
   NO_PROVIDER_MODEL_SELECTION,
@@ -700,6 +701,16 @@ export default function ChatView(props: ChatViewProps) {
     return inserted;
   };
   const citeAssistantTextStable = useStableCallback(citeAssistantText);
+  const onQuoteMessage = (input: {
+    readonly messageId: MessageId;
+    readonly author: string;
+    readonly text: string;
+  }) => {
+    useComposerDraftStore
+      .getState()
+      .addMessageQuotes(composerDraftTarget, [messageQuoteContextRecord(input)]);
+  };
+  const onQuoteMessageStable = useStableCallback(onQuoteMessage);
   const [isWorkspaceFileDragActive, setIsWorkspaceFileDragActive] = useState(false);
   const [optimisticBlobPreviews] = useState(createOptimisticBlobPreviews);
   const [heldOptimisticUserMessages, setHeldOptimisticUserMessages] = useState(() =>
@@ -3779,6 +3790,7 @@ export default function ChatView(props: ChatViewProps) {
                   ? {}
                   : { onOpenTurnDiff: onOpenTurnDiffStable, onForkFromRun: onForkFromRunStable })}
                 onOpenThread={onOpenRelatedThreadStable}
+                onQuoteMessage={onQuoteMessageStable}
                 parentThreadLink={parentThreadLink}
                 workflowOpening={workflowOpening}
                 supportsConversationRollback={supportsConversationRollback}

@@ -52,6 +52,7 @@ import {
   decodeComposerContextFragment,
 } from "@t3tools/shared/composerContextClipboard";
 import { collectComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { selectedQuoteText } from "./MessageQuoteSelection";
 
 const environmentQuery = vi.hoisted(() => ({
   error: "Pull request not found",
@@ -1481,4 +1482,76 @@ it("keeps concurrent approvals actionable outside collapsed work and restores se
   await expect
     .element(screen.getByRole("button", { name: "Open the current tab", exact: true }))
     .toBeVisible();
+});
+
+describe("MessagesTimeline reply quoting", () => {
+  it("quotes a user message from its reply button", async () => {
+    const onQuoteMessage = vi.fn();
+    await using screen = await renderTimeline([message("The login page 500s", {}, "quote-me")], {
+      onQuoteMessage,
+    });
+    await click(screen.button("Quote this message"));
+    expect(onQuoteMessage).toHaveBeenCalledTimes(1);
+    expect(onQuoteMessage).toHaveBeenCalledWith({
+      messageId: MessageId.make("quote-me"),
+      author: "You",
+      text: "The login page 500s",
+    });
+  });
+
+  it("quotes a finished assistant message from its meta row", async () => {
+    const onQuoteMessage = vi.fn();
+    const meta = {
+      id: "entry-quoted-meta",
+      kind: "assistant-meta",
+      createdAt: CREATED_AT,
+      projectedItem: undefined,
+      message: {
+        id: MessageId.make("quoted-answer"),
+        role: "assistant",
+        text: "The answer is 42",
+        runId: null,
+        createdAt: CREATED_AT,
+        updatedAt: CREATED_AT,
+        streaming: false,
+      },
+      showAssistantCopyButton: false,
+      assistantCopyStreaming: false,
+    } as unknown as Entry;
+    await using screen = await renderTimeline([meta], { onQuoteMessage });
+    await click(screen.button("Quote this message"));
+    expect(onQuoteMessage).toHaveBeenCalledWith({
+      messageId: MessageId.make("quoted-answer"),
+      author: "T3 Code",
+      text: "The answer is 42",
+    });
+  });
+
+  it("hides the reply button when the timeline has no quote handler", async () => {
+    await using screen = await renderTimeline([message("plain", {}, "plain")]);
+    expect(screen.buttons("Quote this message")).toHaveLength(0);
+  });
+
+  it("quotes only a selection inside the row body, else the full text", () => {
+    const body = document.createElement("div");
+    body.textContent = "alpha beta gamma";
+    document.body.appendChild(body);
+    try {
+      const whole = document.createRange();
+      whole.selectNodeContents(body);
+      expect(selectedQuoteText(body, "full\nfallback")).toBe("alpha beta gamma");
+      const collapsed = document.createRange();
+      collapsed.collapse();
+      expect(selectedQuoteText(body, "full\nfallback")).toBe("full\nfallback");
+      const outside = document.createElement("div");
+      outside.textContent = "nope";
+      document.body.appendChild(outside);
+      const crossing = document.createRange();
+      crossing.setStart(body.firstChild!, 0);
+      crossing.setEnd(outside.firstChild!, 2);
+      expect(selectedQuoteText(body, "full text")).toBe("full text");
+    } finally {
+      document.body.innerHTML = "";
+    }
+  });
 });

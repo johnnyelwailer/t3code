@@ -353,6 +353,12 @@ interface MessagesTimelineProps {
     readonly sourceThreadId: ThreadId;
     readonly runId: RunId;
   }) => Promise<void>;
+  /** Quotes a message into the composer as reference context; absent hides the reply button. */
+  onQuoteMessage?: (input: {
+    readonly messageId: MessageId;
+    readonly author: string;
+    readonly text: string;
+  }) => void;
   supportsConversationRollback: boolean;
   threadStartCheckpointReady?: boolean;
   availableRevertTurnCounts?: ReadonlySet<number> | undefined;
@@ -454,6 +460,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   parentThreadLink = null,
   workflowOpening = null,
   onForkFromRun,
+  onQuoteMessage,
   supportsConversationRollback,
   threadStartCheckpointReady = false,
   availableRevertTurnCounts,
@@ -1194,6 +1201,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     turnItemSource,
     workflowOpening,
     onForkFromRun,
+    onQuoteMessage,
     onToggleTurnFold,
     onToggleAttemptFold,
     onToggleWorkGroup,
