@@ -1168,6 +1168,62 @@ describe("CloudSessionService.cancel", () => {
     }),
   );
 
+  const cancelBrokerOnly = (everyDevice: boolean) =>
+    Effect.gen(function* () {
+      replaceFeatureFlagPresetValues(
+        new Map([
+          ["CLOUD_SESSIONS", true],
+          ["CLOUD_SESSIONS_EVERY_DEVICE", everyDevice],
+        ]),
+      );
+      const { calls, rest, graphql } = makeGithubMock({ runStatus: "in_progress" });
+      const broker = Layer.succeed(NexiBrokerService.NexiBrokerService, {
+        enabled: true,
+        status: { enabled: true, accountId: "acme" },
+        requestGrant: () => Effect.die("cancel never asks for a grant"),
+        attach: () => Effect.die("unused"),
+        pair: () => Effect.die("unused"),
+        claimStandby: () => Effect.succeed(null),
+        // Run 4242 is the account's, but this login neither dispatched nor claimed it.
+        sessions: Effect.succeed([{ runId: "4242", environmentId: "env-phone" }]),
+        reportInterest: () => Effect.void,
+      });
+      const providers = Layer.mergeAll(
+        noMachines,
+        Layer.mock(GitHubApi.GitHubApi)({ rest, graphql, credential: ambientCredential }),
+        Layer.mock(CliTokenManager.CloudCliTokenManager)({
+          getExisting: Effect.succeed(Option.none()),
+        }),
+        Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+          mint: () => Effect.die("cancel never mints"),
+        }),
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+        broker,
+      );
+      const exit = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.cancel({ sessionId: "4242" })),
+        Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
+        Effect.exit,
+      );
+      return { exit, cancels: calls.filter((call) => joinedOf(call).includes("/cancel")).length };
+    });
+
+  it.effect("never cancels another device's session while every device's sessions are listed", () =>
+    Effect.gen(function* () {
+      const { exit, cancels } = yield* cancelBrokerOnly(true);
+      assert.isTrue(exit._tag === "Failure");
+      assert.equal(cancels, 0);
+    }),
+  );
+
+  it.effect("with the flag off, still stops a broker-listed session after a restart", () =>
+    Effect.gen(function* () {
+      const { exit, cancels } = yield* cancelBrokerOnly(false);
+      assert.isTrue(exit._tag === "Success");
+      assert.equal(cancels, 1);
+    }),
+  );
+
   it.effect("still fails when the cancel is refused for a session that keeps running", () =>
     Effect.gen(function* () {
       const exit = yield* Effect.exit(cancelSession("in_progress", "in_progress"));

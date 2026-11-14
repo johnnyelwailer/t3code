@@ -119,6 +119,11 @@ export const CloudSessionSchema = Schema.Struct({
    * definition. Absent means not.
    */
   machineSetup: Schema.optional(Schema.Boolean),
+  /**
+   * True when another device of the account started it: this server cannot prove it may cancel the
+   * run, so it offers no Stop; that device (or the session's own end) stops it. Absent means not.
+   */
+  startedElsewhere: Schema.optional(Schema.Boolean),
   /** A project-machine session's milestone, present only while `phase` is `preparing`. */
   machineStage: Schema.optional(CloudSessionMachineStageSchema),
 });

@@ -149,7 +149,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "ready",
         progress: null,
         actionLabel: "Connect",
-        secondaryActionLabel: "Stop",
+        secondaryActionLabel: session.startedElsewhere === true ? null : "Stop",
         liveElapsed: false,
       };
     case "failed":

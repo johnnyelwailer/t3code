@@ -145,6 +145,16 @@ export const WORK_FEATURE_FLAG_DEFINITIONS = {
     defaultEnabled: false,
     requiresRestart: false,
   },
+  CLOUD_SESSIONS_EVERY_DEVICE: {
+    group: "Cloud & machines",
+    subgroup: "Cloud sessions",
+    label: "Cloud sessions from every device",
+    description:
+      "The cloud session list also shows the sessions your other signed-in devices started (the broker lists every session of your account), so you can connect to them and open their threads here. Off: only the sessions this app started.",
+    defaultEnabled: false,
+    requiresRestart: true,
+    addedOn: "2026-11-10",
+  },
   DELEGATE_CLOUD: {
     group: "Cloud & machines",
     subgroup: "Cloud sessions",

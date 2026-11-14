@@ -19,6 +19,7 @@ const BrokerSession = Schema.Struct({
   runId: Schema.String,
   environmentId: Schema.optional(Schema.NullOr(Schema.String)),
   label: Schema.optional(Schema.NullOr(Schema.String)),
+  since: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type BrokerSession = typeof BrokerSession.Type;
 const SessionsResponse = Schema.Struct({ sessions: Schema.Array(BrokerSession) });

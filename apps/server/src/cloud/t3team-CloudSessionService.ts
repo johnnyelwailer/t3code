@@ -29,6 +29,7 @@ import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts"
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { isAppStartedSessionRun, makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
+import { brokerListedSessions } from "./t3team-cloudSessionBrokerListed.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 import { offerPlainOnMachineFailure } from "./t3team-cloudSessionMachineOffer.ts";
 import { isMachineSetupEnabled } from "./t3team-machineSetupFlag.ts";
@@ -115,6 +116,10 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const broker = yield* NexiBrokerService;
   const machines = yield* CloudSessionMachines;
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
+  // Off: only the sessions this login dispatched or claimed are listed.
+  const everyDevice = yield* readFeatureFlagFromConfig("CLOUD_SESSIONS_EVERY_DEVICE").pipe(
+    Effect.orElseSucceed(() => false),
+  );
 
   // The GitHub-request half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
@@ -164,7 +169,11 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       machineLabel,
       repoRef,
     });
-    const sessions = [...claimed, ...dispatched];
+    const listed = new Set([...claimed, ...dispatched].map((session) => session.sessionId));
+    const elsewhere = everyDevice
+      ? brokerListedSessions({ brokerSessions, knownRunIds: listed, nowMs, machineLabel, repoRef })
+      : [];
+    const sessions = [...claimed, ...dispatched, ...elsewhere];
     const historyUrl = workflowHistoryUrl(repoRef, login);
     return { sessions, configured: true, historyUrl } satisfies CloudSessionListResult;
   }).pipe(
@@ -376,10 +385,12 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // A claimed standby runs under the pool controller: this server's own claim proves it is
       // this user's session.
       // After a restart this server's ledger is empty; the broker still lists the user's sessions.
+      // Not with every device listed: a broker-only match may be a run another device started.
       const claimedHere =
         sessionRun === undefined &&
         ((yield* isClaimed(claims, input.sessionId, login)) ||
           (broker.enabled &&
+            !everyDevice &&
             (yield* broker.sessions.pipe(Effect.orElseSucceed(() => []))).some(
               (session) => session.runId === input.sessionId,
             )));
@@ -389,7 +400,9 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
-          message: "That session does not exist.",
+          message: everyDevice
+            ? "That session is not one this device started; stop it where it was started."
+            : "That session does not exist.",
         });
       }
       // Already over (an earlier stop, or its time ran out): stopping is done, not an error.
